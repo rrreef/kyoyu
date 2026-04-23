@@ -11,7 +11,7 @@
   height: 78px;
 
   /* Thick frosted glass — slightly less frosted */
-  background: rgba(28, 38, 48, 0.52);
+  background: rgba(28, 38, 48, 0.28);
   backdrop-filter: blur(2px) saturate(180%) brightness(1.1);
   -webkit-backdrop-filter: blur(2px) saturate(180%) brightness(1.1);
 
