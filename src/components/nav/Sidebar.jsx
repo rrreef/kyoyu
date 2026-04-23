@@ -15,15 +15,6 @@ const navItems = [
   { to: '/settings',    label: 'Settings',    icon: Settings       },
 ];
 
-// Condensed subset for the mobile bottom bar
-const mobileNavItems = [
-  { to: '/',         label: 'Home',     icon: Home        },
-  { to: '/search',   label: 'Search',   icon: Search      },
-  { to: '/library',  label: 'Library',  icon: Library     },
-  { to: '/shop',     label: 'Shop',     icon: ShoppingBag },
-  { to: '/settings', label: 'Settings', icon: Settings    },
-];
-
 export default function Sidebar() {
   const { user, logout } = useAuth();
 
@@ -72,21 +63,6 @@ export default function Sidebar() {
           </button>
         </div>
       </aside>
-
-      {/* ── Mobile bottom nav (smartphone only) ── */}
-      <nav className="mobile-nav">
-        {mobileNavItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-          >
-            <Icon size={22} strokeWidth={1.6} />
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
     </>
   );
 }
