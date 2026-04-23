@@ -236,9 +236,6 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* Lock html — only .main-content should scroll */
-  height: 100%;
-  overflow: hidden;
 }
 
 body {
@@ -250,8 +247,8 @@ body {
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  overflow: hidden;
-  height: 100%;
+  overflow-x: hidden;
+  min-height: 100vh;
 }
 
 #root {
@@ -479,6 +476,7 @@ img { display: block; max-width: 100%; }
 .app-layout {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport — adjusts as Safari bar shows/hides */
   overflow: hidden;
 }
 .main-content {
