@@ -11,9 +11,9 @@
   z-index: 100;
 
   /* Liquid glass */
-  background: rgba(6, 6, 8, 0.70) !important;
-  backdrop-filter: blur(60px) saturate(200%) brightness(1.08);
-  -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(1.08);
+  background: rgba(16, 16, 24, 0.88) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 
   /* Gradient border — bright top-left, fades */
   border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -202,7 +202,7 @@
   right: 0;
   height: var(--mobile-nav-height, 60px);
   /* Solid matte — no backdrop-filter (causes ghost/duplicate effect) */
-  background: rgba(10, 10, 14, 0.50);
+  background: rgba(16, 16, 24, 0.82);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
