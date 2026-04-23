@@ -108,6 +108,8 @@
   cursor: pointer;
   position: relative;
   letter-spacing: 0.01em;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.06);
