@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%">
+      <stop offset="0%" stop-color="#3d2000"/>
+      <stop offset="50%" stop-color="#1a0e00"/>
+      <stop offset="100%" stop-color="#080400"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#g)"/>
+  <!-- Warm amber spotlight from above -->
+  <ellipse cx="200" cy="80" rx="120" ry="80" fill="rgba(255,160,40,0.22)"/>
+  <ellipse cx="200" cy="200" rx="160" ry="200" fill="rgba(255,120,20,0.08)"/>
+  <!-- Piano key abstraction -->
+  <rect x="60" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="100" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="140" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="180" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="220" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="260" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <rect x="300" y="260" width="24" height="100" rx="4" fill="rgba(255,220,150,0.7)"/>
+  <!-- Black keys -->
+  <rect x="84" y="260" width="16" height="62" rx="3" fill="rgba(20,10,0,0.9)"/>
+  <rect x="124" y="260" width="16" height="62" rx="3" fill="rgba(20,10,0,0.9)"/>
+  <rect x="204" y="260" width="16" height="62" rx="3" fill="rgba(20,10,0,0.9)"/>
+  <rect x="244" y="260" width="16" height="62" rx="3" fill="rgba(20,10,0,0.9)"/>
+  <rect x="284" y="260" width="16" height="62" rx="3" fill="rgba(20,10,0,0.9)"/>
+</svg>

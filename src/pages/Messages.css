@@ -1,0 +1,250 @@
+.messages-page { width: 100%; }
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.msg-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+  flex-wrap: wrap;
+}
+
+.msg-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+.msg-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 3px 0 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.msg-tab:hover  { color: var(--text-primary); border-bottom-color: var(--text-dim); }
+.msg-tab.active { color: var(--text-primary); border-bottom-color: var(--text-primary); font-weight: 600; }
+
+.msg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0 5px;
+}
+
+/* Search */
+.msg-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  color: var(--text-dim);
+}
+.msg-search input {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  width: 140px;
+}
+.msg-search input::placeholder { color: var(--text-dim); }
+
+/* ── Empty ───────────────────────────────────────────────── */
+.msg-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-12) 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+/* ── Chat list ───────────────────────────────────────────── */
+.msg-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.msg-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-subtle);
+  background: var(--glass-bg);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.msg-row:hover { border-color: var(--glass-border-light); }
+.msg-row--unread { border-color: var(--glass-border-light); }
+
+/* Avatar */
+.msg-avatar {
+  position: relative;
+  width: 44px; height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--glass-bg-hover);
+  border: 1px solid var(--glass-border-subtle);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-family: var(--font-heading);
+  letter-spacing: 0.04em;
+}
+.msg-group-dot {
+  position: absolute;
+  bottom: 1px; right: 1px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  border: 2px solid var(--bg-primary);
+}
+
+.msg-body { flex: 1; min-width: 0; }
+.msg-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+.msg-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.msg-time {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.msg-preview {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg-unread-dot {
+  min-width: 20px; height: 20px;
+  border-radius: 10px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 5px;
+  flex-shrink: 0;
+}
+
+/* ── Purchase request cards ───────────────────────────────── */
+.msg-request {
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-subtle);
+  background: var(--glass-bg);
+  transition: var(--transition-fast);
+}
+.msg-request:hover { border-color: var(--glass-border-light); }
+
+.req-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.req-buyer {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.req-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.req-item {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-2);
+}
+.req-msg {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.45;
+  margin-bottom: var(--sp-3);
+  padding-left: var(--sp-2);
+  border-left: 2px solid var(--glass-border-subtle);
+}
+.req-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.req-price {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.req-date {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-right: auto;
+}
+.req-actions { display: flex; gap: var(--sp-2); }
+.req-btn {
+  padding: 4px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: var(--transition-fast);
+}
+.req-btn--accept {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border: 1px solid transparent;
+}
+.req-btn--accept:hover { opacity: 0.8; }
+.req-btn--decline {
+  background: none;
+  border: 1px solid var(--glass-border-light);
+  color: var(--text-muted);
+}
+.req-btn--decline:hover { color: var(--text-primary); border-color: var(--glass-border-hover); }
+
+@media (max-width: 768px) {
+  .msg-topbar { flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+  .msg-search { width: 100%; }
+  .msg-search input { width: 100%; }
+}

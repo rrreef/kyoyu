@@ -1,0 +1,106 @@
+.orders-page { max-width: 640px; }
+
+.orders-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+.orders-header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.orders-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-12) 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.orders-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+.order-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  transition: var(--transition-fast);
+}
+.order-card:hover { border-color: var(--glass-border-light); }
+
+.order-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.order-body { flex: 1; min-width: 0; }
+
+.order-item {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.order-artist {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+.order-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+.order-dot { opacity: 0.4; }
+.order-price { color: var(--text-secondary); font-weight: 600; }
+
+.order-tracking {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  margin-top: var(--sp-1);
+  font-variant-numeric: tabular-nums;
+}
+.order-eta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.order-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  min-width: 56px;
+  padding-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .order-card { gap: var(--sp-3); padding: var(--sp-3); }
+  .order-cover { width: 48px; height: 48px; }
+}

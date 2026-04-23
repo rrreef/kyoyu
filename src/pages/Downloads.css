@@ -1,0 +1,167 @@
+.downloads-page { max-width: 680px; }
+
+/* ── Header ──────────────────────────────────────────────── */
+.dl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+}
+.dl-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.dl-header-left h1 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.dl-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 20px;
+  padding: 1px 8px;
+}
+
+.dl-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+}
+
+/* Search wrapper — expands on open */
+.dl-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  transition: all 0.2s ease;
+}
+.dl-search-input {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-light);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  outline: none;
+  width: 160px;
+  transition: width 0.2s ease, border-color 0.2s ease;
+}
+.dl-search-input:focus { border-color: var(--text-muted); }
+.dl-search-input::placeholder { color: var(--text-dim); }
+
+.dl-icon-btn {
+  width: 30px; height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-subtle);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+.dl-icon-btn:hover { color: var(--text-primary); border-color: var(--glass-border-light); }
+
+.dl-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 3px 0 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.dl-sort-btn:hover { color: var(--text-primary); }
+
+/* ── Empty ───────────────────────────────────────────────── */
+.dl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-12) 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* ── List ────────────────────────────────────────────────── */
+.dl-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.dl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-subtle);
+  background: var(--glass-bg);
+  transition: var(--transition-fast);
+}
+.dl-row:hover { border-color: var(--glass-border-light); }
+
+.dl-icon-wrap {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-hover);
+  border: 1px solid var(--glass-border-subtle);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.dl-body { flex: 1; min-width: 0; }
+.dl-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.dl-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+.dl-dot { opacity: 0.35; }
+
+.dl-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dl-format {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dl-size {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .dl-search-input { width: 120px; }
+  .dl-row { gap: var(--sp-3); padding: var(--sp-3); }
+}

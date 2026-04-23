@@ -1,0 +1,322 @@
+/* ═══════════════════════════════════════════════════════════════
+   MINIMAL MODE
+   HORIZONTAL layout → 2px bottom bar
+   VERTICAL layout   → 2px left bar
+   All !important overrides use [data-theme] prefix where needed
+   to beat per-file theme-specific overrides.
+═══════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════
+   VERTICAL — left bar
+══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar nav ─────────────────────────────────────────────── */
+.nav-item,
+.creator-nav-item,
+.creator-nav-dashboard {
+  background: none !important;
+  border: none !important;
+  border-left: 2px solid transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding-left: calc(var(--sp-3) - 2px) !important;
+}
+.nav-item:hover,
+.creator-nav-item:hover,
+.creator-nav-dashboard:hover:not(.active) {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-left-color: var(--text-dim) !important;
+  box-shadow: none !important;
+}
+.nav-item.active,
+.creator-nav-item.active,
+.creator-nav-dashboard.active {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-left: 2px solid var(--text-primary) !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+/* ── Upload track tabs (vertical list) ──────────────────────── */
+.track-tab, .adv-track-tab {
+  background: none !important;
+  border: none !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding-left: var(--sp-2) !important;
+}
+.track-tab:hover, .adv-track-tab:hover {
+  background: none !important;
+  border-left-color: var(--text-dim) !important;
+}
+.track-tab.active, .adv-track-tab.active {
+  background: none !important;
+  border-left: 2px solid var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* ── Upload step indicators (vertical) ──────────────────────── */
+.upload-step {
+  border-left: 2px solid transparent !important;
+  padding-left: var(--sp-2) !important;
+}
+.upload-step.active {
+  border-left: 2px solid var(--text-primary) !important;
+}
+.upload-step.active .upload-step-num {
+  background: none !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--glass-border) !important;
+}
+.upload-step.active .upload-step-label {
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* ── CTA action buttons (standalone — left bar as call-to-action) */
+.artist-follow-btn,
+.shop-buy-btn,
+.vinyl-direct-buy-btn,
+.buy-btn,
+.release-play-btn,
+.hero-play-btn,
+.rel-upload-btn,
+.s-save-btn,
+.sub-manage-btn,
+.modal-confirm,
+.ai-builder-btn,
+.upload-drop-btn,
+.upload-next-btn,
+.upload-success-btn,
+.creator-listener-view-btn {
+  background: none !important;
+  border: none !important;
+  border-left: 2px solid var(--text-dim) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 5px var(--sp-3) !important;
+  letter-spacing: 0.03em;
+}
+.artist-follow-btn:hover,
+.shop-buy-btn:hover,
+.vinyl-direct-buy-btn:hover,
+.buy-btn:hover,
+.release-play-btn:hover,
+.hero-play-btn:hover,
+.rel-upload-btn:hover,
+.s-save-btn:hover,
+.sub-manage-btn:hover,
+.modal-confirm:hover,
+.ai-builder-btn:hover,
+.upload-drop-btn:hover,
+.upload-next-btn:hover,
+.upload-success-btn:hover,
+.creator-listener-view-btn:hover {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-left-color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   HORIZONTAL — bottom bar
+   Uses [data-theme] prefix to beat theme-specific overrides
+══════════════════════════════════════════════════════════════ */
+
+/* ── Shared horizontal base (no bubble) ─────────────────────── */
+[data-theme] .search-tab,
+[data-theme] .lib-tab,
+[data-theme] .shop-tab,
+[data-theme] .dash-tab,
+[data-theme] .browse-genre-btn,
+[data-theme] .fmt-btn,
+[data-theme] .s-pill,
+[data-theme] .kpi-period-btn {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  box-shadow: none !important;
+  text-decoration: none !important;
+}
+
+/* Hover */
+[data-theme] .search-tab:hover,
+[data-theme] .lib-tab:hover,
+[data-theme] .shop-tab:hover,
+[data-theme] .dash-tab:hover,
+[data-theme] .browse-genre-btn:hover,
+[data-theme] .fmt-btn:hover,
+[data-theme] .s-pill:hover,
+[data-theme] .kpi-period-btn:hover {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-bottom-color: var(--text-dim) !important;
+  box-shadow: none !important;
+}
+
+/* Active / selected */
+[data-theme] .search-tab.active,
+[data-theme] .lib-tab.active,
+[data-theme] .shop-tab.active,
+[data-theme] .dash-tab.active,
+[data-theme] .fmt-btn.selected,
+[data-theme] .s-pill.active,
+[data-theme] .kpi-period-btn.active,
+[data-theme] .browse-genre-btn.active {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-bottom: 2px solid var(--text-primary) !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+/* Padding per element type */
+[data-theme] .search-tab,
+[data-theme] .lib-tab,
+[data-theme] .shop-tab,
+[data-theme] .dash-tab { padding: 4px 0 6px !important; }
+
+[data-theme] .browse-genre-btn { padding: 3px var(--sp-1) 5px !important; }
+[data-theme] .fmt-btn          { padding: 3px 0 5px !important; }
+[data-theme] .s-pill           { padding: 4px 0 6px !important; }
+[data-theme] .kpi-period-btn   { padding: 2px var(--sp-2) 4px !important; }
+
+/* Tab row / genre group spacing */
+.search-tabs, .lib-tabs, .shop-tabs, .dash-tabs { gap: var(--sp-6) !important; }
+.browse-genres {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  gap: var(--sp-3) var(--sp-6) !important;
+}
+.kpi-period-row { gap: var(--sp-4) !important; }
+
+/* ── VisualIdentity artwork & preset buttons (horizontal rows) ── */
+[data-theme] .vi-artwork-btn,
+[data-theme] .vi-preset-btn {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  box-shadow: none !important;
+}
+[data-theme] .vi-artwork-btn:hover,
+[data-theme] .vi-preset-btn:hover {
+  background: none !important;
+  border-bottom-color: var(--text-dim) !important;
+  box-shadow: none !important;
+}
+[data-theme] .vi-artwork-btn.active,
+[data-theme] .vi-preset-btn.active {
+  background: none !important;
+  color: var(--text-primary) !important;
+  border-bottom: 2px solid var(--text-primary) !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   PANEL / STRUCTURAL elements — keep unchanged
+══════════════════════════════════════════════════════════════ */
+
+/* ── Search bar (functional input — bottom line only) ──────── */
+.search-bar {
+  background: none !important;
+  border: none !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: var(--sp-2) 0 !important;
+}
+.search-bar:focus-within {
+  border-bottom-color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+/* ── TopBar icon buttons ─────────────────────────────────────── */
+.topbar-btn {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.topbar-btn:hover {
+  background: none !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Plan badge & logout ─────────────────────────────────────── */
+.plan-badge {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: var(--sp-1) 0 !important;
+  opacity: 0.55;
+}
+.sidebar-logout, .creator-logout-btn {
+  border: none !important;
+  background: none !important;
+}
+.sidebar-logout:hover, .creator-logout-btn:hover {
+  background: none !important;
+  opacity: 1;
+}
+
+/* ── Card overlays ───────────────────────────────────────────── */
+.card-play-btn {
+  background: none !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(255,255,255,0.55) !important;
+}
+[data-theme="white"] .card-play-btn { border-color: rgba(0,0,0,0.35) !important; }
+.card-play-btn:hover {
+  background: rgba(255,255,255,0.10) !important;
+  box-shadow: none !important;
+}
+.card-action-btn {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.card-action-btn:hover, .card-action-btn.active { color: var(--text-primary) !important; }
+.card-title:hover { color: var(--text-primary) !important; }
+.release-card:hover { border-color: transparent !important; box-shadow: none !important; }
+
+/* ── Player play → thin circle ──────────────────────────────── */
+.play-btn {
+  background: none !important;
+  border: 1.5px solid var(--text-secondary) !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
+}
+.play-btn:hover {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+[data-theme="white"] .play-btn:hover { background: rgba(0,0,0,0.05) !important; }
+
+.ctrl-btn:hover  { color: var(--text-primary) !important; }
+.ctrl-btn.active-ctrl { color: var(--text-primary) !important; }
+.player-like-btn:hover,
+.player-like-btn.liked { color: var(--text-primary) !important; }
+.release-icon-btn:hover,
+.release-icon-btn.saved { color: var(--text-primary) !important; }
+
+/* ── Progress / wav bars / volume ───────────────────────────── */
+.wave-bar { background: var(--text-secondary) !important; box-shadow: none !important; }
+.progress-fill { background: var(--text-primary) !important; box-shadow: none !important; }
+.progress-thumb { background: var(--text-primary) !important; }
+.volume-slider::-webkit-slider-thumb {
+  background: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+/* ── Subscription artist bar ─────────────────────────────────── */
+.sub-artist-bar { background: var(--text-muted) !important; }

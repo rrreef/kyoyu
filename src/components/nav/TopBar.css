@@ -1,0 +1,159 @@
+/* ─── TopBar — iOS 26 Liquid Glass Header ─── */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-6);
+  z-index: 90;
+  gap: var(--sp-4);
+
+  /* Ultra-thin glass — topbar is above everything */
+  background: rgba(6, 6, 8, 0.22) !important;
+  backdrop-filter: blur(60px) saturate(200%) brightness(1.10);
+  -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(1.10);
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 28px rgba(0, 0, 0, 0.28);
+}
+/* Bottom-edge vignette separator */
+.topbar::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,107,26,0.12) 40%,
+    rgba(255,107,26,0.12) 60%,
+    transparent 100%
+  );
+}
+
+.topbar-nav { display: flex; align-items: center; gap: var(--sp-1); }
+
+/* Glass pill buttons */
+.topbar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.topbar-btn:hover {
+  background: rgba(255, 107, 26, 0.12);
+  color: var(--orange-300);
+  border-color: rgba(255, 107, 26, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 12px rgba(255, 107, 26, 0.12);
+}
+
+.topbar-title {
+  font-family: var(--font-heading);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.01em;
+  flex: 1;
+  text-align: center;
+}
+
+.topbar-actions { display: flex; align-items: center; gap: var(--sp-1); }
+
+/* Avatar — micro glass circle */
+.topbar-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 107, 26, 0.4) 0%,
+    rgba(255, 107, 26, 0.2) 100%
+  );
+  border: 1px solid rgba(255, 107, 26, 0.35);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  box-shadow: 0 0 10px rgba(255, 107, 26, 0.2);
+}
+
+@media (max-width: 768px) {
+  .topbar { left: 0; }
+  .topbar-nav { display: none; }
+  .topbar-search { display: none; }
+  .topbar-actions { margin-left: auto; }
+}
+
+/* ── White theme TopBar overrides ──────────────────────────── */
+[data-theme="white"] .topbar {
+  background: rgba(248, 248, 252, 0.22) !important;
+  backdrop-filter: blur(60px) saturate(180%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(60px) saturate(180%) brightness(1.04) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05),
+    0 4px 24px rgba(0, 0, 0, 0.06);
+}
+[data-theme="white"] .topbar::after {
+  display: none; /* remove orange vignette */
+}
+[data-theme="white"] .topbar-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  color: rgba(15, 15, 26, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+}
+[data-theme="white"] .topbar-btn:hover {
+  background: rgba(255, 107, 26, 0.10);
+  color: hsl(24, 100%, 30%);
+  border-color: rgba(255, 107, 26, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+}
+[data-theme="white"] .topbar-title {
+  color: rgba(15, 15, 26, 0.80);
+}
+
+/* ── Grey theme TopBar overrides ───────────────────────────── */
+[data-theme="grey"] .topbar {
+  background: rgba(35, 35, 46, 0.24) !important;
+  backdrop-filter: blur(60px) saturate(200%) brightness(1.08) !important;
+  -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(1.08) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 4px 28px rgba(0, 0, 0, 0.22);
+}
+
+/* Avatar photo (when image is set) */
+.topbar-avatar-img {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  display: block;
+  border: 1.5px solid var(--glass-border-light);
+  background: none;
+}

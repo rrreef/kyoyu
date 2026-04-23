@@ -1,0 +1,139 @@
+.search-bar-wrap { margin-bottom: var(--sp-5); }
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--radius-full) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    0 4px 20px rgba(0,0,0,0.3);
+  transition: var(--transition-base);
+}
+.search-bar:focus-within {
+  border-color: var(--glass-border-light) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 4px 24px rgba(0,0,0,0.3);
+}
+.search-icon { color: var(--text-muted); flex-shrink: 0; margin-left: 10px; }
+.search-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  outline: none;
+  font-size: 1rem;
+  color: var(--text-primary);
+  padding: 0 0 0 4px; /* small left gap so caret clears the rounded border */
+  width: 100%;
+}
+.search-input::placeholder { color: var(--text-muted); }
+
+/* ── Filter tabs (All · Music · Artists …) ─────────────────── */
+.search-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-6);
+  flex-wrap: wrap;
+}
+.search-tab {
+  padding: var(--sp-1) var(--sp-4);
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: var(--transition-fast);
+}
+/* Dark — 11% lighter */
+.search-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.search-tab.active {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+.search-section { margin-bottom: var(--sp-8); }
+.search-grid { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+
+/* ── Browse genres ──────────────────────────────────────────── */
+.search-browse { margin-bottom: var(--sp-8); }
+.browse-title { font-size: 1.125rem; margin-bottom: var(--sp-4); }
+.browse-genres { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-6); }
+.browse-genre-btn {
+  padding: 3px 0 5px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-base);
+  background: none;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.browse-genre-btn:hover {
+  background: none;
+  color: var(--text-primary);
+  border-bottom-color: var(--text-dim);
+}
+
+/* ── Label list ─────────────────────────────────────────────── */
+.label-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--radius-lg) !important;
+  transition: var(--transition-base);
+}
+.label-row:hover { background: var(--glass-bg-hover) !important; }
+.label-row-logo { width: 48px; height: 48px; border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; background: var(--grey-800); }
+.label-row-logo img { width: 100%; height: 100%; object-fit: cover; }
+.label-row-info { flex: 1; }
+.label-row-name { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); }
+.label-row-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.label-row-followers { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Empty state ────────────────────────────────────────────── */
+.search-empty { text-align: center; padding: var(--sp-16) 0; color: var(--text-muted); }
+.search-empty svg { margin: 0 auto var(--sp-4); opacity: 0.3; }
+.search-empty p { font-size: 1rem; color: var(--text-secondary); margin-bottom: var(--sp-2); }
+.search-empty strong { color: var(--text-primary); }
+.search-empty-sub { font-size: 0.875rem; color: var(--text-muted); }
+
+/* ═══ Theme overrides ════════════════════════════════════════ */
+
+/* White — search bar light glass, tabs 11% darker */
+[data-theme="white"] .search-bar {
+  background: rgba(255, 255, 255, 0.60) !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 16px rgba(0,0,0,0.06);
+}
+[data-theme="white"] .search-bar:focus-within {
+  border-color: rgba(0, 0, 0, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 20px rgba(0,0,0,0.08);
+}
+
+/* ── Mobile: 3-column release grid ──────────────────────────── */
+@media (max-width: 768px) {
+  .search-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-2);
+  }
+}

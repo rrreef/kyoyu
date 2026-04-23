@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>KYOYU — Disc + Sharing Concepts</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body {
+      background: #060606; color: #fff;
+      font-family: 'Inter', sans-serif;
+      padding: 64px 48px 96px;
+      display: flex; flex-direction: column; align-items: center; gap: 60px;
+    }
+    header { text-align: center; }
+    header small { display:block; font-size:9px; letter-spacing:0.35em; text-transform:uppercase; color:#1e1e1e; margin-bottom:12px; }
+    header h1 { font-size:22px; font-weight:300; letter-spacing:0.18em; color:#ccc; }
+    header p { font-size:11px; color:#2a2a2a; margin-top:8px; }
+
+    section { width:100%; max-width:1100px; display:flex; flex-direction:column; gap:14px; }
+    .section-header { display:flex; align-items:center; gap:14px; }
+    .section-title { font-size:8px; letter-spacing:0.32em; text-transform:uppercase; color:#1e1e1e; }
+    .section-line { flex:1; height:1px; background:#111; }
+    .section-badge { font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color:#1a1a1a; white-space:nowrap; }
+
+    .grid-8 { display:grid; grid-template-columns:repeat(8,1fr); gap:10px; }
+    .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+
+    .card {
+      background:#0b0b0b; border:1px solid #111; border-radius:14px; overflow:hidden;
+      display:flex; flex-direction:column; transition:border-color .2s,transform .2s; cursor:pointer;
+    }
+    .card:hover { border-color:#222; transform:translateY(-2px); }
+    .card.fav { background:#0e0e0e; border-color:#191919; }
+
+    .img-wrap { width:100%; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; background:#060606; padding:10px; }
+    .img-wrap img { width:100%; height:100%; object-fit:contain; }
+
+    .caption { padding:8px 10px 10px; border-top:1px solid #0e0e0e; display:flex; flex-direction:column; gap:2px; }
+    .lbl { font-size:7px; letter-spacing:0.2em; text-transform:uppercase; color:#1a1a1a; }
+    .title { font-size:10px; font-weight:500; color:#888; margin-top:1px; }
+    .desc { font-size:8.5px; color:#262626; line-height:1.6; margin-top:2px; }
+
+    hr { width:100%; max-width:1100px; border:none; border-top:1px solid #0d0d0d; }
+    footer { font-size:10px; color:#1a1a1a; letter-spacing:0.14em; text-align:center; }
+  </style>
+</head>
+<body>
+
+<header>
+  <small>KYOYU — Visual Identity</small>
+  <h1>8 Selected + 12 Sharing / Division Concepts</h1>
+  <p>Disc as vinyl · Disc as shared revenue · Music + ownership in one mark.</p>
+</header>
+
+<!-- 8 SELECTED -->
+<section>
+  <div class="section-header">
+    <div class="section-title">Your 8 Selected</div>
+    <div class="section-line"></div>
+    <div class="section-badge">C · P · Q · X · AO · AU · AW · BH</div>
+  </div>
+  <div class="grid-8">
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-c.png"/></div><div class="caption"><span class="lbl">C</span><div class="title">Radial Wave</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-p.png"/></div><div class="caption"><span class="lbl">P</span><div class="title">Groove Labyrinth</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-q.png"/></div><div class="caption"><span class="lbl">Q</span><div class="title">Vinyl Side View</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-x.png"/></div><div class="caption"><span class="lbl">X</span><div class="title">Spinning Record</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-ao.png"/></div><div class="caption"><span class="lbl">AO</span><div class="title">Monolith × Wave</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-au.png"/></div><div class="caption"><span class="lbl">AU</span><div class="title">K × Wave</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-aw.png"/></div><div class="caption"><span class="lbl">AW</span><div class="title">Wave Pulse</div></div></div>
+    <div class="card fav"><div class="img-wrap"><img src="/logos/logo-bh2.png"/></div><div class="caption"><span class="lbl">BH</span><div class="title">Record + Tonearm</div></div></div>
+  </div>
+</section>
+
+<hr/>
+
+<!-- 12 SHARING CONCEPTS -->
+<section>
+  <div class="section-header">
+    <div class="section-title">12 New — Disc as Share / Cut </div>
+    <div class="section-line"></div>
+    <div class="section-badge">Vinyl × Revenue split</div>
+  </div>
+  <div class="grid">
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da1.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA1</span>
+        <div class="title">Vinyl Pie Chart</div>
+        <div class="desc">Disc split into 3 unequal sectors — record and revenue split at once.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da2.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA2</span>
+        <div class="title">Pie Slice Pulled</div>
+        <div class="desc">One slice separating from the disc — your cut being taken.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da3.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA3</span>
+        <div class="title">Vinyl + One Cut</div>
+        <div class="desc">Ring with one radial knife line. Vinyl meets the idea of a split.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da4.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA4</span>
+        <div class="title">Solo Wedge</div>
+        <div class="desc">A single pie wedge shown alone — one share, isolated. Reads as sound sector too.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da5.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA5</span>
+        <div class="title">Missing Slice</div>
+        <div class="desc">Solid disc with one triangular gap — share already taken. Refined pac-man.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da6.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA6</span>
+        <div class="title">Groove Pie Grid</div>
+        <div class="desc">Vinyl groove rings crossed by radial cuts — record AND pie chart merged.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da7.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA7</span>
+        <div class="title">Three Floating Slices</div>
+        <div class="desc">3 separate wedge pieces with gaps — sharing distributed to all parties.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da8.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA8</span>
+        <div class="title">Slice Lifting</div>
+        <div class="desc">One third of the disc lifting away — the moment of distribution.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da9.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA9</span>
+        <div class="title">Three Equal Thirds</div>
+        <div class="desc">Circle divided into perfect thirds. Equal share, equal ownership. Clean + bold.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da10.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA10</span>
+        <div class="title">Wave Split</div>
+        <div class="desc">Disc split in two by a sine wave boundary — music IS the dividing line.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da11.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA11</span>
+        <div class="title">Exploded Vinyl</div>
+        <div class="desc">Vinyl groove sections bursting outward — intense, energetic distribution.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="img-wrap"><img src="/logos/logo-da12.png"/></div>
+      <div class="caption">
+        <span class="lbl">DA12</span>
+        <div class="title">Chord Cut</div>
+        <div class="desc">Disc split by an off-center diagonal chord — asymmetric, decisive allocation.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer>8 selected + 12 sharing directions — disc as vinyl, disc as cut.</footer>
+
+</body>
+</html>

@@ -1,0 +1,123 @@
+.artist-page {}
+.artist-hero {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+.artist-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+  filter: brightness(0.3) blur(1px);
+  transform: scale(1.02);
+}
+.artist-hero-content {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-10) var(--sp-8);
+  width: 100%;
+}
+.artist-hero-badge {
+  display: inline-flex;
+  padding: 3px 12px;
+  border-radius: var(--radius-full) !important;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-3);
+}
+.artist-hero-name {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-3);
+  text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+}
+.artist-stats { display: flex; gap: var(--sp-5); margin-bottom: var(--sp-4); }
+.artist-stat { display: flex; align-items: center; gap: var(--sp-2); font-size: 0.8125rem; color: var(--text-secondary); }
+
+.artist-hero-actions { display: flex; gap: var(--sp-3); align-items: center; }
+.artist-follow-btn {
+  padding: var(--sp-2) var(--sp-6);
+  border-radius: var(--radius-full);
+  background: var(--orange-500);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: var(--transition-fast);
+  font-family: var(--font-body);
+  box-shadow: 0 0 20px rgba(255,107,26,0.35);
+}
+.artist-follow-btn:hover { background: var(--orange-400); }
+.artist-play-btn {
+  padding: var(--sp-2) var(--sp-5);
+  border-radius: var(--radius-full) !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+.artist-play-btn:hover { color: var(--text-primary); }
+
+.artist-bio-section { margin-bottom: var(--sp-8); }
+.artist-bio { font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.7; }
+.artist-discography { margin-bottom: var(--sp-8); }
+.artist-events { margin-bottom: var(--sp-8); }
+
+.event-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg) !important;
+}
+.event-date { display: flex; flex-direction: column; align-items: center; min-width: 40px; }
+.event-month { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+.event-day { font-size: 1.5rem; font-weight: 700; font-family: var(--font-heading); color: var(--text-primary); line-height: 1; }
+.event-info { flex: 1; }
+.event-venue { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); }
+.event-city { font-size: 0.8125rem; color: var(--text-muted); }
+.event-tickets-btn {
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: var(--transition-fast);
+  font-family: var(--font-body);
+}
+.event-tickets-btn:hover { border-color: rgba(255,107,26,0.3); color: var(--orange-300); }
+
+.artist-label-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--radius-full) !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-bottom: var(--sp-8);
+  transition: var(--transition-fast);
+}
+.artist-label-link:hover { color: var(--text-primary); }
+
+@media (max-width: 768px) {
+  .artist-hero { height: 320px; }
+  .artist-hero-name { font-size: 2rem; }
+  .artist-stats { flex-wrap: wrap; gap: var(--sp-3); }
+}
+
+/* ═══ Theme — neutralise orange in ArtistPage ══════════════════ */
+.artist-follow-btn { background: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; box-shadow: 0 4px 16px var(--btn-primary-glow) !important; }
+.artist-follow-btn:hover { background: var(--btn-primary-hover) !important; }
+.event-tickets-btn:hover { border-color: var(--glass-border-light) !important; color: var(--text-primary) !important; }

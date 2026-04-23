@@ -1,0 +1,1519 @@
+/* ── Visual Identity Page ─────────────────────────────────── */
+.visual-identity-page { padding: var(--sp-6); }
+
+.vi-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--sp-6);
+  gap: var(--sp-4);
+}
+.vi-header h1 { font-size: 1.8rem; font-weight: 700; margin: 0 0 4px; }
+.vi-header-sub { font-size: 0.82rem; color: var(--text-muted); margin: 0; }
+.vi-header-actions { display: flex; align-items: center; gap: var(--sp-3); }
+
+.vi-preview-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.vi-preview-btn:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.88);
+}
+
+.vi-save-btn {
+  padding: 9px 22px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: rgba(155,109,255,0.22);
+  color: rgba(185,150,255,0.95);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+}
+.vi-save-btn:hover { background: rgba(155,109,255,0.36); }
+.vi-saved-toast {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(80,200,120,0.9);
+}
+
+/* ── Two-column grid ─────────────────────────────────────── */
+.vi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-5);
+  align-items: start;
+}
+.vi-col { display: flex; flex-direction: column; gap: var(--sp-5); }
+
+/* ── Card ────────────────────────────────────────────────── */
+.vi-card {
+  border-radius: var(--radius-xl) !important;
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  position: relative; /* needed for resize handles */
+}
+
+/* ── Resize corner handles ──────────────────────────────────── */
+.vi-rhandle {
+  position: absolute;
+  bottom: 4px;
+  width: 22px;
+  height: 22px;
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: auto;
+}
+.vi-card:hover .vi-rhandle { opacity: 1; }
+
+.vi-rhandle--sw { left: 4px;  cursor: sw-resize; }
+.vi-rhandle--se { right: 4px; cursor: se-resize; }
+
+/* L-shaped bracket indicator */
+.vi-rhandle--sw::after,
+.vi-rhandle--se::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-bottom: 2px solid rgba(255,255,255,0.45);
+  border-radius: 0 0 0 2px;
+  transition: border-color 0.12s;
+}
+.vi-rhandle--sw::after {
+  left: 3px;
+  border-left:  2px solid rgba(255,255,255,0.45);
+}
+.vi-rhandle--se::after {
+  right: 3px;
+  border-right: 2px solid rgba(255,255,255,0.45);
+}
+.vi-rhandle:hover::after {
+  border-color: rgba(155,109,255,0.85);
+}
+
+.vi-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+}
+.vi-card-hint { font-size: 0.76rem; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+/* ── Hidden file input ───────────────────────────────────── */
+.vi-file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Upload Zone ─────────────────────────────────────────── */
+.vi-upload-zone {
+  border-radius: var(--radius-xl);
+  border: 1.5px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+}
+.vi-upload-zone.has-preview { border-style: solid; border-color: rgba(255,255,255,0.1); }
+
+/* ── Empty state label ───────────────────────────────────── */
+.vi-clickable-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+  min-height: 130px;
+  padding: var(--sp-4);
+  color: var(--text-muted);
+  transition: background 0.15s;
+}
+.vi-clickable-label:hover { background: rgba(255,255,255,0.06); }
+.vi-upload-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+.vi-upload-hint  { font-size: 0.68rem; color: var(--text-dim); }
+
+/* ── Preview state ───────────────────────────────────────── */
+.vi-preview-wrapper {
+  position: relative;
+  width: 100%;
+  flex: 1;
+}
+.vi-preview-img {
+  display: block;
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.vi-upload-zone--avatar .vi-preview-img {
+  height: 100px;
+}
+.vi-preview-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vi-preview-wrapper:hover .vi-preview-actions { opacity: 1; }
+.vi-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(30,30,40,0.85);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  backdrop-filter: blur(8px);
+  line-height: 1.3;
+}
+.vi-preview-btn--remove {
+  background: rgba(244,63,94,0.25);
+  border-color: rgba(244,63,94,0.3);
+  color: rgba(255,120,130,0.9);
+}
+.vi-preview-btn--remove:hover { background: rgba(244,63,94,0.45); }
+
+/* Avatar row */
+.vi-avatar-upload-row {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+.vi-avatar-upload-row .vi-upload-zone { flex: 1; min-height: 100px; }
+.vi-avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+  align-self: center;
+}
+.vi-avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Display mode */
+.vi-mode-pills { display: flex; gap: 6px; }
+.vi-mode-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+.vi-mode-pill:hover { background: rgba(255,255,255,0.09); }
+.vi-mode-pill.active {
+  background: rgba(155,109,255,0.2);
+  border-color: rgba(155,109,255,0.4);
+  color: rgba(185,150,255,0.95);
+}
+.vi-mode-desc { font-size: 0.74rem; color: var(--text-muted); line-height: 1.5; }
+
+/* Artworks grid */
+.vi-artwork-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  overflow: hidden;  /* cards are clamped inside — nothing escapes the panel */
+}
+/* ─ Artwork card: absolutely positioned on the free canvas ─ */
+.vi-artwork-card {
+  position:    absolute;
+  border-radius: 10px;
+  overflow:    visible;  /* must be visible so corner handles aren't clipped */
+  border:      1px solid rgba(255,255,255,0.07);
+  background:  transparent;
+  cursor:      grab;
+  user-select: none;
+  touch-action: none;
+  transition:  border-color 0.2s, box-shadow 0.2s;
+  z-index:     1;
+}
+.vi-artwork-card:active { cursor: grabbing; }
+.vi-artwork-card--cropped { border-color: rgba(155,109,255,0.3); }
+.vi-artwork-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.35); z-index: 10; }
+
+/* Magnetic snap: purple glow when card locks onto a guide line */
+.vi-artwork-card--snapping {
+  box-shadow: 0 0 0 2px rgba(155,109,255,0.8), 0 4px 24px rgba(155,109,255,0.35) !important;
+  transition: box-shadow 0.08s ease;
+}
+
+/* Image: fills the proportionally-correct box exactly like profile cover */
+.vi-artwork-img {
+  position:      absolute;
+  inset:         0;
+  width:         100%;
+  height:        100%;
+  object-fit:    cover;
+  display:       block;
+  pointer-events: none;
+  border-radius: 10px; /* card uses overflow:visible so image handles its own rounding */
+}
+
+/* Hover overlay — pointer-events:none when invisible so drag events pass through */
+.vi-artwork-overlay {
+  position:       absolute;
+  inset:          0;
+  display:        flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding:        7px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.52) 0%,
+    transparent 30%,
+    transparent 60%,
+    rgba(0,0,0,0.58) 100%
+  );
+  opacity:        0;
+  pointer-events: none;   /* always transparent to events — only buttons are clickable */
+  transition:     opacity 0.15s;
+}
+.vi-artwork-card:hover .vi-artwork-overlay {
+  opacity: 1;   /* show on hover but keep pointer-events:none on the overlay itself */
+}
+
+.vi-artwork-overlay-top {
+  display:     flex;
+  align-items: center;
+  gap:         5px;
+  flex-wrap:   wrap;
+}
+.vi-artwork-overlay-label {
+  font-size:    0.62rem;
+  font-weight:  600;
+  font-family:  var(--font-body);
+  color:        rgba(255,255,255,0.9);
+  white-space:  nowrap;
+  overflow:     hidden;
+  text-overflow:ellipsis;
+  text-shadow:  0 1px 3px rgba(0,0,0,0.6);
+  cursor:       text;
+  min-width:    0;
+  flex:         1;
+}
+.vi-artwork-label-empty {
+  font-style: italic;
+  opacity:    0.45;
+}
+/* Inline rename input — sits in the overlay top bar */
+.vi-artwork-label-input {
+  flex:           1;
+  min-width:      0;
+  background:     rgba(0,0,0,0.55);
+  border:         1px solid rgba(155,109,255,0.55);
+  border-radius:  5px;
+  padding:        2px 6px;
+  font-size:      0.62rem;
+  font-weight:    600;
+  font-family:    var(--font-body);
+  color:          rgba(255,255,255,0.95);
+  outline:        none;
+  width:          100%;
+  pointer-events: auto;
+}
+.vi-artwork-label-input:focus {
+  border-color:   rgba(155,109,255,0.85);
+  box-shadow:     0 0 0 2px rgba(155,109,255,0.2);
+}
+.vi-artwork-overlay-bottom {
+  display:   flex;
+  gap:       4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Crop badge (inside overlay top) */
+.vi-artwork-crop-badge {
+  font-size:    0.58rem;
+  font-weight:  700;
+  color:        rgba(185,150,255,0.95);
+  background:   rgba(155,109,255,0.25);
+  border:       1px solid rgba(155,109,255,0.3);
+  border-radius:20px;
+  padding:      1px 6px;
+}
+
+/* Action buttons inside overlay */
+.vi-artwork-btn {
+  display:      inline-flex;
+  align-items:  center;
+  gap:          3px;
+  padding:      3px 6px;
+  font-size:    0.62rem;
+  font-weight:  700;
+  font-family:  var(--font-body);
+  color:        rgba(255,255,255,0.85);
+  background:   rgba(30,20,50,0.7);
+  border:       1px solid rgba(255,255,255,0.12);
+  border-radius:4px;
+  cursor:       pointer;
+  backdrop-filter: blur(6px);
+  transition:   background 0.12s, color 0.12s;
+  pointer-events: auto;   /* clickable even though parent overlay is pointer-events:none */
+}
+.vi-artwork-btn:hover   { background: rgba(155,109,255,0.35); border-color: rgba(155,109,255,0.4); }
+.vi-artwork-btn.active  { background: rgba(155,109,255,0.4);  border-color: rgba(155,109,255,0.5); color: rgba(220,190,255,1); }
+.vi-artwork-btn--danger { background: rgba(244,63,94,0.35); border-color: rgba(244,63,94,0.3); }
+.vi-artwork-btn--danger:hover { background: rgba(244,63,94,0.6); }
+
+.vi-artwork-add {
+  height: 110px;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+.vi-artwork-add:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
+
+/* Color presets */
+.vi-palette-presets {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: nowrap;
+  justify-content: center;
+  margin: 0 -2px;
+}
+.vi-preset-btn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font-body);
+}
+.vi-preset-btn.active { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); }
+.vi-preset-btn > span:first-child,
+.vi-preset-btn > span:nth-child(2) {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.vi-preset-label { font-size: 0.62rem; color: var(--text-muted); margin-left: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* Color pickers — single row: Primary [■] #hex  /  Secondary [■] #hex */
+.vi-color-pickers {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+/* Slash divider between the two rows */
+.vi-color-row + .vi-color-row::before {
+  content: '|';
+
+  color: rgba(255,255,255,0.18);
+  font-size: 0.9rem;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.vi-color-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.vi-color-row label { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
+.vi-color-row input[type=color] {
+  width: 32px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+}
+.vi-color-row code { font-size: 0.68rem; color: var(--text-dim); font-family: monospace; }
+
+/* About card — bio textarea */
+.vi-bio-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-family: var(--font-body);
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 100px;
+}
+.vi-bio-textarea::placeholder { color: rgba(255,255,255,0.2); }
+.vi-bio-textarea:hover  { border-color: rgba(255,255,255,0.14); background: rgba(255,255,255,0.05); }
+.vi-bio-textarea:focus  { border-color: rgba(155,109,255,0.4);  background: rgba(155,109,255,0.04); }
+
+/* Links sub-label */
+.vi-about-links-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: var(--sp-3);
+  margin-bottom: 6px;
+  padding-top: var(--sp-3);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Links */
+.vi-links-list { display: flex; flex-direction: column; gap: 6px; }
+.vi-link-row { display: flex; gap: 6px; align-items: center; }
+.vi-link-row input {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: var(--font-body);
+  outline: none;
+}
+.vi-link-row input:focus { border-color: rgba(255,255,255,0.2); }
+.vi-link-remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.vi-link-remove:hover { background: rgba(244,63,94,0.15); color: rgba(244,63,94,0.8); }
+.vi-add-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px dashed rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+  align-self: flex-start;
+  transition: all 0.12s;
+}
+.vi-add-link-btn:hover { background: rgba(255,255,255,0.07); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .vi-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Drag-over highlight ─────────────────────────────────── */
+.vi-upload-zone.vi-drag-over,
+.vi-artwork-add.vi-drag-over {
+  border-color: rgba(155,109,255,0.6) !important;
+  background: rgba(155,109,255,0.1) !important;
+}
+.vi-upload-zone.vi-drag-over .vi-upload-label,
+.vi-artwork-add.vi-drag-over span {
+  color: rgba(185,150,255,0.95);
+}
+.vi-upload-zone.vi-drag-over svg,
+.vi-artwork-add.vi-drag-over svg {
+  color: rgba(185,150,255,0.8);
+}
+
+/* ── Cover upload zone with reposition ──────────────────────── */
+.vi-cover-zone {
+  border-radius: var(--radius-xl);
+  border: 1.5px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s;
+}
+.vi-cover-zone.vi-drag-over {
+  border-color: rgba(155,109,255,0.6) !important;
+  background: rgba(155,109,255,0.1) !important;
+}
+
+/* Preview state */
+.vi-cover-preview {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  cursor: grab;
+  user-select: none;
+  overflow: hidden;
+}
+.vi-cover-preview--dragging {
+  cursor: grabbing;
+}
+
+.vi-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  transition: object-position 0.05s;
+}
+
+/* Reposition hint — centered, shows on hover */
+.vi-cover-reposition-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.32);
+  color: rgba(255,255,255,0.9);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.18s;
+  pointer-events: none;
+}
+.vi-cover-preview:hover .vi-cover-reposition-hint { opacity: 1; }
+.vi-cover-preview--dragging .vi-cover-reposition-hint { opacity: 0; }
+
+/* Position readout pill — bottom left */
+.vi-cover-pos-pill {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: rgba(255,255,255,0.7);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vi-cover-preview:hover .vi-cover-pos-pill { opacity: 1; }
+
+/* Action buttons — bottom right, visible on hover */
+.vi-cover-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vi-cover-preview:hover .vi-cover-actions { opacity: 1; }
+.vi-cover-preview--dragging .vi-cover-actions { opacity: 0; }
+
+/* ── Avatar upload zone with reposition ─────────────────────── */
+.vi-avatar-zone-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+/* Square crop zone */
+.vi-avatar-zone {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: var(--radius-xl);
+  border: 1.5px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+.vi-avatar-zone.vi-drag-over {
+  border-color: rgba(155,109,255,0.6) !important;
+  background: rgba(155,109,255,0.1) !important;
+}
+.vi-avatar-zone--dragging { cursor: grabbing; }
+
+/* Image fills the zone */
+.vi-avatar-zone-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  display: block;
+}
+
+/* Circular crop guide overlay */
+.vi-avatar-circle-guide {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  width: 110px;
+  height: 110px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border: 2px solid rgba(255,255,255,0.35);
+}
+
+/* Reposition hint reused from cover zone */
+.vi-avatar-zone .vi-cover-reposition-hint { pointer-events: none; }
+.vi-avatar-zone:hover .vi-cover-reposition-hint { opacity: 1; }
+.vi-avatar-zone--dragging .vi-cover-reposition-hint { opacity: 0; }
+.vi-avatar-zone .vi-cover-actions { opacity: 0; }
+.vi-avatar-zone:hover .vi-cover-actions { opacity: 1; }
+.vi-avatar-zone--dragging .vi-cover-actions { opacity: 0; }
+
+/* Right-side live circular preview */
+.vi-avatar-circle-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.vi-avatar-circle-preview img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(155,109,255,0.35);
+  display: block;
+}
+.vi-avatar-circle-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+/* ── Avatar zone sizing fix (200px) + inner preview div ─────── */
+.vi-avatar-zone {
+  width: 200px !important;
+  height: 200px !important;
+  cursor: default !important;  /* outer zone is not draggable */
+}
+
+/* Inner preview div — owns the drag behaviour, mirrors vi-cover-preview */
+.vi-avatar-preview-inner {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  user-select: none;
+  overflow: hidden;
+}
+.vi-avatar-preview-inner--dragging {
+  cursor: grabbing;
+}
+/* Avatar: no reposition hint overlay — image moves in real-time, circle shows crop */
+.vi-avatar-preview-inner .vi-cover-reposition-hint { display: none !important; }
+
+.vi-avatar-preview-inner .vi-cover-pos-pill { display: none !important; }
+
+.vi-avatar-preview-inner .vi-cover-actions { opacity: 0; transition: opacity 0.15s; }
+.vi-avatar-preview-inner:hover .vi-cover-actions { opacity: 1; }
+.vi-avatar-preview-inner--dragging .vi-cover-actions { opacity: 0; }
+
+/* Circle guide — scale up for 200px zone */
+.vi-avatar-circle-guide {
+  width: 450px !important;
+  height: 450px !important;
+}
+
+/* Larger circle preview on the right */
+.vi-avatar-circle-preview img {
+  width: 110px !important;
+  height: 110px !important;
+}
+
+/* ── Avatar action toolbar — full-width bar at bottom ───────── */
+.vi-avatar-preview-inner .vi-cover-actions {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.70);
+  backdrop-filter: blur(6px);
+  padding: 7px 8px;
+  border-radius: 0;
+  gap: 6px;
+}
+/* Make all three buttons equal-width inside the toolbar */
+.vi-avatar-preview-inner .vi-cover-actions .vi-preview-btn {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ── Avatar zone flex column layout (image + toolbar) ───────── */
+/* Override to flex-column so toolbar sits below image */
+.vi-avatar-zone {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: auto !important;
+  cursor: default !important;
+  overflow: hidden !important;
+  border-radius: 14px !important;
+}
+
+/* Empty state: zone fills remaining card height, no aspect-ratio */
+.vi-avatar-zone:not(.has-preview) {
+  flex: 1 !important;
+  aspect-ratio: unset !important;
+}
+
+/* Image area: square — height = width via aspect-ratio */
+.vi-avatar-preview-inner {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.vi-avatar-preview-inner--dragging { cursor: grabbing; }
+
+/* Permanent toolbar — below the image, never clipped */
+.vi-avatar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(10,8,24,0.85);
+  backdrop-filter: blur(8px);
+}
+.vi-avatar-toolbar-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  background: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.vi-avatar-toolbar-btn:last-child { border-right: none; }
+.vi-avatar-toolbar-btn:hover { background: rgba(155,109,255,0.12); color: rgba(185,150,255,0.95); }
+.vi-avatar-toolbar-btn--remove:hover { background: rgba(244,63,94,0.12); color: rgba(244,63,94,0.9); }
+
+/* Keep the circle guide centred in the (now flex) image area */
+.vi-avatar-preview-inner .vi-avatar-circle-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 450px !important;
+  height: 450px !important;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  pointer-events: none;
+  border: 2px solid rgba(255,255,255,0.35);
+}
+
+
+/* Upload add tile — div-based */
+/* ── Add-artwork zone — base ───────────────────────────────────── */
+.vi-artwork-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.02);
+  transition: border-color 0.18s, background 0.18s;
+  cursor: default;
+}
+
+/* Empty state: fills card flex column (no artwork yet) */
+.vi-artwork-add--fill {
+  flex: 1;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+
+
+
+/* Inner label is the clickable part */
+.vi-artwork-add-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  transition: color 0.15s;
+}
+.vi-artwork-add:hover .vi-artwork-add-label,
+.vi-artwork-add.vi-drag-over .vi-artwork-add-label {
+  color: rgba(185,150,255,0.8);
+}
+
+/* ── Reposition Modal ─────────────────────────────────────────── */
+.vi-reposition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(4, 2, 14, 0.75);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: vi-overlay-in 0.2s ease;
+}
+@keyframes vi-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.vi-reposition-modal {
+  width: min(660px, 90vw);
+  background: rgba(18, 14, 36, 0.97);
+  border: 1px solid rgba(155,109,255,0.2);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04);
+  animation: vi-modal-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes vi-modal-in {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* Header */
+.vi-reposition-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.vi-reposition-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+}
+.vi-reposition-title em {
+  font-style: normal;
+  color: rgba(185,150,255,0.9);
+}
+.vi-reposition-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.13s, color 0.13s;
+}
+.vi-reposition-close:hover { background: rgba(244,63,94,0.2); color: rgba(244,63,94,0.9); }
+
+/* Image drag area */
+.vi-reposition-img-area {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background: rgba(0,0,0,0.3);
+}
+.vi-reposition-img-area--drag { cursor: grabbing; }
+
+.vi-reposition-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Drag hint centered overlay */
+.vi-reposition-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(3px);
+}
+.vi-reposition-img-area:hover .vi-reposition-hint { opacity: 1; }
+.vi-reposition-img-area--drag .vi-reposition-hint { opacity: 1; }
+
+.vi-reposition-coords {
+  font-size: 1.1rem;
+  font-family: monospace;
+  color: rgba(185,150,255,0.95);
+}
+
+/* Footer */
+.vi-reposition-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  gap: 10px;
+}
+.vi-reposition-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.55);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.13s, color 0.13s;
+}
+.vi-reposition-reset:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+
+.vi-reposition-actions { display: flex; gap: 10px; }
+
+.vi-reposition-cancel {
+  padding: 8px 20px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.13s;
+}
+.vi-reposition-cancel:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+
+.vi-reposition-confirm {
+  padding: 8px 24px;
+  border-radius: 9px;
+  border: none;
+  background: linear-gradient(135deg, rgba(155,109,255,0.85), rgba(120,80,220,0.85));
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: opacity 0.13s, transform 0.1s;
+  box-shadow: 0 4px 16px rgba(155,109,255,0.3);
+}
+.vi-reposition-confirm:hover { opacity: 0.88; transform: translateY(-1px); }
+.vi-reposition-confirm:active { transform: translateY(0); }
+
+/* ── Named-area grid (replaces the flex-column approach) ────── */
+/*
+  Layout:
+  ┌──────────┬──────────────┐
+  │  cover   │   artworks   │  row 1
+  ├──────────┤   (spans     │  row 2
+  │  avatar  │    1 + 2)    │
+  ├──────────┼──────────────┤
+  │ display  │   palette    │  row 3
+  │ (spans   ├──────────────┤  row 4
+  │  3 + 4)  │    links     │
+  └──────────┴──────────────┘
+*/
+/* ═══ Grid: two independent flex columns (1/3 | 2/3) ═════════ */
+.vi-grid {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: var(--sp-5) !important;
+  align-items: flex-start !important;
+}
+
+/* Left column (1/3) */
+.vi-grid > .vi-col:first-child {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--sp-5) !important;
+  min-width: 0;
+}
+
+/* Right column (2/3) */
+.vi-grid > .vi-col:last-child {
+  flex: 2 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--sp-5) !important;
+  min-width: 0;
+}
+
+/* Kill display:contents — columns are real flex containers now */
+.vi-col { display: flex !important; }
+
+/* Display Mode: compact, no stretching */
+.vi-area-display { align-self: start; }
+
+/* Artworks card: flex column so canvas fills height */
+.vi-area-artworks { display: flex; flex-direction: column; }
+.vi-card--artwork .vi-artwork-canvas { flex: 1; align-content: start; }
+.vi-card--artwork {
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden;
+}
+.vi-card--artwork .vi-card-title  { padding: var(--sp-5) var(--sp-5) 0 var(--sp-5); }
+.vi-card--artwork .vi-card-hint   { padding: 4px var(--sp-5) 6px var(--sp-5); }
+
+/* Responsive: single column */
+@media (max-width: 900px) {
+  .vi-grid {
+    flex-direction: column !important;
+  }
+  .vi-grid > .vi-col:first-child,
+  .vi-grid > .vi-col:last-child {
+    flex: none !important;
+    width: 100% !important;
+  }
+}
+/* ── Avatar bubble: same height as Cover Image bubble ──────── */
+.vi-area-avatar {
+  align-self: stretch;      /* fill full left column width */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Zone wrap fills card below the title */
+.vi-area-avatar .vi-avatar-zone-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+/* Avatar zone: full width, grows to fill card height */
+.vi-area-avatar .vi-avatar-zone {
+  width: 100% !important;
+  height: auto !important;
+  min-height: unset !important;
+  aspect-ratio: unset !important;
+  flex: 1 !important;
+  max-height: none !important;
+}
+/* Hide the circular preview strip */
+.vi-area-avatar .vi-avatar-circle-preview {
+  display: none !important;
+}
+
+/* ── Avatar toolbar: match profile cover floating pill buttons ── */
+.vi-avatar-toolbar {
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  gap: 5px !important;
+  padding: 8px 10px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  border-top: 1px solid rgba(255,255,255,0.06) !important;
+}
+
+.vi-avatar-toolbar-btn {
+  flex: unset !important;          /* stop stretching to fill width */
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(30,30,40,0.85) !important;
+  color: rgba(255,255,255,0.85) !important;
+  font-size: 0.72rem !important;
+  backdrop-filter: blur(8px);
+  border-right: unset !important;  /* remove the segmented divider */
+}
+.vi-avatar-toolbar-btn:hover {
+  background: rgba(60,50,80,0.9) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+  color: #fff !important;
+}
+.vi-avatar-toolbar-btn--remove {
+  background: rgba(244,63,94,0.25) !important;
+  border-color: rgba(244,63,94,0.3) !important;
+  color: rgba(255,120,130,0.9) !important;
+}
+.vi-avatar-toolbar-btn--remove:hover {
+  background: rgba(244,63,94,0.45) !important;
+}
+
+/* ── Artist photo zone: wider so all 3 buttons fit in one row ── */
+.vi-avatar-zone {
+  width: 280px !important;
+  border-radius: 16px !important;
+}
+/* Image area taller to stay visually proportional */
+.vi-avatar-preview-inner {
+  min-height: 250px !important;
+}
+/* Scale up the circular crop guide to match */
+.vi-avatar-preview-inner .vi-avatar-circle-guide {
+  width: 450px !important;
+  height: 450px !important;
+}
+/* Empty-state label fills zone dynamically — no fixed min-height */
+.vi-avatar-zone .vi-clickable-label {
+  flex: 1 !important;
+  min-height: 0 !important;
+  width: 100% !important;
+}
+
+/* ── Avatar toolbar: center all buttons ─────────────────────── */
+.vi-avatar-toolbar {
+  justify-content: center !important;
+}
+
+/* ── Avatar toolbar: fully transparent, no divider line ─────── */
+.vi-avatar-toolbar {
+  background: transparent !important;
+  border-top: none !important;
+}
+
+/* ── Avatar toolbar: float over photo like cover buttons ─────── */
+/* Pull toolbar out of flow → overlays the photo */
+.vi-avatar-toolbar {
+  position: absolute !important;
+  bottom: 8px !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: transparent !important;
+  border-top: none !important;
+  backdrop-filter: none !important;
+  /* Pointer events: toolbar div itself transparent, children clickable */
+  pointer-events: none !important;
+}
+.vi-avatar-toolbar > * {
+  pointer-events: auto !important;
+}
+
+/* Preview inner now fills the full zone height (no sibling toolbar eating space) */
+.vi-avatar-preview-inner {
+  flex: 1 !important;
+}
+
+/* Zone needs position:relative so the absolute toolbar anchors to it */
+.vi-avatar-zone {
+  position: relative !important;
+}
+
+/* ── Crop / Center button — primary action in artwork toolbar ── */
+.vi-artwork-btn--crop {
+  background: rgba(155,109,255,0.14) !important;
+  border-color: rgba(155,109,255,0.28) !important;
+  color: rgba(185,150,255,0.92) !important;
+}
+.vi-artwork-btn--crop:hover {
+  background: rgba(155,109,255,0.28) !important;
+  border-color: rgba(155,109,255,0.5) !important;
+  color: rgba(210,185,255,1) !important;
+}
+
+
+/* ── Crop frame (in RepositionModal) ───────────────────────── */
+.vi-crop-frame {
+  position:     absolute;
+  cursor:       move;
+  touch-action: none;
+  /* Huge box-shadow fills everything OUTSIDE the frame with a dark overlay */
+  box-shadow:   0 0 0 5000px rgba(0, 0, 0, 0.52);
+  border:       2px solid rgba(155, 109, 255, 0.92);
+  border-radius: 4px;
+  z-index:      10;
+}
+
+/* Corner markers */
+.vi-crop-corner {
+  position:      absolute;
+  width:         10px;
+  height:        10px;
+  background:    white;
+  border-radius: 2px;
+}
+.vi-crop-corner--tl { top:  -5px; left:  -5px; }
+.vi-crop-corner--tr { top:  -5px; right: -5px; }
+.vi-crop-corner--bl { bottom: -5px; left:  -5px; }
+.vi-crop-corner--br { bottom: -5px; right: -5px; }
+
+/* Live coordinates display inside frame */
+.vi-crop-coords {
+  position:   absolute;
+  bottom:     6px;
+  left:       50%;
+  transform:  translateX(-50%);
+  font-size:  0.65rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  color:      rgba(255,255,255,0.85);
+  background: rgba(0,0,0,0.4);
+  padding:    2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Move icon centred in frame */
+.vi-crop-move-icon {
+  position:        absolute;
+  inset:           0;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  color:           rgba(255,255,255,0.5);
+  pointer-events:  none;
+}
+
+/* ── Polygon crop editor (RepositionModal) ─────────────────── */
+
+/* Draggable vertex handle */
+.vi-poly-vertex {
+  position:      absolute;
+  width:         18px;
+  height:        18px;
+  transform:     translate(-50%, -50%);
+  background:    white;
+  border:        2px solid rgba(155,109,255,0.9);
+  border-radius: 50%;
+  cursor:        move;
+  touch-action:  none;
+  z-index:       20;
+  box-shadow:    0 0 0 3px rgba(155,109,255,0.15);
+  transition:    transform 0.08s, box-shadow 0.08s;
+}
+.vi-poly-vertex:hover {
+  transform:  translate(-50%, -50%) scale(1.25);
+  box-shadow: 0 0 0 5px rgba(155,109,255,0.25);
+}
+.vi-poly-vertex:active {
+  transform:  translate(-50%, -50%) scale(1.1);
+  background: rgba(185,150,255,0.95);
+}
+
+/* Point count badge in modal header */
+.vi-poly-pts-badge {
+  display:       inline-flex;
+  align-items:   center;
+  margin-left:   8px;
+  padding:       1px 7px;
+  font-size:     0.6rem;
+  font-weight:   700;
+  border-radius: 20px;
+  background:    rgba(155,109,255,0.2);
+  color:         rgba(185,150,255,0.9);
+  border:        1px solid rgba(155,109,255,0.25);
+  vertical-align: middle;
+}
+
+/* Hint text in footer */
+.vi-poly-hint {
+  font-size:  0.62rem;
+  color:      rgba(255,255,255,0.35);
+  align-self: center;
+  user-select: none;
+}
+
+/* Remove old box-shadow crop frame styles (polygon replaces it) */
+
+/* ── Polygon modal extras ────────────────────────────────── */
+/* "Edit corners" active state */
+.vi-reposition-reset--active {
+  background:   rgba(155,109,255,0.3) !important;
+  border-color: rgba(155,109,255,0.5) !important;
+  color:        rgba(220,190,255,1)    !important;
+}
+
+/* Remove button inside a vertex handle */
+.vi-poly-vertex-remove {
+  position:        absolute;
+  inset:           0;
+  width:           100%;
+  height:          100%;
+  border-radius:   50%;
+  border:          none;
+  background:      rgba(244,63,94,0.85);
+  color:           white;
+  font-size:       11px;
+  font-weight:     900;
+  cursor:          pointer;
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  padding:         0;
+  line-height:     1;
+}
+.vi-poly-vertex--edit {
+  background: rgba(244,63,94,0.5);
+  border-color: rgba(244,63,94,0.8);
+  cursor: pointer;
+}
+.vi-poly-vertex--edit:hover { background: rgba(244,63,94,0.85); }
+
+/* ── Artwork card corner resize handles ─────────────────── */
+.vi-artwork-resize-handle {
+  position:      absolute;
+  width:         12px;
+  height:        12px;
+  background:    white;
+  border:        2px solid rgba(155,109,255,0.85);
+  border-radius: 50%;
+  z-index:       30;
+  cursor:        nwse-resize;
+  touch-action:  none;
+  transition:    transform 0.1s, background 0.1s;
+}
+/* handle visibility: hidden normally, shown on card hover */
+.vi-artwork-card .vi-artwork-resize-handle { opacity: 0; }
+.vi-artwork-card:hover .vi-artwork-resize-handle { opacity: 1; }
+/* flip cursor for left-side corners */
+.vi-artwork-resize-handle[style*="left: 0"][style*="top: 0"],
+.vi-artwork-resize-handle[style*="left: 0"][style*="bottom: 0"] {
+  cursor: nesw-resize;
+}
+.vi-artwork-resize-handle:hover {
+  transform:  scale(1.4);
+  background: rgba(185,150,255,0.95);
+}
+
+/* ── Artwork panel drag-over state ───────────────────────── */
+.vi-panel-drag-over {
+  border-color: rgba(155,109,255,0.5) !important;
+  background:   rgba(155,109,255,0.06) !important;
+  box-shadow:   0 0 0 2px rgba(155,109,255,0.2) !important;
+}
+.vi-panel-drop-hint {
+  display:        flex;
+  align-items:    center;
+  justify-content: center;
+  gap:            10px;
+  padding:        16px;
+  margin-bottom:  10px;
+  background:     rgba(155,109,255,0.12);
+  border:         1.5px dashed rgba(155,109,255,0.4);
+  border-radius:  10px;
+  color:          rgba(185,150,255,0.95);
+  font-size:      0.85rem;
+  font-weight:    700;
+  font-family:    var(--font-body);
+  pointer-events: none;
+  animation:      vi-drop-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes vi-drop-pulse {
+  from { opacity: 0.7; }
+  to   { opacity: 1;   }
+}

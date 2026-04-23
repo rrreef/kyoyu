@@ -1,0 +1,130 @@
+.shop-header { margin-bottom: var(--sp-6); }
+.shop-header h1 { font-size: 1.75rem; margin-bottom: var(--sp-2); }
+.shop-header p { font-size: 0.9375rem; }
+
+.shop-tabs { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-6); }
+.shop-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  transition: var(--transition-fast);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+.shop-tab.active { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(255,107,26,0.3); }
+
+.shop-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg) !important;
+  margin-bottom: var(--sp-6);
+  color: var(--text-secondary);
+}
+.shop-info-title { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); margin-bottom: 4px; }
+.shop-info-sub { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; }
+
+.shop-release-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.shop-release-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border-radius: var(--radius-lg) !important;
+  flex-wrap: wrap;
+}
+.shop-release-cover { width: 52px; height: 52px; border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
+.shop-release-cover img { width: 100%; height: 100%; object-fit: cover; }
+.shop-release-info { flex: 1; min-width: 160px; }
+.shop-release-title { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); }
+.shop-release-artist { font-size: 0.8125rem; color: var(--text-muted); }
+.shop-release-tracks { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+
+.shop-release-formats { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.fmt-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: var(--font-body);
+}
+.fmt-btn.selected { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 10px rgba(255,107,26,0.3); }
+.fmt-btn:not(.selected):hover { border-color: var(--glass-border-hover); color: var(--text-secondary); }
+
+.shop-release-price { text-align: right; }
+.shop-price { font-size: 1.125rem; font-weight: 700; color: var(--text-primary); }
+.shop-price-sub { font-size: 0.7rem; color: var(--text-muted); }
+.shop-buy-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-full);
+  background: var(--orange-500);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: var(--font-body);
+  white-space: nowrap;
+  box-shadow: 0 0 16px rgba(255,107,26,0.3);
+}
+.shop-buy-btn:hover { background: var(--orange-400); }
+.shop-buy-btn.added { background: var(--grey-700); color: var(--text-muted); }
+
+.vinyl-direct-card { flex-shrink: 0; width: 180px; }
+.vinyl-direct-price { font-size: 1.0625rem; font-weight: 700; color: var(--text-primary); margin-top: var(--sp-2); }
+.vinyl-direct-buy-btn {
+  display: block;
+  width: 100%;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-full);
+  background: var(--orange-500);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: var(--font-body);
+  box-shadow: 0 0 14px rgba(255,107,26,0.3);
+}
+.vinyl-direct-buy-btn:hover { background: var(--orange-400); }
+
+.shop-coming-soon {
+  text-align: center;
+  padding: var(--sp-16) var(--sp-8);
+  border-radius: var(--radius-xl) !important;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+}
+.shop-coming-soon svg { opacity: 0.3; }
+.coming-soon-title { font-family: var(--font-heading); font-size: 1.25rem; color: var(--text-secondary); font-weight: 600; }
+.coming-soon-sub { font-size: 0.875rem; max-width: 400px; line-height: 1.6; }
+
+/* ═══ Theme — neutralise orange in Shop ════════════════════════ */
+.shop-tab.active { background: var(--orange-500) !important; color: var(--text-primary) !important; box-shadow: none !important; border-color: var(--glass-border-light) !important; }
+.fmt-btn.selected { background: var(--orange-500) !important; color: var(--text-primary) !important; box-shadow: none !important; border-color: var(--glass-border-light) !important; }
+.shop-buy-btn { background: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; box-shadow: 0 4px 14px var(--btn-primary-glow) !important; }
+.shop-buy-btn:hover { background: var(--btn-primary-hover) !important; }
+.vinyl-direct-buy-btn { background: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; box-shadow: 0 4px 14px var(--btn-primary-glow) !important; }
+.vinyl-direct-buy-btn:hover { background: var(--btn-primary-hover) !important; }

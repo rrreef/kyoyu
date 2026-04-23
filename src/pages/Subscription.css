@@ -1,0 +1,123 @@
+.sub-header { margin-bottom: var(--sp-8); }
+.sub-header-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-full) !important;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
+}
+.sub-header h1 { font-size: 2rem; margin-bottom: var(--sp-3); }
+.sub-header p { font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.6; max-width: 600px; }
+
+.sub-split { padding: var(--sp-6); border-radius: var(--radius-xl) !important; margin-bottom: var(--sp-8); }
+.sub-split-bar {
+  display: flex;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--sp-5);
+  gap: 1px;
+}
+.sub-split-artists {
+  background: var(--orange-500);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  font-family: var(--font-heading);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  box-shadow: 0 0 20px rgba(255,107,26,0.35);
+}
+.sub-split-phase {
+  background: var(--grey-700);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+.sub-split-amounts { display: flex; gap: var(--sp-8); }
+.sub-amount-block {}
+.sub-amount-val { font-family: var(--font-heading); font-size: 2rem; font-weight: 700; color: var(--text-primary); }
+.sub-amount-secondary { color: var(--text-muted); font-size: 1.25rem; }
+.sub-amount-label { font-size: 0.8125rem; color: var(--text-muted); margin-top: 4px; }
+
+.sub-breakdown { margin-bottom: var(--sp-8); }
+.sub-artist-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.sub-artist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg) !important;
+}
+.sub-artist-rank { font-size: 0.875rem; color: var(--text-dim); min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.sub-artist-info { min-width: 160px; flex-shrink: 0; }
+.sub-artist-name { font-weight: 600; font-size: 0.9375rem; color: var(--text-primary); }
+.sub-artist-tracks { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.sub-artist-bar-wrap { flex: 1; height: 6px; background: var(--grey-800); border-radius: var(--radius-full); overflow: hidden; }
+.sub-artist-bar { height: 100%; background: var(--orange-400); border-radius: var(--radius-full); transition: width 0.8s ease; }
+.sub-artist-pct { font-size: 0.875rem; color: var(--text-muted); min-width: 40px; text-align: right; }
+.sub-artist-amount { font-size: 0.9375rem; font-weight: 700; color: var(--text-primary); min-width: 60px; text-align: right; }
+
+.sub-comparison { padding: var(--sp-6); border-radius: var(--radius-xl) !important; margin-bottom: var(--sp-8); }
+.sub-comp-title { font-family: var(--font-heading); font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: var(--sp-4); }
+.sub-comp-table { display: flex; flex-direction: column; gap: 1px; margin-bottom: var(--sp-4); }
+.sub-comp-row {
+  display: grid;
+  grid-template-columns: 200px 1fr auto;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--glass-bg);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  align-items: center;
+}
+.sub-comp-other { opacity: 0.5; }
+.sub-comp-platform { font-weight: 700; color: var(--text-primary); }
+.sub-comp-highlight { color: var(--text-primary); font-weight: 600; }
+.sub-comp-note { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+.sub-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  padding: var(--sp-6);
+  border-radius: var(--radius-xl) !important;
+}
+.sub-cta-title { font-weight: 600; font-size: 1rem; color: var(--text-primary); }
+.sub-cta-sub { font-size: 0.8125rem; color: var(--text-muted); margin-top: 4px; }
+.sub-manage-btn {
+  padding: var(--sp-3) var(--sp-6);
+  border-radius: var(--radius-full);
+  background: var(--orange-500);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  transition: var(--transition-fast);
+  box-shadow: 0 0 20px rgba(255,107,26,0.3);
+}
+.sub-manage-btn:hover { background: var(--orange-400); }
+
+@media (max-width: 768px) {
+  .sub-comp-row { grid-template-columns: 1fr; }
+  .sub-split-amounts { flex-direction: column; gap: var(--sp-4); }
+  .sub-artist-row { flex-wrap: wrap; }
+}
+
+/* ═══ Theme — neutralise orange in Subscription ════════════════ */
+.sub-manage-btn { background: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; box-shadow: 0 4px 16px var(--btn-primary-glow) !important; }
+.sub-manage-btn:hover { background: var(--btn-primary-hover) !important; }
+.sub-artist-bar { background: var(--accent-interactive) !important; }

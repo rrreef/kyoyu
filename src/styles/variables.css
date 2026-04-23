@@ -1,0 +1,86 @@
+:root {
+  /* Background */
+  --bg-primary: #080808;
+  --bg-secondary: #0f0f0f;
+  --bg-tertiary: #161616;
+  --bg-card: #111111;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-hover: rgba(255, 255, 255, 0.07);
+  --glass-bg-active: rgba(255, 255, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --glass-blur: blur(20px);
+  --glass-blur-sm: blur(10px);
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted: #505050;
+  --text-dim: #2a2a2a;
+
+  /* Greyscale */
+  --grey-100: #f0f0f0;
+  --grey-200: #d0d0d0;
+  --grey-300: #aaaaaa;
+  --grey-400: #808080;
+  --grey-500: #555555;
+  --grey-600: #363636;
+  --grey-700: #252525;
+  --grey-800: #1a1a1a;
+  --grey-900: #111111;
+
+  /* Accent — pure white based */
+  --accent: #ffffff;
+  --accent-dim: rgba(255, 255, 255, 0.7);
+  --accent-subtle: rgba(255, 255, 255, 0.15);
+
+  /* Success / Warning / Error — still mono */
+  --success: #d0d0d0;
+  --warning: #888888;
+  --error: #707070;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 16px 60px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 30px rgba(255, 255, 255, 0.05);
+
+  /* Transitions */
+  --transition-fast: all 0.15s ease;
+  --transition-base: all 0.25s ease;
+  --transition-slow: all 0.4s ease;
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --player-height: 76px;
+  --topbar-height: 60px;
+}

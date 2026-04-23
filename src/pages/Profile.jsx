@@ -1,0 +1,160 @@
+import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { User, Camera, Music, Download, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell } from 'lucide-react';
+import { userProfile, payoutData } from '../data/mockData';
+import { useAuth } from '../contexts/AuthContext';
+import './Profile.css';
+
+export default function Profile() {
+  const { user, role, logout, avatarSrc, setAvatarSrc } = useAuth();
+  const u = userProfile;
+  const [avatarMenu, setAvatarMenu] = useState(false);
+  const fileRef = useRef();
+
+  function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setAvatarSrc(ev.target.result);
+    reader.readAsDataURL(file);
+    setAvatarMenu(false);
+  }
+
+  const AvatarWidget = (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="profile-avatar-wrap" onClick={() => setAvatarMenu(m => !m)}>
+        {avatarSrc
+          ? <img src={avatarSrc} alt="Avatar" className="profile-avatar-img" />
+          : <div className="profile-avatar"><User size={32} /></div>
+        }
+        <div className="profile-avatar-overlay"><Camera size={16} /></div>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+      </div>
+      {avatarMenu && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setAvatarMenu(false)} />
+          <div className="avatar-menu">
+            <button className="avatar-menu-item" onClick={() => fileRef.current.click()}>
+              {avatarSrc ? 'Replace' : 'Add photo'}
+            </button>
+            {avatarSrc && (
+              <button className="avatar-menu-item avatar-menu-remove" onClick={() => { setAvatarSrc(null); setAvatarMenu(false); }}>
+                Remove
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // ── Creator profile ─────────────────────────────────────
+  if (role === 'creator') {
+    const contract = user?.contract || '70 / 30';
+    return (
+      <div className="page profile-page animate-in">
+        {/* Hero */}
+        <div className="profile-hero glass">
+          {AvatarWidget}
+          <div className="profile-info">
+            <h1>{user?.artistName || user?.name || 'Admin'}</h1>
+            <div className="profile-plan-badge profile-contract-badge">
+              <span>Contract</span>
+              <span>·</span>
+              <span>{contract}</span>
+            </div>
+            <div className="profile-member-since">Reef Creator Portal</div>
+          </div>
+        </div>
+
+        {/* Menu */}
+        <div className="profile-menu">
+          {[
+            { icon: BarChart3, label: 'Dashboard',        to: '/dashboard' },
+            { icon: Music,     label: 'My Releases',       to: '/releases'  },
+            { icon: FileText,  label: 'Upload New Release', to: '/upload'   },
+            { icon: Bell,      label: 'Notifications',     to: '/profile'   },
+            { icon: Settings,  label: 'Account Settings',  to: '/settings'  },
+          ].map(({ icon: Icon, label, to }) => (
+            <Link key={label} to={to} className="profile-menu-item glass">
+              <Icon size={18} />
+              <span>{label}</span>
+              <ChevronRight size={16} className="profile-menu-arrow" />
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Listener profile ─────────────────────────────────────
+  return (
+    <div className="page profile-page animate-in">
+      {/* Hero */}
+      <div className="profile-hero glass">
+        {AvatarWidget}
+        <div className="profile-info">
+          <h1>{u.name}</h1>
+          <div className="profile-plan-badge">
+            <span>{u.plan} Plan</span>
+            <span>·</span>
+            <span>€{u.planPrice}/mo</span>
+          </div>
+          <div className="profile-member-since">Member since {new Date(u.joined).toLocaleDateString('en', { year: 'numeric', month: 'long' })}</div>
+        </div>
+        <div className="profile-hero-actions">
+          <Link to="/dashboard" className="profile-dashboard-btn glass-sm">
+            <BarChart3 size={16} />
+            <span>Dashboard</span>
+          </Link>
+        </div>
+        <button className="profile-hero-signout" onClick={logout}>Sign out</button>
+      </div>
+
+      {/* Stats */}
+      <div className="profile-stats">
+        <div className="profile-stat glass">
+          <div className="profile-stat-val">{u.totalPlays.toLocaleString()}</div>
+          <div className="profile-stat-label">Streams</div>
+        </div>
+        <div className="profile-stat glass">
+          <div className="profile-stat-val">{u.totalDownloads}</div>
+          <div className="profile-stat-label">Downloads</div>
+        </div>
+        <div className="profile-stat glass">
+          <div className="profile-stat-val">{u.totalVinylOrders}</div>
+          <div className="profile-stat-label">Vinyl Orders</div>
+        </div>
+        <div className="profile-stat glass">
+          <div className="profile-stat-val">{payoutData.topArtists.length}</div>
+          <div className="profile-stat-label">Artists Supported</div>
+        </div>
+      </div>
+
+      {/* Payout this month */}
+      <div className="profile-payout glass">
+        <div className="profile-payout-title">This Month's Artist Support</div>
+        <div className="profile-payout-amt">€{payoutData.artistPool.toFixed(2)} went to {payoutData.topArtists.length} artists</div>
+        <Link to="/subscription" className="profile-payout-link">
+          See full breakdown →
+        </Link>
+      </div>
+
+      {/* Menu */}
+      <div className="profile-menu">
+        {[
+          { icon: Download, label: 'Downloads',             to: '/downloads'    },
+          { icon: Disc3,    label: 'Merch Orders',          to: '/orders'       },
+          { icon: BarChart3,label: 'Payout Transparency',   to: '/subscription' },
+          { icon: Settings, label: 'Settings',              to: '/settings'     },
+        ].map(({ icon: Icon, label, to }) => (
+          <Link key={label} to={to} className="profile-menu-item glass">
+            <Icon size={18} />
+            <span>{label}</span>
+            <ChevronRight size={16} className="profile-menu-arrow" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,148 @@
+/* ── EmptyReleases ─────────────────────────────────────────── */
+.er-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 40px;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: radial-gradient(ellipse at 50% 110%, rgba(155,109,255,0.08) 0%, transparent 70%);
+}
+.er-wrap--listener {
+  min-height: 260px;
+  padding-bottom: 24px;
+}
+
+/* ── Desert layers ──────────────────────────────────────── */
+.er-desert { position: absolute; inset: 0; pointer-events: none; }
+.er-dune {
+  position: absolute;
+  bottom: 0;
+  left: -5%;
+  width: 110%;
+  border-radius: 50% 50% 0 0 / 60% 60% 0 0;
+  opacity: 0.07;
+}
+.er-dune--near { height: 80px;  background: rgba(155,109,255,0.8); bottom: 0;   }
+.er-dune--mid  { height: 55px;  background: rgba(155,109,255,0.5); bottom: 40px; left: 10%; width: 90%; }
+.er-dune--far  { height: 35px;  background: rgba(155,109,255,0.3); bottom: 72px; left: -10%; width: 120%; }
+
+/* ── Tumbleweeds ────────────────────────────────────────── */
+.er-tumbleweed {
+  position: absolute;
+  bottom: 58px;
+  font-size: 1.2rem;
+  opacity: 0.18;
+  color: rgba(155,109,255,0.7);
+  animation: er-roll 8s linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+.er-tw1 { animation-duration: 9s;  animation-delay: 0s;   font-size: 1.4rem; }
+.er-tw2 { animation-duration: 13s; animation-delay: -5s;  font-size: 0.9rem; bottom: 65px; }
+
+@keyframes er-roll {
+  0%   { left: 105%; transform: rotate(0deg);   }
+  100% { left: -10%; transform: rotate(-540deg); }
+}
+
+/* ── Dust motes ─────────────────────────────────────────── */
+.er-dust {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(155,109,255,0.4);
+  animation: er-float 6s ease-in-out infinite;
+  pointer-events: none;
+}
+.er-dust--0 { left: 15%; bottom: 30%;  animation-delay: 0s;    animation-duration: 5s;  }
+.er-dust--1 { left: 35%; bottom: 45%;  animation-delay: -1.5s; animation-duration: 7s;  }
+.er-dust--2 { left: 55%; bottom: 25%;  animation-delay: -3s;   animation-duration: 6s;  }
+.er-dust--3 { left: 75%; bottom: 40%;  animation-delay: -0.8s; animation-duration: 8s;  }
+.er-dust--4 { left: 88%; bottom: 60%;  animation-delay: -2s;   animation-duration: 5.5s;}
+.er-dust--5 { left: 25%; bottom: 55%;  animation-delay: -4s;   animation-duration: 9s;  }
+
+@keyframes er-float {
+  0%, 100% { transform: translateY(0)   scale(1);   opacity: 0.4; }
+  50%       { transform: translateY(-18px) scale(1.4); opacity: 0.15; }
+}
+
+/* ── Mascot ─────────────────────────────────────────────── */
+.er-mascot-wrap {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 18px;
+}
+
+/* Speech bubble */
+.er-bubble {
+  position: relative;
+  background: rgba(255,255,255,0.92);
+  color: #1a1a2e;
+  border-radius: 14px;
+  padding: 10px 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  max-width: 280px;
+  text-align: center;
+  line-height: 1.4;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  margin-bottom: 12px;
+  transition: opacity 0.4s ease;
+  z-index: 3;
+}
+.er-bubble--fade { opacity: 0; }
+/* Bubble tail pointing down */
+.er-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 11px solid rgba(255,255,255,0.92);
+}
+
+/* Mascot image wrapper — float + gentle bounce */
+.er-mascot-img-wrap {
+  animation: er-mascot-float 3.5s ease-in-out infinite;
+  filter: drop-shadow(0 12px 32px rgba(155,109,255,0.25));
+}
+.er-mascot-img {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+.er-wrap--listener .er-mascot-img { width: 130px; height: 130px; }
+
+@keyframes er-mascot-float {
+  0%, 100% { transform: translateY(0px)   rotate(-1deg); }
+  30%       { transform: translateY(-10px) rotate(1deg);  }
+  60%       { transform: translateY(-5px)  rotate(-0.5deg); }
+}
+
+/* ── Subtitle label ─────────────────────────────────────── */
+.er-label {
+  position: relative;
+  z-index: 2;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 320px;
+  line-height: 1.55;
+  padding: 0 var(--sp-4);
+}
