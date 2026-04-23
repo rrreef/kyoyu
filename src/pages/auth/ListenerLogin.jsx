@@ -5,6 +5,7 @@ import './Auth.css';
 
 export default function ListenerLogin({ onBack, onCreator }) {
   const { signIn, signUp } = useAuth();
+  const [username, setUsername] = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [isNew,    setIsNew]    = useState(false);
@@ -14,13 +15,15 @@ export default function ListenerLogin({ onBack, onCreator }) {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!email || !password) { setError('Please fill in all fields.'); return; }
+    if (isNew && !username.trim()) { setError('Please choose a username.'); return; }
     setError('');
     setLoading(true);
     try {
       if (isNew) {
         await signUp(email, password, {
           role:         'listener',
-          display_name: email.split('@')[0],
+          username:     username.trim(),
+          display_name: username.trim() || email.split('@')[0],
         });
         setError('Check your email for a confirmation link, then sign in.');
         setIsNew(false);
@@ -54,6 +57,23 @@ export default function ListenerLogin({ onBack, onCreator }) {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
+
+          {/* Username — only shown during sign-up */}
+          {isNew && (
+            <div className="auth-field">
+              <label htmlFor="l-username">Username</label>
+              <input
+                id="l-username"
+                type="text"
+                placeholder="yourname"
+                value={username}
+                onChange={e => { setUsername(e.target.value); setError(''); }}
+                autoComplete="username"
+                autoCapitalize="none"
+              />
+            </div>
+          )}
+
           <div className="auth-field">
             <label htmlFor="l-email">Email</label>
             <input
@@ -84,9 +104,8 @@ export default function ListenerLogin({ onBack, onCreator }) {
           </button>
         </form>
 
-
         <div className="auth-links">
-          <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); }}>
+          <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); setUsername(''); }}>
             {isNew ? 'Already have an account? Sign in' : 'No account? Create one'}
           </button>
         </div>

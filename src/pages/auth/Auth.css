@@ -514,3 +514,15 @@
   /* Reduce links margin */
   .auth-links { margin-top: 4px; }
 }
+
+/* Sign-up mode has 3 fields — compress spacing further */
+@media (max-width: 768px) {
+  .auth-card {
+    justify-content: flex-start;
+  }
+  /* When in signup (3 fields), shrink logo margin */
+  .auth-form { gap: 10px; }
+  .auth-header { margin-bottom: 16px; }
+  .auth-field label { font-size: 0.68rem; }
+  .auth-field input { padding: 9px 13px; font-size: 0.84rem; }
+}
