@@ -231,17 +231,37 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  color: var(--text-muted);
-  padding: var(--sp-1);
+  /* Bright white — readable against transparent glass pill */
+  color: rgba(255, 255, 255, 0.60);
+  padding: 6px 14px;
+  border-radius: 999px;
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  transition: var(--transition-fast);
   text-decoration: none;
+  position: relative;
+  transition: color 0.2s ease;
+  z-index: 0;
 }
-.mobile-nav-item.active { color: var(--text-primary); }
-.mobile-nav-item:hover  { color: var(--text-primary); }
+
+/* BeReal-style active capsule — frosted white pill behind icon */
+.mobile-nav-item.active {
+  color: rgba(255, 255, 255, 1);
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.30));
+}
+.mobile-nav-item.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 0.5px solid rgba(255, 255, 255, 0.30);
+  z-index: -1;
+}
+.mobile-nav-item:hover { color: rgba(255, 255, 255, 0.90); }
 
 @media (max-width: 768px) {
   .sidebar { display: none; }
@@ -339,21 +359,20 @@
   border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
-/* Active item — dot instead of top border (pill has no top edge) */
-.mobile-nav-item.active {
-  color: var(--text-primary);
-  position: relative;
-}
-.mobile-nav-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: currentColor;
+/* White theme — dark icons on light glass pill for contrast */
+[data-theme="white"] .mobile-nav-item {
+  color: rgba(15, 15, 26, 0.55);
 }
 [data-theme="white"] .mobile-nav-item.active {
-  color: #0f0f1a !important;
+  color: rgba(15, 15, 26, 1) !important;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.12));
+}
+[data-theme="white"] .mobile-nav-item.active::before {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+[data-theme="white"] .mobile-nav-item:hover {
+  color: rgba(15, 15, 26, 0.85);
 }
 
 /* ── iOS safe area for mobile nav ── */
