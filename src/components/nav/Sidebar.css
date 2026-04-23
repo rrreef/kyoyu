@@ -193,91 +193,15 @@
   background: rgba(255,255,255,0.04);
 }
 
-/* ─── Mobile Nav ─── */
-.mobile-nav {
-  display: none;
-  position: fixed;
-
-  /* Floating pill — doesn't touch screen edges */
-  bottom: calc(env(safe-area-inset-bottom, 16px) + 12px);
-  left: 20px;
-  right: 20px;
-  height: 62px;
-
-  /* Lens effect — very low tint so content clearly shows through */
-  background: rgba(10, 10, 18, 0.06);
-
-  /* Less frosted blur + strong saturation/brightness = magnifying glass feel */
-  backdrop-filter: blur(0px) saturate(350%) brightness(1.45) contrast(1.12);
-  -webkit-backdrop-filter: blur(0px) saturate(350%) brightness(1.45) contrast(1.12);
-
-  border-radius: 999px;
-  border: 0.5px solid rgba(255, 255, 255, 0.28);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.10),
-    0 8px 32px rgba(0, 0, 0, 0.30),
-    0 2px 8px rgba(0, 0, 0, 0.18);
-
-  flex-direction: row;
-  justify-content: space-around;
-  align-items: stretch;
-  padding: 0;
-  z-index: 200;
-  overflow: hidden;
-}
-.mobile-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;  /* perfect vertical center within pill height */
-  gap: 3px;
-  flex: 1;                  /* equal width distribution */
-  height: 100%;             /* stretch to full pill height */
-  color: rgba(255, 255, 255, 0.60);
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 0.58rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-  text-decoration: none;
-  position: relative;
-  transition: color 0.2s ease;
-  z-index: 0;
-}
-
-/* BeReal-style active capsule — frosted white pill behind icon */
-.mobile-nav-item.active {
-  color: rgba(255, 255, 255, 1);
-  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.30));
-}
-.mobile-nav-item.active::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 0.5px solid rgba(255, 255, 255, 0.30);
-  z-index: -1;
-}
-.mobile-nav-item:hover { color: rgba(255, 255, 255, 0.90); }
-
+/* ─── Mobile: hide sidebar, show pill nav ─── */
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .mobile-nav {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    justify-content: space-around;
-  }
+  .topbar  { padding-top: env(safe-area-inset-top); }
 }
 
 /* ═══ Theme overrides — Sidebar ══════════════════════════════ */
 
-/* ── Dark (default) — neutral active states ─────────────────  */
+/* ── Dark (default) ──────────────────────────────────────── */
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
@@ -291,21 +215,17 @@
 }
 .nav-item.active svg { color: var(--text-primary); }
 
-/* ── White theme ─────────────────────────────────────────────  */
+/* ── White theme ─────────────────────────────────────────── */
 [data-theme="white"] .sidebar {
   background: rgba(248, 248, 252, 0.42) !important;
   border-right: 1px solid rgba(0, 0, 0, 0.07);
   box-shadow: 1px 0 0 rgba(0,0,0,0.05), 0 0 40px rgba(0,0,0,0.04);
 }
-/* Logo container — light box with dark icon */
 [data-theme="white"] .logo-mark {
   background: rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.10);
 }
-[data-theme="white"] .logo-mark svg {
-  filter: invert(1); /* white strokes → black */
-}
-/* Nav — neutral dark-on-light */
+[data-theme="white"] .logo-mark svg { filter: invert(1); }
 [data-theme="white"] .nav-item { color: rgba(15, 15, 26, 0.52); }
 [data-theme="white"] .nav-item:hover {
   background: rgba(0, 0, 0, 0.07);
@@ -319,77 +239,22 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
 }
 [data-theme="white"] .nav-item.active svg { color: rgba(15, 15, 26, 0.90); }
-/* Badges & footer */
-[data-theme="white"] .plan-badge {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.10);
-  color: rgba(15, 15, 26, 0.11);
-}
+[data-theme="white"] .plan-badge { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.10); }
 [data-theme="white"] .sidebar-logout { color: rgba(15, 15, 26, 0.32); }
-[data-theme="white"] .sidebar-logout:hover {
-  color: rgba(15, 15, 26, 0.65);
-  background: rgba(0, 0, 0, 0.06);
-}
+[data-theme="white"] .sidebar-logout:hover { color: rgba(15,15,26,0.65); background: rgba(0,0,0,0.06); }
 [data-theme="white"] .nav-label { color: rgba(15, 15, 26, 0.35); }
 [data-theme="white"] .sidebar::before { opacity: 0; }
 
-/* ── Grey theme ──────────────────────────────────────────────  */
+/* ── Grey theme ──────────────────────────────────────────── */
 [data-theme="grey"] .sidebar {
   background: rgba(35, 35, 46, 0.44) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 1px 0 0 rgba(255,255,255,0.04), 0 0 50px rgba(0,0,0,0.3);
 }
-[data-theme="grey"] .nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  box-shadow: none;
-}
+[data-theme="grey"] .nav-item:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
 [data-theme="grey"] .nav-item.active {
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(255,255,255,0.11);
   color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.14);
 }
 [data-theme="grey"] .nav-item.active svg { color: var(--text-primary); }
-
-/* ─── Liquid Glass pill — theme tints ─── */
-[data-theme="white"] .mobile-nav {
-  background: rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(16px) saturate(220%) brightness(1.15) contrast(1.05) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(1.15) contrast(1.05) !important;
-  border-color: rgba(255, 255, 255, 0.55) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.80),
-    0 8px 32px rgba(0, 0, 0, 0.10),
-    0 2px 8px rgba(0, 0, 0, 0.06) !important;
-}
-[data-theme="grey"] .mobile-nav {
-  background: rgba(40, 40, 58, 0.12) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-}
-
-/* White theme — dark icons on light glass pill for contrast */
-[data-theme="white"] .mobile-nav-item {
-  color: rgba(15, 15, 26, 0.55);
-}
-[data-theme="white"] .mobile-nav-item.active {
-  color: rgba(15, 15, 26, 1) !important;
-  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.12));
-}
-[data-theme="white"] .mobile-nav-item.active::before {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.12);
-}
-[data-theme="white"] .mobile-nav-item:hover {
-  color: rgba(15, 15, 26, 0.85);
-}
-
-/* ── iOS safe area for mobile nav ── */
-@media (max-width: 768px) {
-  .mobile-nav {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .topbar {
-    padding-top: env(safe-area-inset-top);
-  }
-}

@@ -1,0 +1,169 @@
+/* ─── Liquid Glass Floating Pill Nav ──────────────────────── */
+
+.mobile-nav {
+  display: none;
+  position: fixed;
+
+  /* Float above bottom, clear of screen edges */
+  bottom: calc(env(safe-area-inset-bottom, 16px) + 12px);
+  left: 20px;
+  right: 20px;
+  height: 62px;
+
+  /* Liquid Glass: ultra-low tint, strong colour amplification through lens */
+  background: rgba(12, 12, 20, 0.12);
+  backdrop-filter: saturate(320%) brightness(1.4) contrast(1.14);
+  -webkit-backdrop-filter: saturate(320%) brightness(1.4) contrast(1.14);
+
+  /* Full pill */
+  border-radius: 999px;
+
+  /* Glass rim: bright top edge + soft outer glow */
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    /* Inner top highlight — light catching the top rim */
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    /* Inner bottom darkening — depth */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    /* Outer glow — hovering depth */
+    0 8px 40px rgba(0, 0, 0, 0.35),
+    0 2px 12px rgba(0, 0, 0, 0.20);
+
+  /* Layout */
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: stretch;
+  padding: 0;
+  z-index: 9000;
+  overflow: hidden;
+  isolation: isolate;
+
+  /* Spring transition — elastic morph on press */
+  transition:
+    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s ease,
+    border-radius 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  will-change: transform;
+}
+
+/* ── Specular glare — moves with touch/gyro ─────────────── */
+.mobile-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  /* Radial glare that moves via CSS var --glare-x */
+  background: radial-gradient(
+    ellipse 55% 80% at var(--glare-x, 22%) -15%,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.10) 35%,
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: 2;
+  transition: background 0.15s ease;
+}
+
+/* ── Edge refraction ring ───────────────────────────────── */
+.mobile-nav::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Press morph state ──────────────────────────────────── */
+.mobile-nav.is-pressed {
+  transform: scaleX(0.96) scaleY(0.93);
+  border-radius: 30px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 4px 20px rgba(0, 0, 0, 0.28),
+    0 1px 6px rgba(0, 0, 0, 0.16);
+}
+
+/* ── Show on mobile ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .mobile-nav { display: flex; }
+}
+
+/* ─── Nav items ──────────────────────────────────────────── */
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.58);
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  text-decoration: none;
+  position: relative;
+  transition: color 0.2s ease;
+  z-index: 3;
+}
+
+/* BeReal-style active capsule */
+.mobile-nav-item.active {
+  color: rgba(255, 255, 255, 1);
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.32));
+}
+.mobile-nav-item.active::before {
+  content: '';
+  position: absolute;
+  inset: 8px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 0.5px solid rgba(255, 255, 255, 0.28);
+  z-index: -1;
+}
+.mobile-nav-item:hover { color: rgba(255, 255, 255, 0.88); }
+
+/* ── White theme overrides ───────────────────────────────── */
+[data-theme="white"] .mobile-nav {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.60) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 8px 40px rgba(0, 0, 0, 0.12),
+    0 2px 12px rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="white"] .mobile-nav-item {
+  color: rgba(15, 15, 26, 0.50);
+}
+[data-theme="white"] .mobile-nav-item.active {
+  color: rgba(15, 15, 26, 1) !important;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.10));
+}
+[data-theme="white"] .mobile-nav-item.active::before {
+  background: rgba(0, 0, 0, 0.07);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+[data-theme="white"] .mobile-nav-item:hover {
+  color: rgba(15, 15, 26, 0.82);
+}
+
+/* ── Grey theme overrides ───────────────────────────────── */
+[data-theme="grey"] .mobile-nav {
+  background: rgba(40, 40, 58, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
