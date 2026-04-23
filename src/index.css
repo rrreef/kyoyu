@@ -249,8 +249,6 @@ body {
   line-height: 1.5;
   overflow-x: hidden;
   min-height: 100vh;
-  /* Prevent iOS bounce on body, scroll only in .main-content */
-  overscroll-behavior: none;
 }
 
 #root {
@@ -487,12 +485,7 @@ img { display: block; max-width: 100%; }
   padding-bottom: calc(var(--player-height) + 16px);
   margin-left: var(--sidebar-width);
   padding-top: var(--topbar-height);
-  /* iOS momentum scrolling */
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  /* GPU-accelerate the scroll container */
-  will-change: scroll-position;
-  transform: translateZ(0);
 }
 
 /* ─── Scroll rows ─── */
