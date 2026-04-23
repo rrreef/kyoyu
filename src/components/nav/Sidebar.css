@@ -202,9 +202,9 @@
   right: 0;
   height: var(--mobile-nav-height, 60px);
   /* Solid matte — no backdrop-filter (causes ghost/duplicate effect) */
-  background: rgba(10, 10, 14, 0.77);
-  backdrop-filter: blur(231px);
-  -webkit-backdrop-filter: blur(231px);
+  background: rgba(10, 10, 14, 0.50);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   padding: var(--sp-2) var(--sp-4) env(safe-area-inset-bottom, 0px);
   z-index: 200;
