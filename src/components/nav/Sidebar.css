@@ -197,26 +197,30 @@
 .mobile-nav {
   display: none;
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: var(--mobile-nav-height, 60px);
 
-  /* iOS 26 Liquid Glass — BeReal style */
-  background: rgba(10, 10, 18, 0.18);
-  backdrop-filter: blur(40px) saturate(220%) brightness(1.15) contrast(1.04);
-  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.15) contrast(1.04);
+  /* Floating pill — doesn't touch screen edges */
+  bottom: calc(env(safe-area-inset-bottom, 16px) + 12px);
+  left: 20px;
+  right: 20px;
+  height: 62px;
 
-  /* Glass edge — top inner glow + thin border */
-  border-top: 0.5px solid rgba(255, 255, 255, 0.22);
+  /* iOS 26 Liquid Glass — BeReal floating pill */
+  background: rgba(10, 10, 18, 0.30);
+  backdrop-filter: blur(40px) saturate(220%) brightness(1.18) contrast(1.05);
+  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.18) contrast(1.05);
+
+  /* Full pill shape */
+  border-radius: 999px;
+
+  /* Glass border + inner glow + outer shadow */
+  border: 0.5px solid rgba(255, 255, 255, 0.20);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 -4px 24px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.15);
 
-  /* Rounded top corners like BeReal pill nav */
-  border-radius: 20px 20px 0 0;
-
-  padding: var(--sp-2) var(--sp-4) env(safe-area-inset-bottom, 0px);
+  padding: 0 24px;
   z-index: 200;
   justify-content: space-around;
   align-items: center;
@@ -236,7 +240,7 @@
   transition: var(--transition-fast);
   text-decoration: none;
 }
-.mobile-nav-item.active { color: var(--text-primary); border-top: 2px solid var(--text-primary); padding-top: calc(var(--sp-1) - 2px); }
+.mobile-nav-item.active { color: var(--text-primary); }
 .mobile-nav-item:hover  { color: var(--text-primary); }
 
 @media (max-width: 768px) {
@@ -321,26 +325,35 @@
 }
 [data-theme="grey"] .nav-item.active svg { color: var(--text-primary); }
 
-/* ─── Liquid Glass — theme colour tints ─── */
+/* ─── Liquid Glass pill — theme tints ─── */
 [data-theme="white"] .mobile-nav {
-  background: rgba(255, 255, 255, 0.28) !important;
-  backdrop-filter: blur(40px) saturate(180%) brightness(1.08) contrast(1.02) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(1.08) contrast(1.02) !important;
-  border-top-color: rgba(255, 255, 255, 0.55) !important;
+  background: rgba(255, 255, 255, 0.45) !important;
+  border-color: rgba(255, 255, 255, 0.60) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 -4px 24px rgba(0, 0, 0, 0.05) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 8px 32px rgba(0, 0, 0, 0.10),
+    0 2px 8px rgba(0, 0, 0, 0.06) !important;
 }
 [data-theme="grey"] .mobile-nav {
-  background: rgba(40, 40, 58, 0.22) !important;
-  backdrop-filter: blur(40px) saturate(220%) brightness(1.12) contrast(1.04) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.12) contrast(1.04) !important;
-  border-top-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(40, 40, 58, 0.35) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
 }
-/* Mobile nav active top-bar adapts to theme */
+
+/* Active item — dot instead of top border (pill has no top edge) */
+.mobile-nav-item.active {
+  color: var(--text-primary);
+  position: relative;
+}
+.mobile-nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
 [data-theme="white"] .mobile-nav-item.active {
   color: #0f0f1a !important;
-  border-top-color: #0f0f1a !important;
 }
 
 /* ── iOS safe area for mobile nav ── */
