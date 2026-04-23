@@ -204,15 +204,12 @@
   right: 20px;
   height: 62px;
 
-  /* Liquid Glass lens — low tint so content shows, high sat/brightness = magnify effect */
+  /* Liquid Glass lens */
   background: rgba(10, 10, 18, 0.10);
   backdrop-filter: blur(16px) saturate(300%) brightness(1.35) contrast(1.08);
   -webkit-backdrop-filter: blur(16px) saturate(300%) brightness(1.35) contrast(1.08);
 
-  /* Full pill shape */
   border-radius: 999px;
-
-  /* Glass rim — bright thin border + deep shadow */
   border: 0.5px solid rgba(255, 255, 255, 0.25);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
@@ -220,22 +217,26 @@
     0 8px 32px rgba(0, 0, 0, 0.30),
     0 2px 8px rgba(0, 0, 0, 0.18);
 
-  padding: 0 24px;
-  z-index: 200;
+  /* Centering */
+  flex-direction: row;
   justify-content: space-around;
-  align-items: center;
-  /* no isolation: isolate — must read content below for backdrop-filter to work */
+  align-items: stretch;   /* items fill full height */
+  padding: 0;
+  z-index: 200;
+  overflow: hidden;       /* clips active capsule to pill shape */
 }
 .mobile-nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;  /* perfect vertical center within pill height */
   gap: 3px;
-  /* Bright white — readable against transparent glass pill */
+  flex: 1;                  /* equal width distribution */
+  height: 100%;             /* stretch to full pill height */
   color: rgba(255, 255, 255, 0.60);
-  padding: 6px 14px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
@@ -265,7 +266,12 @@
 
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .mobile-nav { display: flex; }
+  .mobile-nav {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-around;
+  }
 }
 
 /* ═══ Theme overrides — Sidebar ══════════════════════════════ */
