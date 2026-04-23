@@ -236,6 +236,9 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Lock html — only .main-content should scroll */
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -247,8 +250,8 @@ body {
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  overflow-x: hidden;
-  min-height: 100vh;
+  overflow: hidden;
+  height: 100%;
 }
 
 #root {

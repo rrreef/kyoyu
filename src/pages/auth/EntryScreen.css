@@ -355,3 +355,9 @@
   .entry-divider span { writing-mode: unset; }
   .entry-wordmark { font-size: 1.4rem; }
 }
+
+/* ── iOS safe area (notch / Dynamic Island) ── */
+.entry-screen {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}

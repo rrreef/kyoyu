@@ -323,3 +323,13 @@
   color: #0f0f1a !important;
   border-top-color: #0f0f1a !important;
 }
+
+/* ── iOS safe area for mobile nav ── */
+@media (max-width: 768px) {
+  .mobile-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .topbar {
+    padding-top: env(safe-area-inset-top);
+  }
+}
