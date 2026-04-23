@@ -11,10 +11,12 @@ export function AuthProvider({ children }) {
 
   /* ── Restore session on mount ── */
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) await hydrateUser(session.user);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        if (session) await hydrateUser(session.user);
+      })
+      .catch(() => { /* network error — proceed as logged out */ })
+      .finally(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
