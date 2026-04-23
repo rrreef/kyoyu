@@ -353,76 +353,31 @@ img { display: block; max-width: 100%; }
 .glass {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-md);
   isolation: isolate;
 }
-/* Specular top-edge shine */
-.glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    175deg,
-    var(--glass-shine) 0%,
-    rgba(255,255,255,0.04) 20%,
-    transparent 45%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
+/* No shine pseudo-element — matte style */
+.glass::before { display: none; }
 
-/* .glass-sm — lighter blur, for nested/stacked panels */
+/* .glass-sm — lighter, for nested/stacked panels */
 .glass-sm {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur-sm);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
   border: 1px solid var(--glass-border-subtle);
   isolation: isolate;
 }
-.glass-sm::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    175deg,
-    var(--glass-shine) 0%,
-    transparent 35%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
+.glass-sm::before { display: none; }
 
-/* .glass-elevated — strong blur for modals/popovers */
+/* .glass-elevated — for modals/popovers */
 .glass-elevated {
   position: relative;
   background: var(--glass-bg-elevated);
-  backdrop-filter: var(--glass-blur-lg);
-  -webkit-backdrop-filter: var(--glass-blur-lg);
   border: 1px solid var(--glass-border-light);
-  box-shadow: var(--shadow-xl),
-              0 0 0 1px rgba(255,255,255,0.04) inset;
+  box-shadow: var(--shadow-xl);
   isolation: isolate;
 }
-.glass-elevated::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    155deg,
-    var(--glass-shine-strong) 0%,
-    rgba(255,255,255,0.05) 28%,
-    transparent 52%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
+.glass-elevated::before { display: none; }
 
 /* .glass-hover — interactive hover upgrade */
 .glass-hover:hover {
@@ -430,12 +385,10 @@ img { display: block; max-width: 100%; }
   border-color: var(--glass-border-light) !important;
 }
 
-/* .glass-card — floating card panel with hover lift */
+/* .glass-card — floating card panel */
 .glass-card {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -443,28 +396,14 @@ img { display: block; max-width: 100%; }
   overflow: hidden;
   isolation: isolate;
 }
-.glass-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 55%;
-  background: linear-gradient(
-    180deg,
-    var(--glass-shine) 0%,
-    rgba(255,255,255,0.03) 40%,
-    transparent 100%
-  );
-  pointer-events: none;
-  z-index: 0;
-  border-radius: inherit;
-}
+/* No shine pseudo-element */
+.glass-card::before { display: none; }
 .glass-card:hover {
   background: var(--glass-bg-hover);
-  border-color: rgba(255, 107, 26, 0.22);
-  box-shadow: var(--shadow-lg), var(--shadow-glow-xs);
-  transform: translateY(-2px) scale(1.005);
+  border-color: rgba(255, 107, 26, 0.18);
+  box-shadow: var(--shadow-lg);
 }
-/* Disable card lift on touch devices — causes scroll jank */
+/* Disable card lift on touch devices */
 @media (hover: none) {
   .glass-card:hover {
     transform: none;

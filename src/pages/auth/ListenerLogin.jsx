@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedLogoMark } from './EntryScreen';
+import CheckEmail from './CheckEmail';
 import './Auth.css';
 
 export default function ListenerLogin({ onBack, onCreator }) {
@@ -9,6 +10,7 @@ export default function ListenerLogin({ onBack, onCreator }) {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [isNew,    setIsNew]    = useState(false);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
@@ -25,8 +27,7 @@ export default function ListenerLogin({ onBack, onCreator }) {
           username:     username.trim(),
           display_name: username.trim() || email.split('@')[0],
         });
-        setError('Check your email for a confirmation link, then sign in.');
-        setIsNew(false);
+        setAwaitingConfirm(true);
       } else {
         await signIn(email, password);
       }
@@ -35,6 +36,10 @@ export default function ListenerLogin({ onBack, onCreator }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (awaitingConfirm) {
+    return <CheckEmail email={email} onConfirmed={() => { setAwaitingConfirm(false); setIsNew(false); }} />;
   }
 
   return (

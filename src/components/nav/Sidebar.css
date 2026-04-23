@@ -197,19 +197,18 @@
 .mobile-nav {
   display: none;
   position: fixed;
-  bottom: 0;                  /* glued to absolute screen bottom */
+  bottom: 0;
   left: 0;
   right: 0;
   height: var(--mobile-nav-height, 60px);
-  background: rgba(6, 6, 8, 0.88);
-  backdrop-filter: blur(48px) saturate(180%) brightness(1.05);
-  -webkit-backdrop-filter: blur(48px) saturate(180%) brightness(1.05);
+  /* Solid matte — no backdrop-filter (causes ghost/duplicate effect) */
+  background: #0a0a0e;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   padding: var(--sp-2) var(--sp-4) env(safe-area-inset-bottom, 0px);
-  z-index: 100;
+  z-index: 200;
   justify-content: space-around;
   align-items: center;
+  isolation: isolate;
 }
 .mobile-nav-item {
   display: flex;
@@ -310,13 +309,14 @@
 }
 [data-theme="grey"] .nav-item.active svg { color: var(--text-primary); }
 
-/* ─── Mobile nav — theme-aware backgrounds ─── */
+/* ─── Mobile nav — solid matte backgrounds per theme ─── */
 [data-theme="white"] .mobile-nav {
-  background: rgba(248, 248, 252, 0.88) !important;
+  background: #f2f2f5 !important;
   border-top-color: rgba(0, 0, 0, 0.08) !important;
 }
 [data-theme="grey"] .mobile-nav {
-  background: rgba(30, 30, 38, 0.88) !important;
+  background: #1a1a22 !important;
+  border-top-color: rgba(255,255,255,0.06) !important;
 }
 /* Mobile nav active top-bar adapts to theme */
 [data-theme="white"] .mobile-nav-item.active {

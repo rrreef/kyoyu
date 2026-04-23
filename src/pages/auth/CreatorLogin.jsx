@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedLogoMark } from './EntryScreen';
+import CheckEmail from './CheckEmail';
 import './Auth.css';
 
 export default function CreatorLogin({ onBack, onListener }) {
@@ -8,7 +9,8 @@ export default function CreatorLogin({ onBack, onListener }) {
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [artistName, setArtistName] = useState('');
-  const [isNew,      setIsNew]      = useState(false); // toggle sign-up mode
+  const [isNew,      setIsNew]      = useState(false);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [error,      setError]      = useState('');
   const [loading,    setLoading]    = useState(false);
 
@@ -25,8 +27,7 @@ export default function CreatorLogin({ onBack, onListener }) {
           artist_name:  artistName || email.split('@')[0],
           display_name: artistName || email.split('@')[0],
         });
-        setError('Check your email for a confirmation link, then sign in.');
-        setIsNew(false);
+        setAwaitingConfirm(true);
       } else {
         await signIn(email, password);
         // AuthContext hydrates role automatically via onAuthStateChange
@@ -36,6 +37,10 @@ export default function CreatorLogin({ onBack, onListener }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (awaitingConfirm) {
+    return <CheckEmail email={email} onConfirmed={() => { setAwaitingConfirm(false); setIsNew(false); }} />;
   }
 
   return (
