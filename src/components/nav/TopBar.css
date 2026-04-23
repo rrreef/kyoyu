@@ -13,7 +13,7 @@
   gap: var(--sp-4);
 
   /* Ultra-thin glass — topbar is above everything */
-  background: rgba(14, 14, 20, 0.11) !important;
+  background: rgba(14, 14, 20, 0.44) !important;
   backdrop-filter: blur(77px);
   -webkit-backdrop-filter: blur(77px);
 
@@ -138,7 +138,7 @@
 
 /* ── Grey theme TopBar overrides ───────────────────────────── */
 [data-theme="grey"] .topbar {
-  background: rgba(35, 35, 46, 0.11) !important;
+  background: rgba(35, 35, 46, 0.28) !important;
   backdrop-filter: blur(77px) !important;
   -webkit-backdrop-filter: blur(77px) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
