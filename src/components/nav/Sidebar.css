@@ -11,9 +11,9 @@
   z-index: 100;
 
   /* Liquid glass */
-  background: rgba(16, 16, 24, 0.33) !important;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(16, 16, 24, 0.55) !important;
+  backdrop-filter: blur(77px);
+  -webkit-backdrop-filter: blur(77px);
 
   /* Gradient border — bright top-left, fades */
   border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -202,9 +202,9 @@
   right: 0;
   height: var(--mobile-nav-height, 60px);
   /* Solid matte — no backdrop-filter (causes ghost/duplicate effect) */
-  background: rgba(16, 16, 24, 0.33);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(16, 16, 24, 0.55);
+  backdrop-filter: blur(77px);
+  -webkit-backdrop-filter: blur(77px);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   padding: var(--sp-2) var(--sp-4) env(safe-area-inset-bottom, 0px);
   z-index: 200;
@@ -313,11 +313,11 @@
 
 /* ─── Mobile nav — solid matte backgrounds per theme ─── */
 [data-theme="white"] .mobile-nav {
-  background: rgba(242, 242, 245, 0.33) !important;
+  background: rgba(242, 242, 245, 0.55) !important;
   border-top-color: rgba(0, 0, 0, 0.08) !important;
 }
 [data-theme="grey"] .mobile-nav {
-  background: rgba(26, 26, 34, 0.33) !important;
+  background: rgba(26, 26, 34, 0.55) !important;
   border-top-color: rgba(255,255,255,0.06) !important;
 }
 /* Mobile nav active top-bar adapts to theme */
