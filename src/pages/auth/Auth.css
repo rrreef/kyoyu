@@ -176,18 +176,15 @@
   background: #ff6b1a;
   color: #fff;
   border: none;
-  box-shadow: 0 4px 20px rgba(255,107,26,0.25);
 }
 .auth-btn--primary:hover:not(:disabled) {
   background: #ff7a30;
-  box-shadow: 0 4px 28px rgba(255,107,26,0.35);
 }
 
 .auth-btn--creator-primary {
   background: rgba(255,255,255,0.90);
   color: #0a0a0a;
   border: none;
-  box-shadow: 0 4px 20px rgba(255,255,255,0.08);
 }
 .auth-btn--creator-primary:hover:not(:disabled) {
   background: #ffffff;

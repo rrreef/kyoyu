@@ -4,7 +4,7 @@ import { AnimatedLogoMark } from './EntryScreen';
 import './Auth.css';
 
 export default function CreatorLogin({ onBack, onListener }) {
-  const { signIn, signUp, demoLogin } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [artistName, setArtistName] = useState('');
@@ -101,20 +101,6 @@ export default function CreatorLogin({ onBack, onListener }) {
           </button>
         </form>
 
-        <div className="auth-divider"><span>or</span></div>
-
-        {/* Demo bypass — local only */}
-        <button
-          type="button"
-          className="auth-btn auth-btn--demo auth-btn--demo-creator"
-          onClick={() => demoLogin('creator', {
-            name: 'Admin', email: 'admin@reef.com', artistName: 'Admin', plan: 'Standard (70/30)'
-          })}
-        >
-          <span className="auth-demo-dot" />
-          Demo Login
-          <span className="auth-demo-cred">local-only · no account needed</span>
-        </button>
 
         <div className="auth-links">
           <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); }}>

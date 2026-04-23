@@ -4,7 +4,7 @@ import { AnimatedLogoMark } from './EntryScreen';
 import './Auth.css';
 
 export default function ListenerLogin({ onBack, onCreator }) {
-  const { signIn, signUp, demoLogin } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [isNew,    setIsNew]    = useState(false);
@@ -84,21 +84,6 @@ export default function ListenerLogin({ onBack, onCreator }) {
           </button>
         </form>
 
-        <div className="auth-divider"><span>or</span></div>
-
-        <button
-          type="button"
-          className="auth-btn auth-btn--demo"
-          onClick={() => demoLogin('listener', { name: 'Demo Listener', email: null, plan: 'Standard' })}
-        >
-          <span className="auth-demo-dot" />
-          Demo Login
-          <span className="auth-demo-cred">local-only · no account needed</span>
-        </button>
-
-        <button className="auth-btn auth-btn--ghost" onClick={() => demoLogin('listener', { name: 'Guest', email: null, plan: 'Free' })}>
-          Continue as Guest
-        </button>
 
         <div className="auth-links">
           <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); }}>
