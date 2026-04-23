@@ -204,27 +204,27 @@
   right: 20px;
   height: 62px;
 
-  /* iOS 26 Liquid Glass — BeReal floating pill */
-  background: rgba(10, 10, 18, 0.30);
-  backdrop-filter: blur(40px) saturate(220%) brightness(1.18) contrast(1.05);
-  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.18) contrast(1.05);
+  /* Liquid Glass lens — low tint so content shows, high sat/brightness = magnify effect */
+  background: rgba(10, 10, 18, 0.10);
+  backdrop-filter: blur(16px) saturate(300%) brightness(1.35) contrast(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(300%) brightness(1.35) contrast(1.08);
 
   /* Full pill shape */
   border-radius: 999px;
 
-  /* Glass border + inner glow + outer shadow */
-  border: 0.5px solid rgba(255, 255, 255, 0.20);
+  /* Glass rim — bright thin border + deep shadow */
+  border: 0.5px solid rgba(255, 255, 255, 0.25);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
-    0 8px 32px rgba(0, 0, 0, 0.25),
-    0 2px 8px rgba(0, 0, 0, 0.15);
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10),
+    0 8px 32px rgba(0, 0, 0, 0.30),
+    0 2px 8px rgba(0, 0, 0, 0.18);
 
   padding: 0 24px;
   z-index: 200;
   justify-content: space-around;
   align-items: center;
-  isolation: isolate;
+  /* no isolation: isolate — must read content below for backdrop-filter to work */
 }
 .mobile-nav-item {
   display: flex;
@@ -347,15 +347,17 @@
 
 /* ─── Liquid Glass pill — theme tints ─── */
 [data-theme="white"] .mobile-nav {
-  background: rgba(255, 255, 255, 0.45) !important;
-  border-color: rgba(255, 255, 255, 0.60) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(16px) saturate(220%) brightness(1.15) contrast(1.05) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(1.15) contrast(1.05) !important;
+  border-color: rgba(255, 255, 255, 0.55) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    inset 0 1px 0 rgba(255, 255, 255, 0.80),
     0 8px 32px rgba(0, 0, 0, 0.10),
     0 2px 8px rgba(0, 0, 0, 0.06) !important;
 }
 [data-theme="grey"] .mobile-nav {
-  background: rgba(40, 40, 58, 0.35) !important;
+  background: rgba(40, 40, 58, 0.12) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
