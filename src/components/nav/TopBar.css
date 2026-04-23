@@ -13,7 +13,7 @@
   gap: var(--sp-4);
 
   /* Ultra-thin glass — topbar is above everything */
-  background: rgba(38, 38, 58, 0.55) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(77px);
   -webkit-backdrop-filter: blur(77px);
 

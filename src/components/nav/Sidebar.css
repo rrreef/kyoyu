@@ -11,7 +11,7 @@
   z-index: 100;
 
   /* Liquid glass */
-  background: rgba(38, 38, 58, 0.55) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(77px);
   -webkit-backdrop-filter: blur(77px);
 
@@ -202,7 +202,7 @@
   right: 0;
   height: var(--mobile-nav-height, 60px);
   /* Solid matte — no backdrop-filter (causes ghost/duplicate effect) */
-  background: rgba(38, 38, 58, 0.55);
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(77px);
   -webkit-backdrop-filter: blur(77px);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
