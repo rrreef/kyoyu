@@ -396,9 +396,9 @@
   .entry-wordmark { font-size: 1.25rem; letter-spacing: 0.28em; }
   .entry-tagline { font-size: 0.75rem; margin-top: -4px; }
 
-  /* Cards — stack vertically on very small screens, side by side on normal phones */
+  /* Cards — stacked vertically: Dive In above, Claim Your Cut below */
   .entry-cards {
-    flex-direction: row;
+    flex-direction: column;
     gap: 10px;
     width: 100%;
   }
