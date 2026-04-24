@@ -6,6 +6,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
+input, textarea, select {
+  font-size: max(16px, 1em) !important;
+}
+
+
 
 /* ===== KYO — iOS 26 Liquid Glass Design System ===== */
 :root {
