@@ -1,5 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+/* Eliminate 300ms tap delay in WKWebView / mobile Safari */
+*, *::before, *::after {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+
 /* ===== KYO — iOS 26 Liquid Glass Design System ===== */
 :root {
   --bg-primary: #060608;
