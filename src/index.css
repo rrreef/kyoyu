@@ -8,7 +8,7 @@
 
 /* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
 input, textarea, select {
-  font-size: max(16px, 1em) !important;
+  font-size: 16px !important;
 }
 
 
