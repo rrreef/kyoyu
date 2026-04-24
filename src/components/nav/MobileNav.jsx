@@ -28,26 +28,21 @@ export default function MobileNav() {
     const active = nav.querySelector('.mobile-nav-item.active');
     if (!active) return;
 
-    const navRect    = nav.getBoundingClientRect();
-    const itemRect   = active.getBoundingClientRect();
-    const centerX    = itemRect.left - navRect.left + itemRect.width / 2;
+    const navRect  = nav.getBoundingClientRect();
+    const itemRect = active.getBoundingClientRect();
+    const centerX  = itemRect.left - navRect.left + itemRect.width / 2;
     indicator.style.transform = `translateX(${centerX}px) translateX(-50%)`;
   }, []);
 
-  /* Slide on route change */
   useEffect(() => {
-    // Small delay so NavLink .active class is applied first
     const t = setTimeout(slideIndicator, 16);
     return () => clearTimeout(t);
   }, [location.pathname, slideIndicator]);
 
-  /* Slide on mount */
   useEffect(() => {
-    // No transition on first paint
     const indicator = indicatorRef.current;
     if (indicator) indicator.style.transition = 'none';
     slideIndicator();
-    // Re-enable transition after first render
     const t = setTimeout(() => {
       if (indicator) indicator.style.transition = '';
     }, 50);
@@ -107,17 +102,50 @@ export default function MobileNav() {
 
   return createPortal(
     <>
-      <svg aria-hidden="true" style={{ position:'fixed', width:0, height:0, overflow:'hidden', pointerEvents:'none' }}>
+      {/*
+        SVG lens filter — referenced by backdrop-filter: url('#mob-nav-lens')
+        This applies spatial displacement to the CONTENT BEHIND the pill,
+        not to the pill itself. Creates genuine lens distortion / warp effect.
+      */}
+      <svg
+        aria-hidden="true"
+        style={{ position: 'fixed', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}
+      >
         <defs>
-          <filter id="mob-nav-lens" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.04" numOctaves="2" seed="5" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="20" xChannelSelector="R" yChannelSelector="G" />
+          <filter
+            id="mob-nav-lens"
+            x="-30%" y="-30%"
+            width="160%" height="160%"
+            colorInterpolationFilters="sRGB"
+          >
+            {/* Low-frequency noise = smooth large-scale lens warps */}
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.008 0.012"
+              numOctaves="3"
+              seed="8"
+              result="noise"
+            />
+            {/* scale=90 = very pronounced spatial distortion */}
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="noise"
+              scale="90"
+              xChannelSelector="R"
+              yChannelSelector="G"
+              result="warped"
+            />
+            {/* Boost colour of warped content — vivid "magnified glass" quality */}
+            <feComponentTransfer in="warped">
+              <feFuncR type="linear" slope="1.30" intercept="-0.10" />
+              <feFuncG type="linear" slope="1.30" intercept="-0.10" />
+              <feFuncB type="linear" slope="1.25" intercept="-0.08" />
+            </feComponentTransfer>
           </filter>
         </defs>
       </svg>
 
       <nav ref={navRef} className="mobile-nav">
-        {/* Sliding indicator bar */}
         <div ref={indicatorRef} className="nav-indicator" aria-hidden="true" />
 
         {mobileItems.map(({ to, label, icon: Icon }) => (
