@@ -165,9 +165,6 @@ input, textarea, select {
 
 [data-theme="grey"] body {
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(255, 107, 26, 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 105%, rgba(255, 107, 26, 0.04) 0%, transparent 50%);
 }
 
 /* ══ White theme ═════════════════════════════════════════════ */
@@ -228,9 +225,6 @@ input, textarea, select {
 
 [data-theme="white"] body {
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(255, 107, 26, 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 105%, rgba(255, 107, 26, 0.03) 0%, transparent 50%);
   color: var(--text-primary);
 }
 
@@ -253,9 +247,6 @@ html {
 
 body {
   background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(255, 107, 26, 0.07) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 105%, rgba(255, 107, 26, 0.05) 0%, transparent 50%);
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;
@@ -275,9 +266,6 @@ body {
   position: fixed;
   inset: 0;
   background: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(255,107,26,0.07) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 105%, rgba(255,107,26,0.05) 0%, transparent 50%);
   display: flex;
   align-items: center;
   justify-content: center;
