@@ -11,9 +11,9 @@
   height: 78px;
 
   /* Thick frosted glass — slightly less frosted */
-  background: rgba(28, 38, 48, 0.05);
-  backdrop-filter: url("#mob-nav-lens") saturate(280%) brightness(1.35) contrast(1.10);
-  -webkit-backdrop-filter: url("#mob-nav-lens") saturate(280%) brightness(1.35) contrast(1.10);
+  background: rgba(28, 38, 48, 0.08);
+  backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg);
+  -webkit-backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg);
 
   /* Full pill */
   border-radius: 999px;
@@ -117,8 +117,8 @@
 /* White theme */
 [data-theme="white"] .mobile-nav {
   background: rgba(220, 225, 235, 0.06) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg) !important;
+  -webkit-backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg) !important;
   border: none !important;
   box-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08) !important;
 }
@@ -129,7 +129,7 @@
 /* Grey theme */
 [data-theme="grey"] .mobile-nav {
   background: rgba(24,32,44,0.06) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg) !important;
+  -webkit-backdrop-filter: saturate(600%) contrast(1.35) brightness(1.5) hue-rotate(8deg) !important;
   border: none !important;
 }
