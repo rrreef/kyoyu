@@ -13,6 +13,8 @@ const mobileItems = [
 ];
 
 export default function MobileNav() {
+  // Hide web pill nav when running inside native iOS app shell
+  if (navigator.userAgent.includes('KyoyuApp')) return null;
   const navRef       = useRef(null);
   const indicatorRef = useRef(null);
   const glareRaf     = useRef(null);
