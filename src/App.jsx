@@ -118,15 +118,9 @@ function RoleGate() {
 
 // ─── Root ─────────────────────────────────────────────────
 export default function App() {
-  // Show splash once per session
-  const [splash, setSplash] = useState(
-    () => !sessionStorage.getItem('__reef_splash_done__')
-  );
-
-  function handleSplashDone() {
-    sessionStorage.setItem('__reef_splash_done__', '1');
-    setSplash(false);
-  }
+  // Always show on fresh app load (state is in-memory only)
+  const [splash, setSplash] = useState(true);
+  function handleSplashDone() { setSplash(false); }
 
   return (
     <BrowserRouter>

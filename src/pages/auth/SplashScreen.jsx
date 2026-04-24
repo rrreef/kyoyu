@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './SplashScreen.css';
 
-/* ── The same logo SVG used in EntryScreen ─────────────────── */
 const SplashLogo = () => (
   <svg
     width="120" height="120"
@@ -17,7 +16,6 @@ const SplashLogo = () => (
       <circle cx="16" cy="16" r="3.8" stroke="currentColor" strokeWidth="0.7" fill="none" opacity="0.22" />
       <circle cx="16" cy="16" r="1" fill="currentColor" opacity="0.6" />
     </g>
-    {/* Tonearm */}
     <line
       x1="26" y1="6" x2="7" y2="25"
       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -28,44 +26,31 @@ const SplashLogo = () => (
   </svg>
 );
 
+// Phases: enter → hold → zoom → done
 export default function SplashScreen({ onDone }) {
-  const [phase, setPhase] = useState('enter'); // enter → hold → zoom → done
-  const containerRef = useRef(null);
+  const [phase, setPhase] = useState('enter');
 
   useEffect(() => {
-    // Phase 1: logo floats in (0 → 800ms)
-    const holdTimer = setTimeout(() => setPhase('zoom'), 1800);
-    return () => clearTimeout(holdTimer);
-  }, []);
-
-  useEffect(() => {
-    if (phase === 'zoom') {
-      // Phase 2: smash-zoom (800ms → 1150ms) then exit
-      const doneTimer = setTimeout(() => {
-        setPhase('done');
-        onDone();
-      }, 500);
-      return () => clearTimeout(doneTimer);
-    }
-  }, [phase, onDone]);
-
-  if (phase === 'done') return null;
+    // enter (0–700ms) → hold
+    const t1 = setTimeout(() => setPhase('hold'), 700);
+    // hold (700ms–2200ms) → zoom
+    const t2 = setTimeout(() => setPhase('zoom'), 2200);
+    // zoom (2200ms–2700ms) → done
+    const t3 = setTimeout(() => { onDone(); }, 2700);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [onDone]);
 
   return (
-    <div ref={containerRef} className={`splash-root splash-${phase}`} aria-hidden="true">
-      {/* Ambient orbs */}
+    <div className={`splash-root splash-${phase}`} aria-hidden="true">
       <div className="splash-orb splash-orb--a" />
       <div className="splash-orb splash-orb--b" />
 
       <div className="splash-center">
-        {/* Logo mark */}
         <div className="splash-logo-wrap">
           <SplashLogo />
-          {/* Glow ring behind logo */}
           <div className="splash-glow" />
         </div>
 
-        {/* Wordmark */}
         <div className="splash-wordmark-wrap">
           <span className="splash-wordmark">REEF</span>
           <span className="splash-sub">Fair Music Platform</span>
