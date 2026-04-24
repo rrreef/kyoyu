@@ -1,6 +1,13 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+// Post auth state to native iOS shell (if running inside KyoyuApp)
+function notifyNative(type) {
+  try { window.webkit?.messageHandlers?.auth?.postMessage({ type }); } catch(_) {}
+}
+
+
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -40,6 +47,7 @@ export function AuthProvider({ children }) {
       .single();
 
     const userRole = profile?.role || authUser.user_metadata?.role || 'listener';
+    notifyNative('loggedIn');
     setRole(userRole);
     setUser({
       id:          authUser.id,
@@ -71,6 +79,7 @@ export function AuthProvider({ children }) {
   /* ── Sign out ── */
   async function logout() {
     await supabase.auth.signOut();
+    notifyNative('loggedOut');
     setRole(null);
     setUser(null);
     setAvatarSrc(null);
