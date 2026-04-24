@@ -10,7 +10,7 @@ const LS_KEY = 'kyoyu-theme';
 
 export function useTheme() {
   const [theme, setThemeState] = useState(
-    () => localStorage.getItem(LS_KEY) || 'white'
+    () => localStorage.getItem(LS_KEY) || 'dark'
   );
 
   useEffect(() => {
@@ -19,7 +19,7 @@ export function useTheme() {
 
   /* Apply on first mount (in case localStorage had a saved value) */
   useEffect(() => {
-    const saved = localStorage.getItem(LS_KEY) || 'white';
+    const saved = localStorage.getItem(LS_KEY) || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
   }, []);
 
