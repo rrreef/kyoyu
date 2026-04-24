@@ -119,7 +119,7 @@ function RoleGate() {
 // ─── Root ─────────────────────────────────────────────────
 export default function App() {
   // Always show on fresh app load (state is in-memory only)
-  const [splash, setSplash] = useState(true);
+  const [splash, setSplash] = useState(false);
   function handleSplashDone() { setSplash(false); }
 
   return (
