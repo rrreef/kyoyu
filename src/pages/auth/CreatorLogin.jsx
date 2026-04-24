@@ -64,17 +64,19 @@ export default function CreatorLogin({ onBack, onListener }) {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          {/* Artist name — always visible */}
-          <div className="auth-field">
-            <label htmlFor="c-artist">Artist / Label Name</label>
-            <input
-              id="c-artist"
-              type="text"
-              placeholder="Formant Value / Obsidian Records"
-              value={artistName}
-              onChange={e => { setArtistName(e.target.value); setError(''); }}
-            />
-          </div>
+          {/* Artist name — sign-up only */}
+          {isNew && (
+            <div className="auth-field">
+              <label htmlFor="c-artist">Artist / Label Name</label>
+              <input
+                id="c-artist"
+                type="text"
+                placeholder="Formant Value / Obsidian Records"
+                value={artistName}
+                onChange={e => { setArtistName(e.target.value); setError(''); }}
+              />
+            </div>
+          )}
           <div className="auth-field">
             <label htmlFor="c-email">Email</label>
             <input
