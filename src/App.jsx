@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
@@ -13,6 +14,7 @@ import Player from './components/player/Player';
 
 // Auth screens
 import EntryScreen from './pages/auth/EntryScreen';
+import SplashScreen from './pages/auth/SplashScreen';
 
 // Listener pages
 import Home from './pages/Home';
@@ -116,12 +118,25 @@ function RoleGate() {
 
 // ─── Root ─────────────────────────────────────────────────
 export default function App() {
+  // Show splash once per session
+  const [splash, setSplash] = useState(
+    () => !sessionStorage.getItem('__reef_splash_done__')
+  );
+
+  function handleSplashDone() {
+    sessionStorage.setItem('__reef_splash_done__', '1');
+    setSplash(false);
+  }
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <PlayerProvider>
           <LibraryProvider>
-            <RoleGate />
+            {splash
+              ? <SplashScreen onDone={handleSplashDone} />
+              : <RoleGate />
+            }
           </LibraryProvider>
         </PlayerProvider>
       </AuthProvider>

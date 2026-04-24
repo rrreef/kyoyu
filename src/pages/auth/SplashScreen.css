@@ -1,0 +1,167 @@
+/* ─── Splash Screen ─────────────────────────────────────────── */
+
+.splash-root {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #060608;
+  overflow: hidden;
+}
+
+/* ── Ambient orbs ─────────────────────────────────────────── */
+.splash-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  opacity: 0;
+  animation: splash-orb-breathe 3s ease-in-out infinite;
+}
+.splash-orb--a {
+  width: 340px; height: 340px;
+  background: radial-gradient(circle, rgba(255, 107, 26, 0.22) 0%, transparent 70%);
+  top: -80px; left: -60px;
+  animation-delay: 0s;
+}
+.splash-orb--b {
+  width: 280px; height: 280px;
+  background: radial-gradient(circle, rgba(120, 80, 255, 0.18) 0%, transparent 70%);
+  bottom: -60px; right: -40px;
+  animation-delay: 1.2s;
+}
+
+@keyframes splash-orb-breathe {
+  0%, 100% { opacity: 0; transform: scale(0.9); }
+  50%       { opacity: 1; transform: scale(1.1); }
+}
+
+/* ── Center content ──────────────────────────────────────── */
+.splash-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  transform-origin: center center;
+}
+
+/* ── Phase: enter ─────────────────────────────────────────── */
+.splash-enter .splash-center {
+  animation: splash-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes splash-enter {
+  from { opacity: 0; transform: scale(0.82) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0px);   }
+}
+
+/* ── Phase: hold — gentle float ──────────────────────────── */
+.splash-hold .splash-center {
+  animation: splash-float 2.8s ease-in-out infinite;
+}
+@keyframes splash-float {
+  0%, 100% { transform: translateY(0px);   }
+  50%       { transform: translateY(-6px);  }
+}
+
+/* ── Phase: zoom — smash zoom fills screen ───────────────── */
+.splash-zoom {
+  animation: splash-bg-flash 0.45s ease-in forwards;
+}
+.splash-zoom .splash-center {
+  animation: splash-zoom-in 0.45s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+.splash-zoom .splash-wordmark-wrap {
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+@keyframes splash-zoom-in {
+  from { transform: scale(1);   opacity: 1; }
+  to   { transform: scale(24);  opacity: 0; }
+}
+@keyframes splash-bg-flash {
+  0%   { background: #060608; }
+  60%  { background: #0e0e14; }
+  100% { background: #060608; opacity: 0; }
+}
+
+/* ── Logo wrap + glow ─────────────────────────────────────── */
+.splash-logo-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-logo-svg {
+  color: rgba(255, 255, 255, 0.92);
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 18px rgba(255, 107, 26, 0.35));
+}
+
+.splash-glow {
+  position: absolute;
+  inset: -24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 107, 26, 0.18) 0%, transparent 65%);
+  animation: splash-glow-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes splash-glow-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  50%       { opacity: 1.0; transform: scale(1.05); }
+}
+
+/* ── Record spin ─────────────────────────────────────────── */
+.splash-record-spin {
+  animation: splash-spin 4s linear infinite;
+}
+@keyframes splash-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Tonearm subtle pulse ─────────────────────────────────── */
+.splash-tonearm {
+  animation: tonearm-tick 2.4s ease-in-out infinite;
+  transform-origin: 26px 6px;
+}
+@keyframes tonearm-tick {
+  0%, 100% { transform: rotate(0deg);   opacity: 0.9; }
+  50%       { transform: rotate(-3deg);  opacity: 1.0; }
+}
+
+/* ── Wordmark ────────────────────────────────────────────── */
+.splash-wordmark-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  animation: splash-words-enter 0.6s 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes splash-words-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.splash-wordmark {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 300;
+  letter-spacing: 0.38em;
+  color: rgba(255, 255, 255, 0.90);
+  text-transform: uppercase;
+}
+
+.splash-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+}
