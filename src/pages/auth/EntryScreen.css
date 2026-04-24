@@ -107,11 +107,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 10px;          /* more space between REEF and subtitle */
 }
 .entry-wordmark {
   font-family: var(--font-heading);
-  font-size: 1.75rem;
+  font-size: 2.4rem;  /* bigger */
   font-weight: 700;
   letter-spacing: 0.38em;
   color: rgba(255,255,255,0.92);
@@ -222,17 +222,17 @@
 }
 .entry-card:hover::after { opacity: 1; }
 
-/* Listener */
+/* Listener — same neutral style as creator, no orange */
 .entry-card--listener::after {
-  background: radial-gradient(ellipse at 0% 0%, rgba(255,107,26,0.08) 0%, transparent 65%);
+  background: radial-gradient(ellipse at 0% 0%, rgba(120,140,255,0.06) 0%, transparent 65%);
 }
 .entry-card--listener:hover {
-  border-color: rgba(255, 107, 26, 0.28);
+  border-color: rgba(255,255,255,0.16);
   background: rgba(255,255,255,0.07);
 }
-.entry-card--listener .entry-card__icon { color: rgba(255, 140, 60, 0.85); }
-.entry-card--listener .entry-card__badge { background: rgba(255,107,26,0.10); color: rgba(255,140,60,0.85); border-color: rgba(255,107,26,0.22); }
-.entry-card--listener .entry-card__cta { color: rgba(255,140,60,0.70); }
+.entry-card--listener .entry-card__icon { color: rgba(180,190,255,0.65); }
+.entry-card--listener .entry-card__badge { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.12); }
+.entry-card--listener .entry-card__cta { color: rgba(255,255,255,0.38); }
 
 /* Creator */
 .entry-card--creator::after {
@@ -397,15 +397,15 @@
     margin-top: auto;   /* pushes hero+tagline to lower section */
   }
 
-  /* Smaller logo */
+  /* Bigger logo on mobile */
   .entry-logo-wrap svg,
   .reef-logo-svg {
-    width: 48px !important;
-    height: 48px !important;
+    width: 64px !important;
+    height: 64px !important;
   }
   .entry-logo-wrap::before { inset: -8px; }
 
-  .entry-wordmark { font-size: 1.2rem; letter-spacing: 0.26em; }
+  .entry-wordmark { font-size: 1.6rem; letter-spacing: 0.26em; }
   .entry-tagline  { font-size: 0.72rem; margin-top: -2px; margin-bottom: 20px; }
 
   /* Cards stacked at bottom */
