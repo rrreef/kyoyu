@@ -24,7 +24,7 @@
 }
 .auth-orb--orange {
   width: 600px; height: 600px;
-  background: rgba(255, 107, 26, 0.10);
+  background: rgba(255, 255, 255, 0.0);
   top: -200px; left: -200px;
 }
 .auth-orb--silver {
@@ -173,12 +173,12 @@
 .auth-btn:active { transform: scale(0.98); }
 
 .auth-btn--primary {
-  background: #ff6b1a;
-  color: #fff;
+  background: rgba(255,255,255,0.90);
+  color: #0a0a0a;
   border: none;
 }
 .auth-btn--primary:hover:not(:disabled) {
-  background: #ff7a30;
+  background: #ffffff;
 }
 
 .auth-btn--creator-primary {
@@ -511,8 +511,11 @@
     padding-top: 16px;
   }
 
-  /* Reduce links margin */
-  .auth-links { margin-top: 4px; }
+  /* Links: 3px further from sign-in button */
+  .auth-links { margin-top: 7px; }
+
+  /* Header + form: 20px lower than logo/title */
+  .auth-header { margin-top: 20px; margin-bottom: 20px; }
 }
 
 /* Sign-up mode has 3 fields — compress spacing further */

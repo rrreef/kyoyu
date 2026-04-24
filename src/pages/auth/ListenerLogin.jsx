@@ -63,21 +63,19 @@ export default function ListenerLogin({ onBack, onCreator }) {
 
         <form className="auth-form" onSubmit={handleSubmit}>
 
-          {/* Username — only shown during sign-up */}
-          {isNew && (
-            <div className="auth-field">
-              <label htmlFor="l-username">Username</label>
-              <input
-                id="l-username"
-                type="text"
-                placeholder="yourname"
-                value={username}
-                onChange={e => { setUsername(e.target.value); setError(''); }}
-                autoComplete="username"
-                autoCapitalize="none"
-              />
-            </div>
-          )}
+          {/* Username — always visible */}
+          <div className="auth-field">
+            <label htmlFor="l-username">Username</label>
+            <input
+              id="l-username"
+              type="text"
+              placeholder="yourname"
+              value={username}
+              onChange={e => { setUsername(e.target.value); setError(''); }}
+              autoComplete="username"
+              autoCapitalize="none"
+            />
+          </div>
 
           <div className="auth-field">
             <label htmlFor="l-email">Email</label>
