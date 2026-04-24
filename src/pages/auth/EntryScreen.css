@@ -399,13 +399,14 @@
   /* Bigger logo on mobile */
   .entry-logo-wrap svg,
   .reef-logo-svg {
-    width: 64px !important;
-    height: 64px !important;
+    width: 80px !important;
+    height: 80px !important;
   }
   .entry-logo-wrap::before { inset: -8px; }
 
-  .entry-wordmark { font-size: 1.6rem; letter-spacing: 0.26em; }
-  .entry-tagline  { font-size: 0.72rem; margin-top: -2px; margin-bottom: 20px; }
+  .entry-wordmark { font-size: 2rem; letter-spacing: 0.26em; }
+  /* Equal gaps: REEF → Fair Music Platform → Where the music runs deep = 10px each */
+  .entry-tagline  { font-size: 0.72rem; margin-top: 0; margin-bottom: 20px; }
 
   /* Cards stacked at bottom */
   .entry-cards {
