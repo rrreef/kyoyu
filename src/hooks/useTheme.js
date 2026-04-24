@@ -9,9 +9,15 @@ export const THEMES = [
 const LS_KEY = 'kyoyu-theme';
 
 export function useTheme() {
-  const [theme, setThemeState] = useState(
-    () => localStorage.getItem(LS_KEY) || 'dark'
-  );
+  const [theme, setThemeState] = useState(() => {
+    const saved = localStorage.getItem(LS_KEY);
+    // Migrate: white → dark (dark is now the default)
+    if (!saved || saved === 'white') {
+      localStorage.setItem(LS_KEY, 'dark');
+      return 'dark';
+    }
+    return saved;
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
