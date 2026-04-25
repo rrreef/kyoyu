@@ -246,20 +246,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Payout Promise Banner */}
-      <section className="home-section">
-        <Link to="/subscription" className="payout-banner glass">
-          <div className="payout-banner-left">
-            <div className="payout-banner-title">Your money goes directly to the artists you listen to.</div>
-            <div className="payout-banner-sub">70% of your subscription goes to the artists you actually played this month — split by listening time. Not pooled. Not diluted.</div>
-          </div>
-          <div className="payout-banner-right">
-            <div className="payout-stat">70%</div>
-            <div className="payout-stat-label">To artists</div>
-          </div>
-          <ArrowRight size={20} className="payout-arrow" />
-        </Link>
-      </section>
     </div>
   );
 }
