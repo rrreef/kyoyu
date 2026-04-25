@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, Bell } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import './TopBar.css';
 
@@ -8,18 +8,18 @@ export default function TopBar() {
   const { avatarSrc } = useAuth();
 
   return (
+    /* On desktop: full topbar. On mobile: just the floating pill cluster */
     <header className="topbar glass">
+
+      {/* Desktop-only nav controls */}
       <div className="topbar-nav">
-        <button className="topbar-btn" onClick={() => navigate(-1)} title="Back">
-          <ChevronLeft size={20} />
-        </button>
-        <button className="topbar-btn" onClick={() => navigate(+1)} title="Forward">
-          <ChevronRight size={20} />
-        </button>
+        {/* back/forward removed for cleanliness */}
       </div>
-      <div className="topbar-actions">
+
+      {/* Desktop actions (hidden on mobile via CSS) */}
+      <div className="topbar-actions topbar-actions--desktop">
         <button className="topbar-btn topbar-search" onClick={() => navigate('/search')} title="Search">
-          <Search size={18} />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
         <button className="topbar-btn" title="Notifications">
           <Bell size={18} />
@@ -31,6 +31,21 @@ export default function TopBar() {
           }
         </button>
       </div>
+
+      {/* Mobile-only: two floating pill buttons, no bar */}
+      <div className="topbar-float-cluster">
+        <button className="topbar-float-btn" title="Notifications">
+          <Bell size={18} />
+        </button>
+        <button className="topbar-float-btn topbar-float-btn--avatar"
+                onClick={() => navigate('/profile')} title="Profile">
+          {avatarSrc
+            ? <img src={avatarSrc} alt="Avatar" className="topbar-avatar topbar-avatar-img" />
+            : <div className="topbar-avatar">A</div>
+          }
+        </button>
+      </div>
+
     </header>
   );
 }
