@@ -510,7 +510,7 @@ img { display: block; max-width: 100%; }
     padding-top: var(--page-top);
     padding-bottom: calc(var(--player-height) + var(--mobile-nav-height) + 8px);
   }
-  .page { padding: 0; }
+  .page { padding: 0 16px; }
   h1 { font-size: 1.5rem; }
   /* Shift player above the mobile nav */
   .player-bar { bottom: var(--mobile-nav-height) !important; }
