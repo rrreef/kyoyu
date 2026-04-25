@@ -101,7 +101,14 @@
 }
 
 @media (max-width: 768px) {
-  .topbar { left: 0; }
+  .topbar {
+    left: 0;
+    /* Push content 5px below Dynamic Island / notch */
+    padding-top: calc(env(safe-area-inset-top) + 5px);
+    height: var(--topbar-height);
+    align-items: flex-end;
+    padding-bottom: 8px;
+  }
   .topbar-nav { display: none; }
   .topbar-search { display: none; }
   .topbar-actions { margin-left: auto; }

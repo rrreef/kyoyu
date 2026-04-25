@@ -500,6 +500,10 @@ img { display: block; max-width: 100%; }
 
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
+  :root {
+    /* Bake safe-area + 5px into topbar height so all consumers auto-adjust */
+    --topbar-height: calc(60px + env(safe-area-inset-top) + 5px);
+  }
   .main-content {
     margin-left: 0;
     padding-top: calc(var(--topbar-height) + 8px);
