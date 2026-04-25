@@ -509,6 +509,14 @@ img { display: block; max-width: 100%; }
     margin-left: 0;
     padding-top: var(--page-top);
     padding-bottom: calc(var(--player-height) + var(--mobile-nav-height) + 8px);
+    overflow-x: visible;   /* allow scroll-row bleed-out */
+  }
+  /* Release card rows bleed edge-to-edge; first card stays aligned with text */
+  .scroll-row {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
   .page { padding: 0 16px; }
   h1 { font-size: 1.5rem; }
