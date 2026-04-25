@@ -501,12 +501,13 @@ img { display: block; max-width: 100%; }
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   :root {
-    /* No bar on mobile — no top offset needed for content */
     --topbar-height: 0px;
+    /* Floating pill cluster bottom + 5px gap — used by ALL pages */
+    --page-top: calc(env(safe-area-inset-top) + 61px);
   }
   .main-content {
     margin-left: 0;
-    padding-top: calc(env(safe-area-inset-top) + 16px);
+    padding-top: var(--page-top);
     padding-bottom: calc(var(--player-height) + var(--mobile-nav-height) + 8px);
   }
   .page { padding: var(--sp-4); }
