@@ -13,6 +13,8 @@ const mobileItems = [
 ];
 
 export default function MobileNav() {
+  // Hide web pill on iOS native — native TabView tab bar handles it there
+  if (navigator.userAgent.includes("KyoyuApp")) return null;
   // Hide web pill nav when running inside native iOS app shell
   const navRef       = useRef(null);
   const indicatorRef = useRef(null);
