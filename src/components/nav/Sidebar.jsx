@@ -1,22 +1,33 @@
-import { NavLink } from 'react-router-dom';
-import { Home, Search, Library, ShoppingBag, Store, User, Music, LogOut, Settings, MessageCircle, CalendarDays } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Home, Search, Library, ShoppingBag, Store, Music, LogOut, MessageCircle, CalendarDays } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import './Sidebar.css';
 
+// Routes that the native iOS profile button handles — none of these should
+// highlight a sidebar item (profile icon lives in the native top-right cluster)
+const PROFILE_ROUTES = new Set(['/profile', '/account', '/uploads', '/app-settings', '/downloads', '/orders', '/subscription', '/settings']);
+
 const navItems = [
-  { to: '/',            label: 'Home',        icon: Home        },
-  { to: '/search',      label: 'Search',      icon: Search      },
-  { to: '/library',     label: 'Library',     icon: Library     },
+  { to: '/',            label: 'Home',        icon: Home           },
+  { to: '/search',      label: 'Search',      icon: Search         },
+  { to: '/library',     label: 'Library',     icon: Library        },
   { to: '/events',      label: 'Events',      icon: CalendarDays   },
   { to: '/shop',        label: 'Shop',        icon: ShoppingBag    },
   { to: '/marketplace', label: 'Marketplace', icon: Store          },
   { to: '/messages',    label: 'Messages',    icon: MessageCircle  },
-  { to: '/profile',     label: 'Profile',     icon: User           },
-  { to: '/settings',    label: 'Settings',    icon: Settings       },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+
+  // When on a profile-owned route, suppress ALL active highlights
+  const isProfileRoute = PROFILE_ROUTES.has(pathname)
+    || pathname.startsWith('/release/')
+    || pathname.startsWith('/artist/')
+    || pathname.startsWith('/label/');
+
+
 
   return (
     <>
@@ -41,7 +52,9 @@ export default function Sidebar() {
               key={to}
               to={to}
               end={to === '/'}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              className={({ isActive }) =>
+                `nav-item ${isActive && !isProfileRoute ? 'active' : ''}`
+              }
             >
               <Icon size={18} strokeWidth={1.8} />
               <span>{label}</span>
