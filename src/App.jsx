@@ -27,6 +27,9 @@ import ReleasePage from './pages/ReleasePage';
 import ArtistPage from './pages/ArtistPage';
 import Subscription from './pages/Subscription';
 import ListenerSettings from './pages/ListenerSettings';
+import Account      from './pages/Account';
+import UserUploads  from './pages/UserUploads';
+import AppSettings  from './pages/AppSettings';
 import Orders        from './pages/Orders';
 import Downloads     from './pages/Downloads';
 import Messages      from './pages/Messages';
@@ -71,6 +74,9 @@ function ListenerApp() {
           <Route path="/settings"        element={<ListenerSettings />} />
           <Route path="/orders"          element={<Orders />} />
           <Route path="/downloads"       element={<Downloads />} />
+          <Route path="/account"         element={<Account />} />
+          <Route path="/uploads"         element={<UserUploads />} />
+          <Route path="/app-settings"    element={<AppSettings />} />
           <Route path="/messages"        element={<Messages />} />
           <Route path="/events"          element={<Events />} />
           <Route path="*"               element={<Home />} />

@@ -1,0 +1,112 @@
+.appsettings-page { padding: var(--page-top, 16px) 16px 120px; }
+
+.appsettings-header {
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+.appsettings-header h1 { font-size: 1.25rem; font-weight: 700; }
+.appsettings-back {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-full) !important;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+}
+
+.appsettings-section { margin-bottom: var(--sp-5); }
+.appsettings-label {
+  font-size: 0.68rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim); padding: 0 4px;
+  margin-bottom: var(--sp-2);
+}
+
+.appsettings-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-lg) !important;
+  margin-bottom: var(--sp-2);
+}
+.appsettings-row-btn { cursor: pointer; border: none; width: 100%; text-align: left; }
+.appsettings-icon { color: var(--text-muted); flex-shrink: 0; }
+.appsettings-icon.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.appsettings-row-body { flex: 1; }
+.appsettings-row-title { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); }
+.appsettings-row-sub { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+.appsettings-chevron { color: var(--text-dim); transform: rotate(-90deg); transition: transform 0.2s; }
+.appsettings-chevron.open { transform: rotate(90deg); }
+
+/* Toggle switch */
+.appsettings-toggle {
+  width: 44px; height: 26px;
+  border-radius: 13px;
+  background: rgba(255,255,255,0.12);
+  border: none; cursor: pointer; position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.appsettings-toggle.on { background: rgba(255,255,255,0.82); }
+.appsettings-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(255,255,255,0.55);
+  transition: left 0.2s ease, background 0.2s ease;
+}
+.appsettings-toggle.on .appsettings-thumb {
+  left: 21px;
+  background: var(--bg-primary, #060608);
+}
+
+/* Language picker */
+.appsettings-picker {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden; margin-bottom: var(--sp-2);
+}
+.appsettings-option {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 11px 16px;
+  background: none; border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.8125rem; font-weight: 500;
+  color: var(--text-secondary); cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+}
+.appsettings-option:last-child { border-bottom: none; }
+.appsettings-option:hover { background: rgba(255,255,255,0.05); }
+.appsettings-option.active { color: var(--text-primary); }
+
+/* Quality grid */
+.appsettings-quality-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 1px; border-radius: var(--radius-lg) !important;
+  overflow: hidden; margin-bottom: var(--sp-2);
+}
+.appsettings-quality-btn {
+  display: flex; flex-direction: column; align-items: flex-start;
+  padding: var(--sp-3) var(--sp-4); position: relative;
+  background: none; border: none; cursor: pointer;
+  text-align: left; transition: background 0.15s;
+  gap: 2px;
+}
+.appsettings-quality-btn:hover { background: rgba(255,255,255,0.05); }
+.appsettings-quality-btn.active { background: rgba(255,255,255,0.09); }
+.appsettings-quality-icon { color: var(--text-dim); margin-bottom: 2px; }
+.appsettings-quality-btn.active .appsettings-quality-icon { color: var(--text-secondary); }
+.appsettings-quality-label { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); }
+.appsettings-quality-sub { font-size: 0.65rem; color: var(--text-muted); line-height: 1.3; }
+.appsettings-quality-check { position: absolute; top: 10px; right: 10px; color: var(--text-secondary); }
+
+/* Version check button */
+.appsettings-check-btn {
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radius-full);
+  padding: 3px 10px; cursor: pointer;
+  flex-shrink: 0; transition: color 0.15s;
+}
+.appsettings-check-btn:hover { color: var(--text-primary); }
+.appsettings-check-btn:disabled { opacity: 0.5; }

@@ -1,0 +1,101 @@
+.account-page { padding: var(--page-top, 16px) 16px 120px; }
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+.account-header h1 { font-size: 1.25rem; font-weight: 700; flex: 1; }
+.account-back {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-full) !important;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+}
+.account-save-btn {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font-size: 0.8125rem; font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  transition: all 0.2s ease;
+}
+.account-save-btn.saved {
+  background: rgba(80,200,120,0.18);
+  border-color: rgba(80,200,120,0.4);
+  color: rgba(140,230,160,0.95);
+}
+
+.account-section { margin-bottom: var(--sp-5); }
+.account-section-label {
+  font-size: 0.68rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 0 4px;
+  margin-bottom: var(--sp-2);
+}
+
+.account-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-lg) !important;
+  margin-bottom: var(--sp-2);
+  text-decoration: none;
+}
+.account-row-btn { cursor: pointer; border: none; width: 100%; text-align: left; }
+.account-row-icon { color: var(--text-muted); flex-shrink: 0; }
+.account-row-body { flex: 1; min-width: 0; }
+.account-row-label { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1px; }
+.account-row-val { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-row-action {
+  font-size: 0.75rem; font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radius-full);
+  padding: 3px 10px; cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.account-row-action:hover { color: var(--text-primary); }
+.account-row-chevron { color: var(--text-dim); flex-shrink: 0; transition: transform 0.2s; }
+.account-row-chevron.rotated { transform: rotate(90deg); }
+
+.account-apple-pay .account-row-icon { color: var(--text-secondary); }
+
+.account-input {
+  background: none; border: none; outline: none;
+  font-family: var(--font-body);
+  font-size: 0.75rem; color: var(--text-primary);
+  width: 100%; padding: 0;
+}
+.account-date { color-scheme: dark; }
+
+.account-chip-panel {
+  border-radius: var(--radius-lg) !important;
+  padding: var(--sp-3);
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.account-chip {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  font-size: 0.72rem; font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.account-chip.active {
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.28);
+  color: var(--text-primary);
+}
