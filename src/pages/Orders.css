@@ -12,6 +12,21 @@
   margin: 0;
 }
 
+.orders-back {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  color: var(--text-primary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+.orders-back:hover { border-color: var(--glass-border-light); background: var(--glass-bg-hover); }
+
 .orders-empty {
   display: flex;
   flex-direction: column;

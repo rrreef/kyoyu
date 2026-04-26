@@ -1,5 +1,8 @@
-import { Package, CheckCircle, Truck, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Package, CheckCircle, Truck, Clock, ChevronLeft } from 'lucide-react';
 import './Orders.css';
+
+const isNativeApp = navigator.userAgent.includes('KyoyuApp');
 
 const mockOrders = [
   {
@@ -66,9 +69,15 @@ const STATUS = {
 };
 
 export default function Orders() {
+  const navigate = useNavigate();
   return (
     <div className="page orders-page animate-in">
       <div className="orders-header">
+        {!isNativeApp && (
+          <button className="orders-back glass" onClick={() => navigate('/profile')}>
+            <ChevronLeft size={18} />
+          </button>
+        )}
         <Package size={18} strokeWidth={1.6} />
         <h1>Merch Orders</h1>
       </div>

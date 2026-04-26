@@ -49,20 +49,25 @@ import './index.css';
 // ─── Listener shell ───────────────────────────────────────
 
 // ─── Route reporter: tells native Swift bridge the current path ───────────────
+// Also listens for kyoyu-navigate events dispatched by the native back button
 function RouteReporter() {
   const location = useLocation();
   const navigate  = useNavigate();
 
-  // Post current path to native Swift bridge (shows/hides back button)
+  // Tell Swift which route we're on (so it can show/hide the back button)
   useEffect(() => {
     try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
   }, [location.pathname]);
 
-  // Listen for native iOS back event → navigate to /profile
+  // Listen for native back / navigate events from Swift
+  // Swift calls: window.dispatchEvent(new CustomEvent('kyoyu-navigate', { detail: '/profile' }))
   useEffect(() => {
-    const handler = () => navigate('/profile');
-    window.addEventListener('kyoyu-back', handler);
-    return () => window.removeEventListener('kyoyu-back', handler);
+    const handler = (e) => {
+      const path = e.detail;
+      if (path && typeof path === 'string') navigate(path);
+    };
+    window.addEventListener('kyoyu-navigate', handler);
+    return () => window.removeEventListener('kyoyu-navigate', handler);
   }, [navigate]);
 
   return null;

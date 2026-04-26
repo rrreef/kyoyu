@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Download, Search, ChevronUp, ChevronDown, FileAudio, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Download, Search, ChevronUp, ChevronDown, ChevronLeft, FileAudio, X } from 'lucide-react';
 import './Downloads.css';
+
+const isNativeApp = navigator.userAgent.includes('KyoyuApp');
 
 const mockDownloads = [
   { id: 'd1',  title: 'Phantom Grid — Full Album',           artist: 'Phantom Grid',     format: 'WAV', size: '412 MB', date: '2025-04-18', type: 'Album'     },
@@ -22,6 +25,7 @@ const FORMAT_COLOUR = {
 };
 
 export default function Downloads() {
+  const navigate = useNavigate();
   const [query,    setQuery]  = useState('');
   const [sortDesc, setSort]   = useState(true);   // true = newest first
   const [searching, setSearching] = useState(false);
@@ -46,6 +50,11 @@ export default function Downloads() {
       {/* ── Header bar ── */}
       <div className="dl-header">
         <div className="dl-header-left">
+          {!isNativeApp && (
+            <button className="dl-back glass" onClick={() => navigate('/profile')}>
+              <ChevronLeft size={18} />
+            </button>
+          )}
           <Download size={17} strokeWidth={1.6} />
           <h1>Downloads</h1>
           <span className="dl-count">{mockDownloads.length}</span>
