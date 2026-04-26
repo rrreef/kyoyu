@@ -56,14 +56,6 @@ export default function Profile() {
     const contract = user?.contract || '70 / 30';
     return (
       <div className="page profile-page animate-in">
-        {isNativeApp && (
-          <div className="account-header">
-            <button className="account-back glass" onClick={() => navigate(-1)}>
-              <ChevronLeft size={18} />
-            </button>
-            <h1>Profile</h1>
-          </div>
-        )}
         {/* Hero */}
         <div className="profile-hero glass">
           {AvatarWidget}
@@ -101,14 +93,6 @@ export default function Profile() {
   // ── Listener profile ─────────────────────────────────────
   return (
     <div className="page profile-page animate-in">
-      {isNativeApp && (
-        <div className="account-header">
-          <button className="account-back glass" onClick={() => navigate(-1)}>
-            <ChevronLeft size={18} />
-          </button>
-          <h1>Profile</h1>
-        </div>
-      )}
       {/* Hero — tap to reveal sign-out */}
       <div
         className="profile-hero glass"
