@@ -130,9 +130,11 @@ function ListenerApp() {
 
 // ─── Creator shell ────────────────────────────────────────
 function CreatorApp() {
+  const { pathname } = useLocation();
+  const hideSidebar = PROFILE_ROUTES.has(pathname);
   return (
     <div className="app-layout">
-      <CreatorSidebar />
+      {!hideSidebar && <CreatorSidebar />}
       <div className="main-content" style={{ paddingBottom: '32px' }}>
         <TopBar showSearch={false} />
         <Routes>
