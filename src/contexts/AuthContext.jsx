@@ -12,9 +12,15 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [role, setRole]           = useState(null);
-  const [user, setUser]           = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [avatarSrc, setAvatarSrc] = useState(null);
+  const [user, setUser]              = useState(null);
+  const [loading, setLoading]        = useState(true);
+  const [avatarSrc, setAvatarSrcRaw] = useState(null);
+
+  // Wrapper: updates React state AND pushes to native iOS bridge
+  function setAvatarSrc(dataUrl) {
+    setAvatarSrcRaw(dataUrl);
+    try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl ?? ''); } catch (_) {}
+  }
 
   /* ── Restore session on mount ── */
   useEffect(() => {
