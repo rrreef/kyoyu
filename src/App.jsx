@@ -58,10 +58,11 @@ function RouteReporter() {
     try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
   }, [location.pathname]);
 
-  // Expose go-back hook so Swift back button uses React Router
+  // Listen for native iOS back event → navigate to /profile
   useEffect(() => {
-    window.__kyoyuGoBack = () => navigate(-1);
-    return () => { delete window.__kyoyuGoBack; };
+    const handler = () => navigate('/profile');
+    window.addEventListener('kyoyu-back', handler);
+    return () => window.removeEventListener('kyoyu-back', handler);
   }, [navigate]);
 
   return null;
