@@ -102,10 +102,7 @@ export default function Profile() {
           <h1>{u.name}</h1>
           <div className="profile-plan-badge">
             <span>{u.plan} Plan</span>
-            <span>·</span>
-            <span>€{u.planPrice}/mo</span>
           </div>
-          <div className="profile-member-since">Member since {new Date(u.joined).toLocaleDateString('en', { year: 'numeric', month: 'long' })}</div>
         </div>
         <div className="profile-hero-actions">
           {showSignOut ? (
