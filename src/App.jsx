@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -51,9 +51,19 @@ import './index.css';
 // ─── Route reporter: tells native Swift bridge the current path ───────────────
 function RouteReporter() {
   const location = useLocation();
+  const navigate  = useNavigate();
+
+  // Post current path to native Swift bridge (shows/hides back button)
   useEffect(() => {
     try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
   }, [location.pathname]);
+
+  // Expose go-back hook so Swift back button uses React Router
+  useEffect(() => {
+    window.__kyoyuGoBack = () => navigate(-1);
+    return () => { delete window.__kyoyuGoBack; };
+  }, [navigate]);
+
   return null;
 }
 
