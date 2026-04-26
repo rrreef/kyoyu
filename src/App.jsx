@@ -47,6 +47,16 @@ import ListenerPreview from './pages/ListenerPreview';
 import './index.css';
 
 // ─── Listener shell ───────────────────────────────────────
+
+// ─── Route reporter: tells native Swift bridge the current path ───────────────
+function RouteReporter() {
+  const location = useLocation();
+  useEffect(() => {
+    try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
+  }, [location.pathname]);
+  return null;
+}
+
 function ListenerApp() {
   const { state } = usePlayer();
   const hasTrack = !!state.currentTrack;
