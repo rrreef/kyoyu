@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut, Palette } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut, Palette, ChevronLeft } from 'lucide-react';
 import { userProfile, payoutData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import './Profile.css';
 
 export default function Profile() {
   const { user, role, logout, avatarSrc, setAvatarSrc } = useAuth();
+  const navigate = useNavigate();
+  const isNativeApp = navigator.userAgent.includes('KyoyuApp');
   const u = userProfile;
   const [avatarMenu, setAvatarMenu] = useState(false);
   const [showSignOut, setShowSignOut] = useState(false);
@@ -54,6 +56,12 @@ export default function Profile() {
     const contract = user?.contract || '70 / 30';
     return (
       <div className="page profile-page animate-in">
+        {isNativeApp && (
+          <button className="account-back" onClick={() => navigate(-1)}>
+            <ChevronLeft size={18} strokeWidth={2} />
+            Back
+          </button>
+        )}
         {/* Hero */}
         <div className="profile-hero glass">
           {AvatarWidget}
@@ -91,10 +99,17 @@ export default function Profile() {
   // ── Listener profile ─────────────────────────────────────
   return (
     <div className="page profile-page animate-in">
+      {isNativeApp && (
+        <button className="account-back" onClick={() => navigate(-1)}>
+          <ChevronLeft size={18} strokeWidth={2} />
+          Back
+        </button>
+      )}
       {/* Hero — tap to reveal sign-out */}
       <div
         className="profile-hero glass"
         onClick={() => setShowSignOut(s => !s)}
+
         style={{ cursor: 'pointer' }}
       >
         {AvatarWidget}

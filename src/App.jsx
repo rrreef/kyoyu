@@ -79,13 +79,20 @@ function RouteReporter() {
   return null;
 }
 
+const PROFILE_ROUTES = new Set(['/profile','/account','/uploads','/app-settings','/downloads','/orders','/subscription','/settings']);
+
 function ListenerApp() {
   const { state } = usePlayer();
   const hasTrack = !!state.currentTrack;
+  const { pathname } = useLocation();
+  const hideSidebar = PROFILE_ROUTES.has(pathname)
+    || pathname.startsWith('/release/')
+    || pathname.startsWith('/artist/')
+    || pathname.startsWith('/label/');
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      {!hideSidebar && <Sidebar />}
       <div
         className="main-content"
         style={{ paddingBottom: hasTrack ? 'calc(var(--player-height) + 16px)' : '32px' }}
