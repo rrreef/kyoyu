@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Camera, Music, Download, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell } from 'lucide-react';
+import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell } from 'lucide-react';
 import { userProfile, payoutData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import './Profile.css';
@@ -143,6 +143,8 @@ export default function Profile() {
       {/* Menu */}
       <div className="profile-menu">
         {[
+          { icon: User,     label: 'Account',              to: '/settings'     },
+          { icon: Upload,   label: 'Uploads',               to: '/uploads'      },
           { icon: Download, label: 'Downloads',             to: '/downloads'    },
           { icon: Disc3,    label: 'Merch Orders',          to: '/orders'       },
           { icon: BarChart3,label: 'Manage Subscription',   to: '/subscription' },
