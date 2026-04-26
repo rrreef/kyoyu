@@ -49,18 +49,24 @@ import './index.css';
 // ─── Listener shell ───────────────────────────────────────
 
 // ─── Route reporter: tells native Swift bridge the current path ───────────────
-// Also listens for kyoyu-navigate events dispatched by the native back button
+// Also exposes window.__kyoyuGo so the Swift WKUserScript can drive React Router directly
 function RouteReporter() {
   const location = useLocation();
   const navigate  = useNavigate();
 
-  // Tell Swift which route we're on (so it can show/hide the back button)
+  // Expose React Router's navigate globally — Swift's injected script calls this
+  useEffect(() => {
+    window.__kyoyuGo = (path) => navigate(path);
+    return () => { delete window.__kyoyuGo; };
+  }, [navigate]);
+
+  // Tell Swift which route we're on (shows/hides the native back button)
   useEffect(() => {
     try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
   }, [location.pathname]);
 
-  // Listen for native back / navigate events from Swift
-  // Swift calls: window.dispatchEvent(new CustomEvent('kyoyu-navigate', { detail: '/profile' }))
+  // Also listen for kyoyu-navigate in case the WKUserScript fires before
+  // window.__kyoyuGo is ready (race condition on first mount)
   useEffect(() => {
     const handler = (e) => {
       const path = e.detail;
