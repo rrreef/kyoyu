@@ -57,10 +57,12 @@ export default function Profile() {
     return (
       <div className="page profile-page animate-in">
         {isNativeApp && (
-          <button className="profile-back" onClick={() => navigate(-1)}>
-            <ChevronLeft size={18} strokeWidth={2} />
-            Back
-          </button>
+          <div className="account-header">
+            <button className="account-back glass" onClick={() => navigate(-1)}>
+              <ChevronLeft size={18} />
+            </button>
+            <h1>Profile</h1>
+          </div>
         )}
         {/* Hero */}
         <div className="profile-hero glass">
@@ -100,10 +102,12 @@ export default function Profile() {
   return (
     <div className="page profile-page animate-in">
       {isNativeApp && (
-        <button className="profile-back" onClick={() => navigate(-1)}>
-          <ChevronLeft size={18} strokeWidth={2} />
-          Back
-        </button>
+        <div className="account-header">
+          <button className="account-back glass" onClick={() => navigate(-1)}>
+            <ChevronLeft size={18} />
+          </button>
+          <h1>Profile</h1>
+        </div>
       )}
       {/* Hero — tap to reveal sign-out */}
       <div
