@@ -1,4 +1,4 @@
-.uploads-page { padding: var(--page-top, 16px) 16px 120px; }
+.uploads-page { padding: 0 16px 160px; }
 
 .uploads-header {
   display: flex; align-items: center; gap: var(--sp-3);

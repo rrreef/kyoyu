@@ -1,4 +1,4 @@
-.account-page { padding: var(--page-top, 16px) 16px 120px; }
+.account-page { padding: 0 16px 160px; }
 
 .account-header {
   display: flex;

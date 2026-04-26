@@ -1,4 +1,4 @@
-.appsettings-page { padding: var(--page-top, 16px) 16px 120px; }
+.appsettings-page { padding: 0 16px 160px; }
 
 .appsettings-header {
   display: flex; align-items: center; gap: var(--sp-3);
