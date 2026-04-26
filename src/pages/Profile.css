@@ -1,6 +1,29 @@
 /* Extra bottom clearance so last menu item clears native tab bar */
 .profile-page { padding-bottom: 160px !important; }
 
+/* Native-app back button — glassmorphic pill */
+.profile-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 8px 16px 8px 12px;
+  margin-bottom: var(--sp-4);
+  border: none;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 0.5px solid rgba(255,255,255,0.20);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.profile-back:active { opacity: 0.7; }
+
 .profile-hero {
   display: flex;
   align-items: center;

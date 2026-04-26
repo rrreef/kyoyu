@@ -57,7 +57,7 @@ export default function Profile() {
     return (
       <div className="page profile-page animate-in">
         {isNativeApp && (
-          <button className="account-back" onClick={() => navigate(-1)}>
+          <button className="profile-back" onClick={() => navigate(-1)}>
             <ChevronLeft size={18} strokeWidth={2} />
             Back
           </button>
@@ -100,7 +100,7 @@ export default function Profile() {
   return (
     <div className="page profile-page animate-in">
       {isNativeApp && (
-        <button className="account-back" onClick={() => navigate(-1)}>
+        <button className="profile-back" onClick={() => navigate(-1)}>
           <ChevronLeft size={18} strokeWidth={2} />
           Back
         </button>
