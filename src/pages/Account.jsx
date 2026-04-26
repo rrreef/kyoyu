@@ -4,6 +4,8 @@ import { ChevronLeft, User, Mail, Lock, Cake, CreditCard, Globe, Music2, Chevron
 import { useAuth } from '../contexts/AuthContext';
 import './Account.css';
 
+const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+
 const GENRES = ['Electronic','Hip-Hop','Jazz','Classical','Rock','Indie','R&B','Ambient','Folk','Metal','Pop','Soul','Reggae','Latin','World'];
 const COUNTRIES = ['France','Germany','United Kingdom','Switzerland','Italy','Spain','Netherlands','Belgium','Sweden','United States','Japan','Brazil','Canada','Australia','Portugal'];
 
@@ -33,9 +35,9 @@ export default function Account() {
 
       {/* Back header */}
       <div className="account-header">
-        <button className="account-back glass" onClick={() => navigate('/profile')}>
+        {!isNativeApp && <button className="account-back glass" onClick={() => navigate('/profile')}>
           <ChevronLeft size={18} />
-        </button>
+        </button>}
         <h1>Account</h1>
         <button className={`account-save-btn${saved ? ' saved' : ''}`} onClick={save}>
           {saved ? <><Check size={14} /> Saved</> : 'Save'}

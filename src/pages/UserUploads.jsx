@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Upload, Music, Play, Trash2, Lock } from 'lucide-react';
 import './UserUploads.css';
 
+const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+
 export default function UserUploads() {
   const navigate  = useNavigate();
   const fileRef   = useRef();
@@ -45,9 +47,9 @@ export default function UserUploads() {
     <div className="page uploads-page animate-in">
 
       <div className="uploads-header">
-        <button className="uploads-back glass" onClick={() => navigate('/profile')}>
+        {!isNativeApp && <button className="uploads-back glass" onClick={() => navigate('/profile')}>
           <ChevronLeft size={18} />
-        </button>
+        </button>}
         <h1>My Uploads</h1>
         <button className="uploads-add-btn glass" onClick={() => fileRef.current.click()}>
           <Upload size={15} /> Add

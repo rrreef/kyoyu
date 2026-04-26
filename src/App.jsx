@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -58,6 +58,7 @@ function ListenerApp() {
         className="main-content"
         style={{ paddingBottom: hasTrack ? 'calc(var(--player-height) + 16px)' : '32px' }}
       >
+        <RouteReporter />
         <TopBar />
         <Routes>
           <Route path="/"               element={<Home />} />

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check } from 'lucide-react';
 import './AppSettings.css';
 
+const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+
 const LANGUAGES = ['English','Français','Deutsch','Italiano','Español','Português','Nederlands','Svenska','日本語'];
 const QUALITIES  = [
   { id:'low',    label:'Low',    sub:'~96 kbps — saves data' },
@@ -40,9 +42,9 @@ export default function AppSettings() {
     <div className="page appsettings-page animate-in">
 
       <div className="appsettings-header">
-        <button className="appsettings-back glass" onClick={() => navigate('/profile')}>
+        {!isNativeApp && <button className="appsettings-back glass" onClick={() => navigate('/profile')}>
           <ChevronLeft size={18} />
-        </button>
+        </button>}
         <h1>Settings</h1>
       </div>
 
