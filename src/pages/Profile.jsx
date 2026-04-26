@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell } from 'lucide-react';
+import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut } from 'lucide-react';
 import { userProfile, payoutData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import './Profile.css';
@@ -9,6 +9,7 @@ export default function Profile() {
   const { user, role, logout, avatarSrc, setAvatarSrc } = useAuth();
   const u = userProfile;
   const [avatarMenu, setAvatarMenu] = useState(false);
+  const [showSignOut, setShowSignOut] = useState(false);
   const fileRef = useRef();
 
   function handleAvatarChange(e) {
@@ -90,8 +91,12 @@ export default function Profile() {
   // ── Listener profile ─────────────────────────────────────
   return (
     <div className="page profile-page animate-in">
-      {/* Hero */}
-      <div className="profile-hero glass">
+      {/* Hero — tap to reveal sign-out */}
+      <div
+        className="profile-hero glass"
+        onClick={() => setShowSignOut(s => !s)}
+        style={{ cursor: 'pointer' }}
+      >
         {AvatarWidget}
         <div className="profile-info">
           <h1>{u.name}</h1>
@@ -103,12 +108,22 @@ export default function Profile() {
           <div className="profile-member-since">Member since {new Date(u.joined).toLocaleDateString('en', { year: 'numeric', month: 'long' })}</div>
         </div>
         <div className="profile-hero-actions">
-          <Link to="/dashboard" className="profile-dashboard-btn glass-sm">
-            <BarChart3 size={16} />
-            <span>Dashboard</span>
-          </Link>
+          {showSignOut ? (
+            <button
+              className="profile-dashboard-btn"
+              style={{ border: '1px solid rgba(220,60,60,0.55)', color: 'rgba(220,60,60,0.85)', background: 'transparent', borderRadius: 'var(--radius-full)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'var(--font-body)' }}
+              onClick={e => { e.stopPropagation(); logout(); }}
+            >
+              <LogOut size={14} />
+              <span>Sign out</span>
+            </button>
+          ) : (
+            <Link to="/dashboard" className="profile-dashboard-btn glass-sm" onClick={e => e.stopPropagation()}>
+              <BarChart3 size={16} />
+              <span>Dashboard</span>
+            </Link>
+          )}
         </div>
-        <button className="profile-hero-signout" onClick={logout}>Sign out</button>
       </div>
 
       {/* Stats */}

@@ -1,16 +1,16 @@
 .profile-hero {
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
-  padding: var(--sp-6);
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
   border-radius: var(--radius-xl) !important;
-  margin-bottom: var(--sp-6);
+  margin-bottom: var(--sp-4);
   position: relative;
   z-index: 10;
 }
 .profile-avatar {
-  width: 72px;
-  height: 72px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-full);
   background: var(--grey-800);
   display: flex;
@@ -23,15 +23,15 @@
 /* Editable avatar wrapper */
 .profile-avatar-wrap {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   cursor: pointer;
   border-radius: var(--radius-full);
 }
 .profile-avatar-img {
-  width: 72px;
-  height: 72px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-full);
   object-fit: cover;
   display: block;
@@ -51,7 +51,7 @@
 }
 .profile-avatar-wrap:hover .profile-avatar-overlay { opacity: 1; }
 .profile-info { flex: 1; }
-.profile-info h1 { font-size: 1.625rem; margin-bottom: 4px; }
+.profile-info h1 { font-size: 1.0rem; margin-bottom: 2px; }
 .profile-plan-badge {
   display: flex;
   gap: var(--sp-2);
