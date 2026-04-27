@@ -31,7 +31,9 @@
 
 /* ── Bottom sheet ────────────────────────────────────────── */
 .upl-sheet {
-  width: 100%; max-height: 78vh;
+  width: 100%;
+  /* cap height: leaves full player card + 20px gap visible above the sheet */
+  max-height: calc(100vh - var(--kyoyu-tab-h, 100px) - 210px);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   border-radius: 28px;
   /* Liquid glass */
@@ -53,14 +55,15 @@
   margin: 12px auto 8px;
 }
 
-/* ── Large square artwork ────────────────────────────────── */
+/* ── Compact square artwork ─────────────────────────────── */
 .upl-art-wrap {
   position: relative;
-  width: calc(100% - 32px);
-  aspect-ratio: 1;
-  margin: 0 16px 14px;
-  border-radius: 18px;
+  width: 130px;
+  height: 130px;
+  margin: 4px auto 14px;
+  border-radius: 14px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .upl-art-big {
   width: 100%;
@@ -125,10 +128,5 @@
 .upl-track-sub { font-size:.7rem;color:rgba(255,255,255,.35);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .upl-track-row.active .upl-track-title { color:rgba(255,255,255,.95); }
 
-/* ── Player floats above album sheet ─────────────────────── */
-/* When album modal is open, push player card above the sheet */
-body.upl-album-open .pc-card {
-  z-index: 1300;   /* above upl-overlay (1200) */
-  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px + 72vh);
-  left: 16px; right: 16px;
-}
+/* Player z-index is 1300 — it naturally floats above the sheet */
+/* No bottom repositioning needed; sheet height is capped instead */
