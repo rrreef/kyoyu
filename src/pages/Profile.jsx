@@ -18,7 +18,7 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => setAvatarSrc(ev.target.result);
+    reader.onload = ev => setAvatarSrc(ev.target.result, user?.id);
     reader.readAsDataURL(file);
     setAvatarMenu(false);
   }
@@ -102,7 +102,7 @@ export default function Profile() {
       >
         {AvatarWidget}
         <div className="profile-info">
-          <h1>{u.name}</h1>
+          <h1>{user?.name || u.name}</h1>
           <div className="profile-plan-badge">
             <span>{u.plan} Plan</span>
           </div>

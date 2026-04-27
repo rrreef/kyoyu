@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, User, Mail, Lock, Cake, CreditCard, Globe, Music2, ChevronRight, Check, Apple } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,9 +11,9 @@ const COUNTRIES = ['France','Germany','United Kingdom','Switzerland','Italy','Sp
 
 export default function Account() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
 
-  const [username,    setUsername]    = useState(user?.username || 'listener_user');
+  const [username,    setUsername]    = useState(user?.name || '');
   const [editingUser, setEditingUser] = useState(false);
   const [birthdate,   setBirthdate]   = useState('');
   const [countries,   setCountries]   = useState([]);
@@ -22,10 +22,31 @@ export default function Account() {
   const [genreOpen,   setGenreOpen]   = useState(false);
   const [saved,       setSaved]       = useState(false);
 
+  // Load persisted preferences from localStorage (per user)
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = 'kyoyu-prefs-' + user.id;
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || '{}');
+      if (stored.birthdate) setBirthdate(stored.birthdate);
+      if (stored.countries) setCountries(stored.countries);
+      if (stored.genres)    setGenres(stored.genres);
+    } catch (_) {}
+  }, [user?.id]);
+
   function toggleCountry(c) { setCountries(cs => cs.includes(c) ? cs.filter(x=>x!==c) : [...cs,c]); }
   function toggleGenre(g)   { setGenres(gs => gs.includes(g) ? gs.filter(x=>x!==g) : [...gs,g]); }
 
-  function save() {
+  async function save() {
+    // 1. Immediately update display name in context + persist to Supabase
+    await updateProfile({ name: username });
+
+    // 2. Persist preferences to localStorage per user
+    if (user?.id) {
+      const key = 'kyoyu-prefs-' + user.id;
+      localStorage.setItem(key, JSON.stringify({ birthdate, countries, genres }));
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
