@@ -1,12 +1,30 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2, Lock, ArrowRight } from 'lucide-react';
+import { Play, Plus, Wand2, ChevronDown, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
-import { ReleaseCard } from '../components/ui/Cards';
 import './Library.css';
+
+/* ── Shelf card — identical to Home ───────────────────────── */
+function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
+  return (
+    <div className="shelf-card">
+      <div className="shelf-card-art">
+        {cover
+          ? <img src={cover} alt={title}/>
+          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,.06)'}}>{fallback||<Music2 size={22} color="rgba(255,255,255,.3)"/>}</div>
+        }
+        {badge&&<div className="shelf-card-badge">{BadgeIcon&&<BadgeIcon size={9}/>}<span>{badge}</span></div>}
+      </div>
+      <div className="shelf-card-info">
+        <div className="shelf-card-title">{title}</div>
+        {sub&&<div className="shelf-card-sub">{sub}</div>}
+      </div>
+    </div>
+  );
+}
 
 // Main filter keys
 const FILTERS = [
@@ -127,191 +145,115 @@ export default function Library() {
 
       {/* Likes → Releases */}
       {activeFilter === 'likes' && likesSub === 'releases' && (
-        <div>
-          <div className="section-title">
-            <span>Liked Releases</span>
-            <Link to="/search">Browse <ArrowRight size={12}/></Link>
-          </div>
-          {savedReleaseObjects.length === 0 ? (
-            <div className="lib-empty">
-              <p>No liked releases yet.</p>
-              <Link to="/search" className="lib-empty-link">Browse the catalog →</Link>
-            </div>
-          ) : (
-            <div className="lib-grid">
-              {sortByDate(savedReleaseObjects).map(r => <ReleaseCard key={r.id} release={r} />)}
-            </div>
-          )}
-        </div>
+        savedReleaseObjects.length === 0
+          ? <div className="lib-empty"><p>No liked releases yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>
+          : <>
+              <div className="shelf-row-label">Liked Releases</div>
+              <div className="scroll-row">
+                {sortByDate(savedReleaseObjects).map(r => (
+                  <ShelfCard key={r.id} cover={r.cover} title={r.title} sub={r.artist}/>
+                ))}
+              </div>
+            </>
       )}
 
       {/* Likes → Playlists */}
       {activeFilter === 'likes' && likesSub === 'playlists' && (
-        <div className="playlist-list">
-          <div className="section-title"><span>Liked Playlists</span></div>
-          {savedPlaylists.map(pl => (
-            <div key={pl.id} className="playlist-row glass">
-              <div className="playlist-cover">
-                <img src={pl.cover} alt={pl.title} />
-                {pl.isAI && <div className="ai-pl-badge">AI</div>}
+        savedPlaylists.length === 0
+          ? <div className="lib-empty"><p>No liked playlists yet.</p></div>
+          : <>
+              <div className="shelf-row-label">Liked Playlists</div>
+              <div className="scroll-row">
+                {savedPlaylists.map(pl => (
+                  <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI?'AI':null}/>
+                ))}
               </div>
-              <div className="playlist-info">
-                <div className="playlist-name">{pl.title}</div>
-                <div className="playlist-meta">{pl.curator} · {pl.trackCount} tracks</div>
-              </div>
-              <button className="playlist-play-btn">
-                <Play size={16} fill="currentColor" style={{ marginLeft: 2 }} />
-              </button>
-            </div>
-          ))}
-        </div>
+            </>
       )}
 
-      {/* Playlists */}
+      {/* My Playlists */}
       {activeFilter === 'playlists' && (
-        <div className="playlist-list">
-          <div className="section-title"><span>My Playlists</span><button className="lib-add-btn glass-sm" onClick={() => setShowCreateModal(true)}><Plus size={14}/><span>New</span></button></div>
-          {playlists.map(pl => (
-            <div key={pl.id} className="playlist-row glass">
-              <div className="playlist-cover">
-                <img src={pl.cover} alt={pl.title} />
-                {pl.isAI && <div className="ai-pl-badge">AI</div>}
+        <>
+          <div className="shelf-row-label">My Playlists</div>
+          {playlists.length === 0
+            ? <div className="lib-empty"><p>No playlists yet.</p></div>
+            : <div className="scroll-row">
+                {playlists.map(pl => (
+                  <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
+                ))}
               </div>
-              <div className="playlist-info">
-                <div className="playlist-name">{pl.title}</div>
-                {pl.isAI && <div className="playlist-desc">{pl.aiReason?.slice(0, 80)}…</div>}
-                <div className="playlist-meta">{pl.creator} · {pl.tracks.length} tracks</div>
-              </div>
-              <button className="playlist-play-btn">
-                <Play size={16} fill="currentColor" style={{ marginLeft: 2 }} />
-              </button>
-            </div>
-          ))}
-
+          }
           {/* AI Builder */}
-          <div className="ai-playlist-builder glass">
-            <div className="ai-builder-icon"><Wand2 size={24} /></div>
+          <div className="ai-playlist-builder glass" style={{margin:'16px 16px 0'}}>
+            <div className="ai-builder-icon"><Wand2 size={24}/></div>
             <div>
               <div className="ai-builder-title">Build an AI Playlist</div>
               <div className="ai-builder-sub">Tell KYO AI what you want — a mood, a track, an era, or a BPM range.</div>
             </div>
             <button className="ai-builder-btn">Build</button>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Podcasts */}
+      {/* Podcasts & DJ Sets */}
       {activeFilter === 'podcasts' && (
-        <div className="playlist-list">
-          <div className="section-title"><span>Podcasts &amp; DJ Sets</span><Link to="/search">Browse <ArrowRight size={12}/></Link></div>
-          {djSets.length === 0 ? (
-            <div className="lib-empty">
-              <p>No saved podcasts yet.</p>
-              <Link to="/search" className="lib-empty-link">Browse podcasts →</Link>
-            </div>
-          ) : djSets.map(s => (
-            <div key={s.id} className="playlist-row glass">
-              <div className="playlist-cover">
-                <img src={s.cover} alt={s.title} />
-                <div className="ai-pl-badge" style={{ background: 'rgba(0,0,0,0.7)' }}>
-                  {s.type === 'podcast' ? 'POD' : 'DJ'}
-                </div>
+        djSets.length === 0
+          ? <div className="lib-empty"><p>No saved podcasts yet.</p><Link to="/search" className="lib-empty-link">Browse podcasts →</Link></div>
+          : <>
+              <div className="shelf-row-label">Podcasts &amp; DJ Sets</div>
+              <div className="scroll-row">
+                {djSets.map(s => (
+                  <ShelfCard key={s.id} cover={s.cover} title={s.title} sub={s.artist} badge={s.type==='podcast'?'POD':'DJ'}/>
+                ))}
               </div>
-              <div className="playlist-info">
-                <div className="playlist-name">{s.title}</div>
-                <div className="playlist-meta">{s.artist} · {s.duration}</div>
-              </div>
-              <button className="playlist-play-btn">
-                <Play size={16} fill="currentColor" style={{ marginLeft: 2 }} />
-              </button>
-            </div>
-          ))}
-        </div>
+            </>
       )}
 
       {/* Following */}
       {activeFilter === 'following' && (
-        <>
-          <div className="section-title"><span>Following</span><Link to="/search">Find Artists <ArrowRight size={12}/></Link></div>
-          {followedArtists?.length > 0 ? (
-            <div className="lib-grid">
-              {followedArtists.map(a => (
-                <div key={a.id} className="lib-artist-card glass">
-                  <div className="lib-artist-name">{a.name}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="lib-empty">
-              <p>Artists you follow will appear here.</p>
-              <Link to="/search" className="lib-empty-link">Find artists →</Link>
-            </div>
-          )}
-        </>
+        followedArtists?.length > 0
+          ? <>
+              <div className="shelf-row-label">Artists</div>
+              <div className="scroll-row">
+                {followedArtists.map(a => (
+                  <ShelfCard key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''}/>
+                ))}
+              </div>
+            </>
+          : <div className="lib-empty"><p>Artists you follow will appear here.</p><Link to="/search" className="lib-empty-link">Find artists →</Link></div>
       )}
 
       {/* Downloads */}
       {activeFilter === 'downloads' && (
-        <div>
-          <div className="section-title"><span>Downloads</span><Link to="/shop">Shop <ArrowRight size={12}/></Link></div>
-          {downloads.length === 0 ? (
-            <div className="lib-empty">
-              <p>No downloads yet.</p>
-              <Link to="/shop" className="lib-empty-link">Browse DJ downloads →</Link>
-            </div>
-          ) : (
-            <div className="download-list">
-              {sortByDate(downloads).map(d => (
-                <div key={d.id} className="download-row glass">
-                  <div className="download-info">
-                    <div className="download-title">{d.title}</div>
-                    <div className="download-meta">{d.artistName} · Downloaded {new Date(d.downloadedAt).toLocaleDateString()}</div>
-                  </div>
-                  <span className="download-badge">WAV</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        downloads.length === 0
+          ? <div className="lib-empty"><p>No downloads yet.</p><Link to="/shop" className="lib-empty-link">Browse DJ downloads →</Link></div>
+          : <>
+              <div className="shelf-row-label">Downloads</div>
+              <div className="scroll-row">
+                {sortByDate(downloads).map(d => (
+                  <ShelfCard key={d.id} cover={d.cover||''} title={d.title} sub={d.artistName} badge="WAV"/>
+                ))}
+              </div>
+            </>
       )}
 
       {/* My Uploads */}
       {activeFilter === 'uploads' && (
-        <div>
-          <div className="section-title">
-            <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <Link to="/uploads">Upload <ArrowRight size={12}/></Link>
-          </div>
-          {myUploads.length === 0 ? (
-            <div className="lib-empty">
-              <p>No uploads yet.</p>
-              <Link to="/uploads" className="lib-empty-link">Upload your first track →</Link>
-            </div>
-          ) : (
-            <>
+        myUploads.length === 0
+          ? <div className="lib-empty"><p>No uploads yet.</p><Link to="/uploads" className="lib-empty-link">Upload your first track →</Link></div>
+          : <>
+              <div className="shelf-row-label" style={{display:'flex',alignItems:'center',gap:5}}><Lock size={11}/> My Uploads</div>
               <div className="lib-uploads-sorts">
                 {[{key:'newest',label:'Newest'},{key:'oldest',label:'Oldest'},{key:'artist',label:'Artist'},{key:'label',label:'Label'}].map(o=>(
                   <button key={o.key} className={`lib-upl-sort${uploadsSort===o.key?' active':''}`} onClick={()=>setUploadsSort(o.key)}>{o.label}</button>
                 ))}
               </div>
-              <div className="lib-uploads-list">
+              <div className="scroll-row">
                 {sortUpl(myUploads).map(t=>(
-                  <div key={t.id} className="lib-upl-row glass">
-                    {t.artworkUrl
-                      ? <img src={t.artworkUrl} alt="" className="lib-upl-art"/>
-                      : <div className="lib-upl-art lib-upl-art-ph"><Music2 size={14}/></div>
-                    }
-                    <div className="lib-upl-info">
-                      <div className="lib-upl-title">{t.title||'Untitled'}</div>
-                      <div className="lib-upl-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
-                    </div>
-                    <button className="lib-upl-del" onClick={()=>deleteUpload(t.id)}><Trash2 size={13}/></button>
-                  </div>
+                  <ShelfCard key={t.id} cover={t.artworkUrl||''} title={t.title||'Untitled'} sub={t.artist||''}/>
                 ))}
               </div>
             </>
-          )}
-        </div>
       )}
 
       {/* Create Playlist Modal */}
