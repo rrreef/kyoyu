@@ -25,10 +25,23 @@ function AirPlayIcon() {
   );
 }
 
-/* ── Mini pill at top (img_11 compact) ── */
-function MiniIsland({ track, isPlaying, onTap }) {
+/* ── Mini pill — img_11 ── */
+function MiniIsland({ track, isPlaying, onExpand }) {
+  const startY = useRef(0);
+
+  function onTouchStart(e) { startY.current = e.touches[0].clientY; }
+  function onTouchEnd(e) {
+    const dy = e.changedTouches[0].clientY - startY.current;
+    if (dy > 40) onExpand();   // swipe DOWN → expand
+  }
+
   return (
-    <div className="di-mini" onClick={onTap}>
+    <div
+      className="di-mini"
+      onClick={onExpand}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       {track.releaseCover
         ? <img src={track.releaseCover} className="di-mini-art" alt=""/>
         : <div className="di-mini-art di-mini-art-ph"><Music2 size={14}/></div>
@@ -38,9 +51,10 @@ function MiniIsland({ track, isPlaying, onTap }) {
   );
 }
 
-/* ── Expanded Dynamic Island player (img_12) — drops from top ── */
+/* ── Expanded card — img_12, drops below Dynamic Island ── */
 function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, dispatch }) {
-  const ref = useRef(null);
+  const scrubRef = useRef(null);
+  const startY   = useRef(0);
   const pct = duration ? (progress/duration)*100 : 0;
   const rem = Math.max(0, duration - progress);
 
@@ -49,9 +63,19 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
     dispatch({ type:'SET_PROGRESS', value: Math.floor(((e.clientX-r.left)/r.width)*duration) });
   }
 
+  function onTouchStart(e) { startY.current = e.touches[0].clientY; }
+  function onTouchEnd(e) {
+    const dy = e.changedTouches[0].clientY - startY.current;
+    if (dy < -40) onCollapse();   // swipe UP → collapse to mini
+  }
+
   return (
-    <div className="di-exp">
-      {/* row 1: art + info + eq */}
+    <div
+      className="di-exp"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* Row 1: artwork + info + eq */}
       <div className="di-exp-r1">
         {track.releaseCover
           ? <img src={track.releaseCover} className="di-exp-art" alt=""/>
@@ -64,8 +88,8 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
         <EqBars active={isPlaying} n={5} cls="eq--sm"/>
       </div>
 
-      {/* row 2: scrubber */}
-      <div className="di-scrub" ref={ref} onClick={seek}>
+      {/* Row 2: scrubber */}
+      <div className="di-scrub" ref={scrubRef} onClick={seek}>
         <div className="di-scrub-fill" style={{width:`${pct}%`}}/>
         <div className="di-scrub-thumb" style={{left:`${pct}%`}}/>
       </div>
@@ -74,7 +98,7 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
         <span>-{fmt(rem)}</span>
       </div>
 
-      {/* row 3: controls */}
+      {/* Row 3: controls */}
       <div className="di-ctrls">
         <button className="di-btn" onClick={()=>dispatch({type:'PREV_TRACK'})}>
           <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
@@ -90,9 +114,6 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
         </button>
         <button className="di-btn di-btn--air"><AirPlayIcon/></button>
       </div>
-
-      {/* tap to collapse */}
-      <div className="di-collapse-hit" onClick={onCollapse}/>
     </div>
   );
 }
@@ -107,7 +128,9 @@ export default function Player() {
 
   if (!currentTrack) return null;
 
-  if (!exp) return <MiniIsland track={currentTrack} isPlaying={isPlaying} onTap={()=>setExp(true)}/>;
+  if (!exp) return (
+    <MiniIsland track={currentTrack} isPlaying={isPlaying} onExpand={()=>setExp(true)}/>
+  );
 
   return (
     <ExpandedIsland

@@ -4,7 +4,8 @@
    ══════════════════════════════════════════════════════ */
 .di-mini {
   position: fixed;
-  top: 14px;
+  /* sit just below the Dynamic Island hardware */
+  top: calc(var(--kyoyu-top-h, 59px) + 6px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1400;
@@ -43,7 +44,8 @@
    ══════════════════════════════════════════════════════ */
 .di-exp {
   position: fixed;
-  top: 14px;
+  /* sit just below the Dynamic Island hardware */
+  top: calc(var(--kyoyu-top-h, 59px) + 6px);
   left: 12px; right: 12px;
   z-index: 1300;
   border-radius: 26px;
