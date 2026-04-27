@@ -1,178 +1,203 @@
-/* ══════════════════════════════════════════════════════
-   Mini Dynamic Island — img_11
-   top:8px centers a 44px-tall pill over the DI camera
-   (DI camera center ≈ y30px; pill center = 8+22 = 30px)
-   width:230px covers the camera lens contour fully
-   ══════════════════════════════════════════════════════ */
-.di-mini {
+/* ═══════════════════════════════════════════════════════
+   MINI BAR — liquid glass, bottom above tab bar
+   ═══════════════════════════════════════════════════════ */
+.mini-bar {
   position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1400;
+  bottom: calc(var(--kyoyu-tab-h, 83px) + 8px);
+  left: 8px; right: 8px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.11);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 8px 32px rgba(0,0,0,.45),
+              inset 0 1px 0 rgba(255,255,255,.22);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 230px;
-  height: 44px;
-  padding: 6px 14px 6px 6px;
-  border-radius: 100px;
-  background: #000;
+  padding: 10px 10px 10px 10px;
+  gap: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(0,0,0,.6);
-  animation: di-mini-pop .25s cubic-bezier(.34,1.56,.64,1);
+  z-index: 900;
+  animation: mini-in .35s cubic-bezier(.34,1.56,.64,1);
 }
-@keyframes di-mini-pop {
-  from { transform:translateX(-50%) scale(.6); opacity:0; }
-  to   { transform:translateX(-50%) scale(1);  opacity:1; }
+@keyframes mini-in {
+  from { transform:translateY(16px); opacity:0; }
+  to   { transform:translateY(0);    opacity:1; }
 }
-.di-mini-art {
-  width: 34px; height: 34px;
-  border-radius: 7px;
+
+.mini-art {
+  width: 44px; height: 44px;
+  border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
-.di-mini-art-ph {
+.mini-art-ph {
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,.12);
-  color: rgba(255,255,255,.4);
-  border-radius: 7px;
+  background: rgba(255,255,255,.1);
+  color: rgba(255,255,255,.45);
 }
+.mini-info { flex:1; min-width:0; }
+.mini-title {
+  font-size: 14px; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-artist {
+  font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-ctrls { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.mini-btn {
+  display:flex; align-items:center; justify-content:center;
+  background: none; border: none; color:#fff; cursor:pointer;
+  width:42px; height:42px; border-radius:50%;
+  transition: background .15s, transform .1s;
+}
+.mini-btn:active { transform:scale(.88); background:rgba(255,255,255,.1); }
 
 
-/* ══════════════════════════════════════════════════════
-   Expanded Dynamic Island — img_12
-   Starts at env(safe-area-inset-top) so ALL 4 corners
-   are visible and no border touches the screen edge.
-   At that depth, screen corner clipping is not an issue.
-   ══════════════════════════════════════════════════════ */
-.di-exp {
+/* ═══════════════════════════════════════════════════════
+   FULL SCREEN PLAYER — slides up from bottom
+   ═══════════════════════════════════════════════════════ */
+.fp {
   position: fixed;
-  top: env(safe-area-inset-top);   /* just below DI + status bar */
-  left: 12px; right: 12px;
-  z-index: 1300;
-  border-radius: 20px;              /* all 4 corners visible */
-  padding: 14px 16px 14px;          /* normal padding — already below camera */
-  background: rgba(18,18,22,.97);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  box-shadow: 0 12px 40px rgba(0,0,0,.75),
-              inset 0 1px 0 rgba(255,255,255,.07);
-  transform-origin: top center;
-  animation: di-expand .3s cubic-bezier(.34,1.56,.64,1);
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 44px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 8px);
+  overflow: hidden;
+  transform: translateY(100%);
+  transition: transform .5s cubic-bezier(.32,.72,0,1);
+  will-change: transform;
+  /* dark base so bg art shows through */
+  background: rgba(14,14,20,.92);
 }
-@keyframes di-expand {
-  from { transform: scaleY(.25); opacity:0; }
-  to   { transform: scaleY(1);   opacity:1; }
+.fp--open { transform: translateY(0); }
+
+/* blurred art background */
+.fp-bg {
+  position: absolute;
+  inset: -80px;
+  background: var(--fp-art, rgba(30,30,40,1));
+  background-size: cover;
+  background-position: center;
+  filter: blur(60px) saturate(200%) brightness(.35);
+  z-index: 0;
+}
+/* all direct children above the bg */
+.fp > *:not(.fp-bg) { position: relative; z-index: 1; }
+
+/* pull handle */
+.fp-handle-row {
+  display: flex; justify-content: center;
+  padding: 10px 0 18px;
+}
+.fp-handle {
+  width: 38px; height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,.3);
 }
 
-/* Row 1 */
-.di-exp-r1 {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 10px;
-}
-.di-exp-art {
-  width: 62px; height: 62px;
-  border-radius: 12px;
+/* artwork */
+.fp-art-wrap { padding: 0 28px; flex-shrink: 0; }
+.fp-art {
+  width: 100%; aspect-ratio: 1;
+  border-radius: 18px;
   object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  box-shadow: 0 24px 60px rgba(0,0,0,.65);
 }
-.di-exp-art-ph {
+.fp-art-ph {
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,.07);
-  color: rgba(255,255,255,.3);
-}
-.di-exp-info { flex:1; min-width:0; }
-.di-exp-title {
-  font-size: 1rem; font-weight: 700; color: #fff;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.di-exp-artist {
-  font-size: .78rem; color: rgba(255,255,255,.52);
-  margin-top: 3px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.22);
 }
 
-/* Scrubber */
-.di-scrub {
-  height: 3px; border-radius: 3px;
+/* meta row */
+.fp-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 28px 0;
+}
+.fp-meta-text { flex:1; min-width:0; }
+.fp-title {
+  font-size: 22px; font-weight: 700; color: #fff;
+  letter-spacing: -.3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fp-artist {
+  font-size: 16px; color: rgba(255,255,255,.5);
+  margin-top: 4px;
+}
+.fp-meta-btns { display:flex; gap:8px; flex-shrink:0; margin-left:12px; }
+
+/* scrubber */
+.fp-scrub-wrap { padding: 20px 28px 0; }
+.fp-scrub {
+  position: relative; height: 4px;
   background: rgba(255,255,255,.2);
-  position: relative; cursor: pointer;
-  margin-bottom: 5px;
+  border-radius: 2px; cursor: pointer;
 }
-.di-scrub-fill {
-  position: absolute; inset:0; right:auto;
-  border-radius: 3px;
-  background: rgba(255,255,255,.75);
-  pointer-events: none;
+.fp-scrub-fill {
+  position:absolute; top:0; left:0; bottom:0;
+  background:#fff; border-radius:2px;
 }
-.di-scrub-thumb {
-  position: absolute; top:50%;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: #fff;
+.fp-scrub-thumb {
+  position:absolute; top:50%;
   transform: translate(-50%,-50%);
-  pointer-events: none;
-  box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  width:14px; height:14px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
 }
-.di-times {
-  display: flex; justify-content: space-between;
-  font-size: .65rem; color: rgba(255,255,255,.42);
-  margin-bottom: 10px;
+.fp-times {
+  display:flex; justify-content:space-between;
+  margin-top:8px; font-size:12px;
+  color:rgba(255,255,255,.4);
   font-variant-numeric: tabular-nums;
 }
 
-/* Controls — prev/play/next centered; AirPlay at far right */
-.di-ctrls-row {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-.di-ctrls {
-  display: flex;
-  align-items: center;
+/* controls */
+.fp-ctrls {
+  display: flex; align-items: center;
   justify-content: center;
-  gap: 36px;
-  flex: 1;             /* takes all space so the trio is truly centred */
+  gap: 40px;
+  padding: 24px 0 0;
 }
-.di-btn {
-  display: flex; align-items: center; justify-content: center;
-  background: none; border: none;
-  color: #fff; cursor: pointer; padding: 4px;
+.fp-ctrl {
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:none; color:#fff; cursor:pointer;
+  padding:8px;
   transition: opacity .15s, transform .1s;
 }
-.di-btn:active { transform: scale(.88); opacity: .6; }
-.di-btn--air {
-  position: absolute;
-  right: 0;
-  color: rgba(255,255,255,.5);
+.fp-ctrl:active { transform:scale(.88); opacity:.6; }
+
+/* volume */
+.fp-vol {
+  display:flex; align-items:center; gap:10px;
+  padding: 24px 28px 0;
 }
-.di-btn--air:hover { color: #fff; }
-
-/* ══════════════════════════════════════════════════════
-   Equalizer bars (shared)
-   ══════════════════════════════════════════════════════ */
-.eq {
-  display: flex; align-items: flex-end; flex-shrink: 0;
+.fp-vol-icon { font-size:14px; color:rgba(255,255,255,.4); }
+.fp-vol-slider {
+  flex:1; -webkit-appearance:none;
+  height:4px; background:rgba(255,255,255,.2);
+  border-radius:2px; outline:none;
+}
+.fp-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:16px; height:16px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.3);
 }
 
-/* small — inside expanded header */
-.eq--sm { height: 22px; gap: 2.5px; }
-.eq--sm span { display:block; width:3px; border-radius:2px; background:rgba(255,255,255,.65); height:6px; }
-.eq--sm.on span { animation: eqPulse .9s ease-in-out infinite alternate; }
-
-/* dynamic island mini */
-.eq--di { height: 18px; gap: 2.5px; }
-.eq--di span { display:block; width:2.5px; border-radius:2px; background:rgba(255,255,255,.75); height:5px; }
-.eq--di.on span { animation: eqPulse .9s ease-in-out infinite alternate; }
-
-.eq--sm.on span:nth-child(1), .eq--di.on span:nth-child(1) { animation-duration:.75s; animation-delay:0ms;   }
-.eq--sm.on span:nth-child(2), .eq--di.on span:nth-child(2) { animation-duration:.90s; animation-delay:150ms; }
-.eq--sm.on span:nth-child(3), .eq--di.on span:nth-child(3) { animation-duration:.65s; animation-delay:80ms;  }
-.eq--sm.on span:nth-child(4), .eq--di.on span:nth-child(4) { animation-duration:.80s; animation-delay:220ms; }
-.eq--sm.on span:nth-child(5), .eq--di.on span:nth-child(5) { animation-duration:.70s; animation-delay:60ms;  }
-
-@keyframes eqPulse {
-  from { height:4px;  opacity:.4; }
-  to   { height:20px; opacity:1;  }
+/* bottom actions */
+.fp-actions {
+  display:flex; justify-content:space-around;
+  padding: 22px 40px 0;
 }
+.fp-icon-btn {
+  display:flex; align-items:center; justify-content:center;
+  background:none; border:none;
+  color:rgba(255,255,255,.55); cursor:pointer;
+  width:44px; height:44px; border-radius:50%;
+  transition: color .15s, transform .1s;
+}
+.fp-icon-btn:active { transform:scale(.88); color:#fff; }
