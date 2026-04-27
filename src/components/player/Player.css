@@ -1,221 +1,170 @@
-/* ══════════════════════════════════════════════════════════
-   Player Card  ·  matches reference img_12
-   ══════════════════════════════════════════════════════════ */
-
-.pc-card {
-  position: fixed;
-  left: 12px; right: 12px;
-  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px);
-  z-index: 1300;
-  border-radius: 20px;
-  padding: 14px 16px 12px;
-
-  /* solid dark card matching reference */
-  background: rgba(18, 18, 22, 0.96);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  box-shadow:
-    0 8px 32px rgba(0,0,0,.6),
-    inset 0 1px 0 rgba(255,255,255,.08);
-
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* ── Row 1: artwork + info + eq bars ──────────────────────── */
-.pc-row1 {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.pc-art-wrap { flex-shrink: 0; }
-
-.pc-art {
-  width: 62px;
-  height: 62px;
-  border-radius: 10px;
-  object-fit: cover;
-  display: block;
-  box-shadow: 0 4px 12px rgba(0,0,0,.4);
-}
-.pc-art-ph {
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,.07);
-  color: rgba(255,255,255,.3);
-}
-
-.pc-info { flex: 1; min-width: 0; }
-.pc-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pc-artist {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,.55);
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Equalizer bars (shared by player + dynamic island) ───── */
-.eq-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 2.5px;
-  flex-shrink: 0;
-}
-
-/* medium — player top-right */
-.eq-bars--sm {
-  height: 22px;
-  gap: 2.5px;
-}
-.eq-bars--sm span {
-  display: block;
-  width: 3px;
-  border-radius: 2px;
-  background: rgba(255,255,255,.65);
-  height: 6px;
-}
-.eq-bars--sm.playing span { animation: eqPulse .9s ease-in-out infinite alternate; }
-.eq-bars--sm.playing span:nth-child(1) { animation-duration: .75s; animation-delay: 0ms;   }
-.eq-bars--sm.playing span:nth-child(2) { animation-duration: .90s; animation-delay: 150ms; }
-.eq-bars--sm.playing span:nth-child(3) { animation-duration: .65s; animation-delay:  80ms; }
-.eq-bars--sm.playing span:nth-child(4) { animation-duration: .80s; animation-delay: 220ms; }
-.eq-bars--sm.playing span:nth-child(5) { animation-duration: .70s; animation-delay:  60ms; }
-
-/* dynamic-island variant */
-.eq-bars--di {
-  height: 30px;
-  gap: 3px;
-}
-.eq-bars--di span {
-  display: block;
-  width: 3.5px;
-  border-radius: 3px;
-  background: rgba(255,255,255,.75);
-  height: 7px;
-}
-.eq-bars--di.playing span { animation: eqPulse .9s ease-in-out infinite alternate; }
-.eq-bars--di.playing span:nth-child(1) { animation-duration: .75s; animation-delay: 0ms;   }
-.eq-bars--di.playing span:nth-child(2) { animation-duration: .90s; animation-delay: 150ms; }
-.eq-bars--di.playing span:nth-child(3) { animation-duration: .65s; animation-delay:  80ms; }
-.eq-bars--di.playing span:nth-child(4) { animation-duration: .80s; animation-delay: 220ms; }
-.eq-bars--di.playing span:nth-child(5) { animation-duration: .70s; animation-delay:  60ms; }
-
-@keyframes eqPulse {
-  from { height: 4px;  opacity: 0.45; }
-  to   { height: 20px; opacity: 1;    }
-}
-
-/* ── Scrubber ─────────────────────────────────────────────── */
-.pc-scrubber-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.pc-time {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,.45);
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-.pc-track {
-  flex: 1;
-  height: 3px;
-  border-radius: 3px;
-  background: rgba(255,255,255,.18);
-  position: relative;
-  cursor: pointer;
-}
-.pc-fill {
-  position: absolute;
-  inset: 0;
-  right: auto;
-  border-radius: 3px;
-  background: rgba(255,255,255,.75);
-  pointer-events: none;
-}
-.pc-thumb {
-  position: absolute;
-  top: 50%;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  box-shadow: 0 1px 4px rgba(0,0,0,.5);
-}
-
-/* ── Controls ─────────────────────────────────────────────── */
-.pc-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-}
-.pc-ctrl {
-  display: flex; align-items: center; justify-content: center;
-  background: none; border: none;
-  color: #fff;
-  cursor: pointer;
-  padding: 4px;
-  transition: opacity .15s, transform .1s;
-}
-.pc-ctrl:active { transform: scale(0.88); opacity: 0.6; }
-
-.pc-ctrl--airplay {
-  margin-left: auto;
-  color: rgba(255,255,255,.55);
-}
-.pc-ctrl--airplay:hover { color: #fff; }
-
-/* ══════════════════════════════════════════════════════════
-   Dynamic Island  ·  matches reference img_11
-   ══════════════════════════════════════════════════════════ */
-
-.di-pill {
+/* ══════════════════════════════════════════════════════
+   Mini Dynamic Island — img_11
+   Small compact pill at top center
+   ══════════════════════════════════════════════════════ */
+.di-mini {
   position: fixed;
   top: 14px;
-  left: 12px; right: 12px;   /* wide pill, full width minus margins */
-  height: 58px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px 0 8px;
+  gap: 0;
+  width: 210px;
+  padding: 6px 12px 6px 6px;
   border-radius: 100px;
   background: #000;
   cursor: pointer;
-  box-shadow: 0 6px 24px rgba(0,0,0,.7);
-  animation: di-pop .3s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 6px 24px rgba(0,0,0,.8);
+  animation: di-mini-pop .25s cubic-bezier(.34,1.56,.64,1);
 }
-@keyframes di-pop {
-  from { opacity: 0; transform: scaleX(0.6) scaleY(0.5); }
-  to   { opacity: 1; transform: scaleX(1)   scaleY(1);   }
+@keyframes di-mini-pop {
+  from { transform:translateX(-50%) scale(.6); opacity:0; }
+  to   { transform:translateX(-50%) scale(1);  opacity:1; }
 }
-
-.di-art-wrap {
-  padding: 7px 0 7px 6px;   /* keeps artwork away from pill edge */
-}
-.di-art {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;      /* square with rounded corners */
+.di-mini-art {
+  width: 40px; height: 40px;
+  border-radius: 9px;
   object-fit: cover;
-  display: block;
+  flex-shrink: 0;
 }
-.di-art-ph {
+.di-mini-art-ph {
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,.12);
   color: rgba(255,255,255,.4);
-  border-radius: 10px;
+  border-radius: 9px;
+}
+
+/* ══════════════════════════════════════════════════════
+   Expanded Dynamic Island — img_12
+   Drops from top of screen, contains full player
+   ══════════════════════════════════════════════════════ */
+.di-exp {
+  position: fixed;
+  top: 14px;
+  left: 12px; right: 12px;
+  z-index: 1300;
+  border-radius: 26px;
+  padding: 14px 16px 14px;
+  background: rgba(18,18,22,.97);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 12px 40px rgba(0,0,0,.75),
+              inset 0 1px 0 rgba(255,255,255,.07);
+  transform-origin: top center;
+  animation: di-expand .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes di-expand {
+  from { transform: scaleY(.25); opacity:0; }
+  to   { transform: scaleY(1);   opacity:1; }
+}
+
+/* Invisible hit area top strip → tap to collapse */
+.di-collapse-hit {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 18px;
+  cursor: pointer;
+  border-radius: 26px 26px 0 0;
+}
+
+/* Row 1 */
+.di-exp-r1 {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 10px;
+}
+.di-exp-art {
+  width: 62px; height: 62px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+}
+.di-exp-art-ph {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.3);
+}
+.di-exp-info { flex:1; min-width:0; }
+.di-exp-title {
+  font-size: 1rem; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.di-exp-artist {
+  font-size: .78rem; color: rgba(255,255,255,.52);
+  margin-top: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Scrubber */
+.di-scrub {
+  height: 3px; border-radius: 3px;
+  background: rgba(255,255,255,.2);
+  position: relative; cursor: pointer;
+  margin-bottom: 5px;
+}
+.di-scrub-fill {
+  position: absolute; inset:0; right:auto;
+  border-radius: 3px;
+  background: rgba(255,255,255,.75);
+  pointer-events: none;
+}
+.di-scrub-thumb {
+  position: absolute; top:50%;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+.di-times {
+  display: flex; justify-content: space-between;
+  font-size: .65rem; color: rgba(255,255,255,.42);
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Controls */
+.di-ctrls {
+  display: flex; align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+.di-btn {
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
+  color: #fff; cursor: pointer; padding: 4px;
+  transition: opacity .15s, transform .1s;
+}
+.di-btn:active { transform: scale(.88); opacity: .6; }
+.di-btn--air   { margin-left: auto; color: rgba(255,255,255,.5); }
+
+/* ══════════════════════════════════════════════════════
+   Equalizer bars (shared)
+   ══════════════════════════════════════════════════════ */
+.eq {
+  display: flex; align-items: flex-end; flex-shrink: 0;
+}
+
+/* small — inside expanded header */
+.eq--sm { height: 22px; gap: 2.5px; }
+.eq--sm span { display:block; width:3px; border-radius:2px; background:rgba(255,255,255,.65); height:6px; }
+.eq--sm.on span { animation: eqPulse .9s ease-in-out infinite alternate; }
+
+/* dynamic island mini */
+.eq--di { height: 24px; gap: 3px; }
+.eq--di span { display:block; width:3.5px; border-radius:2px; background:rgba(255,255,255,.75); height:7px; }
+.eq--di.on span { animation: eqPulse .9s ease-in-out infinite alternate; }
+
+.eq--sm.on span:nth-child(1), .eq--di.on span:nth-child(1) { animation-duration:.75s; animation-delay:0ms;   }
+.eq--sm.on span:nth-child(2), .eq--di.on span:nth-child(2) { animation-duration:.90s; animation-delay:150ms; }
+.eq--sm.on span:nth-child(3), .eq--di.on span:nth-child(3) { animation-duration:.65s; animation-delay:80ms;  }
+.eq--sm.on span:nth-child(4), .eq--di.on span:nth-child(4) { animation-duration:.80s; animation-delay:220ms; }
+.eq--sm.on span:nth-child(5), .eq--di.on span:nth-child(5) { animation-duration:.70s; animation-delay:60ms;  }
+
+@keyframes eqPulse {
+  from { height:4px;  opacity:.4; }
+  to   { height:20px; opacity:1;  }
 }

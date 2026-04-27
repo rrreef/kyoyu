@@ -95,7 +95,7 @@ function ListenerApp() {
       {!hideSidebar && <Sidebar />}
       <div
         className="main-content"
-        style={{ paddingBottom: hasTrack ? 'calc(var(--player-height) + 16px)' : '32px' }}
+        style={{ paddingBottom: '32px', paddingTop: hasTrack ? '190px' : '0px' }}
       >
         <RouteReporter />
         <TopBar />

@@ -1,26 +1,21 @@
-import { useRef, useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
-import { useLibrary } from '../../contexts/LibraryContext';
 import { Play, Pause, SkipBack, SkipForward, Music2 } from 'lucide-react';
 import './Player.css';
 
 function fmt(s) {
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  const m = Math.floor(s/60), sec=Math.floor(s%60);
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-/* Animated equalizer bars */
-function EqBars({ active, bars = 5, size = 'md' }) {
+function EqBars({ active, n=5, cls='' }) {
   return (
-    <div className={`eq-bars eq-bars--${size}${active ? ' playing' : ''}`}>
-      {Array.from({length: bars}).map((_,i) => (
-        <span key={i} style={{'--i': i}}/>
-      ))}
+    <div className={`eq ${cls}${active?' on':''}`}>
+      {Array.from({length:n}).map((_,i)=><span key={i} style={{'--i':i}}/>)}
     </div>
   );
 }
 
-/* AirPlay SVG icon */
 function AirPlayIcon() {
   return (
     <svg width="22" height="20" viewBox="0 0 22 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -30,117 +25,95 @@ function AirPlayIcon() {
   );
 }
 
-/* ── Dynamic Island mini ── */
-function DynamicIsland({ track, isPlaying, onTap }) {
+/* ── Mini pill at top (img_11 compact) ── */
+function MiniIsland({ track, isPlaying, onTap }) {
   return (
-    <div className="di-pill" onClick={onTap}>
-      {/* Artwork left */}
-      <div className="di-art-wrap">
-        {track.releaseCover
-          ? <img src={track.releaseCover} className="di-art" alt=""/>
-          : <div className="di-art di-art-ph"><Music2 size={16}/></div>
-        }
-      </div>
-      {/* Waveform right */}
-      <EqBars active={isPlaying} bars={5} size="di"/>
+    <div className="di-mini" onClick={onTap}>
+      {track.releaseCover
+        ? <img src={track.releaseCover} className="di-mini-art" alt=""/>
+        : <div className="di-mini-art di-mini-art-ph"><Music2 size={14}/></div>
+      }
+      <EqBars active={isPlaying} n={5} cls="eq--di"/>
     </div>
   );
 }
 
-export default function Player() {
-  const { state, dispatch } = usePlayer();
-  const { isLiked, toggleLike } = useLibrary();
-  const trackRef   = useRef(null);
-  const swipeStart = useRef(0);
-  const swiping    = useRef(false);
-
-  const [dismissed, setDismissed] = useState(false);
-  const [swipeX,    setSwipeX]    = useState(0);
-
-  const { currentTrack, isPlaying, progress, duration } = state;
-
-  /* Reset dismissed whenever a new track starts */
-  useEffect(() => {
-    if (currentTrack) setDismissed(false);
-  }, [currentTrack?.id]);
-
-  if (!currentTrack) return null;
-
-  const pct       = duration ? (progress / duration) * 100 : 0;
-  const remaining = Math.max(0, duration - progress);
+/* ── Expanded Dynamic Island player (img_12) — drops from top ── */
+function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, dispatch }) {
+  const ref = useRef(null);
+  const pct = duration ? (progress/duration)*100 : 0;
+  const rem = Math.max(0, duration - progress);
 
   function seek(e) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    dispatch({ type: 'SET_PROGRESS', value: Math.floor(((e.clientX - rect.left) / rect.width) * duration) });
-  }
-
-  /* Swipe-left to dismiss */
-  function onTouchStart(e) { swipeStart.current = e.touches[0].clientX; swiping.current = true; }
-  function onTouchMove(e)  { if (!swiping.current) return; const dx = e.touches[0].clientX - swipeStart.current; if (dx < 0) setSwipeX(dx); }
-  function onTouchEnd()    { swiping.current = false; if (swipeX < -80) setDismissed(true); setSwipeX(0); }
-
-  const cardStyle = {
-    transform:  `translateX(${swipeX}px)`,
-    opacity:    Math.max(0, 1 + swipeX / 200),
-    transition: swipeX === 0 ? 'transform .3s, opacity .3s' : 'none',
-  };
-
-  /* ── Dynamic Island when dismissed ── */
-  if (dismissed) {
-    return <DynamicIsland track={currentTrack} isPlaying={isPlaying} onTap={() => setDismissed(false)}/>;
+    const r = e.currentTarget.getBoundingClientRect();
+    dispatch({ type:'SET_PROGRESS', value: Math.floor(((e.clientX-r.left)/r.width)*duration) });
   }
 
   return (
-    <div
-      className="pc-card"
-      style={cardStyle}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      {/* ── Row 1: artwork + info + eq bars ── */}
-      <div className="pc-row1">
-        <div className="pc-art-wrap">
-          {currentTrack.releaseCover
-            ? <img src={currentTrack.releaseCover} className="pc-art" alt=""/>
-            : <div className="pc-art pc-art-ph"><Music2 size={20} strokeWidth={1.2}/></div>
-          }
+    <div className="di-exp">
+      {/* row 1: art + info + eq */}
+      <div className="di-exp-r1">
+        {track.releaseCover
+          ? <img src={track.releaseCover} className="di-exp-art" alt=""/>
+          : <div className="di-exp-art di-exp-art-ph"><Music2 size={20}/></div>
+        }
+        <div className="di-exp-info">
+          <div className="di-exp-title">{track.title}</div>
+          <div className="di-exp-artist">{track.artistName}</div>
         </div>
-        <div className="pc-info">
-          <div className="pc-title">{currentTrack.title}</div>
-          <div className="pc-artist">{currentTrack.artistName}</div>
-        </div>
-        <EqBars active={isPlaying} bars={5} size="sm"/>
+        <EqBars active={isPlaying} n={5} cls="eq--sm"/>
       </div>
 
-      {/* ── Row 2: scrubber ── */}
-      <div className="pc-scrubber-row">
-        <span className="pc-time">{fmt(progress)}</span>
-        <div className="pc-track" ref={trackRef} onClick={seek}>
-          <div className="pc-fill" style={{ width: `${pct}%` }}/>
-          <div className="pc-thumb" style={{ left: `${pct}%` }}/>
-        </div>
-        <span className="pc-time">-{fmt(remaining)}</span>
+      {/* row 2: scrubber */}
+      <div className="di-scrub" ref={ref} onClick={seek}>
+        <div className="di-scrub-fill" style={{width:`${pct}%`}}/>
+        <div className="di-scrub-thumb" style={{left:`${pct}%`}}/>
+      </div>
+      <div className="di-times">
+        <span>{fmt(progress)}</span>
+        <span>-{fmt(rem)}</span>
       </div>
 
-      {/* ── Row 3: controls ── */}
-      <div className="pc-controls">
-        <button className="pc-ctrl" onClick={() => dispatch({ type: 'PREV_TRACK' })}>
+      {/* row 3: controls */}
+      <div className="di-ctrls">
+        <button className="di-btn" onClick={()=>dispatch({type:'PREV_TRACK'})}>
           <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
         </button>
-        <button className="pc-ctrl pc-ctrl--play" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}>
+        <button className="di-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
           {isPlaying
-            ? <Pause size={28} fill="currentColor" strokeWidth={0}/>
-            : <Play  size={28} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>
+            ? <Pause size={30} fill="currentColor" strokeWidth={0}/>
+            : <Play  size={30} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>
           }
         </button>
-        <button className="pc-ctrl" onClick={() => dispatch({ type: 'NEXT_TRACK' })}>
+        <button className="di-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}>
           <SkipForward size={26} fill="currentColor" strokeWidth={0}/>
         </button>
-        <button className="pc-ctrl pc-ctrl--airplay" title="AirPlay">
-          <AirPlayIcon/>
-        </button>
+        <button className="di-btn di-btn--air"><AirPlayIcon/></button>
       </div>
+
+      {/* tap to collapse */}
+      <div className="di-collapse-hit" onClick={onCollapse}/>
     </div>
+  );
+}
+
+/* ── Main export ── */
+export default function Player() {
+  const { state, dispatch } = usePlayer();
+  const [exp, setExp] = useState(true);
+  const { currentTrack, isPlaying, progress, duration } = state;
+
+  useEffect(() => { if (currentTrack) setExp(true); }, [currentTrack?.id]);
+
+  if (!currentTrack) return null;
+
+  if (!exp) return <MiniIsland track={currentTrack} isPlaying={isPlaying} onTap={()=>setExp(true)}/>;
+
+  return (
+    <ExpandedIsland
+      track={currentTrack} isPlaying={isPlaying}
+      progress={progress} duration={duration}
+      onCollapse={()=>setExp(false)} dispatch={dispatch}
+    />
   );
 }
