@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2, Lock } from 'lucide-react';
+import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2, Lock, ArrowRight } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -128,6 +128,10 @@ export default function Library() {
       {/* Likes → Releases */}
       {activeFilter === 'likes' && likesSub === 'releases' && (
         <div>
+          <div className="section-title">
+            <span>Liked Releases</span>
+            <Link to="/search">Browse <ArrowRight size={12}/></Link>
+          </div>
           {savedReleaseObjects.length === 0 ? (
             <div className="lib-empty">
               <p>No liked releases yet.</p>
@@ -144,6 +148,7 @@ export default function Library() {
       {/* Likes → Playlists */}
       {activeFilter === 'likes' && likesSub === 'playlists' && (
         <div className="playlist-list">
+          <div className="section-title"><span>Liked Playlists</span></div>
           {savedPlaylists.map(pl => (
             <div key={pl.id} className="playlist-row glass">
               <div className="playlist-cover">
@@ -165,6 +170,7 @@ export default function Library() {
       {/* Playlists */}
       {activeFilter === 'playlists' && (
         <div className="playlist-list">
+          <div className="section-title"><span>My Playlists</span><button className="lib-add-btn glass-sm" onClick={() => setShowCreateModal(true)}><Plus size={14}/><span>New</span></button></div>
           {playlists.map(pl => (
             <div key={pl.id} className="playlist-row glass">
               <div className="playlist-cover">
@@ -197,6 +203,7 @@ export default function Library() {
       {/* Podcasts */}
       {activeFilter === 'podcasts' && (
         <div className="playlist-list">
+          <div className="section-title"><span>Podcasts &amp; DJ Sets</span><Link to="/search">Browse <ArrowRight size={12}/></Link></div>
           {djSets.length === 0 ? (
             <div className="lib-empty">
               <p>No saved podcasts yet.</p>
@@ -224,25 +231,29 @@ export default function Library() {
 
       {/* Following */}
       {activeFilter === 'following' && (
-        followedArtists?.length > 0 ? (
-          <div className="lib-grid">
-            {followedArtists.map(a => (
-              <div key={a.id} className="lib-artist-card glass">
-                <div className="lib-artist-name">{a.name}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="lib-empty">
-            <p>Artists you follow will appear here.</p>
-            <Link to="/search" className="lib-empty-link">Find artists →</Link>
-          </div>
-        )
+        <>
+          <div className="section-title"><span>Following</span><Link to="/search">Find Artists <ArrowRight size={12}/></Link></div>
+          {followedArtists?.length > 0 ? (
+            <div className="lib-grid">
+              {followedArtists.map(a => (
+                <div key={a.id} className="lib-artist-card glass">
+                  <div className="lib-artist-name">{a.name}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="lib-empty">
+              <p>Artists you follow will appear here.</p>
+              <Link to="/search" className="lib-empty-link">Find artists →</Link>
+            </div>
+          )}
+        </>
       )}
 
       {/* Downloads */}
       {activeFilter === 'downloads' && (
         <div>
+          <div className="section-title"><span>Downloads</span><Link to="/shop">Shop <ArrowRight size={12}/></Link></div>
           {downloads.length === 0 ? (
             <div className="lib-empty">
               <p>No downloads yet.</p>
@@ -267,6 +278,10 @@ export default function Library() {
       {/* My Uploads */}
       {activeFilter === 'uploads' && (
         <div>
+          <div className="section-title">
+            <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
+            <Link to="/uploads">Upload <ArrowRight size={12}/></Link>
+          </div>
           {myUploads.length === 0 ? (
             <div className="lib-empty">
               <p>No uploads yet.</p>
