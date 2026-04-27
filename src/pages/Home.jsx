@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Play, ArrowRight, TrendingUp, Zap, Radio, Music2 } from 'lucide-react';
+import { Play, ArrowRight, TrendingUp, Zap, Radio, Music2, Lock } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -94,29 +94,6 @@ export default function Home() {
             </button>
           )}
         </div>
-
-        {/* My Uploads */}
-        {myUploads.length > 0 && (
-          <>
-            <div className="shelf-row-label">My Uploads <Link to="/uploads" style={{fontSize:'.7rem',color:'rgba(255,255,255,.35)',marginLeft:6}}>See all</Link></div>
-            <div className="scroll-row">
-              {myUploads.map(t => (
-                <div key={t.id} className="shelf-card">
-                  <div className="shelf-card-art">
-                    {t.artworkUrl
-                      ? <img src={t.artworkUrl} alt={t.title}/>
-                      : <div style={{width:'100%',height:'100%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center'}}><Music2 size={20} color="rgba(255,255,255,.3)"/></div>
-                    }
-                  </div>
-                  <div className="shelf-card-info">
-                    <div className="shelf-card-title">{t.title||'Untitled'}</div>
-                    <div className="shelf-card-sub">{t.artist||'Unknown artist'}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
 
         {/* My Playlists */}
         {showPlaylists && (
@@ -225,6 +202,25 @@ export default function Home() {
           <img src={featured.cover} alt={featured.title} />
         </div>
       </section>
+
+      {/* My Uploads — private section */}
+      {myUploads.length > 0 && (
+        <section className="home-section">
+          <div className="section-title">
+            <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
+            <Link to="/uploads">See All <ArrowRight size={12}/></Link>
+          </div>
+          <div className="scroll-row">
+            {myUploads.map(t => (
+              <ShelfCard key={t.id}
+                cover={t.artworkUrl || ''}
+                title={t.title || 'Untitled'}
+                sub={t.artist || 'Unknown artist'}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* New Releases */}
       <section className="home-section">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2 } from 'lucide-react';
+import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2, Lock } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,7 +15,7 @@ const FILTERS = [
   { key: 'podcasts',  label: 'Podcasts'  },
   { key: 'following', label: 'Following' },
   { key: 'downloads', label: 'Downloads' },
-  { key: 'uploads',   label: 'My Uploads'},
+  { key: 'uploads',   label: 'My Uploads', icon: Lock },
 ];
 
 // Sub-filters that appear when Likes is active
@@ -90,13 +90,13 @@ export default function Library() {
       <div className="lib-filter-bar">
         <div className="lib-filters">
 
-          {FILTERS.map(({ key, label }) => (
+          {FILTERS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               className={`lib-filter-btn${activeFilter === key ? ' active' : ''}`}
               onClick={() => handleFilterClick(key)}
             >
-              {label}
+              {Icon && <Icon size={11} style={{marginRight:4,verticalAlign:'middle'}}/>}{label}
             </button>
           ))}
 
