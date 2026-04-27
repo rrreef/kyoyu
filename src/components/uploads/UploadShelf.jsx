@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Pause, Shuffle, X, Music2 } from 'lucide-react';
+import { usePlayer } from '../../contexts/PlayerContext';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -26,13 +28,27 @@ function group(uploads, sort) {
   return [...items, ...singles];
 }
 
-/* ── tiny card ────────────────────────────────────────────── */
+/* ── convert upload track to PlayerContext shape ─────────── */
+function toPlayerTrack(t, albumCover) {
+  return {
+    id:          t.id,
+    title:       t.title || 'Untitled',
+    artistName:  t.artist || '',
+    releaseCover: t.artworkUrl || albumCover || '',
+    releaseTitle: t.album || t.title || '',
+    src:         t.fileUrl || '',
+  };
+}
+
+/* ── tiny shelf card ─────────────────────────────────────── */
 function Card({ cover, title, sub, badge, onClick }) {
   return (
     <div className="shelf-card upl-shelf-card" onClick={onClick}>
       <div className="shelf-card-art">
-        {cover ? <img src={cover} alt={title}/>
-          : <div className="upl-card-ph"><Music2 size={20} strokeWidth={1.3}/></div>}
+        {cover
+          ? <img src={cover} alt={title}/>
+          : <div className="upl-card-ph"><Music2 size={20} strokeWidth={1.3}/></div>
+        }
         {badge && <div className="shelf-card-badge">{badge}</div>}
       </div>
       <div className="shelf-card-info">
@@ -45,39 +61,28 @@ function Card({ cover, title, sub, badge, onClick }) {
 
 /* ── album bottom-sheet modal ─────────────────────────────── */
 function AlbumModal({ alb, onClose }) {
-  const [playing, setPlaying] = useState(null);
-  const ref = useRef(new Audio());
+  const { playTrack } = usePlayer();
+  const [activeId, setActiveId] = useState(null);
 
-  function playTrack(t, fromQueue) {
-    ref.current.pause();
-    if (!fromQueue && playing === t.id) { setPlaying(null); return; }
-    if (!t.fileUrl) return;
-    ref.current.src = t.fileUrl;
-    ref.current.play().catch(()=>{});
-    setPlaying(t.id);
-    ref.current.onended = () => setPlaying(null);
+  function handlePlayTrack(t) {
+    const pt = toPlayerTrack(t, alb.artworkUrl);
+    const queue = alb.tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
+    playTrack(pt, queue);
+    setActiveId(t.id);
   }
 
-  function playQueue(shuffle) {
-    const q = shuffle ? [...alb.tracks].sort(()=>Math.random()-.5) : [...alb.tracks];
-    let i = 0;
-    function next() {
-      if (i >= q.length) { setPlaying(null); return; }
-      const t = q[i++];
-      if (!t.fileUrl) { next(); return; }
-      ref.current.src = t.fileUrl;
-      ref.current.play().catch(()=>{});
-      setPlaying(t.id);
-      ref.current.onended = next;
-    }
-    next();
+  function handlePlayAll(shuffle) {
+    const tracks = shuffle
+      ? [...alb.tracks].sort(() => Math.random() - .5)
+      : [...alb.tracks];
+    const queue = tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
+    playTrack(queue[0], queue);
+    setActiveId(queue[0].id);
   }
 
-  function close() { ref.current.pause(); onClose(); }
-
-  return (
-    <div className="upl-overlay" onClick={e=>{ if(e.target===e.currentTarget) close(); }}>
-      <div className="upl-sheet">
+  const modal = (
+    <div className="upl-overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="upl-sheet" onClick={e=>e.stopPropagation()}>
         <div className="upl-handle"/>
 
         {/* header */}
@@ -91,15 +96,15 @@ function AlbumModal({ alb, onClose }) {
             <div className="upl-sheet-artist">{alb.artist}</div>
             <div className="upl-sheet-count">{alb.tracks.length} tracks · Private</div>
           </div>
-          <button className="upl-sheet-close" onClick={close}><X size={15}/></button>
+          <button className="upl-sheet-close" onClick={onClose}><X size={15}/></button>
         </div>
 
         {/* play controls */}
         <div className="upl-sheet-ctrls">
-          <button className="upl-ctrl upl-ctrl-primary" onClick={()=>playQueue(false)}>
+          <button className="upl-ctrl upl-ctrl-primary" onClick={()=>handlePlayAll(false)}>
             <Play size={15} fill="currentColor"/> Play
           </button>
-          <button className="upl-ctrl upl-ctrl-secondary" onClick={()=>playQueue(true)}>
+          <button className="upl-ctrl upl-ctrl-secondary" onClick={()=>handlePlayAll(true)}>
             <Shuffle size={15}/> Shuffle
           </button>
         </div>
@@ -107,9 +112,11 @@ function AlbumModal({ alb, onClose }) {
         {/* track list */}
         <div className="upl-sheet-tracks">
           {alb.tracks.map((t,i) => (
-            <button key={t.id} className={`upl-track-row${playing===t.id?' active':''}`} onClick={()=>playTrack(t,false)}>
+            <button key={t.id}
+              className={`upl-track-row${activeId===t.id?' active':''}`}
+              onClick={()=>handlePlayTrack(t)}>
               <span className="upl-track-n">
-                {playing===t.id ? <Pause size={13} fill="currentColor"/> : i+1}
+                {activeId===t.id ? <Play size={12} fill="currentColor"/> : i+1}
               </span>
               <div className="upl-track-info">
                 <div className="upl-track-title">{t.title||'Untitled'}</div>
@@ -121,22 +128,38 @@ function AlbumModal({ alb, onClose }) {
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }
 
 /* ── main export ──────────────────────────────────────────── */
-const SORTS = [{key:'newest',label:'Newest'},{key:'oldest',label:'Oldest'},{key:'artist',label:'Artist A–Z'},{key:'label',label:'Label'}];
+const SORTS = [
+  {key:'newest',label:'Newest'},
+  {key:'oldest',label:'Oldest'},
+  {key:'artist',label:'Artist A–Z'},
+  {key:'label', label:'Label'},
+];
 
 export default function UploadShelf({ uploads }) {
-  const [sort, setSort] = useState('newest');
+  const { playTrack } = usePlayer();
+  const [sort, setSort]       = useState('newest');
   const [activeAlb, setActiveAlb] = useState(null);
   const items = group(uploads, sort);
+
+  function handleSingleTrack(item) {
+    const pt = toPlayerTrack(item, null);
+    const singles = items.filter(x=>x._type==='track').map(x=>toPlayerTrack(x,null));
+    playTrack(pt, singles);
+  }
 
   return (
     <>
       {/* sort pills */}
       <div className="upl-sorts">
         {SORTS.map(o => (
-          <button key={o.key} className={`upl-sort-pill${sort===o.key?' active':''}`} onClick={()=>setSort(o.key)}>
+          <button key={o.key}
+            className={`upl-sort-pill${sort===o.key?' active':''}`}
+            onClick={()=>setSort(o.key)}>
             {o.label}
           </button>
         ))}
@@ -146,12 +169,17 @@ export default function UploadShelf({ uploads }) {
       <div className="scroll-row">
         {items.map(item =>
           item._type === 'album'
-            ? <Card key={item.id} cover={item.artworkUrl} title={item.album} sub={item.artist} badge={`${item.tracks.length} tracks`} onClick={()=>setActiveAlb(item)}/>
-            : <Card key={item.id} cover={item.artworkUrl} title={item.title||'Untitled'} sub={item.artist||''} onClick={null}/>
+            ? <Card key={item.id} cover={item.artworkUrl} title={item.album}
+                sub={item.artist} badge={`${item.tracks.length} tracks`}
+                onClick={()=>setActiveAlb(item)}/>
+            : <Card key={item.id} cover={item.artworkUrl} title={item.title||'Untitled'}
+                sub={item.artist||''} onClick={()=>handleSingleTrack(item)}/>
         )}
       </div>
 
-      {activeAlb && <AlbumModal alb={activeAlb} onClose={()=>setActiveAlb(null)}/>}
+      {activeAlb && (
+        <AlbumModal alb={activeAlb} onClose={()=>setActiveAlb(null)}/>
+      )}
     </>
   );
 }
