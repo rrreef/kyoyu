@@ -21,12 +21,13 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
 
-  // When on a profile-owned route, suppress ALL active highlights
+  // On profile-owned routes: don't render sidebar at all
   const isProfileRoute = PROFILE_ROUTES.has(pathname)
     || pathname.startsWith('/release/')
     || pathname.startsWith('/artist/')
     || pathname.startsWith('/label/');
 
+  if (isProfileRoute) return null;
 
 
   return (
