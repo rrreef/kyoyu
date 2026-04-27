@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { Play, Pause, Rewind, FastForward, Music2,
          Star, MoreHorizontal, Airplay, AlignJustify, MessageSquare } from 'lucide-react';
@@ -9,14 +9,23 @@ function fmt(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-/* ── Bottom mini bar ── */
+/* ── Bottom mini bar — fused with tab bar ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
+  const ref = useRef(null);
   const startY = useRef(0);
-  function onTS(e) { startY.current = e.touches[0].clientY; }
-  function onTE(e) { if (startY.current - e.changedTouches[0].clientY > 40) onExpand(); }
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onTS = e => { startY.current = e.touches[0].clientY; };
+    const onTE = e => { if (startY.current - e.changedTouches[0].clientY > 30) onExpand(); };
+    el.addEventListener('touchstart', onTS, { passive: true });
+    el.addEventListener('touchend',   onTE, { passive: true });
+    return () => { el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); };
+  }, [onExpand]);
 
   return (
-    <div className="mini-bar" onClick={onExpand} onTouchStart={onTS} onTouchEnd={onTE}>
+    <div ref={ref} className="mini-bar" onClick={onExpand}>
       {track.releaseCover
         ? <img src={track.releaseCover} className="mini-art" alt=""/>
         : <div className="mini-art mini-art-ph"><Music2 size={18}/></div>
@@ -38,79 +47,104 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   );
 }
 
-/* ── Full screen player ── */
+/* ── Full screen player — screenshot 2 layout ── */
 function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch }) {
-  const startY = useRef(0);
+  const fpRef    = useRef(null);
+  const handleRef = useRef(null);
+  const startY   = useRef(0);
+
+  // Attach via DOM so WKWebView scroll can't intercept
+  useEffect(() => {
+    const el   = fpRef.current;
+    const hdl  = handleRef.current;
+    if (!el || !hdl) return;
+
+    const onTS = e => { startY.current = e.touches[0].clientY; };
+    const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 50) onCollapse(); };
+
+    // Whole-card swipe-down
+    el.addEventListener('touchstart', onTS,  { passive: true });
+    el.addEventListener('touchend',   onTE,  { passive: true });
+    // Handle tap also collapses
+    hdl.addEventListener('click', onCollapse);
+
+    return () => {
+      el.removeEventListener('touchstart', onTS);
+      el.removeEventListener('touchend',   onTE);
+      hdl.removeEventListener('click', onCollapse);
+    };
+  }, [onCollapse]);
+
   const pct = duration ? (progress/duration)*100 : 0;
   const rem = Math.max(0, duration - progress);
 
-  function onTS(e) { startY.current = e.touches[0].clientY; }
-  function onTE(e) { if (e.changedTouches[0].clientY - startY.current > 60) onCollapse(); }
   function seek(e) {
     const r = e.currentTarget.getBoundingClientRect();
     dispatch({ type:'SET_PROGRESS', value: Math.floor(((e.clientX-r.left)/r.width)*duration) });
   }
 
   return (
-    <div className={`fp${open?' fp--open':''}`} onTouchStart={onTS} onTouchEnd={onTE}
-         style={track.releaseCover ? {'--fp-art': `url(${track.releaseCover})`} : {}}>
-      {/* blurred art bg */}
-      <div className="fp-bg"/>
+    <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
 
-      {/* handle */}
-      <div className="fp-handle-row"><div className="fp-handle"/></div>
+      {/* ① Pull handle — tap or swipe down to close */}
+      <div ref={handleRef} className="fp-handle-row">
+        <div className="fp-handle"/>
+      </div>
 
-      {/* artwork */}
+      {/* ② Large artwork */}
       <div className="fp-art-wrap">
         {track.releaseCover
           ? <img src={track.releaseCover} className="fp-art" alt=""/>
-          : <div className="fp-art fp-art-ph"><Music2 size={72}/></div>
+          : <div className="fp-art fp-art-ph"><Music2 size={80}/></div>
         }
       </div>
 
-      {/* title row */}
+      {/* ③ Title + actions */}
       <div className="fp-meta">
         <div className="fp-meta-text">
           <div className="fp-title">{track.title}</div>
-          <div className="fp-artist">{track.artistName}</div>
+          <div className="fp-artist">{track.artistName || '—'}</div>
         </div>
         <div className="fp-meta-btns">
-          <button className="fp-icon-btn"><Star size={20}/></button>
-          <button className="fp-icon-btn"><MoreHorizontal size={20}/></button>
+          <button className="fp-icon-btn"><Star size={22}/></button>
+          <button className="fp-icon-btn"><MoreHorizontal size={22}/></button>
         </div>
       </div>
 
-      {/* scrubber */}
+      {/* ④ Scrubber */}
       <div className="fp-scrub-wrap">
         <div className="fp-scrub" onClick={seek}>
           <div className="fp-scrub-fill" style={{width:`${pct}%`}}/>
           <div className="fp-scrub-thumb" style={{left:`${pct}%`}}/>
         </div>
-        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
+        <div className="fp-times">
+          <span>{fmt(progress)}</span>
+          <span>-{fmt(rem)}</span>
+        </div>
       </div>
 
-      {/* controls */}
+      {/* ⑤ Controls */}
       <div className="fp-ctrls">
         <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}>
-          <Rewind size={36} fill="currentColor" strokeWidth={0}/>
+          <Rewind size={38} fill="currentColor" strokeWidth={0}/>
         </button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
-          {isPlaying ? <Pause size={44} fill="currentColor" strokeWidth={0}/>
-                     : <Play  size={44} fill="currentColor" strokeWidth={0} style={{marginLeft:4}}/>}
+        <button className="fp-ctrl fp-ctrl--play" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
+          {isPlaying ? <Pause size={52} fill="currentColor" strokeWidth={0}/>
+                     : <Play  size={52} fill="currentColor" strokeWidth={0} style={{marginLeft:4}}/>}
         </button>
         <button className="fp-ctrl" onClick={()=>dispatch({type:'NEXT_TRACK'})}>
-          <FastForward size={36} fill="currentColor" strokeWidth={0}/>
+          <FastForward size={38} fill="currentColor" strokeWidth={0}/>
         </button>
       </div>
 
-      {/* volume */}
+      {/* ⑥ Volume */}
       <div className="fp-vol">
         <span className="fp-vol-icon">🔈</span>
         <input type="range" className="fp-vol-slider" min="0" max="100" defaultValue="80"/>
         <span className="fp-vol-icon">🔊</span>
       </div>
 
-      {/* bottom icons */}
+      {/* ⑦ Bottom icons */}
       <div className="fp-actions">
         <button className="fp-icon-btn"><MessageSquare size={22}/></button>
         <button className="fp-icon-btn"><Airplay size={22}/></button>
@@ -124,13 +158,15 @@ export default function Player() {
   const { state, dispatch } = usePlayer();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration } = state;
+  const expand   = useCallback(() => setExp(true),  []);
+  const collapse = useCallback(() => setExp(false), []);
   useEffect(() => { if (currentTrack) setExp(false); }, [currentTrack?.id]);
   if (!currentTrack) return null;
   return (
     <>
-      {!exp && <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={()=>setExp(true)} dispatch={dispatch}/>}
+      {!exp && <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
       <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
-                  open={exp} onCollapse={()=>setExp(false)} dispatch={dispatch}/>
+                  open={exp} onCollapse={collapse} dispatch={dispatch}/>
     </>
   );
 }

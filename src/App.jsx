@@ -95,7 +95,7 @@ function ListenerApp() {
       {!hideSidebar && <Sidebar />}
       <div
         className="main-content"
-        style={{ paddingTop: '0px', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 80px)' : 'calc(var(--kyoyu-tab-h, 83px) + 16px)' }}
+        style={{ paddingTop:'0px', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 62px)' : 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
       >
         <RouteReporter />
         <TopBar />
