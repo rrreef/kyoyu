@@ -6,18 +6,20 @@
   padding: 16px 18px 14px;
   overflow: hidden;
 
-  /* Glass base */
-  background: rgba(28, 28, 32, 0.6);
+  /* Liquid glass */
+  background: rgba(28, 28, 32, 0.55);
   backdrop-filter: blur(48px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(48px) saturate(200%) brightness(1.1);
 
+  /* Clean transparent glass border — no rainbow, just specular highlight */
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.25),
-    inset 0 -1px 0 rgba(0,0,0,0.4),
-    inset 1px 0 0 rgba(255,255,255,0.12),
-    inset -1px 0 0 rgba(255,255,255,0.06),
-    0 24px 64px rgba(0,0,0,0.65),
-    0 4px 18px rgba(0,0,0,0.4);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    inset 1px 0 0 rgba(255, 255, 255, 0.10),
+    inset -1px 0 0 rgba(255, 255, 255, 0.06),
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Artwork blurred backdrop ────────────────────────────────── */
@@ -32,28 +34,7 @@
   pointer-events: none;
 }
 
-/* ── Prismatic iridescent border ─────────────────────────────── */
-.ip-prism {
-  position: absolute;
-  inset: 0;
-  border-radius: 22px;
-  pointer-events: none;
-  z-index: 20;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(rgba(28,28,32,0) 0%, rgba(28,28,32,0) 100%) padding-box,
-    linear-gradient(
-      130deg,
-      rgba(255, 80, 80,  0.55) 0%,
-      rgba(255,190,  0,  0.30) 20%,
-      rgba( 60,120,255,  0.40) 40%,
-      rgba(180,  0,255,  0.25) 60%,
-      rgba( 30,200,200,  0.35) 80%,
-      rgba(255,255,255,  0.50) 100%
-    ) border-box;
-}
-
-/* ── All inner content above backdrop ───────────────────────── */
+/* All inner content above backdrop */
 .ip-header,
 .ip-scrubber-row,
 .ip-controls { position: relative; z-index: 5; }
@@ -73,12 +54,12 @@
   object-fit: cover;
   flex-shrink: 0;
   box-shadow:
-    0 6px 20px rgba(0,0,0,0.55),
-    inset 0 1px 0 rgba(255,255,255,0.12);
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .ip-art-ph {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ip-info { flex: 1; min-width: 0; }
@@ -95,7 +76,7 @@
 
 .ip-artist {
   font-size: 0.82rem;
-  color: rgba(255,255,255,0.55);
+  color: rgba(255, 255, 255, 0.55);
   margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -114,7 +95,7 @@
   display: block;
   width: 3px;
   border-radius: 2px;
-  background: rgba(255,255,255,0.65);
+  background: rgba(255, 255, 255, 0.65);
   height: 6px;
 }
 .ip-wave.playing span {
@@ -125,7 +106,7 @@
 .ip-wave.playing span:nth-child(3) { animation-delay: 60ms;  animation-duration: 0.63s; }
 .ip-wave.playing span:nth-child(4) { animation-delay: 200ms; animation-duration: 0.79s; }
 @keyframes ipWave {
-  from { height: 4px; opacity: 0.45; }
+  from { height: 4px;  opacity: 0.45; }
   to   { height: 18px; opacity: 1; }
 }
 
@@ -140,11 +121,13 @@
 .ip-time {
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
-  color: rgba(255,255,255,0.55);
-  min-width: 36px;
+  color: rgba(255, 255, 255, 0.55);
+  min-width: 34px;
+  flex-shrink: 0;
 }
-.ip-time:last-child { text-align: right; }
+.ip-time-right { text-align: right; }
 
+/* Track container */
 .ip-track-wrap {
   flex: 1;
   position: relative;
@@ -157,7 +140,7 @@
   position: absolute;
   inset: 0;
   border-radius: 100px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .ip-track-fill {
@@ -166,37 +149,76 @@
   top: 0;
   bottom: 0;
   border-radius: 100px;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255, 255, 255, 0.85);
   pointer-events: none;
+  transition: width 0.05s linear;
 }
 
-/* Range input — transparent but provides the draggable thumb */
-.ip-scrubber {
+/* ── Range input — full track, visible thumb ─────────────────── */
+.ip-range {
   position: absolute;
-  inset: -10px 0;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   width: 100%;
-  height: 24px;
-  opacity: 0;
+  height: 20px;          /* tall hit area */
+  margin: 0;
+  padding: 0;
   cursor: pointer;
   z-index: 10;
+
+  /* Must reset all browser styles */
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  border: none;
 }
 
-/* Visible thumb via box-shadow trick on the track-wrap */
-.ip-track-wrap::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  left: calc(var(--pct, 0) * 1%);
+/* ── WebKit thumb (Chrome, Safari, Edge) ─────────────────────── */
+.ip-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
   width: 18px;
   height: 18px;
   border-radius: 50%;
   background: #fff;
+  cursor: grab;
   box-shadow:
-    0 2px 8px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.5);
-  pointer-events: none;
-  transition: width 0.1s, height 0.1s;
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.12s;
+  margin-top: 0;          /* centred on transparent track */
+}
+.ip-range:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+/* ── WebKit track (transparent — visual track is ip-track-bg) ── */
+.ip-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+  border-radius: 100px;
+}
+
+/* ── Firefox thumb ───────────────────────────────────────────── */
+.ip-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: grab;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.ip-range:active::-moz-range-thumb { cursor: grabbing; }
+
+.ip-range::-moz-range-track {
+  height: 4px;
+  background: transparent;
+  border-radius: 100px;
 }
 
 /* ── Controls ────────────────────────────────────────────────── */
@@ -204,7 +226,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 18px;
 }
 
 .ip-ctrl {
@@ -214,16 +236,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255, 255, 255, 0.8);
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s, transform 0.12s;
+  transition: color 0.15s, background 0.15s, transform 0.12s;
 }
-.ip-ctrl:hover  { color: #fff; }
+.ip-ctrl:hover  { color: #fff; background: rgba(255, 255, 255, 0.07); }
 .ip-ctrl:active { transform: scale(0.88); }
 
-/* Central play button — dark solid glass circle like Design 2 */
+/* Track nav buttons (prev/next track) */
+.ip-track-nav {
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+}
+.ip-track-nav:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Spacer to keep layout symmetric when nav isn't shown */
+.ip-ctrl-spacer { width: 40px; flex-shrink: 0; }
+
+/* Central play button — glass circle */
 .ip-play-btn {
   width: 56px;
   height: 56px;
@@ -236,12 +268,13 @@
   border: none;
   transition: transform 0.15s, background 0.15s;
 
-  background: rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(16px);
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
   box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.4),
-    inset 0 -1px 0 rgba(0,0,0,0.4),
-    0 6px 24px rgba(0,0,0,0.5);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 6px 24px rgba(0, 0, 0, 0.45);
 }
-.ip-play-btn:hover  { background: rgba(255,255,255,0.22); transform: scale(1.06); }
+.ip-play-btn:hover  { background: rgba(255, 255, 255, 0.22); transform: scale(1.06); }
 .ip-play-btn:active { transform: scale(0.93); }

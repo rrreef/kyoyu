@@ -202,6 +202,10 @@ export default function UserUploads() {
             artworkUrl={m.artworkUrl}
             title={m.title}
             artist={m.artist}
+            hasPrev={active > 0}
+            hasNext={active < files.length - 1}
+            onPrev={() => setActive(a => Math.max(0, a - 1))}
+            onNext={() => setActive(a => Math.min(files.length - 1, a + 1))}
           />
         </div>
 
