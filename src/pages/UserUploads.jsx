@@ -13,26 +13,42 @@ const ok       = f => ACCEPTED.includes('.'+f.name.split('.').pop().toLowerCase(
 const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:String(new Date().getFullYear()), label:'', mixEng:'', masterEng:'', artworkUrl:null, artworkFile:null });
 
 /* ─── metadata extraction via music-metadata-browser ────────── */
+/* MIME map needed because AIFF files may have wrong browser MIME type */
+const MIME_MAP = {
+  mp3:  'audio/mpeg',
+  flac: 'audio/flac',
+  wav:  'audio/wav',
+  aiff: 'audio/aiff',
+  aif:  'audio/aiff',
+};
+
 async function extractMeta(file) {
   const r = { title:null, artist:null, album:null, genre:null, year:null, label:null, artworkUrl:null };
   try {
-    const meta = await mm.parseBlob(file, { skipCovers: false, duration: false });
-    const c = meta.common;
-    r.title  = c.title              || null;
-    r.artist = c.artist             || null;
-    r.album  = c.album              || null;
-    r.genre  = c.genre?.[0]         || null;
-    r.year   = c.year?.toString()   || null;
-    r.label  = c.label?.[0]         || null;
+    const ext  = file.name.split('.').pop().toLowerCase();
+    const mime = MIME_MAP[ext] || file.type || 'audio/mpeg';
+    // parseBuffer requires a Uint8Array — reads the FULL file so AIFF tail tags work
+    const buf  = await file.arrayBuffer();
+    const meta = await mm.parseBuffer(new Uint8Array(buf), mime, { skipCovers: false });
+    const c    = meta.common;
+    r.title  = c.title            || null;
+    r.artist = c.artist           || null;
+    r.album  = c.album            || null;
+    r.genre  = c.genre?.[0]       || null;
+    r.year   = c.year?.toString() || null;
+    r.label  = c.label?.[0]       || null;
     if (c.picture?.length) {
       const pic = c.picture[0];
-      r.artworkUrl = URL.createObjectURL(new Blob([pic.data], { type: pic.format || 'image/jpeg' }));
+      r.artworkUrl = URL.createObjectURL(
+        new Blob([pic.data], { type: pic.format || 'image/jpeg' })
+      );
     }
   } catch (e) {
-    console.warn('[UserUploads] metadata parse error:', e);
+    console.warn('[extractMeta] failed:', e);
   }
   return r;
 }
+
 
 const STEPS = ['Files','Track Info','Review'];
 
