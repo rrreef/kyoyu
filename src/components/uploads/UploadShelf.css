@@ -1,4 +1,4 @@
-/* ── UploadShelf cards ───────────────────────────────────── */
+/* ── Upload shelf cards ──────────────────────────────────── */
 .upl-shelf-card { cursor: pointer; }
 .upl-card-ph {
   width: 100%; height: 100%;
@@ -50,28 +50,50 @@
 .upl-handle {
   width: 36px; height: 4px; border-radius: 2px;
   background: rgba(255,255,255,.2);
-  margin: 12px auto 0;
+  margin: 12px auto 8px;
 }
 
-/* header */
-.upl-sheet-hdr { display:flex;align-items:flex-start;gap:14px;padding:16px 18px 12px;position:relative; }
-.upl-sheet-art {
-  width:72px;height:72px;border-radius:14px;object-fit:cover;
-  flex-shrink:0;box-shadow:0 8px 28px rgba(0,0,0,.45);
+/* ── Large square artwork ────────────────────────────────── */
+.upl-art-wrap {
+  position: relative;
+  width: calc(100% - 32px);
+  aspect-ratio: 1;
+  margin: 0 16px 14px;
+  border-radius: 18px;
+  overflow: hidden;
 }
-.upl-sheet-art-ph { display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);color:rgba(255,255,255,.3); }
-.upl-sheet-meta { flex:1;min-width:0;padding-top:4px; }
-.upl-sheet-album { font-size:1rem;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.upl-sheet-artist { font-size:.8rem;color:rgba(255,255,255,.52);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.upl-sheet-count { font-size:.67rem;color:rgba(255,255,255,.28);margin-top:5px; }
+.upl-art-big {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.upl-art-big-ph {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.3);
+}
+
+/* Close button — absolute top-right of artwork */
 .upl-sheet-close {
-  width:28px;height:28px;border-radius:50%;
-  background:rgba(255,255,255,.09);border:none;
-  display:flex;align-items:center;justify-content:center;
-  color:rgba(255,255,255,.55);cursor:pointer;flex-shrink:0;margin-top:2px;
-  transition:background .15s;
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(8px);
+  border: .5px solid rgba(255,255,255,.15);
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.8);
+  cursor: pointer;
+  transition: background .15s;
 }
-.upl-sheet-close:hover { background:rgba(255,255,255,.16); }
+.upl-sheet-close:hover { background: rgba(0,0,0,.75); }
+
+/* metadata */
+.upl-sheet-meta { padding: 0 18px 12px; }
+.upl-sheet-album { font-size:1.05rem;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.upl-sheet-artist { font-size:.82rem;color:rgba(255,255,255,.52);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.upl-sheet-count { font-size:.67rem;color:rgba(255,255,255,.28);margin-top:5px; }
 
 /* play controls */
 .upl-sheet-ctrls { display:flex;gap:10px;padding:0 18px 16px; }
@@ -81,8 +103,8 @@
   cursor:pointer;border:none;transition:transform .12s,background .15s;
 }
 .upl-ctrl:hover { transform:scale(1.02); }
-.upl-ctrl-primary { background:rgba(255,255,255,.18);color:#fff;border:.5px solid rgba(255,255,255,.25); }
-.upl-ctrl-secondary { background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:.5px solid rgba(255,255,255,.12); }
+.upl-ctrl-primary  { background:rgba(255,255,255,.18);color:#fff;border:.5px solid rgba(255,255,255,.25); }
+.upl-ctrl-secondary{ background:rgba(255,255,255,.07);color:rgba(255,255,255,.75);border:.5px solid rgba(255,255,255,.12); }
 
 /* track list */
 .upl-sheet-tracks { display:flex;flex-direction:column;padding:0 0 40px; }
@@ -102,3 +124,11 @@
 .upl-track-title { font-size:.875rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .upl-track-sub { font-size:.7rem;color:rgba(255,255,255,.35);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .upl-track-row.active .upl-track-title { color:rgba(255,255,255,.95); }
+
+/* ── Player floats above album sheet ─────────────────────── */
+/* When album modal is open, push player card above the sheet */
+body.upl-album-open .pc-card {
+  z-index: 1300;   /* above upl-overlay (1200) */
+  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px + 72vh);
+  left: 16px; right: 16px;
+}

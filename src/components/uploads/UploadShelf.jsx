@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Pause, Shuffle, X, Music2 } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
@@ -31,12 +31,12 @@ function group(uploads, sort) {
 /* ── convert upload track to PlayerContext shape ─────────── */
 function toPlayerTrack(t, albumCover) {
   return {
-    id:          t.id,
-    title:       t.title || 'Untitled',
-    artistName:  t.artist || '',
+    id:           t.id,
+    title:        t.title || 'Untitled',
+    artistName:   t.artist || '',
     releaseCover: t.artworkUrl || albumCover || '',
     releaseTitle: t.album || t.title || '',
-    src:         t.fileUrl || '',
+    src:          t.fileUrl || '',
   };
 }
 
@@ -64,8 +64,14 @@ function AlbumModal({ alb, onClose }) {
   const { playTrack } = usePlayer();
   const [activeId, setActiveId] = useState(null);
 
+  /* Mark body so Player CSS can float above the sheet */
+  useEffect(() => {
+    document.body.classList.add('upl-album-open');
+    return () => document.body.classList.remove('upl-album-open');
+  }, []);
+
   function handlePlayTrack(t) {
-    const pt = toPlayerTrack(t, alb.artworkUrl);
+    const pt    = toPlayerTrack(t, alb.artworkUrl);
     const queue = alb.tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
     playTrack(pt, queue);
     setActiveId(t.id);
@@ -85,21 +91,23 @@ function AlbumModal({ alb, onClose }) {
       <div className="upl-sheet" onClick={e=>e.stopPropagation()}>
         <div className="upl-handle"/>
 
-        {/* header */}
-        <div className="upl-sheet-hdr">
+        {/* ── Large square artwork ── */}
+        <div className="upl-art-wrap">
           {alb.artworkUrl
-            ? <img src={alb.artworkUrl} alt={alb.album} className="upl-sheet-art"/>
-            : <div className="upl-sheet-art upl-sheet-art-ph"><Music2 size={34} strokeWidth={1.2}/></div>
+            ? <img src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
+            : <div className="upl-art-big upl-art-big-ph"><Music2 size={52} strokeWidth={1}/></div>
           }
-          <div className="upl-sheet-meta">
-            <div className="upl-sheet-album">{alb.album}</div>
-            <div className="upl-sheet-artist">{alb.artist}</div>
-            <div className="upl-sheet-count">{alb.tracks.length} tracks · Private</div>
-          </div>
           <button className="upl-sheet-close" onClick={onClose}><X size={15}/></button>
         </div>
 
-        {/* play controls */}
+        {/* ── Metadata ── */}
+        <div className="upl-sheet-meta">
+          <div className="upl-sheet-album">{alb.album}</div>
+          <div className="upl-sheet-artist">{alb.artist}</div>
+          <div className="upl-sheet-count">{alb.tracks.length} tracks · Private</div>
+        </div>
+
+        {/* ── Play controls ── */}
         <div className="upl-sheet-ctrls">
           <button className="upl-ctrl upl-ctrl-primary" onClick={()=>handlePlayAll(false)}>
             <Play size={15} fill="currentColor"/> Play
@@ -109,7 +117,7 @@ function AlbumModal({ alb, onClose }) {
           </button>
         </div>
 
-        {/* track list */}
+        {/* ── Track list ── */}
         <div className="upl-sheet-tracks">
           {alb.tracks.map((t,i) => (
             <button key={t.id}
@@ -142,12 +150,12 @@ const SORTS = [
 
 export default function UploadShelf({ uploads }) {
   const { playTrack } = usePlayer();
-  const [sort, setSort]       = useState('newest');
+  const [sort, setSort]         = useState('newest');
   const [activeAlb, setActiveAlb] = useState(null);
   const items = group(uploads, sort);
 
   function handleSingleTrack(item) {
-    const pt = toPlayerTrack(item, null);
+    const pt      = toPlayerTrack(item, null);
     const singles = items.filter(x=>x._type==='track').map(x=>toPlayerTrack(x,null));
     playTrack(pt, singles);
   }

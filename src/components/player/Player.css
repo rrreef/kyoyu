@@ -6,7 +6,7 @@
   left: 12px;
   right: 12px;
   bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px);  /* above UITabBar */
-  z-index: 200;
+  z-index: 1300;          /* always above modals */
   border-radius: 22px;
   padding: 14px 18px 12px;
 
@@ -150,11 +150,11 @@
   top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 500;
+  z-index: 1400;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 5px;
+  gap: 10px;
+  padding: 7px 16px 7px 7px;  /* breathing room from pill edges */
   border-radius: 100px;
   background: #000;
   cursor: pointer;
@@ -166,11 +166,12 @@
   to   { transform: translateX(-50%) scale(1);   opacity: 1; }
 }
 .pc-island-art {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;          /* square, not circular */
   object-fit: cover;
   flex-shrink: 0;
+  margin-left: 2px;            /* extra space from left edge */
 }
 .pc-island-art-ph {
   display: flex;
@@ -178,6 +179,7 @@
   justify-content: center;
   background: rgba(255,255,255,.1);
   color: rgba(255,255,255,.4);
+  border-radius: 8px;
 }
 .pc-island-info {
   display: flex;
@@ -191,6 +193,10 @@
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Extra right margin on waveform so it's not flush with pill edge */
+.pc-island .pc-wave--sm {
+  margin-right: 2px;
 }
 
 /* ── Progress ────────────────────────────────────────────────── */
