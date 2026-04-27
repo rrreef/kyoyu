@@ -5,7 +5,7 @@
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: 96px;           /* sits above the GlassTabBar */
+  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px);  /* above UITabBar */
   z-index: 200;
   border-radius: 22px;
   padding: 14px 18px 12px;

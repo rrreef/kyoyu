@@ -23,7 +23,8 @@
   -webkit-backdrop-filter: blur(14px);
   z-index: 1200;
   display: flex; align-items: flex-end;
-  padding-bottom: 82px; /* clears the native tab bar */
+  /* Use Swift-injected --kyoyu-tab-h so sheet always clears native UITabBar */
+  padding-bottom: var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom)));
   animation: upl-fade-in .2s ease;
 }
 @keyframes upl-fade-in { from{opacity:0} to{opacity:1} }
