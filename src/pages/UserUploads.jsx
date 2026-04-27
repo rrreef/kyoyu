@@ -226,7 +226,7 @@ export default function UserUploads() {
           {files.map(({file,id},i)=>(
             <button key={id} className={`uu-tab${i===active?' active':''}`} onClick={()=>setActive(i)}>
               {metas[i]?.artworkUrl?<img src={metas[i].artworkUrl} alt="" className="uu-tab-art"/>:<span className="uu-tab-num">{i+1}</span>}
-              <span>{metas[i]?.title||stripExt(file.name)}</span>
+              <span className="uu-tab-frac">{i+1}/{files.length}</span>
             </button>
           ))}
         </div>

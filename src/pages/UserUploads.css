@@ -67,10 +67,11 @@
 /* ── Step 1: Track Info ──────────────────────────────────────── */
 .uu-tabs { display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none; }
 .uu-tabs::-webkit-scrollbar { display:none; }
-.uu-tab { display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:.5px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s; }
-.uu-tab.active { background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff; }
-.uu-tab-art { width:20px;height:20px;border-radius:5px;object-fit:cover; }
-.uu-tab-num { width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,.1);font-size:.65rem;display:flex;align-items:center;justify-content:center; }
+.uu-tab { display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:100px;background:rgba(255,255,255,.05);border:.5px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0; }
+.uu-tab.active { background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28);color:#fff; }
+.uu-tab-art { width:22px;height:22px;border-radius:6px;object-fit:cover;flex-shrink:0; }
+.uu-tab-num { width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.1);font-size:.63rem;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.uu-tab-frac { font-size:.72rem;font-weight:700;letter-spacing:-.01em; }
 
 .uu-track-form { display:flex;flex-direction:column;gap:12px;padding:0 16px 120px; }
 
