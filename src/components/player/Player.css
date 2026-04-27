@@ -50,8 +50,14 @@
   left: 12px; right: 12px;
   z-index: 1300;
   border-radius: 26px;
-  /* push content below the camera / DI hardware */
-  padding: calc(var(--kyoyu-top-h, 59px) + 10px) 16px 14px;
+  /*
+   * env(safe-area-inset-top) is the native CSS function that returns
+   * the exact top safe area for THIS device automatically.
+   * Works on iPhone SE (20pt), 13 (47pt), 14-17 Pro (59-62pt), etc.
+   * --kyoyu-top-h (injected by Swift) is the same value and serves
+   * as the fallback for the inline style in App.jsx.
+   */
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 14px;
   background: rgba(18,18,22,.97);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -121,11 +127,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Controls */
+/* Controls — prev/play/next centered; AirPlay at far right */
+.di-ctrls-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
 .di-ctrls {
-  display: flex; align-items: center;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 36px;
+  flex: 1;             /* takes all space so the trio is truly centred */
 }
 .di-btn {
   display: flex; align-items: center; justify-content: center;
@@ -134,7 +147,12 @@
   transition: opacity .15s, transform .1s;
 }
 .di-btn:active { transform: scale(.88); opacity: .6; }
-.di-btn--air   { margin-left: auto; color: rgba(255,255,255,.5); }
+.di-btn--air {
+  position: absolute;
+  right: 0;
+  color: rgba(255,255,255,.5);
+}
+.di-btn--air:hover { color: #fff; }
 
 /* ══════════════════════════════════════════════════════
    Equalizer bars (shared)

@@ -99,19 +99,21 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
       </div>
 
       {/* Row 3: controls */}
-      <div className="di-ctrls">
-        <button className="di-btn" onClick={()=>dispatch({type:'PREV_TRACK'})}>
-          <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
-        </button>
-        <button className="di-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
-          {isPlaying
-            ? <Pause size={30} fill="currentColor" strokeWidth={0}/>
-            : <Play  size={30} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>
-          }
-        </button>
-        <button className="di-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}>
-          <SkipForward size={26} fill="currentColor" strokeWidth={0}/>
-        </button>
+      <div className="di-ctrls-row">
+        <div className="di-ctrls">
+          <button className="di-btn" onClick={()=>dispatch({type:'PREV_TRACK'})}>
+            <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
+          </button>
+          <button className="di-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
+            {isPlaying
+              ? <Pause size={30} fill="currentColor" strokeWidth={0}/>
+              : <Play  size={30} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>
+            }
+          </button>
+          <button className="di-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}>
+            <SkipForward size={26} fill="currentColor" strokeWidth={0}/>
+          </button>
+        </div>
         <button className="di-btn di-btn--air"><AirPlayIcon/></button>
       </div>
     </div>
