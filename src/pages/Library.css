@@ -259,3 +259,17 @@
   white-space: nowrap;
 }
 .lib-sort-btn:hover { color: var(--text-primary); }
+
+/* ── My Uploads ───────────────────────────────────────────── */
+.lib-uploads-sorts { display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px 10px; }
+.lib-upl-sort { padding:5px 12px;border-radius:100px;font-size:.72rem;font-weight:600;background:rgba(255,255,255,.06);border:.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);cursor:pointer;transition:all .15s; }
+.lib-upl-sort.active { background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff; }
+.lib-uploads-list { display:flex;flex-direction:column;gap:6px;padding:0 16px 120px; }
+.lib-upl-row { display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px; }
+.lib-upl-art { width:42px;height:42px;border-radius:10px;object-fit:cover;flex-shrink:0; }
+.lib-upl-art-ph { background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3); }
+.lib-upl-info { flex:1;min-width:0; }
+.lib-upl-title { font-size:.85rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.lib-upl-sub { font-size:.7rem;color:rgba(255,255,255,.38);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.lib-upl-del { width:28px;height:28px;border-radius:50%;background:transparent;border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.22);cursor:pointer;flex-shrink:0;transition:color .2s; }
+.lib-upl-del:hover { color:#ff4444; }

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle } from 'lucide-react';
+import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History } from 'lucide-react';
 import * as mm from 'music-metadata-browser';
 import InlinePlayer from '../components/player/InlinePlayer';
+import { useAuth } from '../contexts/AuthContext';
 import './UserUploads.css';
 
 /* ─── helpers ───────────────────────────────────────────────── */
@@ -54,20 +55,51 @@ const STEPS = ['Files','Track Info','Review'];
 
 const isNativeApp = () => navigator.userAgent.includes('KyoyuApp');
 
+const SORT_OPTS = [
+  { key:'newest', label:'Newest' },
+  { key:'oldest', label:'Oldest' },
+  { key:'artist', label:'Artist A–Z' },
+  { key:'label',  label:'Label A–Z' },
+];
+function sortUploads(arr, s) {
+  const c=[...arr];
+  if(s==='oldest') return c.sort((a,b)=>(a.savedAt||0)-(b.savedAt||0));
+  if(s==='artist') return c.sort((a,b)=>(a.artist||'').localeCompare(b.artist||''));
+  if(s==='label')  return c.sort((a,b)=>(a.label||'').localeCompare(b.label||''));
+  return c.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0)); // newest
+}
+
 export default function UserUploads() {
+  const { user } = useAuth();
+  const UPLOAD_KEY = `kyoyu-uploads-${user?.id||'anon'}`;
   const [step,        setStep]        = useState(0);
-  const [files,       setFiles]       = useState([]);   // [{file,id}]
+  const [files,       setFiles]       = useState([]);
   const [metas,       setMetas]       = useState([]);
   const [active,      setActive]      = useState(0);
-  const [saved,       setSaved]       = useState([]);
+  const [saved,       setSaved]       = useState(() => { try { return JSON.parse(localStorage.getItem(`kyoyu-uploads-${typeof window!=='undefined'?'_init':''}`) || '[]'); } catch { return []; } });
   const [playing,     setPlaying]     = useState(null);
   const [dragging,    setDragging]    = useState(false);
   const [rejected,    setRejected]    = useState([]);
   const [advanced,    setAdvanced]    = useState(false);
   const [audioUrls,   setAudioUrls]   = useState({});
+  const [showPrev,    setShowPrev]    = useState(false);
+  const [prevSort,    setPrevSort]    = useState('newest');
   const fileRef    = useRef();
   const artRefs    = useRef([]);
   const audioRef   = useRef(new Audio());
+
+  /* Load saved uploads from localStorage once user ID is known */
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `kyoyu-uploads-${user.id}`;
+    try { const s = localStorage.getItem(key); if(s) setSaved(JSON.parse(s)); } catch {}
+  }, [user?.id]);
+
+  /* Persist saved to localStorage whenever it changes */
+  useEffect(() => {
+    if (!user?.id) return;
+    try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(saved)); } catch {}
+  }, [saved, user?.id]);
 
   /* Register native upload result handler */
   useEffect(() => {
@@ -142,7 +174,7 @@ export default function UserUploads() {
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
   function saveAll(){
-    setSaved(prev=>[...metas.map((m,i)=>({...m,fileUrl:audioUrls[files[i]?.id],format:ext(files[i].file),size:fmtBytes(files[i].file.size)})),...prev]);
+    setSaved(prev=>[...metas.map((m,i)=>({...m,fileUrl:audioUrls[files[i]?.id],format:ext(files[i].file),size:fmtBytes(files[i].file.size),savedAt:Date.now()})),...prev]);
     setFiles([]);setMetas([]);setStep(0);setActive(0);
   }
   function removeSaved(id){setSaved(p=>p.filter(t=>t.id!==id));if(playing===id){audioRef.current.pause();setPlaying(null);}}
@@ -193,17 +225,42 @@ export default function UserUploads() {
 
       {files.length>0&&<button className="uu-next-btn" onClick={()=>setStep(1)}>Next — Track Info <ChevronRight size={15}/></button>}
 
+      {/* ── Previously Uploaded ── */}
       {saved.length>0&&(
-        <div className="uu-library">
-          <div className="uu-library-hdr">Library</div>
-          {saved.map(t=>(
-            <div key={t.id} className={`uu-track glass${playing===t.id?' playing':''}`}>
-              {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
-              <div className="uu-track-info"><div className="uu-track-title">{t.title}</div><div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div></div>
-              <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
-              <button className="uu-del" onClick={()=>removeSaved(t.id)}><Trash2 size={13}/></button>
-            </div>
-          ))}
+        <div className="uu-prev-section">
+          <button className="uu-prev-toggle glass" onClick={()=>setShowPrev(v=>!v)}>
+            <History size={14}/>
+            <span>Previously uploaded</span>
+            <span className="uu-prev-count">{saved.length}</span>
+            <ChevronDown size={14} className={`uu-chev${showPrev?' open':''}`}/>
+          </button>
+
+          {showPrev&&(
+            <>
+              {/* Sort pills */}
+              <div className="uu-prev-sorts">
+                {SORT_OPTS.map(o=>(
+                  <button key={o.key} className={`uu-prev-sort${prevSort===o.key?' active':''}`}
+                    onClick={()=>setPrevSort(o.key)}>{o.label}</button>
+                ))}
+              </div>
+
+              {/* List */}
+              <div className="uu-prev-list">
+                {sortUploads(saved,prevSort).map(t=>(
+                  <div key={t.id} className={`uu-track glass${playing===t.id?' playing':''}`}>
+                    {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
+                    <div className="uu-track-info">
+                      <div className="uu-track-title">{t.title}</div>
+                      <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                    </div>
+                    <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
+                    <button className="uu-del" onClick={()=>removeSaved(t.id)}><Trash2 size={13}/></button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

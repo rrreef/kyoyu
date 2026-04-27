@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react';
+import { Play, Plus, Wand2, ArrowUpDown, ChevronUp, ChevronDown, Music2, Trash2 } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useAuth } from '../contexts/AuthContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { ReleaseCard } from '../components/ui/Cards';
 import './Library.css';
@@ -14,6 +15,7 @@ const FILTERS = [
   { key: 'podcasts',  label: 'Podcasts'  },
   { key: 'following', label: 'Following' },
   { key: 'downloads', label: 'Downloads' },
+  { key: 'uploads',   label: 'My Uploads'},
 ];
 
 // Sub-filters that appear when Likes is active
@@ -24,10 +26,34 @@ const LIKES_SUB = [
 
 export default function Library() {
   const [activeFilter, setFilter]    = useState('likes');
-  const [likesSub,     setLikesSub]  = useState('releases');   // releases | playlists
-  const [sortDesc,     setSort]      = useState(true);          // true = recent first
+  const [likesSub,     setLikesSub]  = useState('releases');
+  const [sortDesc,     setSort]      = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [myUploads,    setMyUploads]  = useState([]);
+  const [uploadsSort,  setUploadsSort]= useState('newest');
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      setMyUploads(raw ? JSON.parse(raw) : []);
+    } catch {}
+  }, [user?.id, activeFilter]);
+
+  function sortUpl(arr) {
+    const c = [...arr];
+    if(uploadsSort==='oldest') return c.sort((a,b)=>(a.savedAt||0)-(b.savedAt||0));
+    if(uploadsSort==='artist') return c.sort((a,b)=>(a.artist||'').localeCompare(b.artist||''));
+    if(uploadsSort==='label')  return c.sort((a,b)=>(a.label||'').localeCompare(b.label||''));
+    return c.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0));
+  }
+  function deleteUpload(id) {
+    const next = myUploads.filter(t=>t.id!==id);
+    setMyUploads(next);
+    if(user?.id) localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next));
+  }
 
   const { savedReleases, playlists, downloads, followedArtists, createPlaylist } = useLibrary();
   const { playRelease } = usePlayer();
@@ -234,6 +260,41 @@ export default function Library() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* My Uploads */}
+      {activeFilter === 'uploads' && (
+        <div>
+          {myUploads.length === 0 ? (
+            <div className="lib-empty">
+              <p>No uploads yet.</p>
+              <Link to="/uploads" className="lib-empty-link">Upload your first track →</Link>
+            </div>
+          ) : (
+            <>
+              <div className="lib-uploads-sorts">
+                {[{key:'newest',label:'Newest'},{key:'oldest',label:'Oldest'},{key:'artist',label:'Artist'},{key:'label',label:'Label'}].map(o=>(
+                  <button key={o.key} className={`lib-upl-sort${uploadsSort===o.key?' active':''}`} onClick={()=>setUploadsSort(o.key)}>{o.label}</button>
+                ))}
+              </div>
+              <div className="lib-uploads-list">
+                {sortUpl(myUploads).map(t=>(
+                  <div key={t.id} className="lib-upl-row glass">
+                    {t.artworkUrl
+                      ? <img src={t.artworkUrl} alt="" className="lib-upl-art"/>
+                      : <div className="lib-upl-art lib-upl-art-ph"><Music2 size={14}/></div>
+                    }
+                    <div className="lib-upl-info">
+                      <div className="lib-upl-title">{t.title||'Untitled'}</div>
+                      <div className="lib-upl-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                    </div>
+                    <button className="lib-upl-del" onClick={()=>deleteUpload(t.id)}><Trash2 size={13}/></button>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

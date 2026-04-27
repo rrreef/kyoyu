@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
-import { Play, ArrowRight, TrendingUp, Zap, Radio } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, ArrowRight, TrendingUp, Zap, Radio, Music2 } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useAuth } from '../contexts/AuthContext';
 import './Home.css';
 
 /* ── Compact shelf card for playlists / radios ── */
@@ -29,7 +30,17 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
 
 export default function Home() {
   const { playRelease, playTrack } = usePlayer();
+  const { user } = useAuth();
   const featured = releases[0];
+  const [myUploads, setMyUploads] = useState([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      setMyUploads(raw ? JSON.parse(raw).slice(0,10) : []);
+    } catch {}
+  }, [user?.id]);
 
   // Shelf filter state
   const [shelfFilter, setShelfFilter]   = useState('all');       // all | music | podcast | suggestions
@@ -83,6 +94,29 @@ export default function Home() {
             </button>
           )}
         </div>
+
+        {/* My Uploads */}
+        {myUploads.length > 0 && (
+          <>
+            <div className="shelf-row-label">My Uploads <Link to="/uploads" style={{fontSize:'.7rem',color:'rgba(255,255,255,.35)',marginLeft:6}}>See all</Link></div>
+            <div className="scroll-row">
+              {myUploads.map(t => (
+                <div key={t.id} className="shelf-card">
+                  <div className="shelf-card-art">
+                    {t.artworkUrl
+                      ? <img src={t.artworkUrl} alt={t.title}/>
+                      : <div style={{width:'100%',height:'100%',background:'rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center'}}><Music2 size={20} color="rgba(255,255,255,.3)"/></div>
+                    }
+                  </div>
+                  <div className="shelf-card-info">
+                    <div className="shelf-card-title">{t.title||'Untitled'}</div>
+                    <div className="shelf-card-sub">{t.artist||'Unknown artist'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* My Playlists */}
         {showPlaylists && (
