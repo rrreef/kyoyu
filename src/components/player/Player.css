@@ -5,14 +5,14 @@
    ══════════════════════════════════════════════════════ */
 .di-mini {
   position: fixed;
-  top: 8px;               /* AT the DI camera level, not below it */
+  top: 14px;              /* at DI hardware level, slightly lower than before */
   left: 50%;
   transform: translateX(-50%);
   z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 172px;           /* compact — matches DI extended state */
+  width: 195px;           /* slightly wider so artwork + waveform breathe */
   height: 34px;
   padding: 4px 10px 4px 4px;
   border-radius: 100px;
@@ -46,18 +46,16 @@
    ══════════════════════════════════════════════════════ */
 .di-exp {
   position: fixed;
-  top: 0;               /* flush with screen top — AT camera level */
+  /*
+   * Start just BELOW the Dynamic Island hardware.
+   * env(safe-area-inset-top) = DI + status bar height for this device.
+   * +8px gap so all 4 card corners are fully visible (not cropped by screen).
+   */
+  top: calc(env(safe-area-inset-top) + 8px);
   left: 12px; right: 12px;
   z-index: 1300;
-  border-radius: 26px;
-  /*
-   * env(safe-area-inset-top) is the native CSS function that returns
-   * the exact top safe area for THIS device automatically.
-   * Works on iPhone SE (20pt), 13 (47pt), 14-17 Pro (59-62pt), etc.
-   * --kyoyu-top-h (injected by Swift) is the same value and serves
-   * as the fallback for the inline style in App.jsx.
-   */
-  padding: calc(env(safe-area-inset-top) + 10px) 16px 14px;
+  border-radius: 20px;    /* all 4 corners rounded and visible */
+  padding: 12px 16px 14px;
   background: rgba(18,18,22,.97);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);

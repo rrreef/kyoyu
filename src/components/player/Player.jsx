@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
-import { Play, Pause, SkipBack, SkipForward, Music2 } from 'lucide-react';
+import { Play, Pause, Rewind, FastForward, Music2 } from 'lucide-react';
 import './Player.css';
 
 function fmt(s) {
@@ -102,7 +102,7 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
       <div className="di-ctrls-row">
         <div className="di-ctrls">
           <button className="di-btn" onClick={()=>dispatch({type:'PREV_TRACK'})}>
-            <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
+            <Rewind size={26} fill="currentColor" strokeWidth={0}/>
           </button>
           <button className="di-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
             {isPlaying
@@ -111,7 +111,7 @@ function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, disp
             }
           </button>
           <button className="di-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}>
-            <SkipForward size={26} fill="currentColor" strokeWidth={0}/>
+            <FastForward size={26} fill="currentColor" strokeWidth={0}/>
           </button>
         </div>
         <button className="di-btn di-btn--air"><AirPlayIcon/></button>
