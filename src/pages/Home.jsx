@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Play, ArrowRight, TrendingUp, Zap, Radio, Music2, Lock } from 'lucide-react';
+import { Play, ArrowRight, TrendingUp, Zap, Radio, Lock } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
+import UploadShelf from '../components/uploads/UploadShelf';
 import './Home.css';
 
 /* ── Compact shelf card for playlists / radios ── */
@@ -210,17 +211,10 @@ export default function Home() {
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
             <Link to="/uploads">See All <ArrowRight size={12}/></Link>
           </div>
-          <div className="scroll-row">
-            {myUploads.map(t => (
-              <ShelfCard key={t.id}
-                cover={t.artworkUrl || ''}
-                title={t.title || 'Untitled'}
-                sub={t.artist || 'Unknown artist'}
-              />
-            ))}
-          </div>
+          <UploadShelf uploads={myUploads}/>
         </section>
       )}
+
 
       {/* New Releases */}
       <section className="home-section">

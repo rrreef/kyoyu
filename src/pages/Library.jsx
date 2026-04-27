@@ -5,6 +5,7 @@ import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
+import UploadShelf from '../components/uploads/UploadShelf';
 import './Library.css';
 
 /* ── Shelf card — identical to Home ───────────────────────── */
@@ -243,16 +244,7 @@ export default function Library() {
           ? <div className="lib-empty"><p>No uploads yet.</p><Link to="/uploads" className="lib-empty-link">Upload your first track →</Link></div>
           : <>
               <div className="shelf-row-label" style={{display:'flex',alignItems:'center',gap:5}}><Lock size={11}/> My Uploads</div>
-              <div className="lib-uploads-sorts">
-                {[{key:'newest',label:'Newest'},{key:'oldest',label:'Oldest'},{key:'artist',label:'Artist'},{key:'label',label:'Label'}].map(o=>(
-                  <button key={o.key} className={`lib-upl-sort${uploadsSort===o.key?' active':''}`} onClick={()=>setUploadsSort(o.key)}>{o.label}</button>
-                ))}
-              </div>
-              <div className="scroll-row">
-                {sortUpl(myUploads).map(t=>(
-                  <ShelfCard key={t.id} cover={t.artworkUrl||''} title={t.title||'Untitled'} sub={t.artist||''}/>
-                ))}
-              </div>
+              <UploadShelf uploads={myUploads}/>
             </>
       )}
 
