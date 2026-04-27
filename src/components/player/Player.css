@@ -1,20 +1,21 @@
 /* ══════════════════════════════════════════════════════
    Mini Dynamic Island — img_11
-   Sits AT the Dynamic Island hardware level (top: 8px)
-   Small compact pill, artwork left + eq bars right
+   top:8px centers a 44px-tall pill over the DI camera
+   (DI camera center ≈ y30px; pill center = 8+22 = 30px)
+   width:230px covers the camera lens contour fully
    ══════════════════════════════════════════════════════ */
 .di-mini {
   position: fixed;
-  top: 16px;              /* sweet spot: 14=too high, 20=too low */
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 195px;           /* slightly wider so artwork + waveform breathe */
-  height: 34px;
-  padding: 4px 10px 4px 4px;
+  width: 230px;
+  height: 44px;
+  padding: 6px 14px 6px 6px;
   border-radius: 100px;
   background: #000;
   cursor: pointer;
@@ -26,8 +27,8 @@
   to   { transform:translateX(-50%) scale(1);  opacity:1; }
 }
 .di-mini-art {
-  width: 26px; height: 26px;
-  border-radius: 5px;
+  width: 34px; height: 34px;
+  border-radius: 7px;
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -35,27 +36,23 @@
   display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,.12);
   color: rgba(255,255,255,.4);
-  border-radius: 5px;
+  border-radius: 7px;
 }
+
 
 /* ══════════════════════════════════════════════════════
    Expanded Dynamic Island — img_12
-   Flat top (no corners to clip), rounded bottom only.
-   Flush from screen top like iOS Live Activities.
+   Starts at env(safe-area-inset-top) so ALL 4 corners
+   are visible and no border touches the screen edge.
+   At that depth, screen corner clipping is not an issue.
    ══════════════════════════════════════════════════════ */
 .di-exp {
   position: fixed;
-  /*
-   * Flush from screen top — no top corners means nothing gets
-   * clipped by the iPhone's own ~47pt screen rounded corners.
-   * Only bottom corners are rounded (standard iOS DI pattern).
-   * Content pushed below the DI hardware via padding-top.
-   */
-  top: 0;
-  left: 8px; right: 8px;
+  top: env(safe-area-inset-top);   /* just below DI + status bar */
+  left: 12px; right: 12px;
   z-index: 1300;
-  border-radius: 0 0 20px 20px;    /* flat top, rounded bottom only */
-  padding: calc(env(safe-area-inset-top) + 8px) 16px 14px;
+  border-radius: 20px;              /* all 4 corners visible */
+  padding: 14px 16px 14px;          /* normal padding — already below camera */
   background: rgba(18,18,22,.97);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);

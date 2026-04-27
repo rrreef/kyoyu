@@ -29,6 +29,14 @@ function AirPlayIcon() {
 function MiniIsland({ track, isPlaying, onExpand }) {
   const startY = useRef(0);
 
+  // Hide native status bar while mini pill is visible
+  useEffect(() => {
+    try { window.webkit.messageHandlers.statusBar.postMessage('hide'); } catch(e){}
+    return () => {
+      try { window.webkit.messageHandlers.statusBar.postMessage('show'); } catch(e){}
+    };
+  }, []);
+
   function onTouchStart(e) { startY.current = e.touches[0].clientY; }
   function onTouchEnd(e) {
     const dy = e.changedTouches[0].clientY - startY.current;
@@ -55,6 +63,12 @@ function MiniIsland({ track, isPlaying, onExpand }) {
 function ExpandedIsland({ track, isPlaying, progress, duration, onCollapse, dispatch }) {
   const scrubRef = useRef(null);
   const startY   = useRef(0);
+
+  // Restore native status bar when expanded player is visible
+  useEffect(() => {
+    try { window.webkit.messageHandlers.statusBar.postMessage('show'); } catch(e){}
+  }, []);
+
   const pct = duration ? (progress/duration)*100 : 0;
   const rem = Math.max(0, duration - progress);
 
