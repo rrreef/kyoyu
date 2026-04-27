@@ -1,0 +1,247 @@
+/* ═══ InlinePlayer — iOS 26 Liquid Glass (Design 2) ════════════ */
+
+.ip-card {
+  position: relative;
+  border-radius: 22px;
+  padding: 16px 18px 14px;
+  overflow: hidden;
+
+  /* Glass base */
+  background: rgba(28, 28, 32, 0.6);
+  backdrop-filter: blur(48px) saturate(200%) brightness(1.1);
+  -webkit-backdrop-filter: blur(48px) saturate(200%) brightness(1.1);
+
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.25),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    inset 1px 0 0 rgba(255,255,255,0.12),
+    inset -1px 0 0 rgba(255,255,255,0.06),
+    0 24px 64px rgba(0,0,0,0.65),
+    0 4px 18px rgba(0,0,0,0.4);
+}
+
+/* ── Artwork blurred backdrop ────────────────────────────────── */
+.ip-art-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(32px) saturate(180%) brightness(0.35);
+  transform: scale(1.15);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Prismatic iridescent border ─────────────────────────────── */
+.ip-prism {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  pointer-events: none;
+  z-index: 20;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgba(28,28,32,0) 0%, rgba(28,28,32,0) 100%) padding-box,
+    linear-gradient(
+      130deg,
+      rgba(255, 80, 80,  0.55) 0%,
+      rgba(255,190,  0,  0.30) 20%,
+      rgba( 60,120,255,  0.40) 40%,
+      rgba(180,  0,255,  0.25) 60%,
+      rgba( 30,200,200,  0.35) 80%,
+      rgba(255,255,255,  0.50) 100%
+    ) border-box;
+}
+
+/* ── All inner content above backdrop ───────────────────────── */
+.ip-header,
+.ip-scrubber-row,
+.ip-controls { position: relative; z-index: 5; }
+
+/* ── Header ──────────────────────────────────────────────────── */
+.ip-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.ip-art {
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow:
+    0 6px 20px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.ip-art-ph {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.ip-info { flex: 1; min-width: 0; }
+
+.ip-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ip-artist {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.55);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Waveform ────────────────────────────────────────────────── */
+.ip-wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.ip-wave span {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.65);
+  height: 6px;
+}
+.ip-wave.playing span {
+  animation: ipWave 0.9s ease-in-out infinite alternate;
+}
+.ip-wave.playing span:nth-child(1) { animation-delay: 0ms;   animation-duration: 0.72s; }
+.ip-wave.playing span:nth-child(2) { animation-delay: 130ms; animation-duration: 0.88s; }
+.ip-wave.playing span:nth-child(3) { animation-delay: 60ms;  animation-duration: 0.63s; }
+.ip-wave.playing span:nth-child(4) { animation-delay: 200ms; animation-duration: 0.79s; }
+@keyframes ipWave {
+  from { height: 4px; opacity: 0.45; }
+  to   { height: 18px; opacity: 1; }
+}
+
+/* ── Scrubber ────────────────────────────────────────────────── */
+.ip-scrubber-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ip-time {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.55);
+  min-width: 36px;
+}
+.ip-time:last-child { text-align: right; }
+
+.ip-track-wrap {
+  flex: 1;
+  position: relative;
+  height: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.ip-track-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.15);
+}
+
+.ip-track-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.85);
+  pointer-events: none;
+}
+
+/* Range input — transparent but provides the draggable thumb */
+.ip-scrubber {
+  position: absolute;
+  inset: -10px 0;
+  width: 100%;
+  height: 24px;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
+}
+
+/* Visible thumb via box-shadow trick on the track-wrap */
+.ip-track-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  left: calc(var(--pct, 0) * 1%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.5);
+  pointer-events: none;
+  transition: width 0.1s, height 0.1s;
+}
+
+/* ── Controls ────────────────────────────────────────────────── */
+.ip-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
+.ip-ctrl {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.8);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.12s;
+}
+.ip-ctrl:hover  { color: #fff; }
+.ip-ctrl:active { transform: scale(0.88); }
+
+/* Central play button — dark solid glass circle like Design 2 */
+.ip-play-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s, background 0.15s;
+
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.4),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    0 6px 24px rgba(0,0,0,0.5);
+}
+.ip-play-btn:hover  { background: rgba(255,255,255,0.22); transform: scale(1.06); }
+.ip-play-btn:active { transform: scale(0.93); }

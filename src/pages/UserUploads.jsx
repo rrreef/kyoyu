@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle } from 'lucide-react';
 import * as mm from 'music-metadata-browser';
+import InlinePlayer from '../components/player/InlinePlayer';
 import './UserUploads.css';
 
 /* ─── helpers ───────────────────────────────────────────────── */
@@ -196,7 +197,12 @@ export default function UserUploads() {
             </div>
           )}
           <div className="uu-file-chip"><File size={11}/>{files[active]?.file.name}<span className="uu-fmt">{ext(files[active]?.file??{name:'x.mp3'})}</span></div>
-          {audioUrls[files[active]?.id]&&<audio key={files[active]?.id} controls src={audioUrls[files[active].id]} className="uu-player"/>}
+          <InlinePlayer
+            src={audioUrls[files[active]?.id]}
+            artworkUrl={m.artworkUrl}
+            title={m.title}
+            artist={m.artist}
+          />
         </div>
 
         {/* Fields */}

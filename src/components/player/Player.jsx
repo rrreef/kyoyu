@@ -1,119 +1,96 @@
+import { useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import {
-  Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
-  Shuffle, Repeat, Repeat1, Heart, ChevronUp, List
-} from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Heart } from 'lucide-react';
 import './Player.css';
 
-function formatTime(s) {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
+function fmt(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-function WaveBar({ delay }) {
-  return <div className="wave-bar" style={{ animationDelay: `${delay}ms` }} />;
+/* Animated waveform bars */
+function Waveform({ active }) {
+  return (
+    <div className={`pc-wave${active ? ' playing' : ''}`}>
+      {[0,1,2,3].map(i => <span key={i} style={{ '--i': i }} />)}
+    </div>
+  );
 }
 
 export default function Player() {
   const { state, dispatch } = usePlayer();
   const { isLiked, toggleLike } = useLibrary();
-  const { currentTrack, isPlaying, progress, duration, volume, isMuted, isShuffled, repeatMode } = state;
+  const trackRef = useRef(null);
+  const { currentTrack, isPlaying, progress, duration, repeatMode, isShuffled } = state;
 
   if (!currentTrack) return null;
 
-  const liked = isLiked(currentTrack.id);
-  const progressPercent = duration ? (progress / duration) * 100 : 0;
+  const liked    = isLiked(currentTrack.id);
+  const pct      = duration ? (progress / duration) * 100 : 0;
+  const remaining= duration - progress;
+
+  function seek(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    dispatch({ type: 'SET_PROGRESS', value: Math.floor(((e.clientX - rect.left) / rect.width) * duration) });
+  }
 
   return (
-    <div className="player-bar glass">
-      {/* Track info */}
-      <div className="player-info">
-        <div className="player-cover">
-          <img src={currentTrack.releaseCover} alt={currentTrack.releaseTitle} />
-          {isPlaying && (
-            <div className="player-cover-waves">
-              <WaveBar delay={0} />
-              <WaveBar delay={150} />
-              <WaveBar delay={300} />
-              <WaveBar delay={150} />
-            </div>
-          )}
+    <div className="pc-card">
+      {/* Prismatic border ring */}
+      <div className="pc-prism" />
+
+      {/* Header row: title centred + waveform right */}
+      <div className="pc-header">
+        <div className="pc-text">
+          <div className="pc-title">{currentTrack.title}</div>
+          <div className="pc-artist">{currentTrack.artistName}</div>
         </div>
-        <div className="player-meta">
-          <div className="player-title">{currentTrack.title}</div>
-          <div className="player-artist">{currentTrack.artistName}</div>
+        <Waveform active={isPlaying} />
+      </div>
+
+      {/* Progress row */}
+      <div className="pc-progress-row">
+        <span className="pc-time">{fmt(progress)}</span>
+        <div className="pc-track" ref={trackRef} onClick={seek}>
+          <div className="pc-fill" style={{ width: `${pct}%` }} />
+          <div className="pc-thumb" style={{ left: `${pct}%` }} />
         </div>
+        <span className="pc-time">-{fmt(remaining > 0 ? remaining : 0)}</span>
+      </div>
+
+      {/* Controls row */}
+      <div className="pc-controls">
         <button
-          className={`player-like-btn ${liked ? 'liked' : ''}`}
+          className={`pc-btn pc-like${liked ? ' liked' : ''}`}
           onClick={() => toggleLike(currentTrack.id)}
-          title="Like"
         >
           <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
         </button>
-      </div>
 
-      {/* Controls */}
-      <div className="player-center">
-        <div className="player-controls">
-          <button
-            className={`ctrl-btn ${isShuffled ? 'active-ctrl' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_SHUFFLE' })}
-            title="Shuffle"
-          >
-            <Shuffle size={16} />
-          </button>
-          <button className="ctrl-btn" onClick={() => dispatch({ type: 'PREV_TRACK' })} title="Previous">
-            <SkipBack size={18} />
-          </button>
-          <button
-            className="play-btn"
-            onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: 2 }} />}
-          </button>
-          <button className="ctrl-btn" onClick={() => dispatch({ type: 'NEXT_TRACK' })} title="Next">
-            <SkipForward size={18} />
-          </button>
-          <button
-            className={`ctrl-btn ${repeatMode !== 'none' ? 'active-ctrl' : ''}`}
-            onClick={() => dispatch({ type: 'CYCLE_REPEAT' })}
-            title={`Repeat: ${repeatMode}`}
-          >
-            {repeatMode === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
-          </button>
-        </div>
-        <div className="player-progress">
-          <span className="player-time">{formatTime(progress)}</span>
-          <div
-            className="progress-track"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pct = (e.clientX - rect.left) / rect.width;
-              dispatch({ type: 'SET_PROGRESS', value: Math.floor(pct * duration) });
-            }}
-          >
-            <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
-            <div className="progress-thumb" style={{ left: `${progressPercent}%` }} />
-          </div>
-          <span className="player-time">{currentTrack.duration || formatTime(duration)}</span>
-        </div>
-      </div>
-
-      {/* Volume */}
-      <div className="player-right">
-        <button className="ctrl-btn" onClick={() => dispatch({ type: 'TOGGLE_MUTE' })}>
-          {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+        <button className="pc-btn" onClick={() => dispatch({ type: 'PREV_TRACK' })}>
+          <SkipBack size={17} fill="currentColor" />
         </button>
-        <input
-          type="range"
-          className="volume-slider"
-          min="0" max="1" step="0.01"
-          value={isMuted ? 0 : volume}
-          onChange={(e) => dispatch({ type: 'SET_VOLUME', value: parseFloat(e.target.value) })}
-        />
+
+        <button className="pc-play-btn" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}>
+          {isPlaying
+            ? <Pause size={19} fill="currentColor" />
+            : <Play  size={19} fill="currentColor" style={{ marginLeft: 2 }} />
+          }
+        </button>
+
+        <button className="pc-btn" onClick={() => dispatch({ type: 'NEXT_TRACK' })}>
+          <SkipForward size={17} fill="currentColor" />
+        </button>
+
+        {/* AirPods/output icon */}
+        <button className="pc-btn pc-output" title="Audio output">
+          <svg width="20" height="16" viewBox="0 0 20 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <circle cx="6"  cy="8" r="3" />
+            <circle cx="14" cy="8" r="3" />
+            <path d="M6 5V2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5V5" strokeLinecap="round"/>
+          </svg>
+        </button>
       </div>
     </div>
   );
