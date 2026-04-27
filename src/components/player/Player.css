@@ -1,315 +1,221 @@
-/* ═══ Player Card — iOS 26 Liquid Glass ════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   Player Card  ·  matches reference img_12
+   ══════════════════════════════════════════════════════════ */
 
-/* ── Floating card above the native tab bar ─────────────────── */
 .pc-card {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px);  /* above UITabBar */
-  z-index: 1300;          /* always above modals */
-  border-radius: 22px;
-  padding: 14px 18px 12px;
+  left: 12px; right: 12px;
+  bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 8px);
+  z-index: 1300;
+  border-radius: 20px;
+  padding: 14px 16px 12px;
 
-  /* Liquid glass base */
-  background: rgba(30, 30, 35, 0.55);
-  backdrop-filter: blur(60px) saturate(200%) brightness(1.12);
-  -webkit-backdrop-filter: blur(60px) saturate(200%) brightness(1.12);
-
-  /* Specular rim + drop shadow */
+  /* solid dark card matching reference */
+  background: rgba(18, 18, 22, 0.96);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.22),
-    inset 0 -1px 0 rgba(0,0,0,0.35),
-    inset 1px 0 0 rgba(255,255,255,0.10),
-    inset -1px 0 0 rgba(255,255,255,0.06),
-    0 20px 60px rgba(0,0,0,0.6),
-    0 4px 16px rgba(0,0,0,0.4);
+    0 8px 32px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,255,255,.08);
 
-  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* Prismatic / iridescent outer border */
-.pc-prism {
-  position: absolute;
-  inset: 0;
-  border-radius: 22px;
-  pointer-events: none;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(rgba(30,30,35,0) 0%, rgba(30,30,35,0) 100%) padding-box,
-    linear-gradient(
-      135deg,
-      rgba(255,255,255,0.35) 0%,
-      rgba(255,200,200,0.12) 20%,
-      rgba(180,180,255,0.18) 40%,
-      rgba(255,255,255,0.08) 60%,
-      rgba(200,255,200,0.10) 80%,
-      rgba(255,255,255,0.28) 100%
-    ) border-box;
-  z-index: 10;
-}
-
-/* ── Header: title + waveform ────────────────────────────────── */
-.pc-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.pc-text { flex: 1; min-width: 0; }
-
-.pc-title {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pc-artist {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.55);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Artwork row ──────────────────────────────────────────────── */
-.pc-artwork-row {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-.pc-artwork {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
-  object-fit: cover;
-  box-shadow: 0 6px 20px rgba(0,0,0,.5);
-  flex-shrink: 0;
-}
-.pc-artwork-ph {
+/* ── Row 1: artwork + info + eq bars ──────────────────────── */
+.pc-row1 {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pc-art-wrap { flex-shrink: 0; }
+
+.pc-art {
+  width: 62px;
+  height: 62px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 4px 12px rgba(0,0,0,.4);
+}
+.pc-art-ph {
+  display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,.07);
   color: rgba(255,255,255,.3);
 }
 
-/* ── Animated waveform ───────────────────────────────────────── */
-.pc-wave {
-  display: flex;
-  align-items: flex-end;
-  gap: 2.5px;
-  height: 20px;
-  flex-shrink: 0;
-  margin-left: 10px;
-  padding-top: 2px;
-}
-/* small variant — used inside Dynamic Island */
-.pc-wave--sm {
-  height: 14px;
-  margin-left: 4px;
-  gap: 2px;
-}
-.pc-wave--sm span { width: 2px !important; }
-
-.pc-wave span {
-  display: block;
-  width: 3px;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.7);
-  height: 6px;
-  transition: height 0.1s;
-}
-
-.pc-wave.playing span {
-  animation: pcWave 0.9s ease-in-out infinite alternate;
-}
-.pc-wave.playing span:nth-child(1) { animation-delay: 0ms;   animation-duration: 0.75s; }
-.pc-wave.playing span:nth-child(2) { animation-delay: 150ms; animation-duration: 0.9s; }
-.pc-wave.playing span:nth-child(3) { animation-delay: 80ms;  animation-duration: 0.65s; }
-.pc-wave.playing span:nth-child(4) { animation-delay: 220ms; animation-duration: 0.80s; }
-
-.pc-wave--sm.playing span:nth-child(1) { animation-duration: 0.75s; }
-.pc-wave--sm.playing span:nth-child(2) { animation-duration: 0.9s;  }
-.pc-wave--sm.playing span:nth-child(3) { animation-duration: 0.65s; }
-.pc-wave--sm.playing span:nth-child(4) { animation-duration: 0.80s; }
-
-@keyframes pcWave {
-  from { height: 4px;  opacity: 0.5; }
-  to   { height: 16px; opacity: 1;   }
-}
-
-/* ── Dynamic Island mini ─────────────────────────────────────── */
-.pc-island {
-  position: fixed;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1400;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 16px 7px 7px;  /* breathing room from pill edges */
-  border-radius: 100px;
-  background: #000;
-  cursor: pointer;
-  animation: island-pop .3s cubic-bezier(.34,1.56,.64,1);
-  box-shadow: 0 4px 20px rgba(0,0,0,.6);
-}
-@keyframes island-pop {
-  from { transform: translateX(-50%) scale(0.7); opacity: 0; }
-  to   { transform: translateX(-50%) scale(1);   opacity: 1; }
-}
-.pc-island-art {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;          /* square, not circular */
-  object-fit: cover;
-  flex-shrink: 0;
-  margin-left: 2px;            /* extra space from left edge */
-}
-.pc-island-art-ph {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,.1);
-  color: rgba(255,255,255,.4);
-  border-radius: 8px;
-}
-.pc-island-info {
-  display: flex;
-  flex-direction: column;
-}
-.pc-island-title {
-  font-size: .72rem;
-  font-weight: 600;
+.pc-info { flex: 1; min-width: 0; }
+.pc-title {
+  font-size: 1rem;
+  font-weight: 700;
   color: #fff;
   white-space: nowrap;
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Extra right margin on waveform so it's not flush with pill edge */
-.pc-island .pc-wave--sm {
-  margin-right: 2px;
+.pc-artist {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,.55);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ── Progress ────────────────────────────────────────────────── */
-.pc-progress-row {
+/* ── Equalizer bars (shared by player + dynamic island) ───── */
+.eq-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  flex-shrink: 0;
+}
+
+/* medium — player top-right */
+.eq-bars--sm {
+  height: 22px;
+  gap: 2.5px;
+}
+.eq-bars--sm span {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,.65);
+  height: 6px;
+}
+.eq-bars--sm.playing span { animation: eqPulse .9s ease-in-out infinite alternate; }
+.eq-bars--sm.playing span:nth-child(1) { animation-duration: .75s; animation-delay: 0ms;   }
+.eq-bars--sm.playing span:nth-child(2) { animation-duration: .90s; animation-delay: 150ms; }
+.eq-bars--sm.playing span:nth-child(3) { animation-duration: .65s; animation-delay:  80ms; }
+.eq-bars--sm.playing span:nth-child(4) { animation-duration: .80s; animation-delay: 220ms; }
+.eq-bars--sm.playing span:nth-child(5) { animation-duration: .70s; animation-delay:  60ms; }
+
+/* dynamic-island variant */
+.eq-bars--di {
+  height: 30px;
+  gap: 3px;
+}
+.eq-bars--di span {
+  display: block;
+  width: 3.5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.75);
+  height: 7px;
+}
+.eq-bars--di.playing span { animation: eqPulse .9s ease-in-out infinite alternate; }
+.eq-bars--di.playing span:nth-child(1) { animation-duration: .75s; animation-delay: 0ms;   }
+.eq-bars--di.playing span:nth-child(2) { animation-duration: .90s; animation-delay: 150ms; }
+.eq-bars--di.playing span:nth-child(3) { animation-duration: .65s; animation-delay:  80ms; }
+.eq-bars--di.playing span:nth-child(4) { animation-duration: .80s; animation-delay: 220ms; }
+.eq-bars--di.playing span:nth-child(5) { animation-duration: .70s; animation-delay:  60ms; }
+
+@keyframes eqPulse {
+  from { height: 4px;  opacity: 0.45; }
+  to   { height: 20px; opacity: 1;    }
+}
+
+/* ── Scrubber ─────────────────────────────────────────────── */
+.pc-scrubber-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
 }
-
 .pc-time {
   font-size: 0.68rem;
+  color: rgba(255,255,255,.45);
+  flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-  color: rgba(255,255,255,0.5);
-  min-width: 32px;
 }
-.pc-time:last-child { text-align: right; }
-
 .pc-track {
   flex: 1;
   height: 3px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 100px;
-  cursor: pointer;
+  border-radius: 3px;
+  background: rgba(255,255,255,.18);
   position: relative;
-  transition: height 0.15s;
+  cursor: pointer;
 }
-.pc-track:hover { height: 5px; }
-
 .pc-fill {
-  height: 100%;
-  background: rgba(255,255,255,0.88);
-  border-radius: 100px;
+  position: absolute;
+  inset: 0;
+  right: auto;
+  border-radius: 3px;
+  background: rgba(255,255,255,.75);
   pointer-events: none;
 }
-
 .pc-thumb {
   position: absolute;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: 13px;
-  height: 13px;
-  background: #fff;
+  width: 12px; height: 12px;
   border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
 }
-.pc-track:hover .pc-thumb { opacity: 1; }
 
-/* ── Controls ────────────────────────────────────────────────── */
+/* ── Controls ─────────────────────────────────────────────── */
 .pc-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.pc-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  color: rgba(255,255,255,0.75);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, transform 0.12s;
+  gap: 28px;
 }
-.pc-btn:hover  { color: #fff; background: rgba(255,255,255,0.08); }
-.pc-btn:active { transform: scale(0.88); }
-.pc-btn.liked  { color: #fff; }
-
-/* Central play/pause — glassy circle */
-.pc-play-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.pc-ctrl {
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none;
   color: #fff;
   cursor: pointer;
-  border: none;
-  transition: transform 0.15s, background 0.15s;
-
-  background: rgba(255,255,255,0.18);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.35),
-    inset 0 -1px 0 rgba(0,0,0,0.25),
-    0 4px 16px rgba(0,0,0,0.4);
+  padding: 4px;
+  transition: opacity .15s, transform .1s;
 }
-.pc-play-btn:hover  { background: rgba(255,255,255,0.26); transform: scale(1.06); }
-.pc-play-btn:active { transform: scale(0.93); }
+.pc-ctrl:active { transform: scale(0.88); opacity: 0.6; }
 
-/* AirPods output icon button  */
-.pc-output { opacity: 0.65; }
-.pc-output:hover { opacity: 1; }
+.pc-ctrl--airplay {
+  margin-left: auto;
+  color: rgba(255,255,255,.55);
+}
+.pc-ctrl--airplay:hover { color: #fff; }
 
-/* ── Web-only fallback (no native tab bar): lower position ───── */
-@media (max-width: 768px) {
-  .pc-card { bottom: 88px; }
+/* ══════════════════════════════════════════════════════════
+   Dynamic Island  ·  matches reference img_11
+   ══════════════════════════════════════════════════════════ */
+
+.di-pill {
+  position: fixed;
+  top: 14px;
+  left: 12px; right: 12px;   /* wide pill, full width minus margins */
+  height: 58px;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 8px;
+  border-radius: 100px;
+  background: #000;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0,0,0,.7);
+  animation: di-pop .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes di-pop {
+  from { opacity: 0; transform: scaleX(0.6) scaleY(0.5); }
+  to   { opacity: 1; transform: scaleX(1)   scaleY(1);   }
 }
 
-/* ── Desktop (sidebar layout): narrower card, left-anchored ──── */
-@media (min-width: 769px) {
-  .pc-card {
-    left: calc(var(--sidebar-width) + 16px);
-    right: 16px;
-    bottom: 16px;
-    max-width: 520px;
-  }
+.di-art-wrap {
+  padding: 7px 0 7px 6px;   /* keeps artwork away from pill edge */
+}
+.di-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;      /* square with rounded corners */
+  object-fit: cover;
+  display: block;
+}
+.di-art-ph {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.4);
+  border-radius: 10px;
 }

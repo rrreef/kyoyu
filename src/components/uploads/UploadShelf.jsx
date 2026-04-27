@@ -91,13 +91,17 @@ function AlbumModal({ alb, onClose }) {
       <div className="upl-sheet" onClick={e=>e.stopPropagation()}>
         <div className="upl-handle"/>
 
-        {/* ── Large square artwork ── */}
+        {/* ── Top bar: close button ── */}
+        <div className="upl-topbar">
+          <button className="upl-sheet-close" onClick={onClose}><X size={14}/></button>
+        </div>
+
+        {/* ── Artwork ── */}
         <div className="upl-art-wrap">
           {alb.artworkUrl
             ? <img src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
             : <div className="upl-art-big upl-art-big-ph"><Music2 size={52} strokeWidth={1}/></div>
           }
-          <button className="upl-sheet-close" onClick={onClose}><X size={15}/></button>
         </div>
 
         {/* ── Metadata ── */}

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { Play, Pause, SkipBack, SkipForward, Heart, Music2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Music2 } from 'lucide-react';
 import './Player.css';
 
 function fmt(s) {
@@ -9,27 +9,40 @@ function fmt(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-/* Animated waveform bars */
-function Waveform({ active, size = 'md' }) {
+/* Animated equalizer bars */
+function EqBars({ active, bars = 5, size = 'md' }) {
   return (
-    <div className={`pc-wave pc-wave--${size}${active ? ' playing' : ''}`}>
-      {[0,1,2,3].map(i => <span key={i} style={{ '--i': i }} />)}
+    <div className={`eq-bars eq-bars--${size}${active ? ' playing' : ''}`}>
+      {Array.from({length: bars}).map((_,i) => (
+        <span key={i} style={{'--i': i}}/>
+      ))}
     </div>
   );
 }
 
-/* ── Dynamic Island mini (shown when player is dismissed) ── */
+/* AirPlay SVG icon */
+function AirPlayIcon() {
+  return (
+    <svg width="22" height="20" viewBox="0 0 22 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/>
+      <polygon points="11 13 16 20 6 20 11 13" fill="currentColor" stroke="none"/>
+    </svg>
+  );
+}
+
+/* ── Dynamic Island mini ── */
 function DynamicIsland({ track, isPlaying, onTap }) {
   return (
-    <div className="pc-island" onClick={onTap}>
-      {track.releaseCover
-        ? <img src={track.releaseCover} className="pc-island-art" alt=""/>
-        : <div className="pc-island-art pc-island-art-ph"><Music2 size={10}/></div>
-      }
-      <div className="pc-island-info">
-        <span className="pc-island-title">{track.title}</span>
+    <div className="di-pill" onClick={onTap}>
+      {/* Artwork left */}
+      <div className="di-art-wrap">
+        {track.releaseCover
+          ? <img src={track.releaseCover} className="di-art" alt=""/>
+          : <div className="di-art di-art-ph"><Music2 size={16}/></div>
+        }
       </div>
-      <Waveform active={isPlaying} size="sm"/>
+      {/* Waveform right */}
+      <EqBars active={isPlaying} bars={5} size="di"/>
     </div>
   );
 }
@@ -37,50 +50,38 @@ function DynamicIsland({ track, isPlaying, onTap }) {
 export default function Player() {
   const { state, dispatch } = usePlayer();
   const { isLiked, toggleLike } = useLibrary();
-  const trackRef  = useRef(null);
-  const swipeStart= useRef(0);
-  const swiping   = useRef(false);
+  const trackRef   = useRef(null);
+  const swipeStart = useRef(0);
+  const swiping    = useRef(false);
 
   const [dismissed, setDismissed] = useState(false);
   const [swipeX,    setSwipeX]    = useState(0);
 
   const { currentTrack, isPlaying, progress, duration } = state;
 
-  /* Reset dismissed when a new track starts */
+  /* Reset dismissed whenever a new track starts */
   useEffect(() => {
     if (currentTrack) setDismissed(false);
   }, [currentTrack?.id]);
 
   if (!currentTrack) return null;
 
-  const liked    = isLiked(currentTrack.id);
-  const pct      = duration ? (progress / duration) * 100 : 0;
-  const remaining= duration - progress;
+  const pct       = duration ? (progress / duration) * 100 : 0;
+  const remaining = Math.max(0, duration - progress);
 
   function seek(e) {
     const rect = e.currentTarget.getBoundingClientRect();
     dispatch({ type: 'SET_PROGRESS', value: Math.floor(((e.clientX - rect.left) / rect.width) * duration) });
   }
 
-  /* Swipe-left handlers */
-  function onTouchStart(e) {
-    swipeStart.current = e.touches[0].clientX;
-    swiping.current = true;
-  }
-  function onTouchMove(e) {
-    if (!swiping.current) return;
-    const dx = e.touches[0].clientX - swipeStart.current;
-    if (dx < 0) setSwipeX(dx);
-  }
-  function onTouchEnd() {
-    swiping.current = false;
-    if (swipeX < -80) setDismissed(true);
-    setSwipeX(0);
-  }
+  /* Swipe-left to dismiss */
+  function onTouchStart(e) { swipeStart.current = e.touches[0].clientX; swiping.current = true; }
+  function onTouchMove(e)  { if (!swiping.current) return; const dx = e.touches[0].clientX - swipeStart.current; if (dx < 0) setSwipeX(dx); }
+  function onTouchEnd()    { swiping.current = false; if (swipeX < -80) setDismissed(true); setSwipeX(0); }
 
   const cardStyle = {
-    transform: `translateX(${swipeX}px)`,
-    opacity: Math.max(0, 1 + swipeX / 200),
+    transform:  `translateX(${swipeX}px)`,
+    opacity:    Math.max(0, 1 + swipeX / 200),
     transition: swipeX === 0 ? 'transform .3s, opacity .3s' : 'none',
   };
 
@@ -97,67 +98,47 @@ export default function Player() {
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      {/* Prismatic border ring */}
-      <div className="pc-prism" />
-
-      {/* Artwork row */}
-      <div className="pc-artwork-row">
-        {currentTrack.releaseCover
-          ? <img src={currentTrack.releaseCover} className="pc-artwork" alt=""/>
-          : <div className="pc-artwork pc-artwork-ph"><Music2 size={18} strokeWidth={1.3}/></div>
-        }
-      </div>
-
-      {/* Header row: title + waveform */}
-      <div className="pc-header">
-        <div className="pc-text">
+      {/* ── Row 1: artwork + info + eq bars ── */}
+      <div className="pc-row1">
+        <div className="pc-art-wrap">
+          {currentTrack.releaseCover
+            ? <img src={currentTrack.releaseCover} className="pc-art" alt=""/>
+            : <div className="pc-art pc-art-ph"><Music2 size={20} strokeWidth={1.2}/></div>
+          }
+        </div>
+        <div className="pc-info">
           <div className="pc-title">{currentTrack.title}</div>
           <div className="pc-artist">{currentTrack.artistName}</div>
         </div>
-        <Waveform active={isPlaying}/>
+        <EqBars active={isPlaying} bars={5} size="sm"/>
       </div>
 
-      {/* Progress row */}
-      <div className="pc-progress-row">
+      {/* ── Row 2: scrubber ── */}
+      <div className="pc-scrubber-row">
         <span className="pc-time">{fmt(progress)}</span>
         <div className="pc-track" ref={trackRef} onClick={seek}>
-          <div className="pc-fill" style={{ width: `${pct}%` }} />
-          <div className="pc-thumb" style={{ left: `${pct}%` }} />
+          <div className="pc-fill" style={{ width: `${pct}%` }}/>
+          <div className="pc-thumb" style={{ left: `${pct}%` }}/>
         </div>
-        <span className="pc-time">-{fmt(remaining > 0 ? remaining : 0)}</span>
+        <span className="pc-time">-{fmt(remaining)}</span>
       </div>
 
-      {/* Controls row */}
+      {/* ── Row 3: controls ── */}
       <div className="pc-controls">
-        <button
-          className={`pc-btn pc-like${liked ? ' liked' : ''}`}
-          onClick={() => toggleLike(currentTrack.id)}
-        >
-          <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
+        <button className="pc-ctrl" onClick={() => dispatch({ type: 'PREV_TRACK' })}>
+          <SkipBack size={26} fill="currentColor" strokeWidth={0}/>
         </button>
-
-        <button className="pc-btn" onClick={() => dispatch({ type: 'PREV_TRACK' })}>
-          <SkipBack size={17} fill="currentColor" />
-        </button>
-
-        <button className="pc-play-btn" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}>
+        <button className="pc-ctrl pc-ctrl--play" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}>
           {isPlaying
-            ? <Pause size={19} fill="currentColor" />
-            : <Play  size={19} fill="currentColor" style={{ marginLeft: 2 }} />
+            ? <Pause size={28} fill="currentColor" strokeWidth={0}/>
+            : <Play  size={28} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>
           }
         </button>
-
-        <button className="pc-btn" onClick={() => dispatch({ type: 'NEXT_TRACK' })}>
-          <SkipForward size={17} fill="currentColor" />
+        <button className="pc-ctrl" onClick={() => dispatch({ type: 'NEXT_TRACK' })}>
+          <SkipForward size={26} fill="currentColor" strokeWidth={0}/>
         </button>
-
-        {/* AirPods/output icon */}
-        <button className="pc-btn pc-output" title="Audio output">
-          <svg width="20" height="16" viewBox="0 0 20 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <circle cx="6"  cy="8" r="3" />
-            <circle cx="14" cy="8" r="3" />
-            <path d="M6 5V2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5V5" strokeLinecap="round"/>
-          </svg>
+        <button className="pc-ctrl pc-ctrl--airplay" title="AirPlay">
+          <AirPlayIcon/>
         </button>
       </div>
     </div>
