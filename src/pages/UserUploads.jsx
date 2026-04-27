@@ -1,285 +1,254 @@
-import { useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Upload, Music2, Play, Pause, Trash2, Lock,
-  ChevronDown, Check, X, ImagePlus, Disc3,
-} from 'lucide-react';
-import * as mm from 'music-metadata-browser';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle } from 'lucide-react';
 import './UserUploads.css';
 
-const ACCEPT = '.mp3,.wav,.flac,.aiff,.aif,audio/*';
-const FORMATS = ['FLAC', 'WAV', 'AIFF', 'MP3'];
+/* ─── helpers ───────────────────────────────────────────────── */
+const ACCEPTED = ['.wav','.aiff','.aif','.mp3','.flac'];
+const fmtBytes = b => b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB';
+const ext      = f => f.name.split('.').pop().toUpperCase();
+const stripExt = n => n.replace(/\.[^/.]+$/,'');
+const ok       = f => ACCEPTED.includes('.'+f.name.split('.').pop().toLowerCase());
+const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:String(new Date().getFullYear()), label:'', mixEng:'', masterEng:'', artworkUrl:null, artworkFile:null });
 
-// ── Metadata extraction ──────────────────────────────────────
-async function extractMeta(file) {
-  try {
-    const meta = await mm.parseBlob(file, { skipCovers: false, duration: false });
-    const c = meta.common;
+/* ─── inline metadata parser (ID3v2, FLAC, WAV, AIFF) ───────── */
+function dec(enc,b,s,e){let d=b.slice(s,Math.min(e,b.length)),l=d.length;if(enc===1||enc===2){while(l>=2&&!d[l-1]&&!d[l-2])l-=2;}else{while(l>0&&!d[l-1])l--;}try{if(enc===0)return new TextDecoder('iso-8859-1').decode(d.slice(0,l)).trim();if(enc===1||enc===2)return new TextDecoder('utf-16').decode(d.slice(0,l)).trim();return new TextDecoder('utf-8').decode(d.slice(0,l)).trim();}catch{return '';}}
+function parseID3(bytes,view,o,r){const ver=bytes[o+3];const flags=bytes[o+5];const sz=((bytes[o+6]&0x7f)<<21)|((bytes[o+7]&0x7f)<<14)|((bytes[o+8]&0x7f)<<7)|(bytes[o+9]&0x7f);let i=o+10;if(flags&0x40)i+=ver>=4?((bytes[i]&0x7f)<<21)|((bytes[i+1]&0x7f)<<14)|((bytes[i+2]&0x7f)<<7)|(bytes[i+3]&0x7f):view.getUint32(i)+4;const end=Math.min(o+10+sz,bytes.length);while(i+10<end){const fid=String.fromCharCode(bytes[i],bytes[i+1],bytes[i+2],bytes[i+3]);if(fid==='\x00\x00\x00\x00')break;const fsz=ver>=4?((bytes[i+4]&0x7f)<<21)|((bytes[i+5]&0x7f)<<14)|((bytes[i+6]&0x7f)<<7)|(bytes[i+7]&0x7f):view.getUint32(i+4);if(fsz<=0||fsz>end-i-10)break;i+=10;const e=bytes[i];const t=()=>dec(e,bytes,i+1,i+fsz);if(fid==='TIT2'&&!r.title)r.title=t();else if(fid==='TPE1'&&!r.artist)r.artist=t();else if((fid==='TALB'||fid==='TOAL')&&!r.album)r.album=t();else if(fid==='TCON'&&!r.genre){const g=t();const m=g.match(/^\((\d+)\)(.*)$/);r.genre=m?(m[2].trim()||g):g.trim();}else if((fid==='TDRC'||fid==='TYER')&&!r.year)r.year=t().slice(0,4);else if(fid==='TPUB'&&!r.label)r.label=t();else if(fid==='APIC'&&!r.artworkUrl&&fsz>4){let p=i+1;let me=p;while(me<i+fsz&&bytes[me])me++;const mime=String.fromCharCode(...bytes.slice(p,me));p=me+2;if(e===1||e===2){while(p+1<i+fsz&&!(bytes[p]===0&&bytes[p+1]===0))p+=2;p+=2;}else{while(p<i+fsz&&bytes[p])p++;p++;}const pic=bytes.slice(p,i+fsz);if(pic.length>0)r.artworkUrl=URL.createObjectURL(new Blob([pic],{type:mime||'image/jpeg'}));}i+=fsz;}}
 
-    let artworkUrl = null;
-    if (c.picture?.length) {
-      const pic = c.picture[0];
-      const blob = new Blob([pic.data], { type: pic.format || 'image/jpeg' });
-      artworkUrl = URL.createObjectURL(blob);
-    }
+async function extractMeta(file){const r={title:null,artist:null,album:null,genre:null,year:null,label:null,artworkUrl:null};try{const buf=await file.slice(0,4*1024*1024).arrayBuffer();const b=new Uint8Array(buf);const v=new DataView(buf);const s4=o=>String.fromCharCode(b[o],b[o+1],b[o+2],b[o+3]);const hdr=s4(0);if(hdr==='FORM'&&(s4(8)==='AIFF'||s4(8)==='AIFC')){let o=12;while(o+8<b.length){const cid=s4(o);const csz=v.getUint32(o+4);o+=8;if((cid==='ID3 '||cid==='id3 ')&&b[o]===0x49&&b[o+1]===0x44&&b[o+2]===0x33)parseID3(b,v,o,r);if(!csz)break;o+=csz+(csz%2);}}else if(hdr==='RIFF'&&s4(8)==='WAVE'){let o=12;while(o+8<b.length){const cid=s4(o);const csz=v.getUint32(o+4,true);o+=8;if(cid==='id3 '||cid==='ID3 '||cid==='ID32')parseID3(b,v,o,r);if(!csz)break;o+=csz+(csz%2);}}else if(b[0]===0x49&&b[1]===0x44&&b[2]===0x33)parseID3(b,v,0,r);else if(b[0]===0x66&&b[1]===0x4C&&b[2]===0x61&&b[3]===0x43){let o=4;while(o+4<b.length){const bb=b[o];const isLast=(bb&0x80)!==0;const bt=bb&0x7f;const bsz=(b[o+1]<<16)|(b[o+2]<<8)|b[o+3];o+=4;if(bt===4&&bsz>8){const vl=v.getUint32(o,true);let p=o+4+vl;const cnt=v.getUint32(p,true);p+=4;for(let i=0;i<cnt&&p+4<=o+bsz;i++){const cl=v.getUint32(p,true);p+=4;if(cl>0&&p+cl<=o+bsz){const kv=new TextDecoder('utf-8').decode(b.slice(p,p+cl));const eq=kv.indexOf('=');if(eq>0){const k=kv.slice(0,eq).toUpperCase(),val=kv.slice(eq+1).trim();if(k==='TITLE'&&!r.title)r.title=val;if(k==='ARTIST'&&!r.artist)r.artist=val;if(k==='ALBUM'&&!r.album)r.album=val;if(k==='GENRE'&&!r.genre)r.genre=val;if((k==='DATE'||k==='YEAR')&&!r.year)r.year=val.slice(0,4);if(k==='LABEL'&&!r.label)r.label=val;}p+=cl;}}}else if(bt===6&&!r.artworkUrl&&bsz>16){let p=o+4;const ml=v.getUint32(p);p+=4;const mime=new TextDecoder().decode(b.slice(p,p+ml));p+=ml+4+16;const pl=v.getUint32(p);p+=4;if(pl>0&&p+pl<=o+bsz){const pic=b.slice(p,p+pl);r.artworkUrl=URL.createObjectURL(new Blob([pic],{type:mime||'image/jpeg'}));}}if(isLast)break;o+=bsz;}}}catch(_){}return r;}
 
-    const ext = file.name.split('.').pop().toUpperCase();
-    return {
-      title:            c.title            || file.name.replace(/\.[^.]+$/, ''),
-      artist:           c.artist           || '',
-      album:            c.album            || '',
-      genre:            c.genre?.[0]       || '',
-      year:             c.year?.toString() || '',
-      label:            c.label?.[0]       || '',
-      mixingEngineer:   c.engineer         || '',
-      masteringEngineer:'',
-      artworkUrl,
-      format: ext,
-      size: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-      fileUrl: URL.createObjectURL(file),
-    };
-  } catch {
-    const ext = file.name.split('.').pop().toUpperCase();
-    return {
-      title: file.name.replace(/\.[^.]+$/, ''),
-      artist: '', album: '', genre: '', year: '',
-      label: '', mixingEngineer: '', masteringEngineer: '',
-      artworkUrl: null,
-      format: ext,
-      size: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-      fileUrl: URL.createObjectURL(file),
-    };
-  }
-}
+const STEPS = ['Files','Track Info','Review'];
 
-// ── Field row component ──────────────────────────────────────
-function Field({ label, value, onChange, placeholder, type = 'text' }) {
-  return (
-    <div className="uu-field">
-      <label className="uu-field-label">{label}</label>
-      <input
-        className="uu-field-input"
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder || label}
-      />
-    </div>
-  );
-}
-
-// ── Main component ───────────────────────────────────────────
 export default function UserUploads() {
-  const navigate = useNavigate();
-  const fileRef  = useRef();
-  const audioRef = useRef(new Audio());
+  const [step,        setStep]        = useState(0);
+  const [files,       setFiles]       = useState([]);   // [{file,id}]
+  const [metas,       setMetas]       = useState([]);
+  const [active,      setActive]      = useState(0);
+  const [saved,       setSaved]       = useState([]);
+  const [playing,     setPlaying]     = useState(null);
+  const [dragging,    setDragging]    = useState(false);
+  const [rejected,    setRejected]    = useState([]);
+  const [advanced,    setAdvanced]    = useState(false);
+  const [audioUrls,   setAudioUrls]   = useState({});
+  const fileRef    = useRef();
+  const artRefs    = useRef([]);
+  const audioRef   = useRef(new Audio());
 
-  const [tracks,   setTracks]   = useState([]);
-  const [playing,  setPlaying]  = useState(null);
-  const [stage,    setStage]    = useState('list');   // 'list' | 'processing' | 'review'
-  const [draft,    setDraft]    = useState(null);
-  const [advanced, setAdvanced] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  /* blob URLs */
+  useEffect(() => {
+    setAudioUrls(prev => {
+      const next={...prev};
+      const ids=new Set(files.map(f=>f.id));
+      Object.keys(next).forEach(id=>{if(!ids.has(id)){URL.revokeObjectURL(next[id]);delete next[id];}});
+      files.forEach(({file,id})=>{if(!next[id])next[id]=URL.createObjectURL(file);});
+      return next;
+    });
+  },[files]);
 
-  // ── File handling ────────────────────────────────────────
-  const handleFile = useCallback(async (file) => {
-    if (!file || !file.type.startsWith('audio/')) return;
-    setStage('processing');
-    const meta = await extractMeta(file);
-    setDraft({ ...meta, id: Math.random().toString(36).slice(2) });
-    setStage('review');
-  }, []);
+  /* sync metas + extract tags for new files */
+  useEffect(() => {
+    const prev=new Map(metas.map(m=>[m.id,m]));
+    const next=files.map(({file,id})=>prev.get(id)??{...emptyMeta(id),title:stripExt(file.name)});
+    if(active>=files.length&&files.length>0)setActive(files.length-1);
+    setMetas(next);
+    files.forEach(({file,id})=>{
+      if(prev.has(id))return;
+      extractMeta(file).then(r=>{
+        setMetas(m=>m.map(t=>t.id!==id?t:{...t,
+          title:r.title||t.title, artist:r.artist||t.artist,
+          album:r.album||t.album, genre:r.genre||t.genre,
+          year:r.year||t.year,   label:r.label||t.label,
+          artworkUrl:t.artworkUrl||r.artworkUrl||null,
+        }));
+      });
+    });
+  },[files]);
 
-  function onFileInput(e) {
-    handleFile(e.target.files?.[0]);
-    e.target.value = '';
+  function addFiles(fl) {
+    const incoming=Array.from(fl);
+    const good=incoming.filter(f=>ok(f));
+    const bad=incoming.filter(f=>!ok(f));
+    setFiles(prev=>{const names=new Set(prev.map(f=>f.file.name));return[...prev,...good.filter(f=>!names.has(f.name)).map(f=>({file:f,id:Math.random().toString(36).slice(2)}))];});
+    if(bad.length){setRejected(bad.map(f=>f.name));setTimeout(()=>setRejected([]),4000);}
   }
+  function removeFile(id){setFiles(p=>p.filter(f=>f.id!==id));}
+  function setField(i,k){return v=>setMetas(m=>m.map((t,j)=>j===i?{...t,[k]:v}:t));}
+  function copyAll(k,v){setMetas(m=>m.map(t=>({...t,[k]:v})));}
+  function pickArt(i,e){const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:f,artworkUrl:url}:t));e.target.value='';}
+  function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
-  function onDrop(e) {
-    e.preventDefault();
-    setDragging(false);
-    handleFile(e.dataTransfer.files?.[0]);
+  function saveAll(){
+    setSaved(prev=>[...metas.map((m,i)=>({...m,fileUrl:audioUrls[files[i]?.id],format:ext(files[i].file),size:fmtBytes(files[i].file.size)})),...prev]);
+    setFiles([]);setMetas([]);setStep(0);setActive(0);
   }
+  function removeSaved(id){setSaved(p=>p.filter(t=>t.id!==id));if(playing===id){audioRef.current.pause();setPlaying(null);}}
+  function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
 
-  // ── Draft helpers ────────────────────────────────────────
-  function setField(key) { return val => setDraft(d => ({ ...d, [key]: val })); }
+  const m=metas[active]||emptyMeta('_');
 
-  function saveDraft() {
-    setTracks(ts => [draft, ...ts]);
-    setDraft(null);
-    setStage('list');
-    setAdvanced(false);
-  }
-
-  function cancelDraft() {
-    setDraft(null);
-    setStage('list');
-    setAdvanced(false);
-  }
-
-  // ── Playback ─────────────────────────────────────────────
-  function togglePlay(t) {
-    if (playing === t.id) {
-      audioRef.current.pause();
-      setPlaying(null);
-    } else {
-      audioRef.current.src = t.fileUrl;
-      audioRef.current.play();
-      setPlaying(t.id);
-      audioRef.current.onended = () => setPlaying(null);
-    }
-  }
-
-  function removeTrack(id) {
-    setTracks(ts => ts.filter(t => t.id !== id));
-    if (playing === id) { audioRef.current.pause(); setPlaying(null); }
-  }
-
-  // ── REVIEW STAGE ────────────────────────────────────────
-  if (stage === 'review' && draft) {
-    return (
-      <div className="page uu-page animate-in">
-        <div className="uu-review-header">
-          <button className="uu-icon-btn" onClick={cancelDraft}><X size={18} /></button>
-          <span className="uu-review-title">Review Track</span>
-          <button className="uu-save-btn" onClick={saveDraft}>
-            <Check size={15} /> Save
-          </button>
-        </div>
-
-        <div className="uu-review-scroll">
-          {/* Artwork */}
-          <div className="uu-artwork-wrap">
-            {draft.artworkUrl
-              ? <img src={draft.artworkUrl} alt="artwork" className="uu-artwork-img" />
-              : (
-                <div className="uu-artwork-placeholder">
-                  <Disc3 size={48} strokeWidth={1} />
-                  <span>No artwork</span>
-                </div>
-              )
-            }
-            <div className="uu-format-badge">{draft.format}</div>
-          </div>
-
-          {/* Core fields */}
-          <div className="uu-fields glass">
-            <Field label="Title"  value={draft.title}  onChange={setField('title')}  placeholder="Track title" />
-            <Field label="Artist" value={draft.artist} onChange={setField('artist')} placeholder="Artist name" />
-            <Field label="Album"  value={draft.album}  onChange={setField('album')}  placeholder="Album name" />
-            <Field label="Genre"  value={draft.genre}  onChange={setField('genre')}  placeholder="Genre" />
-            <Field label="Year"   value={draft.year}   onChange={setField('year')}   placeholder="Year" type="number" />
-          </div>
-
-          {/* Advanced settings */}
-          <button className="uu-advanced-toggle" onClick={() => setAdvanced(a => !a)}>
-            <span>Advanced Settings</span>
-            <ChevronDown size={16} className={`uu-chevron${advanced ? ' open' : ''}`} />
-          </button>
-
-          {advanced && (
-            <div className="uu-fields glass uu-fields-advanced animate-in">
-              <Field label="Mixing Engineer"    value={draft.mixingEngineer}    onChange={setField('mixingEngineer')}    placeholder="Name" />
-              <Field label="Mastering Engineer" value={draft.masteringEngineer} onChange={setField('masteringEngineer')} placeholder="Name" />
-              <Field label="Label"              value={draft.label}             onChange={setField('label')}             placeholder="Record label" />
-            </div>
-          )}
-
-          <button className="uu-save-full-btn" onClick={saveDraft}>
-            <Check size={18} /> Save Track
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── PROCESSING STAGE ────────────────────────────────────
-  if (stage === 'processing') {
-    return (
-      <div className="page uu-page animate-in">
-        <div className="uu-processing">
-          <div className="uu-spinner" />
-          <span>Reading metadata…</span>
-        </div>
-      </div>
-    );
-  }
-
-  // ── LIST STAGE ───────────────────────────────────────────
-  return (
+  /* ── STEP 0 ─────────────────────────────────────────── */
+  if(step===0) return (
     <div className="page uu-page animate-in">
-      <div className="uu-header">
-        <h1>My Uploads</h1>
-        <button className="uu-add-btn glass" onClick={() => fileRef.current.click()}>
-          <Upload size={14} /> Add
-        </button>
+      <div className="uu-header"><h1>My Uploads</h1></div>
+      <div className="uu-steps">{STEPS.map((s,i)=><div key={s} className={`uu-step${i===step?' active':i<step?' done':''}`}><span>{i<step?'✓':i+1}</span>{s}</div>)}</div>
+
+      <input ref={fileRef} type="file" multiple accept=".wav,.aiff,.aif,.mp3,.flac" style={{display:'none'}} onChange={e=>{addFiles(e.target.files);e.target.value='';}}/>
+
+      <div className={`uu-dropzone glass${dragging?' dragging':''}`}
+        onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)}
+        onDrop={e=>{e.preventDefault();setDragging(false);addFiles(e.dataTransfer.files);}}
+        onClick={()=>fileRef.current.click()}>
+        <UploadIcon size={28} strokeWidth={1.5}/>
+        <div className="uu-drop-title">{dragging?'Drop to add':'Drag & drop audio files'}</div>
+        <div className="uu-drop-formats">{['FLAC','WAV','AIFF','MP3'].map(f=><span key={f} className="uu-fmt">{f}</span>)}</div>
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept={ACCEPT}
-        style={{ display: 'none' }}
-        onChange={onFileInput}
-      />
+      {rejected.length>0&&<div className="uu-rejected"><AlertCircle size={13}/><span>{rejected.join(', ')} — unsupported format</span></div>}
 
-      {/* Drop zone */}
-      <div
-        className={`uu-dropzone glass${dragging ? ' dragging' : ''}`}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => fileRef.current.click()}
-      >
-        <div className="uu-drop-icon">
-          <Upload size={26} strokeWidth={1.5} />
-        </div>
-        <div className="uu-drop-title">Drop an audio file</div>
-        <div className="uu-drop-formats">
-          {FORMATS.map(f => <span key={f} className="uu-format-pill">{f}</span>)}
-        </div>
-      </div>
-
-      {/* Privacy note */}
-      <div className="uu-privacy">
-        <Lock size={11} />
-        <span>Stored privately on this device · Never uploaded to servers</span>
-      </div>
-
-      {/* Track list */}
-      {tracks.length > 0 && (
-        <div className="uu-list">
-          {tracks.map(t => (
-            <div key={t.id} className={`uu-track glass${playing === t.id ? ' playing' : ''}`}>
-              {t.artworkUrl
-                ? <img src={t.artworkUrl} alt="" className="uu-track-art" />
-                : <div className="uu-track-art-placeholder"><Music2 size={16} /></div>
-              }
-              <div className="uu-track-info">
-                <div className="uu-track-title">{t.title}</div>
-                <div className="uu-track-sub">{[t.artist, t.format, t.size].filter(Boolean).join(' · ')}</div>
-              </div>
-              <button className="uu-play-btn" onClick={() => togglePlay(t)}>
-                {playing === t.id
-                  ? <Pause size={15} fill="currentColor" />
-                  : <Play  size={15} fill="currentColor" />
-                }
-              </button>
-              <button className="uu-del-btn" onClick={() => removeTrack(t.id)}>
-                <Trash2 size={13} />
-              </button>
+      {files.length>0&&(
+        <div className="uu-file-list glass">
+          <div className="uu-file-list-hdr"><span>{files.length} track{files.length>1?'s':''} selected</span><button onClick={()=>fileRef.current.click()}>+ Add more</button></div>
+          {files.map(({file,id},i)=>(
+            <div key={id} className="uu-file-row">
+              <span className="uu-file-num">{i+1}</span>
+              <File size={13}/><span className="uu-file-name">{file.name}</span>
+              <span className="uu-fmt">{ext(file)}</span><span className="uu-fsz">{fmtBytes(file.size)}</span>
+              <button onClick={()=>removeFile(id)}><X size={13}/></button>
             </div>
           ))}
         </div>
       )}
 
-      {tracks.length === 0 && (
-        <div className="uu-empty">
-          <Music2 size={32} strokeWidth={1.2} />
-          <div>No uploads yet</div>
-          <div className="uu-empty-sub">Your private music lives here</div>
+      <div className="uu-privacy"><Lock size={11}/><span>Stored privately · never uploaded to servers</span></div>
+
+      {files.length>0&&<button className="uu-next-btn" onClick={()=>setStep(1)}>Next — Track Info <ChevronRight size={15}/></button>}
+
+      {saved.length>0&&(
+        <div className="uu-library">
+          <div className="uu-library-hdr">Library</div>
+          {saved.map(t=>(
+            <div key={t.id} className={`uu-track glass${playing===t.id?' playing':''}`}>
+              {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
+              <div className="uu-track-info"><div className="uu-track-title">{t.title}</div><div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div></div>
+              <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
+              <button className="uu-del" onClick={()=>removeSaved(t.id)}><Trash2 size={13}/></button>
+            </div>
+          ))}
         </div>
       )}
+
+      {saved.length===0&&files.length===0&&<div className="uu-empty"><Music2 size={32} strokeWidth={1.2}/><div>No uploads yet</div><div className="uu-empty-sub">Your private music lives here</div></div>}
+    </div>
+  );
+
+  /* ── STEP 1: Track Info ──────────────────────────────── */
+  if(step===1) return (
+    <div className="page uu-page animate-in">
+      <div className="uu-header">
+        <button className="uu-back-btn" onClick={()=>setStep(0)}><ChevronLeft size={18}/></button>
+        <h1>Track Info</h1>
+        <button className="uu-next-sm" onClick={()=>setStep(2)}>Review <ChevronRight size={14}/></button>
+      </div>
+      <div className="uu-steps">{STEPS.map((s,i)=><div key={s} className={`uu-step${i===step?' active':i<step?' done':''}`}><span>{i<step?'✓':i+1}</span>{s}</div>)}</div>
+
+      {files.length>1&&(
+        <div className="uu-tabs">
+          {files.map(({file,id},i)=>(
+            <button key={id} className={`uu-tab${i===active?' active':''}`} onClick={()=>setActive(i)}>
+              {metas[i]?.artworkUrl?<img src={metas[i].artworkUrl} alt="" className="uu-tab-art"/>:<span className="uu-tab-num">{i+1}</span>}
+              <span>{metas[i]?.title||stripExt(file.name)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="uu-track-form">
+        {/* Artwork */}
+        <input type="file" accept="image/*" style={{display:'none'}} ref={el=>artRefs.current[active]=el} onChange={e=>pickArt(active,e)}/>
+        <div className="uu-art-section">
+          {m.artworkUrl?(
+            <div className="uu-art-preview">
+              <img src={m.artworkUrl} alt="artwork" className="uu-art-big"/>
+              <div className="uu-art-btns">
+                <button onClick={()=>artRefs.current[active]?.click()}>Replace</button>
+                <button onClick={()=>rmArt(active)}><X size={12}/></button>
+              </div>
+            </div>
+          ):(
+            <div className="uu-art-empty" onClick={()=>artRefs.current[active]?.click()}>
+              <Image size={24} strokeWidth={1.5}/><span>Add artwork</span><span className="uu-art-hint">JPG, PNG · min 800×800</span>
+            </div>
+          )}
+          <div className="uu-file-chip"><File size={11}/>{files[active]?.file.name}<span className="uu-fmt">{ext(files[active]?.file??{name:'x.mp3'})}</span></div>
+          {audioUrls[files[active]?.id]&&<audio key={files[active]?.id} controls src={audioUrls[files[active].id]} className="uu-player"/>}
+        </div>
+
+        {/* Fields */}
+        <div className="uu-fields glass">
+          {[
+            {k:'title',  label:'Title'},
+            {k:'artist', label:'Artist', copy:true},
+            {k:'album',  label:'Album',  copy:true},
+            {k:'genre',  label:'Genre',  copy:true},
+            {k:'year',   label:'Year',   copy:true, type:'number'},
+          ].map(({k,label,copy,type})=>(
+            <div key={k} className="uu-field">
+              <label>{label}{copy&&files.length>1&&<button className="uu-copy-all" onClick={()=>copyAll(k,m[k])}>Copy to all</button>}</label>
+              <input type={type||'text'} value={m[k]||''} onChange={e=>setField(active,k)(e.target.value)} placeholder={label}/>
+            </div>
+          ))}
+        </div>
+
+        {/* Advanced */}
+        <button className="uu-adv-toggle" onClick={()=>setAdvanced(a=>!a)}>
+          <ChevronDown size={14} className={`uu-chev${advanced?' open':''}`}/> Advanced
+        </button>
+        {advanced&&(
+          <div className="uu-fields glass uu-fields-adv animate-in">
+            {[{k:'mixEng',label:'Mixing Engineer'},{k:'masterEng',label:'Mastering Engineer'},{k:'label',label:'Label',copy:true}].map(({k,label,copy})=>(
+              <div key={k} className="uu-field">
+                <label>{label}{copy&&files.length>1&&<button className="uu-copy-all" onClick={()=>copyAll(k,m[k])}>Copy to all</button>}</label>
+                <input value={m[k]||''} onChange={e=>setField(active,k)(e.target.value)} placeholder={label}/>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {files.length>1&&(
+          <div className="uu-track-nav">
+            <button disabled={active===0} onClick={()=>setActive(i=>i-1)}><ChevronLeft size={14}/> Prev</button>
+            <span>{active+1} / {files.length}</span>
+            <button disabled={active===files.length-1} onClick={()=>setActive(i=>i+1)}>Next <ChevronRight size={14}/></button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  /* ── STEP 2: Review ──────────────────────────────────── */
+  return (
+    <div className="page uu-page animate-in">
+      <div className="uu-header">
+        <button className="uu-back-btn" onClick={()=>setStep(1)}><ChevronLeft size={18}/></button>
+        <h1>Review</h1>
+        <button className="uu-save-hdr" onClick={saveAll}><Check size={14}/> Save All</button>
+      </div>
+      <div className="uu-steps">{STEPS.map((s,i)=><div key={s} className={`uu-step${i===step?' active':i<step?' done':''}`}><span>{i<step?'✓':i+1}</span>{s}</div>)}</div>
+
+      <div className="uu-review-list">
+        {metas.map((t,i)=>(
+          <div key={t.id} className="uu-review-card glass">
+            {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-review-art"/>:<div className="uu-review-art uu-art-ph"><Music2 size={20}/></div>}
+            <div className="uu-review-info">
+              <div className="uu-review-title">{t.title||'Untitled'}</div>
+              <div className="uu-review-sub">{t.artist}{t.album?' — '+t.album:''}</div>
+              <div className="uu-review-tags">{[t.genre,t.year,ext(files[i].file)].filter(Boolean).map(v=><span key={v} className="uu-fmt">{v}</span>)}</div>
+            </div>
+            <button className="uu-review-edit" onClick={()=>{setActive(i);setStep(1);}}><ChevronRight size={16}/></button>
+          </div>
+        ))}
+      </div>
+
+      <button className="uu-save-full" onClick={saveAll}><Check size={18}/> Save {files.length} Track{files.length>1?'s':''} to Library</button>
     </div>
   );
 }
