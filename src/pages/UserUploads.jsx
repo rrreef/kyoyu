@@ -52,6 +52,8 @@ async function extractMeta(file) {
 
 const STEPS = ['Files','Track Info','Review'];
 
+const isNativeApp = () => navigator.userAgent.includes('KyoyuApp');
+
 export default function UserUploads() {
   const [step,        setStep]        = useState(0);
   const [files,       setFiles]       = useState([]);   // [{file,id}]
@@ -67,25 +69,54 @@ export default function UserUploads() {
   const artRefs    = useRef([]);
   const audioRef   = useRef(new Audio());
 
-  /* blob URLs */
+  /* Register native upload result handler */
+  useEffect(() => {
+    window.__kyoyuUploadResult = (tracks) => {
+      // tracks: [{id, fileName, fileUrl, format, size, title, artist, album, genre, year, artworkDataUrl?}]
+      const newFiles = tracks.map(t => ({ file:{ name:t.fileName, size:t.size, native:true }, id:t.id }));
+      const newMetas = tracks.map(t => ({
+        ...emptyMeta(t.id),
+        title:  t.title  || stripExt(t.fileName),
+        artist: t.artist || '',
+        album:  t.album  || '',
+        genre:  t.genre  || '',
+        year:   t.year   || String(new Date().getFullYear()),
+        artworkUrl: t.artworkDataUrl || null,
+      }));
+      const newUrls = Object.fromEntries(tracks.map(t => [t.id, t.fileUrl]));
+      setFiles(p => [...p, ...newFiles]);
+      setMetas(p => [...p, ...newMetas]);
+      setAudioUrls(p => ({ ...p, ...newUrls }));
+      setStep(1); setActive(0);
+    };
+    return () => { window.__kyoyuUploadResult = undefined; };
+  }, []);
+
+  /* blob URLs — only for non-native JS File objects */
   useEffect(() => {
     setAudioUrls(prev => {
       const next={...prev};
       const ids=new Set(files.map(f=>f.id));
-      Object.keys(next).forEach(id=>{if(!ids.has(id)){URL.revokeObjectURL(next[id]);delete next[id];}});
-      files.forEach(({file,id})=>{if(!next[id])next[id]=URL.createObjectURL(file);});
+      Object.keys(next).forEach(id=>{
+        if(!ids.has(id)&&!next[id]?.startsWith('kyoyu-file://'))
+          {URL.revokeObjectURL(next[id]);delete next[id];}
+        else if(!ids.has(id)) delete next[id];
+      });
+      files.forEach(({file,id})=>{
+        if(!next[id] && !file.native) next[id]=URL.createObjectURL(file);
+      });
       return next;
     });
   },[files]);
 
-  /* sync metas + extract tags for new files */
+  /* sync metas + extract tags for new non-native files */
   useEffect(() => {
     const prev=new Map(metas.map(m=>[m.id,m]));
     const next=files.map(({file,id})=>prev.get(id)??{...emptyMeta(id),title:stripExt(file.name)});
     if(active>=files.length&&files.length>0)setActive(files.length-1);
     setMetas(next);
     files.forEach(({file,id})=>{
-      if(prev.has(id))return;
+      if(prev.has(id)||file.native)return; // skip already-processed or native files
       extractMeta(file).then(r=>{
         setMetas(m=>m.map(t=>t.id!==id?t:{...t,
           title:r.title||t.title, artist:r.artist||t.artist,
@@ -130,9 +161,12 @@ export default function UserUploads() {
       <div className={`uu-dropzone glass${dragging?' dragging':''}`}
         onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)}
         onDrop={e=>{e.preventDefault();setDragging(false);addFiles(e.dataTransfer.files);}}
-        onClick={()=>fileRef.current.click()}>
+        onClick={()=>{
+          if(isNativeApp()) window.webkit?.messageHandlers?.upload?.postMessage({action:'pick'});
+          else fileRef.current.click();
+        }}>
         <UploadIcon size={28} strokeWidth={1.5}/>
-        <div className="uu-drop-title">{dragging?'Drop to add':'Drag & drop audio files'}</div>
+        <div className="uu-drop-title">{dragging?'Drop to add': isNativeApp() ? 'Tap to select from Files' : 'Drag & drop audio files'}</div>
         <div className="uu-drop-formats">{['FLAC','WAV','AIFF','MP3'].map(f=><span key={f} className="uu-fmt">{f}</span>)}</div>
       </div>
 
@@ -140,7 +174,10 @@ export default function UserUploads() {
 
       {files.length>0&&(
         <div className="uu-file-list glass">
-          <div className="uu-file-list-hdr"><span>{files.length} track{files.length>1?'s':''} selected</span><button onClick={()=>fileRef.current.click()}>+ Add more</button></div>
+          <div className="uu-file-list-hdr"><span>{files.length} track{files.length>1?'s':''} selected</span><button onClick={()=>{
+            if(isNativeApp()) window.webkit?.messageHandlers?.upload?.postMessage({action:'pick'});
+            else fileRef.current.click();
+          }}>+ Add more</button></div>
           {files.map(({file,id},i)=>(
             <div key={id} className="uu-file-row">
               <span className="uu-file-num">{i+1}</span>
