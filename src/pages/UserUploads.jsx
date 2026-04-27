@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle } from 'lucide-react';
+import * as mm from 'music-metadata-browser';
 import './UserUploads.css';
 
 /* ─── helpers ───────────────────────────────────────────────── */
@@ -10,11 +11,27 @@ const stripExt = n => n.replace(/\.[^/.]+$/,'');
 const ok       = f => ACCEPTED.includes('.'+f.name.split('.').pop().toLowerCase());
 const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:String(new Date().getFullYear()), label:'', mixEng:'', masterEng:'', artworkUrl:null, artworkFile:null });
 
-/* ─── inline metadata parser (ID3v2, FLAC, WAV, AIFF) ───────── */
-function dec(enc,b,s,e){let d=b.slice(s,Math.min(e,b.length)),l=d.length;if(enc===1||enc===2){while(l>=2&&!d[l-1]&&!d[l-2])l-=2;}else{while(l>0&&!d[l-1])l--;}try{if(enc===0)return new TextDecoder('iso-8859-1').decode(d.slice(0,l)).trim();if(enc===1||enc===2)return new TextDecoder('utf-16').decode(d.slice(0,l)).trim();return new TextDecoder('utf-8').decode(d.slice(0,l)).trim();}catch{return '';}}
-function parseID3(bytes,view,o,r){const ver=bytes[o+3];const flags=bytes[o+5];const sz=((bytes[o+6]&0x7f)<<21)|((bytes[o+7]&0x7f)<<14)|((bytes[o+8]&0x7f)<<7)|(bytes[o+9]&0x7f);let i=o+10;if(flags&0x40)i+=ver>=4?((bytes[i]&0x7f)<<21)|((bytes[i+1]&0x7f)<<14)|((bytes[i+2]&0x7f)<<7)|(bytes[i+3]&0x7f):view.getUint32(i)+4;const end=Math.min(o+10+sz,bytes.length);while(i+10<end){const fid=String.fromCharCode(bytes[i],bytes[i+1],bytes[i+2],bytes[i+3]);if(fid==='\x00\x00\x00\x00')break;const fsz=ver>=4?((bytes[i+4]&0x7f)<<21)|((bytes[i+5]&0x7f)<<14)|((bytes[i+6]&0x7f)<<7)|(bytes[i+7]&0x7f):view.getUint32(i+4);if(fsz<=0||fsz>end-i-10)break;i+=10;const e=bytes[i];const t=()=>dec(e,bytes,i+1,i+fsz);if(fid==='TIT2'&&!r.title)r.title=t();else if(fid==='TPE1'&&!r.artist)r.artist=t();else if((fid==='TALB'||fid==='TOAL')&&!r.album)r.album=t();else if(fid==='TCON'&&!r.genre){const g=t();const m=g.match(/^\((\d+)\)(.*)$/);r.genre=m?(m[2].trim()||g):g.trim();}else if((fid==='TDRC'||fid==='TYER')&&!r.year)r.year=t().slice(0,4);else if(fid==='TPUB'&&!r.label)r.label=t();else if(fid==='APIC'&&!r.artworkUrl&&fsz>4){let p=i+1;let me=p;while(me<i+fsz&&bytes[me])me++;const mime=String.fromCharCode(...bytes.slice(p,me));p=me+2;if(e===1||e===2){while(p+1<i+fsz&&!(bytes[p]===0&&bytes[p+1]===0))p+=2;p+=2;}else{while(p<i+fsz&&bytes[p])p++;p++;}const pic=bytes.slice(p,i+fsz);if(pic.length>0)r.artworkUrl=URL.createObjectURL(new Blob([pic],{type:mime||'image/jpeg'}));}i+=fsz;}}
-
-async function extractMeta(file){const r={title:null,artist:null,album:null,genre:null,year:null,label:null,artworkUrl:null};try{const buf=await file.slice(0,4*1024*1024).arrayBuffer();const b=new Uint8Array(buf);const v=new DataView(buf);const s4=o=>String.fromCharCode(b[o],b[o+1],b[o+2],b[o+3]);const hdr=s4(0);if(hdr==='FORM'&&(s4(8)==='AIFF'||s4(8)==='AIFC')){let o=12;while(o+8<b.length){const cid=s4(o);const csz=v.getUint32(o+4);o+=8;if((cid==='ID3 '||cid==='id3 ')&&b[o]===0x49&&b[o+1]===0x44&&b[o+2]===0x33)parseID3(b,v,o,r);if(!csz)break;o+=csz+(csz%2);}}else if(hdr==='RIFF'&&s4(8)==='WAVE'){let o=12;while(o+8<b.length){const cid=s4(o);const csz=v.getUint32(o+4,true);o+=8;if(cid==='id3 '||cid==='ID3 '||cid==='ID32')parseID3(b,v,o,r);if(!csz)break;o+=csz+(csz%2);}}else if(b[0]===0x49&&b[1]===0x44&&b[2]===0x33)parseID3(b,v,0,r);else if(b[0]===0x66&&b[1]===0x4C&&b[2]===0x61&&b[3]===0x43){let o=4;while(o+4<b.length){const bb=b[o];const isLast=(bb&0x80)!==0;const bt=bb&0x7f;const bsz=(b[o+1]<<16)|(b[o+2]<<8)|b[o+3];o+=4;if(bt===4&&bsz>8){const vl=v.getUint32(o,true);let p=o+4+vl;const cnt=v.getUint32(p,true);p+=4;for(let i=0;i<cnt&&p+4<=o+bsz;i++){const cl=v.getUint32(p,true);p+=4;if(cl>0&&p+cl<=o+bsz){const kv=new TextDecoder('utf-8').decode(b.slice(p,p+cl));const eq=kv.indexOf('=');if(eq>0){const k=kv.slice(0,eq).toUpperCase(),val=kv.slice(eq+1).trim();if(k==='TITLE'&&!r.title)r.title=val;if(k==='ARTIST'&&!r.artist)r.artist=val;if(k==='ALBUM'&&!r.album)r.album=val;if(k==='GENRE'&&!r.genre)r.genre=val;if((k==='DATE'||k==='YEAR')&&!r.year)r.year=val.slice(0,4);if(k==='LABEL'&&!r.label)r.label=val;}p+=cl;}}}else if(bt===6&&!r.artworkUrl&&bsz>16){let p=o+4;const ml=v.getUint32(p);p+=4;const mime=new TextDecoder().decode(b.slice(p,p+ml));p+=ml+4+16;const pl=v.getUint32(p);p+=4;if(pl>0&&p+pl<=o+bsz){const pic=b.slice(p,p+pl);r.artworkUrl=URL.createObjectURL(new Blob([pic],{type:mime||'image/jpeg'}));}}if(isLast)break;o+=bsz;}}}catch(_){}return r;}
+/* ─── metadata extraction via music-metadata-browser ────────── */
+async function extractMeta(file) {
+  const r = { title:null, artist:null, album:null, genre:null, year:null, label:null, artworkUrl:null };
+  try {
+    const meta = await mm.parseBlob(file, { skipCovers: false, duration: false });
+    const c = meta.common;
+    r.title  = c.title              || null;
+    r.artist = c.artist             || null;
+    r.album  = c.album              || null;
+    r.genre  = c.genre?.[0]         || null;
+    r.year   = c.year?.toString()   || null;
+    r.label  = c.label?.[0]         || null;
+    if (c.picture?.length) {
+      const pic = c.picture[0];
+      r.artworkUrl = URL.createObjectURL(new Blob([pic.data], { type: pic.format || 'image/jpeg' }));
+    }
+  } catch (e) {
+    console.warn('[UserUploads] metadata parse error:', e);
+  }
+  return r;
+}
 
 const STEPS = ['Files','Track Info','Review'];
 
