@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════ */
 .di-mini {
   position: fixed;
-  top: 14px;              /* at DI hardware level, slightly lower than before */
+  top: 20px;              /* at DI level — very slightly lower than before */
   left: 50%;
   transform: translateX(-50%);
   z-index: 1400;
@@ -51,11 +51,17 @@
    * env(safe-area-inset-top) = DI + status bar height for this device.
    * +8px gap so all 4 card corners are fully visible (not cropped by screen).
    */
-  top: calc(env(safe-area-inset-top) + 8px);
+  top: 10px;              /* AT the DI notch — card aligns with hardware */
   left: 12px; right: 12px;
   z-index: 1300;
-  border-radius: 20px;    /* all 4 corners rounded and visible */
-  padding: 12px 16px 14px;
+  border-radius: 20px;
+  /*
+   * Card starts at the DI level (top:10px).
+   * padding-top pushes content below the DI camera area.
+   * env(safe-area-inset-top) ≈ 59px on iPhone 14-17 Pro.
+   * Content starts at: 10 + (59-6) = 63px — just below DI bottom (~48px).
+   */
+  padding: calc(env(safe-area-inset-top) - 6px) 16px 14px;
   background: rgba(18,18,22,.97);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
