@@ -5,7 +5,7 @@
    ══════════════════════════════════════════════════════ */
 .di-mini {
   position: fixed;
-  top: 20px;              /* at DI level — very slightly lower than before */
+  top: 16px;              /* sweet spot: 14=too high, 20=too low */
   left: 50%;
   transform: translateX(-50%);
   z-index: 1400;
@@ -40,28 +40,22 @@
 
 /* ══════════════════════════════════════════════════════
    Expanded Dynamic Island — img_12
-   Starts at top:0 (same level as camera lenses).
-   Background covers behind the camera. Content is
-   padded below the DI hardware via --kyoyu-top-h.
+   Flat top (no corners to clip), rounded bottom only.
+   Flush from screen top like iOS Live Activities.
    ══════════════════════════════════════════════════════ */
 .di-exp {
   position: fixed;
   /*
-   * Start just BELOW the Dynamic Island hardware.
-   * env(safe-area-inset-top) = DI + status bar height for this device.
-   * +8px gap so all 4 card corners are fully visible (not cropped by screen).
+   * Flush from screen top — no top corners means nothing gets
+   * clipped by the iPhone's own ~47pt screen rounded corners.
+   * Only bottom corners are rounded (standard iOS DI pattern).
+   * Content pushed below the DI hardware via padding-top.
    */
-  top: 10px;              /* AT the DI notch — card aligns with hardware */
-  left: 12px; right: 12px;
+  top: 0;
+  left: 8px; right: 8px;
   z-index: 1300;
-  border-radius: 20px;
-  /*
-   * Card starts at the DI level (top:10px).
-   * padding-top pushes content below the DI camera area.
-   * env(safe-area-inset-top) ≈ 59px on iPhone 14-17 Pro.
-   * Content starts at: 10 + (59-6) = 63px — just below DI bottom (~48px).
-   */
-  padding: calc(env(safe-area-inset-top) - 6px) 16px 14px;
+  border-radius: 0 0 20px 20px;    /* flat top, rounded bottom only */
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 14px;
   background: rgba(18,18,22,.97);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
