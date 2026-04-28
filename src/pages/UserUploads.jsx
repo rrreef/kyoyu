@@ -76,7 +76,7 @@ export default function UserUploads() {
   const [files,       setFiles]       = useState([]);
   const [metas,       setMetas]       = useState([]);
   const [active,      setActive]      = useState(0);
-  const [saved,       setSaved]       = useState(() => { try { return JSON.parse(localStorage.getItem(`kyoyu-uploads-${typeof window!=='undefined'?'_init':''}`) || '[]'); } catch { return []; } });
+  const [saved,       setSaved]       = useState([]);
   const [playing,     setPlaying]     = useState(null);
   const [dragging,    setDragging]    = useState(false);
   const [rejected,    setRejected]    = useState([]);
@@ -173,9 +173,29 @@ export default function UserUploads() {
   function pickArt(i,e){const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:f,artworkUrl:url}:t));e.target.value='';}
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
-  function saveAll(){
-    setSaved(prev=>[...metas.map((m,i)=>({...m,fileUrl:audioUrls[files[i]?.id],format:ext(files[i].file),size:fmtBytes(files[i].file.size),savedAt:Date.now()})),...prev]);
-    setFiles([]);setMetas([]);setStep(0);setActive(0);
+  async function saveAll(){
+    const items = await Promise.all(metas.map(async (m, i) => {
+      let artworkUrl = m.artworkUrl;
+      // Convert blob/object URL to persistent base64 data URL
+      if (m.artworkFile) {
+        artworkUrl = await new Promise(res => {
+          const r = new FileReader();
+          r.onload = e => res(e.target.result);
+          r.readAsDataURL(m.artworkFile);
+        });
+      }
+      return {
+        ...m,
+        artworkUrl,
+        artworkFile: undefined,  // don't store File objects in localStorage
+        fileUrl:  audioUrls[files[i]?.id],
+        format:   ext(files[i].file),
+        size:     fmtBytes(files[i].file.size),
+        savedAt:  Date.now(),
+      };
+    }));
+    setSaved(prev => [...items, ...prev]);
+    setFiles([]); setMetas([]); setStep(0); setActive(0);
   }
   function removeSaved(id){setSaved(p=>p.filter(t=>t.id!==id));if(playing===id){audioRef.current.pause();setPlaying(null);}}
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}

@@ -34,6 +34,7 @@ import Orders        from './pages/Orders';
 import Downloads     from './pages/Downloads';
 import Messages      from './pages/Messages';
 import Events        from './pages/Events';
+import MyReleases    from './pages/MyReleases';
 
 // Creator pages
 import Dashboard     from './pages/Dashboard';
@@ -116,6 +117,7 @@ function ListenerApp() {
           <Route path="/downloads"       element={<Downloads />} />
           <Route path="/account"         element={<Account />} />
           <Route path="/uploads"         element={<UserUploads />} />
+          <Route path="/my-releases"      element={<MyReleases />} />
           <Route path="/app-settings"    element={<AppSettings />} />
           <Route path="/messages"        element={<Messages />} />
           <Route path="/events"          element={<Events />} />

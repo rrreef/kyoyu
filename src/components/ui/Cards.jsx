@@ -2,20 +2,35 @@ import { Link } from 'react-router-dom';
 import { Play, Heart, ShoppingBag } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { useState, useRef } from 'react';
 import './Cards.css';
 
 export function ReleaseCard({ release, size = 'md' }) {
   const { playRelease } = usePlayer();
   const { isSaved, toggleSave } = useLibrary();
   const saved = isSaved(release.id);
+  const [longPressed, setLongPressed] = useState(false);
+  const longTimer = useRef(null);
+
+  function onTouchStart() {
+    longTimer.current = setTimeout(() => setLongPressed(true), 400);
+  }
+  function onTouchEnd() {
+    clearTimeout(longTimer.current);
+    if (longPressed) { setLongPressed(false); playRelease(release); }
+  }
+  function onTouchMove() { clearTimeout(longTimer.current); setLongPressed(false); }
 
   return (
-    <div className={`release-card glass-card ${size}`}>
+    <div
+      className={`release-card glass-card ${size}${longPressed ? ' long-pressed' : ''}`}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchMove={onTouchMove}
+    >
       <div className="card-cover-wrap">
         <img src={release.cover} alt={release.title} className="card-cover" />
         <div className="card-cover-overlay">
           <button className="card-play-btn" onClick={() => playRelease(release)} aria-label="Play">
-            <Play size={18} fill="white" />
+            <Play size={18} fill="currentColor" />
           </button>
         </div>
       </div>

@@ -81,7 +81,7 @@ function SavedToast({ visible }) {
 /* ─── Section panels ─────────────────────────────────────── */
 
 function AccountPanel({ user }) {
-  const { updateProfile } = useAuth();
+  const { updateProfile, setAvatarSrc } = useAuth();
   const [vi]         = useVIStore();
   const [artistName, setArtistName] = useState(user?.artistName || '');
   const [bio,        setBio]        = useState(user?.bio        || '');
@@ -94,11 +94,16 @@ function AccountPanel({ user }) {
   const avatarImage    = vi.avatarImage;
   const avatarObjPos   = vi.avatarPosition ? `${vi.avatarPosition.x}% ${vi.avatarPosition.y}%` : '50% 50%';
 
-  /* Handle file from input or drop */
+  /* Handle file from input or drop — convert to data URL for persistence + native sync */
   const processAvatarFile = (f) => {
     if (!f || !f.type.startsWith('image/')) return;
-    const url = URL.createObjectURL(f);
-    setVIState({ avatarImage: url }); // sync to VI store → ListenerPreview too
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;  // base64 — survives reload, works on native
+      setVIState({ avatarImage: dataUrl });
+      setAvatarSrc(dataUrl, user?.id);   // → AuthContext → native iOS profile button
+    };
+    reader.readAsDataURL(f);
   };
 
   const handleAvatarInput = (e) => {
@@ -159,7 +164,7 @@ function AccountPanel({ user }) {
               <button
                 type="button"
                 className="s-avatar-remove"
-                onClick={() => setVIState({ avatarImage: null })}
+                onClick={() => { setVIState({ avatarImage: null }); setAvatarSrc(null); }}
                 title="Remove photo"
               >×</button>
             )}

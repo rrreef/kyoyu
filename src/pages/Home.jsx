@@ -209,7 +209,7 @@ export default function Home() {
         <section className="home-section">
           <div className="section-title">
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <Link to="/uploads">See All <ArrowRight size={12}/></Link>
+            <Link to="/my-releases">See All <ArrowRight size={12}/></Link>
           </div>
           <UploadShelf uploads={myUploads}/>
         </section>
