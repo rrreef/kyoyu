@@ -89,6 +89,61 @@ function sortUploads(arr, s) {
   return c.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0)); // newest
 }
 
+/* ── SwipeDeleteRow — iOS swipe-to-reveal delete ──────────────── */
+function SwipeDeleteRow({ onDelete, children }) {
+  const [offset, setOffset] = useState(0);
+  const startX      = useRef(null);
+  const startOff    = useRef(0);
+  const liveOffset  = useRef(0);  // always current, avoids stale closure in onTouchEnd
+  const dragging    = useRef(false);
+  const DELETE_W    = 76;
+  const THRESHOLD   = 36;
+
+  function onTouchStart(e) {
+    startX.current   = e.touches[0].clientX;
+    startOff.current = liveOffset.current;
+    dragging.current = true;
+  }
+  function onTouchMove(e) {
+    if (!dragging.current) return;
+    const dx   = startX.current - e.touches[0].clientX; // positive = swiping left
+    const next = Math.max(0, Math.min(startOff.current + dx, DELETE_W + 8));
+    liveOffset.current = next;
+    setOffset(next);
+  }
+  function onTouchEnd() {
+    dragging.current = false;
+    const snap = liveOffset.current >= THRESHOLD ? DELETE_W : 0;
+    liveOffset.current = snap;
+    setOffset(snap);
+  }
+  function close(e) { e?.stopPropagation(); liveOffset.current = 0; setOffset(0); }
+
+  const isOpen = offset >= DELETE_W;
+
+  return (
+    <div className="sdr-wrap" onClick={isOpen ? close : undefined}>
+      <div className="sdr-bg">
+        <button className="sdr-btn" onClick={(e) => { e.stopPropagation(); onDelete(); close(); }}>
+          <Trash2 size={20} />
+        </button>
+      </div>
+      <div
+        className="sdr-content"
+        style={{
+          transform: `translateX(-${offset}px)`,
+          transition: dragging.current ? 'none' : 'transform 0.28s cubic-bezier(.25,.46,.45,.94)',
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function UserUploads() {
   const { user } = useAuth();
   const UPLOAD_KEY = `kyoyu-uploads-${user?.id||'anon'}`;
@@ -336,15 +391,16 @@ export default function UserUploads() {
               {/* List */}
               <div className="uu-prev-list">
                 {sortUploads(saved,prevSort).map(t=>(
-                  <div key={t.id} className={`uu-track glass${playing===t.id?' playing':''}`}>
-                    {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
-                    <div className="uu-track-info">
-                      <div className="uu-track-title">{t.title}</div>
-                      <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                  <SwipeDeleteRow key={t.id} onDelete={() => removeSaved(t.id)}>
+                    <div className={`uu-track glass${playing===t.id?' playing':''}`}>
+                      {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
+                      <div className="uu-track-info">
+                        <div className="uu-track-title">{t.title}</div>
+                        <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                      </div>
+                      <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
                     </div>
-                    <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
-                    <button className="uu-del" onClick={()=>removeSaved(t.id)}><Trash2 size={13}/></button>
-                  </div>
+                  </SwipeDeleteRow>
                 ))}
               </div>
             </>
