@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Play, ArrowRight, TrendingUp, Zap, Radio, Lock } from 'lucide-react';
+import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -29,18 +29,55 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
   );
 }
 
+/* ── Expanded vertical list (See All view) ─────────────────── */
+function UploadExpandedList({ uploads }) {
+  const { playTrack } = usePlayer();
+  const [activeId, setActiveId] = useState(null);
+  const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+
+  function play(t) {
+    const queue = sorted.map(u => ({
+      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '',
+      releaseCover: u.artworkUrl || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || '',
+    }));
+    playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
+    setActiveId(t.id);
+  }
+
+  return (
+    <div className="upl-expanded-list">
+      {sorted.map(t => (
+        <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`}>
+          {t.artworkUrl
+            ? <img src={t.artworkUrl} alt="" className="upl-exp-art"/>
+            : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={15}/></div>
+          }
+          <div className="upl-exp-info">
+            <div className="upl-exp-title">{t.title || 'Untitled'}</div>
+            <div className="upl-exp-sub">{t.artist || ''}</div>
+          </div>
+          <button className="upl-exp-play" onClick={() => play(t)}>
+            {activeId === t.id ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   const { playRelease, playTrack } = usePlayer();
   const { user } = useAuth();
   const featured = releases[0];
   const [myUploads, setMyUploads] = useState([]);
+  const [showAllUploads, setShowAllUploads] = useState(false);
 
   useEffect(() => {
     function loadUploads() {
       if (!user?.id) return;
       try {
         const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-        setMyUploads(raw ? JSON.parse(raw).slice(0, 10) : []);
+        setMyUploads(raw ? JSON.parse(raw) : []);   // load all — slice happens at render
       } catch {}
     }
     loadUploads();
@@ -214,9 +251,15 @@ export default function Home() {
         <section className="home-section">
           <div className="section-title">
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <Link to="/my-releases">See All <ArrowRight size={12}/></Link>
+            <button className="see-all-toggle" onClick={() => setShowAllUploads(p => !p)}>
+              {showAllUploads ? 'Show Less' : `See All (${myUploads.length})`}
+              <ArrowRight size={12} style={{marginLeft:3,verticalAlign:'middle',transform: showAllUploads ? 'rotate(90deg)' : 'none',transition:'transform .2s'}}/>
+            </button>
           </div>
-          <UploadShelf uploads={myUploads}/>
+          {showAllUploads
+            ? <UploadExpandedList uploads={myUploads} />
+            : <UploadShelf uploads={myUploads.slice(0, 10)} />
+          }
         </section>
       )}
 

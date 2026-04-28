@@ -130,3 +130,19 @@
 
 /* Player z-index is 1300 — it naturally floats above the sheet */
 /* No bottom repositioning needed; sheet height is capped instead */
+
+/* ── See All toggle button (matches .section-title a style) ── */
+.see-all-toggle { background:none;border:none;cursor:pointer;font-size:.7rem;font-weight:500;color:var(--text-muted,rgba(255,255,255,.4));font-family:inherit;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:2px;padding:0;transition:color .15s; }
+.see-all-toggle:hover { color:var(--text-primary,#fff); }
+
+/* ── Expanded vertical upload list ────────────────────────── */
+.upl-expanded-list { display:flex;flex-direction:column;gap:4px;padding:0 16px 8px; }
+.upl-exp-row { display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.03);border:.5px solid rgba(255,255,255,.07);transition:background .15s; }
+.upl-exp-row.active { background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14); }
+.upl-exp-art { width:42px;height:42px;border-radius:8px;object-fit:cover;flex-shrink:0; }
+.upl-exp-art-ph { background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3); }
+.upl-exp-info { flex:1;min-width:0; }
+.upl-exp-title { font-size:.86rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.upl-exp-sub { font-size:.72rem;color:rgba(255,255,255,.38);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.upl-exp-play { width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:none;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;flex-shrink:0;transition:background .15s;-webkit-tap-highlight-color:transparent; }
+.upl-exp-play:hover { background:rgba(255,255,255,.16); }
