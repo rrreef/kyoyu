@@ -12,41 +12,36 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
-/* ── Scrubber: uncontrolled range + direct DOM fill update ── */
+/* ── Scrubber: uncontrolled range + direct DOM updates ── */
 function Scrubber({ progress, duration, onSeek }) {
   const rangeRef = useRef(null);
   const fillRef  = useRef(null);
+  const thumbRef = useRef(null);
   const dragging = useRef(false);
-  const [active, setActive] = useState(false);
 
-  // Sync slider position from audio ONLY when not dragging
+  // Sync slider + fill + thumb from audio (skipped while user is dragging)
   useEffect(() => {
-    if (dragging.current || !rangeRef.current) return;
-    rangeRef.current.value = progress || 0;
-    if (fillRef.current) {
-      fillRef.current.style.width = `${duration ? (progress/duration)*100 : 0}%`;
-    }
+    if (dragging.current) return;
+    const pct = duration ? (progress / duration) * 100 : 0;
+    if (rangeRef.current)  rangeRef.current.value        = progress || 0;
+    if (fillRef.current)   fillRef.current.style.width   = `${pct}%`;
+    if (thumbRef.current)  thumbRef.current.style.left   = `${Math.max(0,Math.min(100,pct))}%`;
   }, [progress, duration]);
 
-  // Update max when duration known
   useEffect(() => {
     if (rangeRef.current) rangeRef.current.max = duration || 100;
   }, [duration]);
 
-  // Attach native events — most reliable in WKWebView
   useEffect(() => {
     const el = rangeRef.current; if (!el) return;
-
     const onInput = () => {
-      const pct = duration ? (parseFloat(el.value)/duration)*100 : 0;
-      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+      const val = parseFloat(el.value);
+      const pct = duration ? (val / duration) * 100 : 0;
+      if (fillRef.current)  fillRef.current.style.width  = `${pct}%`;
+      if (thumbRef.current) thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
     };
-    const onStart = () => { dragging.current = true; setActive(true); };
-    const onEnd   = () => {
-      dragging.current = false; setActive(false);
-      onSeek(parseFloat(el.value));
-    };
-
+    const onStart = () => { dragging.current = true; };
+    const onEnd   = () => { dragging.current = false; onSeek(parseFloat(el.value)); };
     el.addEventListener('input',      onInput);
     el.addEventListener('mousedown',  onStart);
     el.addEventListener('touchstart', onStart, { passive: true });
@@ -61,57 +56,48 @@ function Scrubber({ progress, duration, onSeek }) {
     };
   }, [duration, onSeek]);
 
-  const pct = duration ? (progress/duration)*100 : 0;
+  const pct = duration ? (progress / duration) * 100 : 0;
   return (
     <div className="fp-scrub">
-      <div ref={fillRef} className="fp-scrub-fill" style={{ width:`${pct}%` }}/>
-      {active && <div className="fp-scrub-thumb" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>}
+      <div ref={fillRef}  className="fp-scrub-fill"  style={{ width:`${pct}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>
       <input ref={rangeRef} type="range" className="fp-range-overlay"
         defaultValue={0} min={0} max={duration||100} step={0.1}/>
     </div>
   );
 }
 
-/* ── Volume slider: same pattern, updates live ── */
+/* ── Volume slider ── */
 function VolSlider({ volume, onSet }) {
   const rangeRef = useRef(null);
   const fillRef  = useRef(null);
-  const [active, setActive] = useState(false);
+  const thumbRef = useRef(null);
 
   useEffect(() => {
-    if (rangeRef.current) rangeRef.current.value = volume ?? 0.8;
-    if (fillRef.current)  fillRef.current.style.width = `${(volume??0.8)*100}%`;
+    const pct = (volume ?? 0.8) * 100;
+    if (rangeRef.current)  rangeRef.current.value       = volume ?? 0.8;
+    if (fillRef.current)   fillRef.current.style.width  = `${pct}%`;
+    if (thumbRef.current)  thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
   }, [volume]);
 
   useEffect(() => {
     const el = rangeRef.current; if (!el) return;
     const onInput = () => {
-      const v = parseFloat(el.value);
-      if (fillRef.current) fillRef.current.style.width = `${v*100}%`;
+      const v   = parseFloat(el.value);
+      const pct = v * 100;
+      if (fillRef.current)  fillRef.current.style.width  = `${pct}%`;
+      if (thumbRef.current) thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
       onSet(v);
     };
-    const onStart = () => setActive(true);
-    const onEnd   = () => setActive(false);
-
-    el.addEventListener('input',      onInput);
-    el.addEventListener('mousedown',  onStart);
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('mouseup',    onEnd);
-    el.addEventListener('touchend',   onEnd);
-    return () => {
-      el.removeEventListener('input',      onInput);
-      el.removeEventListener('mousedown',  onStart);
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('mouseup',    onEnd);
-      el.removeEventListener('touchend',   onEnd);
-    };
+    el.addEventListener('input', onInput);
+    return () => el.removeEventListener('input', onInput);
   }, [onSet]);
 
-  const pct = (volume??0.8)*100;
+  const pct = (volume ?? 0.8) * 100;
   return (
     <div className="fp-vol-bar">
-      <div ref={fillRef} className="fp-vol-fill" style={{ width:`${pct}%` }}/>
-      {active && <div className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>}
+      <div ref={fillRef}  className="fp-vol-fill"        style={{ width:`${pct}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>
       <input ref={rangeRef} type="range" className="fp-range-overlay"
         defaultValue={0.8} min={0} max={1} step={0.01}/>
     </div>

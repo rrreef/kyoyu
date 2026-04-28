@@ -79,25 +79,23 @@
 .fp-scrub-fill { position:absolute; top:0; left:0; bottom:0; background:var(--text-primary); border-radius:2px; pointer-events:none; }
 .fp-times { display:flex; justify-content:space-between; margin-top:10px; font-size:12px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
 
-/* Circle thumb — shown only while pointer is held */
+/* Circle thumb — always visible */
 .fp-scrub-thumb {
   position:absolute; top:50%; transform:translate(-50%,-50%);
-  width:20px; height:20px; border-radius:50%;
-  background:#fff; box-shadow:0 0 12px rgba(255,255,255,.55), 0 2px 8px rgba(0,0,0,.4);
+  width:10px; height:10px; border-radius:50%;
+  background:#fff; box-shadow:0 0 6px rgba(255,255,255,.5), 0 1px 4px rgba(0,0,0,.4);
   pointer-events:none; z-index:5;
-  animation: thumb-pop .12s cubic-bezier(.34,1.56,.64,1);
 }
-.fp-scrub-thumb--sm { width:14px; height:14px; }
-@keyframes thumb-pop { from{transform:translate(-50%,-50%) scale(0)} to{transform:translate(-50%,-50%) scale(1)} }
+.fp-scrub-thumb--sm { width:7px; height:7px; }
 
-/* Invisible native range input — overlaid on visual track */
+/* Invisible native range overlay */
 .fp-range-overlay {
-  position:absolute; inset:-14px 0; width:100%; height:calc(100% + 28px);
+  position:absolute; inset:-18px 0; width:100%; height:calc(100% + 36px);
   opacity:0; cursor:pointer; -webkit-appearance:none; appearance:none;
   margin:0; padding:0; background:transparent; border:none; z-index:10;
 }
-.fp-range-overlay::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%; background:transparent; cursor:pointer; }
-.fp-range-overlay::-moz-range-thumb { width:28px; height:28px; border-radius:50%; background:transparent; cursor:pointer; border:none; }
+.fp-range-overlay::-webkit-slider-thumb { -webkit-appearance:none; width:36px; height:36px; border-radius:50%; background:transparent; cursor:pointer; }
+.fp-range-overlay::-moz-range-thumb    { width:36px; height:36px; border-radius:50%; background:transparent; cursor:pointer; border:none; }
 
 /* Controls */
 .fp-ctrls { display:flex; align-items:center; justify-content:center; gap:44px; padding-top:20px; }
