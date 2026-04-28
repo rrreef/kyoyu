@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
   async function hydrateUser(authUser) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, artist_name, display_name')
+      .select('role, artist_name, display_name, avatar_url')
       .eq('id', authUser.id)
       .single();
 
@@ -73,11 +73,13 @@ export function AuthProvider({ children }) {
     setRole(userRole);
     setUser(hydrated);
 
-    // Restore persisted avatar (stored per user id)
-    const saved = localStorage.getItem('kyoyu-avatar-' + authUser.id);
-    if (saved) {
-      setAvatarSrcRaw(saved);
-      try { window.webkit?.messageHandlers?.avatar?.postMessage(saved); } catch (_) {}
+    // Restore avatar: Supabase URL (cross-device) takes priority over localStorage
+    const supabaseAvatar = profile?.avatar_url || null;
+    const localAvatar    = localStorage.getItem('kyoyu-avatar-' + authUser.id);
+    const avatarToUse    = supabaseAvatar || localAvatar || null;
+    if (avatarToUse) {
+      setAvatarSrcRaw(avatarToUse);
+      try { window.webkit?.messageHandlers?.avatar?.postMessage(avatarToUse); } catch (_) {}
     }
   }
 

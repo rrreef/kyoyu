@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role         TEXT NOT NULL DEFAULT 'listener' CHECK (role IN ('creator', 'listener')),
   artist_name  TEXT,
   display_name TEXT,
+  avatar_url   TEXT,   -- public Supabase Storage URL for profile picture
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

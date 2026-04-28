@@ -8,7 +8,41 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
 import { setVIState, useVIStore } from '../lib/visualIdentityStore';
 import { useTheme, THEMES } from '../hooks/useTheme';
+import { supabase } from '../lib/supabase';
 import './Settings.css';
+
+/* ─── Helpers: resize image via canvas ───────────────────────── */
+function resizeViaCanvas(imgEl, maxPx, mimeType = 'image/jpeg', quality = 0.85) {
+  const scale = Math.min(maxPx / imgEl.naturalWidth, maxPx / imgEl.naturalHeight, 1);
+  const w = Math.round(imgEl.naturalWidth  * scale);
+  const h = Math.round(imgEl.naturalHeight * scale);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d').drawImage(imgEl, 0, 0, w, h);
+  return cv.toDataURL(mimeType, quality);
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
+async function uploadAvatarToSupabase(file, userId) {
+  if (!userId) return null;
+  try {
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(`${userId}/avatar.jpg`, file, { contentType: 'image/jpeg', upsert: true });
+    if (error) { console.warn('[avatar upload]', error.message); return null; }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(`${userId}/avatar.jpg`);
+    return data?.publicUrl || null;
+  } catch (e) { console.warn('[avatar upload]', e); return null; }
+}
 
 /* ─── Settings sections ──────────────────────────────────── */
 const SECTIONS = [
@@ -95,15 +129,30 @@ function AccountPanel({ user }) {
   const avatarObjPos   = vi.avatarPosition ? `${vi.avatarPosition.x}% ${vi.avatarPosition.y}%` : '50% 50%';
 
   /* Handle file from input or drop — convert to data URL for persistence + native sync */
-  const processAvatarFile = (f) => {
+  const processAvatarFile = async (f) => {
     if (!f || !f.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target.result;  // base64 — survives reload, works on native
-      setVIState({ avatarImage: dataUrl });
-      setAvatarSrc(dataUrl, user?.id);   // → AuthContext → native iOS profile button
-    };
-    reader.readAsDataURL(f);
+    try {
+      const img = await loadImage(f);
+
+      // 1️⃣ Immediate local preview (full quality)
+      const displayDataUrl = resizeViaCanvas(img, 800);
+      setVIState({ avatarImage: displayDataUrl });
+
+      // 2️⃣ Send tiny thumbnail to native bridge RIGHT NOW — small enough to never fail
+      const thumbDataUrl = resizeViaCanvas(img, 80, 'image/jpeg', 0.8);
+      try { window.webkit?.messageHandlers?.avatar?.postMessage(thumbDataUrl); } catch (_) {}
+
+      // 3️⃣ Upload to Supabase and save permanent URL for cross-device sync
+      const publicUrl = await uploadAvatarToSupabase(f, user?.id);
+      if (publicUrl) {
+        await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl });
+        setAvatarSrc(publicUrl, user?.id); // stores in localStorage + posts URL to native
+      } else {
+        setAvatarSrc(displayDataUrl, user?.id); // fallback: data URL
+      }
+    } catch (e) {
+      console.warn('[processAvatarFile]', e);
+    }
   };
 
   const handleAvatarInput = (e) => {

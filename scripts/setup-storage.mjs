@@ -28,6 +28,14 @@ async function setup() {
   });
   console.log('artwork bucket:', e2 ? `⚠️  ${e2.message}` : '✓ created');
 
+  // Avatars bucket — public (profile pictures), 5 MB max
+  const { error: e3 } = await supabase.storage.createBucket('avatars', {
+    public: true,
+    fileSizeLimit: 5 * 1024 * 1024,
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  });
+  console.log('avatars bucket:', e3 ? `⚠️  ${e3.message}` : '✓ created');
+
   console.log('\nDone. Run the storage policies SQL in Supabase next.');
 }
 
