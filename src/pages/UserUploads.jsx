@@ -13,6 +13,26 @@ const stripExt = n => n.replace(/\.[^/.]+$/,'');
 const ok       = f => ACCEPTED.includes('.'+f.name.split('.').pop().toLowerCase());
 const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:String(new Date().getFullYear()), label:'', mixEng:'', masterEng:'', artworkUrl:null, artworkFile:null });
 
+/* Compress any data URL to a 120×120 JPEG thumbnail (~3-5 KB).
+   This keeps localStorage usage well under the 5 MB quota even with 100+ tracks. */
+function compressArtwork(dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(dataUrl);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const SIZE = 120;
+        const cv = document.createElement('canvas');
+        cv.width = SIZE; cv.height = SIZE;
+        cv.getContext('2d').drawImage(img, 0, 0, SIZE, SIZE);
+        resolve(cv.toDataURL('image/jpeg', 0.65));
+      } catch { resolve(dataUrl); } // if canvas fails, keep original
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 /* ─── metadata extraction via music-metadata-browser ────────── */
 /* MIME map needed because AIFF files may have wrong browser MIME type */
 const MIME_MAP = {
@@ -100,11 +120,8 @@ export default function UserUploads() {
     setStorageLoaded(true);  // only now is it safe to persist
   }, [user?.id]);
 
-  /* Persist saved — only AFTER the initial load to avoid wiping stored data on mount */
-  useEffect(() => {
-    if (!user?.id || !storageLoaded) return;
-    try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(saved)); } catch {}
-  }, [saved, user?.id, storageLoaded]);
+  /* Persistence is handled directly inside saveAll() and removeSaved()
+     with artwork compression — no separate effect needed */
 
   /* Register native upload result handler */
   useEffect(() => {
@@ -201,6 +218,8 @@ export default function UserUploads() {
         } else if (artworkUrl && artworkUrl.startsWith('blob:')) {
           artworkUrl = null;
         }
+        // Compress artwork thumbnail before storing
+        artworkUrl = await compressArtwork(artworkUrl);
         return {
           ...m, artworkUrl, artworkFile: undefined,
           fileUrl:  audioUrls[files[i]?.id] || null,
@@ -212,14 +231,21 @@ export default function UserUploads() {
       const uid = user?.id;
       if (uid) {
         const key = `kyoyu-uploads-${uid}`;
-        // Safe parse — corrupt data falls back to empty rather than throwing
         let existing = [];
         try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch { existing = []; }
-        const nextSaved = [...items, ...existing];
-        try { localStorage.setItem(key, JSON.stringify(nextSaved)); } catch(qe) {
-          // Quota exceeded — retry without artwork to free space
-          const slim = nextSaved.map(t => ({ ...t, artworkUrl: null }));
-          try { localStorage.setItem(key, JSON.stringify(slim)); } catch {}
+        // Compress existing artwork too (in case older saves had large data URLs)
+        const existingCompressed = await Promise.all(
+          existing.map(async t => ({
+            ...t,
+            artworkUrl: await compressArtwork(t.artworkUrl),
+          }))
+        );
+        const nextSaved = [...items, ...existingCompressed];
+        try {
+          localStorage.setItem(key, JSON.stringify(nextSaved));
+        } catch(qe) {
+          console.error('[saveAll] localStorage quota:', qe);
+          // Never strip artwork — just log and keep going (data still in React state)
         }
         setSaved(nextSaved);
       } else {
@@ -229,7 +255,7 @@ export default function UserUploads() {
       window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
     } catch(err) {
       console.error('[saveAll]', err);
-      setSaveErr(`Save failed: ${err.message}`); // shown in-UI — alert() is silent in WKWebView
+      setSaveErr(`Save failed: ${err.message}`);
     }
   }
   function removeSaved(id){
