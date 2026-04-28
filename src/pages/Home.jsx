@@ -36,11 +36,16 @@ export default function Home() {
   const [myUploads, setMyUploads] = useState([]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    try {
-      const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-      setMyUploads(raw ? JSON.parse(raw).slice(0,10) : []);
-    } catch {}
+    function loadUploads() {
+      if (!user?.id) return;
+      try {
+        const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+        setMyUploads(raw ? JSON.parse(raw).slice(0, 10) : []);
+      } catch {}
+    }
+    loadUploads();
+    window.addEventListener('kyoyu-uploads-changed', loadUploads);
+    return () => window.removeEventListener('kyoyu-uploads-changed', loadUploads);
   }, [user?.id]);
 
   // Shelf filter state

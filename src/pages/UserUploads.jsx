@@ -84,6 +84,7 @@ export default function UserUploads() {
   const [audioUrls,   setAudioUrls]   = useState({});
   const [showPrev,    setShowPrev]    = useState(false);
   const [prevSort,    setPrevSort]    = useState('newest');
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const fileRef    = useRef();
   const artRefs    = useRef([]);
   const audioRef   = useRef(new Audio());
@@ -91,15 +92,18 @@ export default function UserUploads() {
   /* Load saved uploads from localStorage once user ID is known */
   useEffect(() => {
     if (!user?.id) return;
-    const key = `kyoyu-uploads-${user.id}`;
-    try { const s = localStorage.getItem(key); if(s) setSaved(JSON.parse(s)); } catch {}
+    try {
+      const s = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      if (s) setSaved(JSON.parse(s));
+    } catch {}
+    setStorageLoaded(true);  // only now is it safe to persist
   }, [user?.id]);
 
-  /* Persist saved to localStorage whenever it changes */
+  /* Persist saved — only AFTER the initial load to avoid wiping stored data on mount */
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !storageLoaded) return;
     try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(saved)); } catch {}
-  }, [saved, user?.id]);
+  }, [saved, user?.id, storageLoaded]);
 
   /* Register native upload result handler */
   useEffect(() => {
@@ -174,28 +178,38 @@ export default function UserUploads() {
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
   async function saveAll(){
-    const items = await Promise.all(metas.map(async (m, i) => {
-      let artworkUrl = m.artworkUrl;
-      // Convert blob/object URL to persistent base64 data URL
-      if (m.artworkFile) {
-        artworkUrl = await new Promise(res => {
-          const r = new FileReader();
-          r.onload = e => res(e.target.result);
-          r.readAsDataURL(m.artworkFile);
-        });
-      }
-      return {
-        ...m,
-        artworkUrl,
-        artworkFile: undefined,  // don't store File objects in localStorage
-        fileUrl:  audioUrls[files[i]?.id],
-        format:   ext(files[i].file),
-        size:     fmtBytes(files[i].file.size),
-        savedAt:  Date.now(),
-      };
-    }));
-    setSaved(prev => [...items, ...prev]);
-    setFiles([]); setMetas([]); setStep(0); setActive(0);
+    try {
+      const items = await Promise.all(metas.map(async (m, i) => {
+        let artworkUrl = m.artworkUrl;
+        // Convert any blob/object URL to persistent base64 data URL
+        if (m.artworkFile) {
+          artworkUrl = await new Promise(res => {
+            const r = new FileReader();
+            r.onload = e => res(e.target.result);
+            r.readAsDataURL(m.artworkFile);
+          });
+        } else if (artworkUrl && artworkUrl.startsWith('blob:')) {
+          // blob URLs are ephemeral — strip them so they don't corrupt saved data
+          artworkUrl = null;
+        }
+        return {
+          ...m,
+          artworkUrl,
+          artworkFile: undefined,
+          fileUrl:  audioUrls[files[i]?.id] || null,
+          format:   files[i]?.file ? ext(files[i].file) : '',
+          size:     files[i]?.file ? fmtBytes(files[i].file.size) : '',
+          savedAt:  Date.now(),
+        };
+      }));
+      setSaved(prev => [...items, ...prev]);
+      setFiles([]); setMetas([]); setStep(0); setActive(0);
+      setShowPrev(true);  // auto-expand so user sees newly saved tracks
+      window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed')); // notify Home shelf
+    } catch(err) {
+      console.error('[saveAll]', err);
+      alert(`Could not save: ${err.message}`);
+    }
   }
   function removeSaved(id){setSaved(p=>p.filter(t=>t.id!==id));if(playing===id){audioRef.current.pause();setPlaying(null);}}
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
