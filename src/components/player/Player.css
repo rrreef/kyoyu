@@ -101,7 +101,11 @@
 .fp-action-btn:active { transform:scale(.88); }
 
 /* ── Queue view ── */
-.fp-q-header { display:flex; align-items:center; gap:12px; padding-bottom:16px; }
+.fp-q-header {
+  display:flex; align-items:center; gap:12px; padding-bottom:16px;
+  /* push below absolute handle bar + DI safe area */
+  padding-top: calc(env(safe-area-inset-top, 44px) + 50px);
+}
 .fp-q-art { width:52px; height:52px; border-radius:8px; object-fit:cover; flex-shrink:0; }
 .fp-q-art-ph { display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.1); color:rgba(255,255,255,.3); }
 .fp-q-info { flex:1; min-width:0; }
