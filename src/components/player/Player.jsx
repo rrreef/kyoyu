@@ -12,6 +12,10 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
+// Shared flag: true while any scrubber/volume drag is active.
+// Checked by FullPlayer's swipe-collapse handler to avoid collapsing on scrub release.
+const scrubState = { dragging: false };
+
 /* ── Custom drag hook ──────────────────────────────────────────
    Attaches touchstart to a hit div; touchmove/touchend on document
    so WKWebView's native scroll layer cannot intercept them.
@@ -39,11 +43,13 @@ function useScrub(hitRef, fillRef, thumbRef, onMovePct, onEndPct) {
     /* touch */
     function tMove(e) { e.preventDefault(); const p = pct(e.touches[0].clientX); set(p); moveRef.current(p); }
     function tEnd(e)  {
+      scrubState.dragging = false;
       document.removeEventListener('touchmove', tMove);
       const p = pct(e.changedTouches[0].clientX); set(p); endRef.current(p);
     }
     function tStart(e) {
-      e.stopPropagation();   // block fp swipe-collapse
+      e.stopPropagation();
+      scrubState.dragging = true;
       const p = pct(e.touches[0].clientX); set(p); moveRef.current(p);
       document.addEventListener('touchmove', tMove, { passive: false });
       document.addEventListener('touchend',  tEnd,  { once: true, passive: true });
@@ -52,11 +58,13 @@ function useScrub(hitRef, fillRef, thumbRef, onMovePct, onEndPct) {
     /* mouse (desktop / simulator) */
     function mMove(e) { const p = pct(e.clientX); set(p); moveRef.current(p); }
     function mUp(e)   {
+      scrubState.dragging = false;
       document.removeEventListener('mousemove', mMove);
       const p = pct(e.clientX); set(p); endRef.current(p);
     }
     function mDown(e) {
       e.stopPropagation();
+      scrubState.dragging = true;
       const p = pct(e.clientX); set(p); moveRef.current(p);
       document.addEventListener('mousemove', mMove);
       document.addEventListener('mouseup',   mUp, { once: true });
@@ -208,7 +216,10 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
   useEffect(() => {
     const el=fpRef.current; const hdl=handleRef.current; if(!el||!hdl) return;
     const onTS=e=>{ startY.current=e.touches[0].clientY; };
-    const onTE=e=>{ if(e.changedTouches[0].clientY-startY.current>60) onCollapse(); };
+    const onTE=e=>{
+      if (scrubState.dragging) return;   // ignore release from scrub gesture
+      if(e.changedTouches[0].clientY-startY.current>60) onCollapse();
+    };
     el.addEventListener('touchstart',onTS,{passive:true}); el.addEventListener('touchend',onTE,{passive:true});
     hdl.addEventListener('click',onCollapse);
     return ()=>{ el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); hdl.removeEventListener('click',onCollapse); };
