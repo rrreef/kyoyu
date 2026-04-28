@@ -12,6 +12,31 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
+/* ── Drag helper: attaches touchmove to document so WKWebView can't intercept ── */
+function useDrag(elRef, onPct) {
+  useEffect(() => {
+    const el = elRef.current; if (!el) return;
+    function getX(e) { return (e.touches?.[0] ?? e.changedTouches?.[0] ?? e).clientX; }
+    function update(e) {
+      const r = elRef.current?.getBoundingClientRect(); if (!r) return;
+      onPct(Math.max(0, Math.min(1, (getX(e) - r.left) / r.width)));
+    }
+    function onEnd() {
+      document.removeEventListener('touchmove', update);
+      document.removeEventListener('touchend', onEnd);
+    }
+    function onStart(e) {
+      e.stopPropagation();
+      update(e);
+      document.addEventListener('touchmove', update, { passive: true });
+      document.addEventListener('touchend', onEnd, { once: true });
+    }
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('click', update);
+    return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('click', update); };
+  });   // re-attach on every render so closure captures latest onPct
+}
+
 /* ── Web fallback mini bar ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   const ref = useRef(null); const startY = useRef(0);
@@ -36,17 +61,15 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch }) {
-  const fpRef = useRef(null); const handleRef = useRef(null); const startY = useRef(0);
-  const volRef = useRef(null);
+  const fpRef     = useRef(null);
+  const handleRef = useRef(null);
+  const scrubRef  = useRef(null);
+  const volRef    = useRef(null);
+  const startY    = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
   const [vol, setVol] = useState(80);
 
-  function handleVol(e) {
-    const r = volRef.current.getBoundingClientRect();
-    const x = (e.clientX ?? e.touches?.[0]?.clientX ?? 0) - r.left;
-    setVol(Math.max(0, Math.min(100, Math.round((x / r.width) * 100))));
-  }
-
+  // Swipe-down to collapse (whole card)
   useEffect(() => {
     const el = fpRef.current; const hdl = handleRef.current;
     if (!el || !hdl) return;
@@ -58,12 +81,13 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     return () => { el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); hdl.removeEventListener('click',onCollapse); };
   }, [onCollapse]);
 
+  // Scrubber drag
+  useDrag(scrubRef, pct => dispatch({ type:'SET_PROGRESS', value: Math.floor(pct * duration) }));
+  // Volume drag
+  useDrag(volRef, pct => setVol(Math.round(pct * 100)));
+
   const pct = duration ? (progress/duration)*100 : 0;
   const rem = Math.max(0, duration - progress);
-  function seek(e) {
-    const r = e.currentTarget.getBoundingClientRect();
-    dispatch({ type:'SET_PROGRESS', value: Math.floor(((e.clientX-r.left)/r.width)*duration) });
-  }
 
   const Artwork = ({ big }) => track.releaseCover
     ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
@@ -72,7 +96,9 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const Bottom = () => (
     <>
       <div className="fp-scrub-wrap">
-        <div className="fp-scrub" onClick={seek}><div className="fp-scrub-fill" style={{width:`${pct}%`}}/></div>
+        <div ref={scrubRef} className="fp-scrub">
+          <div className="fp-scrub-fill" style={{width:`${pct}%`}}/>
+        </div>
         <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
       </div>
       <div className="fp-ctrls">
@@ -84,7 +110,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
       </div>
       <div className="fp-vol">
         <Volume size={15} className="fp-vol-icon"/>
-        <div ref={volRef} className="fp-vol-bar" onClick={handleVol} onTouchStart={handleVol}>
+        <div ref={volRef} className="fp-vol-bar">
           <div className="fp-vol-fill" style={{width:`${vol}%`}}/>
         </div>
         <Volume2 size={15} className="fp-vol-icon"/>
@@ -102,7 +128,6 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   return (
     <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
       <div ref={handleRef} className="fp-handle-row"><div className="fp-handle"/></div>
-
       {showQueue ? (
         <>
           <div className="fp-q-header">
@@ -155,7 +180,7 @@ export default function Player() {
       if (cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if (cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if (cmd==='prev')   dispatch({type:'PREV_TRACK'});
-      if (cmd==='expand') { setExp(true);  postNative({ expanded: true  }); }
+      if (cmd==='expand') { setExp(true); postNative({ expanded: true }); }
     };
     return () => { delete window.__kyoyuPlayerCmd; };
   }, [dispatch]);
