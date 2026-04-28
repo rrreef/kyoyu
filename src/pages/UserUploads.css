@@ -138,3 +138,4 @@
 
 .uu-save-full { display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 16px 120px;padding:15px;border-radius:16px;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.18);font-size:.9rem;font-weight:700;color:#fff;cursor:pointer;transition:background .2s,transform .15s; }
 .uu-save-full:hover { background:rgba(255,255,255,.15);transform:translateY(-1px); }
+.uu-save-err { margin:0 16px 12px;padding:10px 14px;border-radius:12px;background:rgba(239,68,68,.18);border:.5px solid rgba(239,68,68,.35);color:#fca5a5;font-size:.8rem; }
