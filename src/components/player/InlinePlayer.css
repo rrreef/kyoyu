@@ -3,34 +3,30 @@
 .ip-card {
   position: relative;
   width: 100%;
-  box-sizing: border-box;       /* ← prevents horizontal overflow */
+  box-sizing: border-box;
   border-radius: 22px;
   padding: 16px 18px 14px;
   overflow: hidden;
 
-  /* Transparent liquid glass — lets page background show through */
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  /* Black transparent liquid glass */
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
 
-  /* Glass border with top specular highlight */
-  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-    inset 1px 0 0 rgba(255, 255, 255, 0.08),
-    inset -1px 0 0 rgba(255, 255, 255, 0.05),
-    0 20px 60px rgba(0, 0, 0, 0.45),
-    0 4px 16px rgba(0, 0, 0, 0.3);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Artwork blurred backdrop ─────────────────────────────────── */
+/* Artwork blurred backdrop — very subtle, mostly black */
 .ip-art-bg {
   position: absolute;
   inset: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(28px) saturate(200%) brightness(0.45);
+  filter: blur(40px) saturate(80%) brightness(0.15);
   transform: scale(1.12);
   z-index: 0;
   pointer-events: none;
@@ -133,7 +129,7 @@
 .ip-track-wrap {
   flex: 1;
   position: relative;
-  height: 4px;
+  height: 2px;
   display: flex;
   align-items: center;
 }
@@ -142,7 +138,7 @@
   position: absolute;
   inset: 0;
   border-radius: 100px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .ip-track-fill {
@@ -171,26 +167,15 @@
   outline: none;
   border: none;
 }
+/* No visible thumb — track-only style matching full-screen player */
 .ip-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  cursor: grab;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,.6);
-  transition: transform 0.12s;
+  width: 0; height: 0;
 }
-.ip-range:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.2); }
-.ip-range::-webkit-slider-runnable-track { height: 4px; background: transparent; border-radius: 100px; }
-.ip-range::-moz-range-thumb {
-  width: 18px; height: 18px;
-  border-radius: 50%; background: #fff; cursor: grab; border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,.5);
-}
-.ip-range:active::-moz-range-thumb { cursor: grabbing; }
-.ip-range::-moz-range-track { height: 4px; background: transparent; border-radius: 100px; }
+.ip-range::-webkit-slider-runnable-track { height: 2px; background: transparent; border-radius: 100px; }
+.ip-range::-moz-range-thumb { width: 0; height: 0; border: none; background: transparent; }
+.ip-range::-moz-range-track { height: 2px; background: transparent; border-radius: 100px; }
 
 /* ── Controls ──────────────────────────────────────────────────── */
 .ip-controls {

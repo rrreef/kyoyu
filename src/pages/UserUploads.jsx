@@ -187,6 +187,7 @@ export default function UserUploads() {
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
   async function saveAll(){
+    if (!user?.id) return;
     try {
       const items = await Promise.all(metas.map(async (m, i) => {
         let artworkUrl = m.artworkUrl;
@@ -200,30 +201,34 @@ export default function UserUploads() {
           artworkUrl = null;
         }
         return {
-          ...m,
-          artworkUrl,
-          artworkFile: undefined,
+          ...m, artworkUrl, artworkFile: undefined,
           fileUrl:  audioUrls[files[i]?.id] || null,
           format:   files[i]?.file ? ext(files[i].file) : '',
           size:     files[i]?.file ? fmtBytes(files[i].file.size) : '',
           savedAt:  Date.now(),
         };
       }));
-      // Persist IMMEDIATELY — don't rely on useEffect which may not fire before unmount
-      const nextSaved = [...items, ...saved];
-      setSaved(nextSaved);
-      if (user?.id) {
-        try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(nextSaved)); } catch(e) { console.error('[persist]', e); }
-      }
-      setFiles([]); setMetas([]); setStep(0); setActive(0);
-      setShowPrev(true);
+      // Always read from localStorage (ground truth) — never trust stale React closure
+      const key = `kyoyu-uploads-${user.id}`;
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const nextSaved = [...items, ...existing];
+      localStorage.setItem(key, JSON.stringify(nextSaved));  // write first
+      setSaved(nextSaved);                                    // then update UI
+      setFiles([]); setMetas([]); setStep(0); setActive(0); setShowPrev(true);
       window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
     } catch(err) {
       console.error('[saveAll]', err);
       alert(`Could not save: ${err.message}`);
     }
   }
-  function removeSaved(id){setSaved(p=>p.filter(t=>t.id!==id));if(playing===id){audioRef.current.pause();setPlaying(null);}}
+  function removeSaved(id){
+    if (playing===id){audioRef.current.pause();setPlaying(null);}
+    setSaved(prev => {
+      const next = prev.filter(t => t.id !== id);
+      if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
 
   const m=metas[active]||emptyMeta('_');
