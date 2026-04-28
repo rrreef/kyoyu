@@ -124,7 +124,9 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
         </>
       ) : (
         <>
-          <div className="fp-art-wrap"><Artwork big={true}/></div>
+          <div className="fp-top">
+            <div className="fp-art-wrap"><Artwork big={true}/></div>
+          </div>
           <div className="fp-meta">
             <div className="fp-meta-text">
               <div className="fp-title">{track.title}</div>

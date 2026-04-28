@@ -22,11 +22,10 @@
 /* ═══ FULL SCREEN PLAYER ═══ */
 .fp {
   position: fixed; inset: 0; z-index: 1500;
-  display: flex; flex-direction: column; justify-content: flex-end;
+  display: flex; flex-direction: column;
   align-items: stretch;
   padding-left: 24px; padding-right: 24px;
-  padding-top: 0;           /* handle is absolute, no top padding needed */
-  padding-bottom: 33px;     /* bottom actions 33px from screen edge */
+  padding-top: 0; padding-bottom: 33px;
   background: #3a3a3e;
   transform: translateY(100%);
   transition: transform .48s cubic-bezier(.32,.72,0,1);
@@ -44,16 +43,25 @@
 }
 .fp-handle { width:38px; height:4px; border-radius:2px; background:rgba(255,255,255,.32); }
 
-/* Artwork — slightly inset so handle has breathing room from DI */
-.fp-art-wrap { flex-shrink:0; padding: 0 20px; }
+/* Top area — grows to fill space between DI and title, artwork centered inside */
+.fp-top {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  /* push artwork below the absolute handle + DI safe area */
+  padding-top: calc(env(safe-area-inset-top, 44px) + 40px);
+}
+
+/* Artwork — fills fp-top width */
+.fp-art-wrap { width:100%; padding: 0 20px; }
 .fp-art {
   width:100%; aspect-ratio:1; border-radius:12px; object-fit:cover;
   box-shadow: 0 16px 48px rgba(0,0,0,.5);
 }
 .fp-art-ph { display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.06); color:rgba(255,255,255,.2); }
 
-/* Meta row */
-.fp-meta { display:flex; align-items:center; justify-content:space-between; padding-top:22px; }
+/* Meta row — 44px gap from artwork */
+.fp-meta { display:flex; align-items:center; justify-content:space-between; padding-top:44px; }
 .fp-meta-text { flex:1; min-width:0; }
 .fp-title { font-size:20px; font-weight:700; color:#fff; letter-spacing:-.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fp-artist { font-size:15px; color:rgba(255,255,255,.45); margin-top:3px; }
