@@ -18,7 +18,7 @@ const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:Stri
 function compressArtwork(dataUrl) {
   if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(dataUrl);
   return new Promise(resolve => {
-    const img = new Image();
+    const img = document.createElement('img'); // avoid Vite renaming Image → Image$1
     img.onload = () => {
       try {
         const SIZE = 120;
