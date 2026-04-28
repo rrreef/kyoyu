@@ -2,84 +2,10 @@ import { useState } from 'react';
 import { MessageCircle, ShoppingBag, Search, Check, Clock, Package } from 'lucide-react';
 import './Messages.css';
 
-/* ── Mock data ──────────────────────────────────────────── */
-const mockChats = [
-  {
-    id: 'c1', type: 'dm',
-    name: 'Aura System',
-    avatar: null,
-    initials: 'AS',
-    preview: 'Thanks for the support! Let me know if…',
-    time: '14:32',
-    unread: 2,
-  },
-  {
-    id: 'c2', type: 'group',
-    name: 'Phantom Grid Fan Club',
-    avatar: null,
-    initials: 'PG',
-    preview: 'Nocturnal: anyone going to the Brussels show?',
-    time: '12:08',
-    unread: 0,
-  },
-  {
-    id: 'c3', type: 'dm',
-    name: 'Mirrorform',
-    avatar: null,
-    initials: 'MF',
-    preview: 'The download link should be in your email',
-    time: 'Yesterday',
-    unread: 0,
-  },
-  {
-    id: 'c4', type: 'group',
-    name: 'Berlin Experimental Collective',
-    avatar: null,
-    initials: 'BE',
-    preview: 'New drop tonight at midnight UTC',
-    time: 'Mon',
-    unread: 5,
-  },
-  {
-    id: 'c5', type: 'dm',
-    name: 'Pale Current',
-    avatar: null,
-    initials: 'PC',
-    preview: 'Soft Architecture is finally out 🎛',
-    time: 'Sun',
-    unread: 0,
-  },
-];
+/* ── Data — real conversations will come from backend ── */
+const mockChats = [];
 
-const mockRequests = [
-  {
-    id: 'r1',
-    buyer: 'marco_lisbon',
-    item: 'Phantom Grid — Dissolution (Vinyl 12")',
-    price: '€22.00',
-    message: 'Hi! Is this still available? Happy to pay via PayPal.',
-    date: '2025-04-20',
-    status: 'pending',
-  },
-  {
-    id: 'r2',
-    buyer: 'soulstep_hanna',
-    item: 'Aura System — Live Set USB',
-    price: '€35.00',
-    message: 'Would love to grab one. Can you ship to Sweden?',
-    date: '2025-04-18',
-    status: 'accepted',
-  },
-  {
-    id: 'r3',
-    buyer: 'driftwave99',
-    item: 'Nocturnal Axis — Cassette Bundle',
-    price: '€18.00',
-    message: 'Interested in 2 copies if possible.',
-    date: '2025-04-10',
-    status: 'declined',
-  },
-];
+const mockRequests = [];
 
 const STATUS = {
   pending:  { label: 'Pending',  icon: Clock,   colour: 'var(--text-muted)' },

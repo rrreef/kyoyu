@@ -177,6 +177,7 @@ export default function Home() {
 
       </section>
 
+      {featured && (
       <section className="hero-section">
         {/* Ambient blurred background */}
         <div className="hero-cover-bg" style={{ backgroundImage: `url(${featured.cover})` }} />
@@ -210,6 +211,7 @@ export default function Home() {
           <img src={featured.cover} alt={featured.title} />
         </div>
       </section>
+      )}
 
       {/* My Uploads — private section */}
       {myUploads.length > 0 && (
