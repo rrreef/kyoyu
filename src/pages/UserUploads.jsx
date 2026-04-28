@@ -92,6 +92,7 @@ function sortUploads(arr, s) {
 /* ── SwipeDeleteRow — iOS swipe-to-reveal delete ──────────────── */
 function SwipeDeleteRow({ onDelete, children, disabled }) {
   const wrapRef     = useRef(null);
+  const contentRef  = useRef(null);  // for non-passive native touchmove
   const [offset, setOffset] = useState(0);
   const [snapped, setSnapped] = useState(false);
   const startX      = useRef(null);
@@ -101,6 +102,15 @@ function SwipeDeleteRow({ onDelete, children, disabled }) {
   const THRESHOLD   = 36;
 
   function maxW() { return Math.round((wrapRef.current?.offsetWidth || 340) * 0.25); }
+
+  /* Non-passive native listener — so preventDefault() actually blocks UIScrollView */
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const handler = (e) => { if (dragging.current && !disabled) e.preventDefault(); };
+    el.addEventListener('touchmove', handler, { passive: false });
+    return () => el.removeEventListener('touchmove', handler);
+  }, [disabled]);
 
   function onTouchStart(e) {
     if (disabled) return;
@@ -128,7 +138,6 @@ function SwipeDeleteRow({ onDelete, children, disabled }) {
 
   return (
     <div ref={wrapRef} className="sdr-wrap" onClick={snapped ? close : undefined}>
-      {/* Red zone — grows from right as user swipes */}
       <div className="sdr-bg" style={{ width: `${offset}px` }}>
         {offset > 20 && (
           <button className="sdr-btn" onClick={(e) => { e.stopPropagation(); onDelete(); close(); }}>
@@ -137,6 +146,7 @@ function SwipeDeleteRow({ onDelete, children, disabled }) {
         )}
       </div>
       <div
+        ref={contentRef}
         className="sdr-content"
         style={{
           transform: `translateX(-${offset}px)`,
