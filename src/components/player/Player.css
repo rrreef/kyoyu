@@ -88,14 +88,11 @@
 }
 .fp-scrub-thumb--sm { width:7px; height:7px; }
 
-/* Invisible native range overlay */
-.fp-range-overlay {
-  position:absolute; inset:-18px 0; width:100%; height:calc(100% + 36px);
-  opacity:0; cursor:pointer; -webkit-appearance:none; appearance:none;
-  margin:0; padding:0; background:transparent; border:none; z-index:10;
+/* Hit area div — extends touch target 16px above+below the 3px track */
+.fp-scrub-hit {
+  position:absolute; inset:-16px 0;
+  cursor:pointer; touch-action:none; z-index:10;
 }
-.fp-range-overlay::-webkit-slider-thumb { -webkit-appearance:none; width:36px; height:36px; border-radius:50%; background:transparent; cursor:pointer; }
-.fp-range-overlay::-moz-range-thumb    { width:36px; height:36px; border-radius:50%; background:transparent; cursor:pointer; border:none; }
 
 /* Controls */
 .fp-ctrls { display:flex; align-items:center; justify-content:center; gap:44px; padding-top:20px; }

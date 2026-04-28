@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X,
@@ -12,94 +12,139 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
-/* ── Scrubber: uncontrolled range + direct DOM updates ── */
+/* ─────────────────────────────────────────────────────────────
+   useScrub: custom touch/mouse tracking, document-level move
+   Works in WKWebView because we skip the native range input
+───────────────────────────────────────────────────────────── */
+function useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd }) {
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const hit = hitRef.current;
+    if (!hit) return;
+
+    function pct(clientX) {
+      const r = hitRef.current.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    }
+    function applyPct(p) {
+      if (fillRef.current)  fillRef.current.style.width = `${p*100}%`;
+      if (thumbRef.current) thumbRef.current.style.left  = `${p*100}%`;
+      onMove(p);
+    }
+
+    /* ── touch ── */
+    function tStart(e) {
+      dragging.current = true;
+      applyPct(pct(e.touches[0].clientX));
+      document.addEventListener('touchmove', tMove, { passive: false });
+      document.addEventListener('touchend',  tEnd,  { once: true });
+    }
+    function tMove(e) {
+      if (!dragging.current) return;
+      e.preventDefault();
+      applyPct(pct(e.touches[0].clientX));
+    }
+    function tEnd(e) {
+      dragging.current = false;
+      document.removeEventListener('touchmove', tMove);
+      const p = pct(e.changedTouches[0].clientX);
+      applyPct(p);
+      onEnd(p);
+    }
+
+    /* ── mouse (desktop / simulator) ── */
+    function mDown(e) {
+      dragging.current = true;
+      applyPct(pct(e.clientX));
+      document.addEventListener('mousemove', mMove);
+      document.addEventListener('mouseup',   mUp, { once: true });
+    }
+    function mMove(e) { if (dragging.current) applyPct(pct(e.clientX)); }
+    function mUp(e) {
+      dragging.current = false;
+      document.removeEventListener('mousemove', mMove);
+      const p = pct(e.clientX);
+      applyPct(p);
+      onEnd(p);
+    }
+
+    hit.addEventListener('touchstart', tStart, { passive: true });
+    hit.addEventListener('mousedown',  mDown);
+    return () => {
+      hit.removeEventListener('touchstart', tStart);
+      hit.removeEventListener('mousedown',  mDown);
+      document.removeEventListener('touchmove', tMove);
+      document.removeEventListener('mousemove', mMove);
+    };
+  }, [hitRef, fillRef, thumbRef, onMove, onEnd]); // eslint-disable-line
+
+  return dragging;
+}
+
+/* ── Progress scrubber ── */
 function Scrubber({ progress, duration, onSeek }) {
-  const rangeRef = useRef(null);
+  const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
   const dragging = useRef(false);
 
-  // Sync slider + fill + thumb from audio (skipped while user is dragging)
+  // Stable callbacks via refs
+  const seekRef = useRef(onSeek);
+  useEffect(() => { seekRef.current = onSeek; }, [onSeek]);
+  const durRef = useRef(duration);
+  useEffect(() => { durRef.current = duration; }, [duration]);
+
+  const onMove = useCallback(() => {}, []); // visual only during drag
+  const onEnd  = useCallback(pct => { seekRef.current(pct * (durRef.current || 0)); }, []);
+
+  useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd });
+
+  // Sync from audio when idle
   useEffect(() => {
     if (dragging.current) return;
-    const pct = duration ? (progress / duration) * 100 : 0;
-    if (rangeRef.current)  rangeRef.current.value        = progress || 0;
-    if (fillRef.current)   fillRef.current.style.width   = `${pct}%`;
-    if (thumbRef.current)  thumbRef.current.style.left   = `${Math.max(0,Math.min(100,pct))}%`;
+    const p = duration ? (progress / duration) * 100 : 0;
+    if (fillRef.current)  fillRef.current.style.width = `${p}%`;
+    if (thumbRef.current) thumbRef.current.style.left  = `${p}%`;
   }, [progress, duration]);
 
-  useEffect(() => {
-    if (rangeRef.current) rangeRef.current.max = duration || 100;
-  }, [duration]);
-
-  useEffect(() => {
-    const el = rangeRef.current; if (!el) return;
-    const onInput = () => {
-      const val = parseFloat(el.value);
-      const pct = duration ? (val / duration) * 100 : 0;
-      if (fillRef.current)  fillRef.current.style.width  = `${pct}%`;
-      if (thumbRef.current) thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
-    };
-    const onStart = () => { dragging.current = true; };
-    const onEnd   = () => { dragging.current = false; onSeek(parseFloat(el.value)); };
-    el.addEventListener('input',      onInput);
-    el.addEventListener('mousedown',  onStart);
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('mouseup',    onEnd);
-    el.addEventListener('touchend',   onEnd);
-    return () => {
-      el.removeEventListener('input',      onInput);
-      el.removeEventListener('mousedown',  onStart);
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('mouseup',    onEnd);
-      el.removeEventListener('touchend',   onEnd);
-    };
-  }, [duration, onSeek]);
-
-  const pct = duration ? (progress / duration) * 100 : 0;
+  const p = duration ? (progress / duration) * 100 : 0;
   return (
     <div className="fp-scrub">
-      <div ref={fillRef}  className="fp-scrub-fill"  style={{ width:`${pct}%` }}/>
-      <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>
-      <input ref={rangeRef} type="range" className="fp-range-overlay"
-        defaultValue={0} min={0} max={duration||100} step={0.1}/>
+      <div ref={fillRef}  className="fp-scrub-fill"  style={{ width:`${p}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${p}%` }}/>
+      <div ref={hitRef}   className="fp-scrub-hit"/>
     </div>
   );
 }
 
 /* ── Volume slider ── */
 function VolSlider({ volume, onSet }) {
-  const rangeRef = useRef(null);
+  const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
 
+  const setRef = useRef(onSet);
+  useEffect(() => { setRef.current = onSet; }, [onSet]);
+
+  const onMove = useCallback(pct => { setRef.current(pct); }, []);
+  const onEnd  = useCallback(pct => { setRef.current(pct); }, []);
+
+  useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd });
+
+  // Sync from state when idle
   useEffect(() => {
-    const pct = (volume ?? 0.8) * 100;
-    if (rangeRef.current)  rangeRef.current.value       = volume ?? 0.8;
-    if (fillRef.current)   fillRef.current.style.width  = `${pct}%`;
-    if (thumbRef.current)  thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
+    const p = (volume ?? 0.8) * 100;
+    if (fillRef.current)  fillRef.current.style.width = `${p}%`;
+    if (thumbRef.current) thumbRef.current.style.left  = `${p}%`;
   }, [volume]);
 
-  useEffect(() => {
-    const el = rangeRef.current; if (!el) return;
-    const onInput = () => {
-      const v   = parseFloat(el.value);
-      const pct = v * 100;
-      if (fillRef.current)  fillRef.current.style.width  = `${pct}%`;
-      if (thumbRef.current) thumbRef.current.style.left  = `${Math.max(0,Math.min(100,pct))}%`;
-      onSet(v);
-    };
-    el.addEventListener('input', onInput);
-    return () => el.removeEventListener('input', onInput);
-  }, [onSet]);
-
-  const pct = (volume ?? 0.8) * 100;
+  const p = (volume ?? 0.8) * 100;
   return (
     <div className="fp-vol-bar">
-      <div ref={fillRef}  className="fp-vol-fill"        style={{ width:`${pct}%` }}/>
-      <div ref={thumbRef} className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${Math.max(0,Math.min(100,pct))}%` }}/>
-      <input ref={rangeRef} type="range" className="fp-range-overlay"
-        defaultValue={0.8} min={0} max={1} step={0.01}/>
+      <div ref={fillRef}  className="fp-vol-fill"             style={{ width:`${p}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${p}%` }}/>
+      <div ref={hitRef}   className="fp-scrub-hit"/>
     </div>
   );
 }
@@ -118,10 +163,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   return (
     <div ref={ref} className="mini-bar" onClick={onExpand}>
       {track.releaseCover ? <img src={track.releaseCover} className="mini-art" alt=""/> : <div className="mini-art mini-art-ph"><Music2 size={18}/></div>}
-      <div className="mini-info">
-        <div className="mini-title">{track.title}</div>
-        <div className="mini-artist">{track.artistName}</div>
-      </div>
+      <div className="mini-info"><div className="mini-title">{track.title}</div><div className="mini-artist">{track.artistName}</div></div>
       <div className="mini-ctrls" onClick={e=>e.stopPropagation()}>
         <button className="mini-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
           {isPlaying?<Pause size={22} fill="currentColor" strokeWidth={0}/>:<Play size={22} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>}
@@ -134,9 +176,9 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume }) {
-  const fpRef    = useRef(null);
-  const handleRef= useRef(null);
-  const startY   = useRef(0);
+  const fpRef     = useRef(null);
+  const handleRef = useRef(null);
+  const startY    = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
 
   useEffect(() => {
@@ -144,16 +186,16 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
     const onTS=e=>{ startY.current=e.touches[0].clientY; };
     const onTE=e=>{ if(e.changedTouches[0].clientY-startY.current>60) onCollapse(); };
     el.addEventListener('touchstart',onTS,{passive:true});
-    el.addEventListener('touchend',onTE,{passive:true});
+    el.addEventListener('touchend',  onTE,{passive:true});
     hdl.addEventListener('click',onCollapse);
     return ()=>{ el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); hdl.removeEventListener('click',onCollapse); };
-  }, [onCollapse]);
+  },[onCollapse]);
 
-  const rem = Math.max(0,(duration||0)-(progress||0));
-  const seekCb  = useCallback(v => seekTo(v),   [seekTo]);
-  const volCb   = useCallback(v => setVolume(v), [setVolume]);
+  const rem    = Math.max(0,(duration||0)-(progress||0));
+  const seekCb = useCallback(v=>seekTo(v),   [seekTo]);
+  const volCb  = useCallback(v=>setVolume(v), [setVolume]);
 
-  const Artwork = ({ big }) => track.releaseCover
+  const Artwork = ({big}) => track.releaseCover
     ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
     : <div className={big?'fp-art fp-art-ph':'fp-q-art fp-art-ph'}><Music2 size={big?72:24}/></div>;
 
@@ -193,10 +235,7 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
           <div className="fp-q-header">
             <Artwork big={false}/>
             <div className="fp-q-info"><div className="fp-title">{track.title}</div></div>
-            <div className="fp-meta-btns">
-              <button className="fp-icon-btn"><Star size={18}/></button>
-              <button className="fp-icon-btn"><MoreHorizontal size={18}/></button>
-            </div>
+            <div className="fp-meta-btns"><button className="fp-icon-btn"><Star size={18}/></button><button className="fp-icon-btn"><MoreHorizontal size={18}/></button></div>
           </div>
           <div className="fp-q-modes">
             <button className="fp-mode-btn"><Shuffle size={17}/></button>
@@ -211,14 +250,8 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
         <>
           <div className="fp-top"><div className="fp-art-wrap"><Artwork big={true}/></div></div>
           <div className="fp-meta">
-            <div className="fp-meta-text">
-              <div className="fp-title">{track.title}</div>
-              <div className="fp-artist">{track.artistName||'—'}</div>
-            </div>
-            <div className="fp-meta-btns">
-              <button className="fp-icon-btn"><Star size={20}/></button>
-              <button className="fp-icon-btn"><MoreHorizontal size={20}/></button>
-            </div>
+            <div className="fp-meta-text"><div className="fp-title">{track.title}</div><div className="fp-artist">{track.artistName||'—'}</div></div>
+            <div className="fp-meta-btns"><button className="fp-icon-btn"><Star size={20}/></button><button className="fp-icon-btn"><MoreHorizontal size={20}/></button></div>
           </div>
           <Bottom/>
         </>
@@ -227,16 +260,14 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
   );
 }
 
-/* ── Root ── */
 export default function Player() {
   const { state, dispatch, seekTo, setVolume } = usePlayer();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, volume } = state;
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
-
   useEffect(()=>{
-    window.__kyoyuPlayerCmd = cmd => {
+    window.__kyoyuPlayerCmd = cmd=>{
       if(cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if(cmd==='prev')   dispatch({type:'PREV_TRACK'});
@@ -244,12 +275,10 @@ export default function Player() {
     };
     return ()=>{ delete window.__kyoyuPlayerCmd; };
   },[dispatch]);
-
   useEffect(()=>{
     if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||''});
     else             postNative({visible:false,playing:false,title:'',artwork:''});
   },[currentTrack,isPlaying]);
-
   if(!currentTrack) return null;
   return (
     <>
