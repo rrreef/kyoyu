@@ -53,7 +53,7 @@
 /* Swipe-delete row */
 .sdr-wrap { position:relative;border-radius:16px;overflow:hidden;margin-bottom:8px; }
 .sdr-bg { position:absolute;right:0;top:0;bottom:0;overflow:hidden;
-  background:rgba(0,0,0,.92);border:1.5px solid #ef4444;
+  background:rgba(0,0,0,.92);border:1.5px solid #ef4444;border-radius:0 16px 16px 0;
   display:flex;align-items:center;justify-content:center; }
 .sdr-btn { background:none;border:none;color:#ef4444;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
