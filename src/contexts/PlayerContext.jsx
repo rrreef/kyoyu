@@ -129,6 +129,17 @@ export function PlayerProvider({ children }) {
     }
   }, [state.isPlaying]); // eslint-disable-line
 
+  // ── Sync in-app slider when hardware volume buttons are pressed ──
+  // Swift observes AVAudioSession.outputVolume via KVO and calls this.
+  useEffect(() => {
+    window.__kyoyuSystemVolumeChanged = (v) => {
+      const vol = Math.max(0, Math.min(1, Number(v)));
+      if (gainRef.current) gainRef.current.gain.value = vol;
+      dispatch({ type:'SET_VOLUME', value: vol });
+    };
+    return () => { delete window.__kyoyuSystemVolumeChanged; };
+  }, []);
+
   // ── Helpers (stable — safe in drag handlers) ──
 
   const seekTo = useCallback((seconds) => {
