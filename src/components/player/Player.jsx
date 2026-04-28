@@ -136,14 +136,14 @@ export default function Player() {
   const { state, dispatch } = usePlayer();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration } = state;
-  const expand   = useCallback(() => setExp(true),  []);
-  const collapse = useCallback(() => setExp(false), []);
+  const expand   = useCallback(() => { setExp(true);  postNative({ expanded: true  }); }, []);
+  const collapse = useCallback(() => { setExp(false); postNative({ expanded: false }); }, []);
   useEffect(() => {
     window.__kyoyuPlayerCmd = (cmd) => {
       if (cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if (cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if (cmd==='prev')   dispatch({type:'PREV_TRACK'});
-      if (cmd==='expand') setExp(true);
+      if (cmd==='expand') { setExp(true);  postNative({ expanded: true  }); }
     };
     return () => { delete window.__kyoyuPlayerCmd; };
   }, [dispatch]);

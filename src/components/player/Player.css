@@ -38,8 +38,8 @@
 .fp-handle-row { display:flex; justify-content:center; padding:10px 0 18px; cursor:pointer; }
 .fp-handle { width:38px; height:4px; border-radius:2px; background:rgba(255,255,255,.32); }
 
-/* Artwork */
-.fp-art-wrap { flex-shrink:0; }
+/* Artwork — slightly inset so handle has breathing room from DI */
+.fp-art-wrap { flex-shrink:0; padding: 0 20px; }
 .fp-art {
   width:100%; aspect-ratio:1; border-radius:12px; object-fit:cover;
   box-shadow: 0 16px 48px rgba(0,0,0,.5);
@@ -70,7 +70,7 @@
 .fp-ctrl { display:flex; align-items:center; justify-content:center; background:none; border:none; color:#fff; cursor:pointer; padding:6px; }
 .fp-ctrl:active { opacity:.6; transform:scale(.88); }
 
-/* Volume — flat bar, no visible thumb */
+/* Volume — flat 3px bar, NO visible thumb (matches progress bar thickness) */
 .fp-vol { display:flex; align-items:center; gap:10px; padding-top:20px; }
 .fp-vol-icon { color:rgba(255,255,255,.4); flex-shrink:0; }
 .fp-vol-slider {
@@ -78,8 +78,7 @@
   background:rgba(255,255,255,.22); border-radius:2px; outline:none;
 }
 .fp-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance:none; width:20px; height:20px;
-  border-radius:50%; background:transparent; /* invisible but touchable */
+  -webkit-appearance:none; width:0; height:0; /* completely hidden */
 }
 
 /* Bottom 3 action buttons */
