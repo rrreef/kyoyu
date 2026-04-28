@@ -92,35 +92,51 @@ function sortUploads(arr, s) {
 /* ── SwipeDeleteRow — iOS swipe-to-reveal delete ──────────────── */
 function SwipeDeleteRow({ onDelete, children, disabled }) {
   const wrapRef     = useRef(null);
-  const contentRef  = useRef(null);  // for non-passive native touchmove
+  const contentRef  = useRef(null);
   const [offset, setOffset] = useState(0);
   const [snapped, setSnapped] = useState(false);
   const startX      = useRef(null);
+  const startY      = useRef(null);      // track vertical too
   const startOff    = useRef(0);
   const liveOffset  = useRef(0);
   const dragging    = useRef(false);
+  const direction   = useRef(null);      // 'h' | 'v' | null
   const THRESHOLD   = 36;
+  const DIR_LOCK    = 6;                 // px to confirm direction
 
   function maxW() { return Math.round((wrapRef.current?.offsetWidth || 340) * 0.25); }
 
-  /* Non-passive native listener — so preventDefault() actually blocks UIScrollView */
+  /* Non-passive listener — only blocks native scroll for confirmed horizontal swipes */
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    const handler = (e) => { if (dragging.current && !disabled) e.preventDefault(); };
+    const handler = (e) => {
+      if (dragging.current && direction.current === 'h' && !disabled) e.preventDefault();
+    };
     el.addEventListener('touchmove', handler, { passive: false });
     return () => el.removeEventListener('touchmove', handler);
   }, [disabled]);
 
   function onTouchStart(e) {
     if (disabled) return;
-    startX.current   = e.touches[0].clientX;
-    startOff.current = liveOffset.current;
-    dragging.current = true;
+    startX.current    = e.touches[0].clientX;
+    startY.current    = e.touches[0].clientY;
+    startOff.current  = liveOffset.current;
+    dragging.current  = true;
+    direction.current = null;
   }
   function onTouchMove(e) {
     if (!dragging.current || disabled) return;
-    const dx   = startX.current - e.touches[0].clientX;
+    const dx = startX.current - e.touches[0].clientX;  // positive = left
+    const dy = startY.current - e.touches[0].clientY;  // positive = up
+
+    // Wait until enough movement to determine direction
+    if (direction.current === null) {
+      if (Math.abs(dx) < DIR_LOCK && Math.abs(dy) < DIR_LOCK) return;
+      direction.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    }
+    if (direction.current === 'v') return; // vertical scroll — do nothing
+
     const next = Math.max(0, Math.min(startOff.current + dx, maxW() + 6));
     liveOffset.current = next;
     setOffset(next);
@@ -128,6 +144,9 @@ function SwipeDeleteRow({ onDelete, children, disabled }) {
   function onTouchEnd() {
     if (!dragging.current) return;
     dragging.current = false;
+    const wasH = direction.current === 'h';
+    direction.current = null;
+    if (!wasH) return;  // vertical or undetermined — no snap
     const m = maxW();
     const snap = liveOffset.current >= THRESHOLD ? m : 0;
     liveOffset.current = snap;
