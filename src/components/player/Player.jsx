@@ -12,39 +12,56 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
-/* ── Drag helper: attaches touchmove to document so WKWebView can't intercept ── */
+/* ── Drag helper: passive:false so we can preventDefault and block page scroll ── */
 function useDrag(elRef, onPct) {
+  const cbRef = useRef(onPct);
+  // keep callback ref fresh without re-running the effect
+  useEffect(() => { cbRef.current = onPct; });
+
   useEffect(() => {
     const el = elRef.current; if (!el) return;
+
     function getX(e) { return (e.touches?.[0] ?? e.changedTouches?.[0] ?? e).clientX; }
+
     function update(e) {
+      e.preventDefault();
       const r = elRef.current?.getBoundingClientRect(); if (!r) return;
-      onPct(Math.max(0, Math.min(1, (getX(e) - r.left) / r.width)));
+      cbRef.current(Math.max(0, Math.min(1, (getX(e) - r.left) / r.width)));
     }
+
     function onEnd() {
       document.removeEventListener('touchmove', update);
-      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchend',  onEnd);
     }
+
     function onStart(e) {
       e.stopPropagation();
+      e.preventDefault();
       update(e);
-      document.addEventListener('touchmove', update, { passive: true });
-      document.addEventListener('touchend', onEnd, { once: true });
+      document.addEventListener('touchmove', update, { passive: false });
+      document.addEventListener('touchend',  onEnd,  { once: true });
     }
-    el.addEventListener('touchstart', onStart, { passive: true });
+
+    el.addEventListener('touchstart', onStart, { passive: false });
     el.addEventListener('click', update);
-    return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('click', update); };
-  });   // re-attach on every render so closure captures latest onPct
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('click', update);
+      document.removeEventListener('touchmove', update);
+      document.removeEventListener('touchend',  onEnd);
+    };
+  }, [elRef]);
 }
 
-/* ── Web fallback mini bar ── */
+/* ── Mini bar ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   const ref = useRef(null); const startY = useRef(0);
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const s = e => { startY.current = e.touches[0].clientY; };
     const e2 = e => { if (startY.current - e.changedTouches[0].clientY > 30) onExpand(); };
-    el.addEventListener('touchstart', s, { passive:true }); el.addEventListener('touchend', e2, { passive:true });
+    el.addEventListener('touchstart', s, { passive:true });
+    el.addEventListener('touchend',   e2, { passive:true });
     return () => { el.removeEventListener('touchstart',s); el.removeEventListener('touchend',e2); };
   }, [onExpand]);
   return (
@@ -60,34 +77,52 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch }) {
-  const fpRef     = useRef(null);
-  const handleRef = useRef(null);
-  const scrubRef  = useRef(null);
-  const volRef    = useRef(null);
-  const startY    = useRef(0);
+function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume }) {
+  const fpRef    = useRef(null);
+  const handleRef= useRef(null);
+  const scrubRef = useRef(null);
+  const volRef   = useRef(null);
+  const startY   = useRef(0);
+  const dragging = useRef(false);   // flag: block collapse while scrubbing
   const [showQueue, setShowQueue] = useState(false);
-  const [vol, setVol] = useState(80);
 
-  // Swipe-down to collapse (whole card)
+  // Swipe-down to collapse — only fires when not dragging a scrubber
   useEffect(() => {
     const el = fpRef.current; const hdl = handleRef.current;
     if (!el || !hdl) return;
     const onTS = e => { startY.current = e.touches[0].clientY; };
-    const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 60) onCollapse(); };
+    const onTE = e => {
+      if (dragging.current) return;
+      if (e.changedTouches[0].clientY - startY.current > 60) onCollapse();
+    };
     el.addEventListener('touchstart', onTS, { passive:true });
     el.addEventListener('touchend',   onTE, { passive:true });
     hdl.addEventListener('click', onCollapse);
-    return () => { el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); hdl.removeEventListener('click',onCollapse); };
+    return () => {
+      el.removeEventListener('touchstart', onTS);
+      el.removeEventListener('touchend',   onTE);
+      hdl.removeEventListener('click', onCollapse);
+    };
   }, [onCollapse]);
 
-  // Scrubber drag
-  useDrag(scrubRef, pct => dispatch({ type:'SET_PROGRESS', value: Math.floor(pct * duration) }));
-  // Volume drag
-  useDrag(volRef, pct => setVol(Math.round(pct * 100)));
+  // Scrubber drag → seekTo
+  useDrag(scrubRef, pct => {
+    dragging.current = true;
+    seekTo(pct * (duration || 0));
+    // clear flag slightly after touch ends (useDrag handles touchend cleanup)
+    requestAnimationFrame(() => { dragging.current = false; });
+  });
 
-  const pct = duration ? (progress/duration)*100 : 0;
-  const rem = Math.max(0, duration - progress);
+  // Volume drag → setVolume
+  useDrag(volRef, pct => {
+    dragging.current = true;
+    setVolume(pct);
+    requestAnimationFrame(() => { dragging.current = false; });
+  });
+
+  const pct = duration ? (progress / duration) * 100 : 0;
+  const rem = Math.max(0, (duration || 0) - (progress || 0));
+  const vol = Math.round((volume || 0.8) * 100);
 
   const Artwork = ({ big }) => track.releaseCover
     ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
@@ -149,9 +184,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
         </>
       ) : (
         <>
-          <div className="fp-top">
-            <div className="fp-art-wrap"><Artwork big={true}/></div>
-          </div>
+          <div className="fp-top"><div className="fp-art-wrap"><Artwork big={true}/></div></div>
           <div className="fp-meta">
             <div className="fp-meta-text">
               <div className="fp-title">{track.title}</div>
@@ -169,14 +202,16 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   );
 }
 
+/* ── Root Player ── */
 export default function Player() {
-  const { state, dispatch } = usePlayer();
+  const { state, dispatch, seekTo, setVolume } = usePlayer();
   const [exp, setExp] = useState(false);
-  const { currentTrack, isPlaying, progress, duration } = state;
+  const { currentTrack, isPlaying, progress, duration, volume } = state;
   const expand   = useCallback(() => { setExp(true);  postNative({ expanded: true  }); }, []);
   const collapse = useCallback(() => { setExp(false); postNative({ expanded: false }); }, []);
+
   useEffect(() => {
-    window.__kyoyuPlayerCmd = (cmd) => {
+    window.__kyoyuPlayerCmd = cmd => {
       if (cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if (cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if (cmd==='prev')   dispatch({type:'PREV_TRACK'});
@@ -184,15 +219,22 @@ export default function Player() {
     };
     return () => { delete window.__kyoyuPlayerCmd; };
   }, [dispatch]);
+
   useEffect(() => {
     if (currentTrack) postNative({ visible:true, playing:isPlaying, title:currentTrack.title||'', artwork:currentTrack.releaseCover||'' });
     else postNative({ visible:false, playing:false, title:'', artwork:'' });
   }, [currentTrack, isPlaying]);
+
   if (!currentTrack) return null;
   return (
     <>
       {!exp && !isNative() && <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
-      <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration} open={exp} onCollapse={collapse} dispatch={dispatch}/>
+      <FullPlayer
+        track={currentTrack} isPlaying={isPlaying} progress={progress}
+        duration={duration} volume={volume} open={exp}
+        onCollapse={collapse} dispatch={dispatch}
+        seekTo={seekTo} setVolume={setVolume}
+      />
     </>
   );
 }
