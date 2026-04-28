@@ -37,7 +37,15 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch }) {
   const fpRef = useRef(null); const handleRef = useRef(null); const startY = useRef(0);
+  const volRef = useRef(null);
   const [showQueue, setShowQueue] = useState(false);
+  const [vol, setVol] = useState(80);
+
+  function handleVol(e) {
+    const r = volRef.current.getBoundingClientRect();
+    const x = (e.clientX ?? e.touches?.[0]?.clientX ?? 0) - r.left;
+    setVol(Math.max(0, Math.min(100, Math.round((x / r.width) * 100))));
+  }
 
   useEffect(() => {
     const el = fpRef.current; const hdl = handleRef.current;
@@ -76,7 +84,9 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
       </div>
       <div className="fp-vol">
         <Volume size={15} className="fp-vol-icon"/>
-        <input type="range" className="fp-vol-slider" min="0" max="100" defaultValue="80"/>
+        <div ref={volRef} className="fp-vol-bar" onClick={handleVol} onTouchStart={handleVol}>
+          <div className="fp-vol-fill" style={{width:`${vol}%`}}/>
+        </div>
         <Volume2 size={15} className="fp-vol-icon"/>
       </div>
       <div className="fp-actions">

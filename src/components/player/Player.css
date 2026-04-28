@@ -22,20 +22,26 @@
 /* ═══ FULL SCREEN PLAYER ═══ */
 .fp {
   position: fixed; inset: 0; z-index: 1500;
-  display: flex; flex-direction: column; align-items: stretch;
-  /* Pad top past DI + status bar so handle appears below it */
-  padding-top: env(safe-area-inset-top, 44px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 12px);
+  display: flex; flex-direction: column; justify-content: flex-end;
+  align-items: stretch;
   padding-left: 24px; padding-right: 24px;
-  background: #3a3a3e;          /* dark charcoal matching Apple Music screenshots */
+  padding-top: 0;           /* handle is absolute, no top padding needed */
+  padding-bottom: 33px;     /* bottom actions 33px from screen edge */
+  background: #3a3a3e;
   transform: translateY(100%);
   transition: transform .48s cubic-bezier(.32,.72,0,1);
   will-change: transform; overflow: hidden;
 }
 .fp--open { transform: translateY(0); }
 
-/* Handle — thin bar only, no ball; extra bottom padding pushes content lower */
-.fp-handle-row { display:flex; justify-content:center; padding:10px 0 40px; cursor:pointer; }
+/* Handle — absolute at top so it doesn't push content down */
+.fp-handle-row {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 44px) + 8px);
+  left: 0; right: 0;
+  display: flex; justify-content: center;
+  cursor: pointer; padding: 10px 0; z-index: 2;
+}
 .fp-handle { width:38px; height:4px; border-radius:2px; background:rgba(255,255,255,.32); }
 
 /* Artwork — slightly inset so handle has breathing room from DI */
@@ -70,19 +76,16 @@
 .fp-ctrl { display:flex; align-items:center; justify-content:center; background:none; border:none; color:#fff; cursor:pointer; padding:6px; }
 .fp-ctrl:active { opacity:.6; transform:scale(.88); }
 
-/* Volume — same 2px flat bar as scrubber, NO thumb, NO default WebKit styling */
+/* Volume — div-based, identical to scrubber, zero browser chrome */
 .fp-vol { display:flex; align-items:center; gap:10px; padding-top:20px; }
 .fp-vol-icon { color:rgba(255,255,255,.4); flex-shrink:0; }
-.fp-vol-slider {
-  flex:1; -webkit-appearance:none; appearance:none;
-  height:2px; background:transparent;
-  border-radius:2px; outline:none; cursor:pointer;
+.fp-vol-bar {
+  flex:1; height:3px; position:relative;
+  background:rgba(255,255,255,.22); border-radius:2px; cursor:pointer;
 }
-.fp-vol-slider::-webkit-slider-runnable-track {
-  height:2px; background:rgba(255,255,255,.22); border-radius:2px;
-}
-.fp-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance:none; width:0; height:0;
+.fp-vol-fill {
+  position:absolute; top:0; left:0; bottom:0;
+  background:#fff; border-radius:2px; pointer-events:none;
 }
 
 /* Bottom 3 action buttons */
