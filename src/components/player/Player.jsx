@@ -4,26 +4,30 @@ import { Play, Pause, Rewind, FastForward, Music2,
          Star, MoreHorizontal, Airplay, AlignJustify, MessageSquare } from 'lucide-react';
 import './Player.css';
 
+/* ── Helpers ── */
 function fmt(s) {
   const m = Math.floor((s||0)/60), sec = Math.floor((s||0)%60);
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
+function postNative(payload) {
+  try { window.webkit.messageHandlers.player.postMessage(payload); } catch(e){}
+}
+const isNative = () => {
+  try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; }
+};
 
-/* ── Bottom mini bar — fused with tab bar ── */
+/* ── Web mini bar (shown only in browser, not in iOS app) ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   const ref = useRef(null);
   const startY = useRef(0);
-
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const el = ref.current; if (!el) return;
     const onTS = e => { startY.current = e.touches[0].clientY; };
     const onTE = e => { if (startY.current - e.changedTouches[0].clientY > 30) onExpand(); };
     el.addEventListener('touchstart', onTS, { passive: true });
     el.addEventListener('touchend',   onTE, { passive: true });
     return () => { el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); };
   }, [onExpand]);
-
   return (
     <div ref={ref} className="mini-bar" onClick={onExpand}>
       {track.releaseCover
@@ -47,37 +51,30 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   );
 }
 
-/* ── Full screen player — screenshot 2 layout ── */
+/* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch }) {
   const fpRef    = useRef(null);
   const handleRef = useRef(null);
   const startY   = useRef(0);
 
-  // Attach via DOM so WKWebView scroll can't intercept
   useEffect(() => {
-    const el   = fpRef.current;
-    const hdl  = handleRef.current;
+    const el  = fpRef.current;
+    const hdl = handleRef.current;
     if (!el || !hdl) return;
-
     const onTS = e => { startY.current = e.touches[0].clientY; };
     const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 50) onCollapse(); };
-
-    // Whole-card swipe-down
-    el.addEventListener('touchstart', onTS,  { passive: true });
-    el.addEventListener('touchend',   onTE,  { passive: true });
-    // Handle tap also collapses
+    el.addEventListener('touchstart',  onTS, { passive: true });
+    el.addEventListener('touchend',    onTE, { passive: true });
     hdl.addEventListener('click', onCollapse);
-
     return () => {
-      el.removeEventListener('touchstart', onTS);
-      el.removeEventListener('touchend',   onTE);
+      el.removeEventListener('touchstart',  onTS);
+      el.removeEventListener('touchend',    onTE);
       hdl.removeEventListener('click', onCollapse);
     };
   }, [onCollapse]);
 
   const pct = duration ? (progress/duration)*100 : 0;
   const rem = Math.max(0, duration - progress);
-
   function seek(e) {
     const r = e.currentTarget.getBoundingClientRect();
     dispatch({ type:'SET_PROGRESS', value: Math.floor(((e.clientX-r.left)/r.width)*duration) });
@@ -85,21 +82,13 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
 
   return (
     <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
-
-      {/* ① Pull handle — tap or swipe down to close */}
-      <div ref={handleRef} className="fp-handle-row">
-        <div className="fp-handle"/>
-      </div>
-
-      {/* ② Large artwork */}
+      <div ref={handleRef} className="fp-handle-row"><div className="fp-handle"/></div>
       <div className="fp-art-wrap">
         {track.releaseCover
           ? <img src={track.releaseCover} className="fp-art" alt=""/>
           : <div className="fp-art fp-art-ph"><Music2 size={80}/></div>
         }
       </div>
-
-      {/* ③ Title + actions */}
       <div className="fp-meta">
         <div className="fp-meta-text">
           <div className="fp-title">{track.title}</div>
@@ -110,25 +99,18 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
           <button className="fp-icon-btn"><MoreHorizontal size={22}/></button>
         </div>
       </div>
-
-      {/* ④ Scrubber */}
       <div className="fp-scrub-wrap">
         <div className="fp-scrub" onClick={seek}>
           <div className="fp-scrub-fill" style={{width:`${pct}%`}}/>
           <div className="fp-scrub-thumb" style={{left:`${pct}%`}}/>
         </div>
-        <div className="fp-times">
-          <span>{fmt(progress)}</span>
-          <span>-{fmt(rem)}</span>
-        </div>
+        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
       </div>
-
-      {/* ⑤ Controls */}
       <div className="fp-ctrls">
         <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}>
           <Rewind size={38} fill="currentColor" strokeWidth={0}/>
         </button>
-        <button className="fp-ctrl fp-ctrl--play" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
+        <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
           {isPlaying ? <Pause size={52} fill="currentColor" strokeWidth={0}/>
                      : <Play  size={52} fill="currentColor" strokeWidth={0} style={{marginLeft:4}}/>}
         </button>
@@ -136,15 +118,11 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
           <FastForward size={38} fill="currentColor" strokeWidth={0}/>
         </button>
       </div>
-
-      {/* ⑥ Volume */}
       <div className="fp-vol">
         <span className="fp-vol-icon">🔈</span>
         <input type="range" className="fp-vol-slider" min="0" max="100" defaultValue="80"/>
         <span className="fp-vol-icon">🔊</span>
       </div>
-
-      {/* ⑦ Bottom icons */}
       <div className="fp-actions">
         <button className="fp-icon-btn"><MessageSquare size={22}/></button>
         <button className="fp-icon-btn"><Airplay size={22}/></button>
@@ -160,11 +138,40 @@ export default function Player() {
   const { currentTrack, isPlaying, progress, duration } = state;
   const expand   = useCallback(() => setExp(true),  []);
   const collapse = useCallback(() => setExp(false), []);
-  useEffect(() => { if (currentTrack) setExp(false); }, [currentTrack?.id]);
+
+  // Expose command handler for Swift → web (toggle, next, prev, expand)
+  useEffect(() => {
+    window.__kyoyuPlayerCmd = (cmd) => {
+      if (cmd === 'toggle') dispatch({ type: 'TOGGLE_PLAY' });
+      if (cmd === 'next')   dispatch({ type: 'NEXT_TRACK' });
+      if (cmd === 'prev')   dispatch({ type: 'PREV_TRACK' });
+      if (cmd === 'expand') setExp(true);
+    };
+    return () => { delete window.__kyoyuPlayerCmd; };
+  }, [dispatch]);
+
+  // Send state to native Swift mini player
+  useEffect(() => {
+    if (currentTrack) {
+      postNative({
+        visible: true,
+        playing: isPlaying,
+        title:   currentTrack.title || '',
+        artwork: currentTrack.releaseCover || '',
+      });
+    } else {
+      postNative({ visible: false, playing: false, title: '', artwork: '' });
+    }
+  }, [currentTrack, isPlaying]);
+
   if (!currentTrack) return null;
+
   return (
     <>
-      {!exp && <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
+      {/* Web mini bar only for browser — native Swift pill used in iOS app */}
+      {!exp && !isNative() && (
+        <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
+      )}
       <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
                   open={exp} onCollapse={collapse} dispatch={dispatch}/>
     </>
