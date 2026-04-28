@@ -73,21 +73,41 @@
 }
 .fp-icon-btn:active { transform:scale(.88); }
 
-/* Scrubber — flat, NO thumb */
+/* Scrubber — flat track, circle thumb appears while dragging */
 .fp-scrub-wrap { padding-top:18px; }
-.fp-scrub { position:relative; height:3px; background:var(--glass-border-light); border-radius:2px; cursor:pointer; }
-.fp-scrub-fill { position:absolute; top:0; left:0; bottom:0; background:var(--text-primary); border-radius:2px; }
-.fp-times { display:flex; justify-content:space-between; margin-top:6px; font-size:12px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+.fp-scrub { position:relative; height:3px; background:var(--glass-border-light); border-radius:2px; cursor:pointer; overflow:visible; }
+.fp-scrub-fill { position:absolute; top:0; left:0; bottom:0; background:var(--text-primary); border-radius:2px; pointer-events:none; }
+.fp-times { display:flex; justify-content:space-between; margin-top:10px; font-size:12px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+
+/* Circle thumb — shown only while pointer is held */
+.fp-scrub-thumb {
+  position:absolute; top:50%; transform:translate(-50%,-50%);
+  width:20px; height:20px; border-radius:50%;
+  background:#fff; box-shadow:0 0 12px rgba(255,255,255,.55), 0 2px 8px rgba(0,0,0,.4);
+  pointer-events:none; z-index:5;
+  animation: thumb-pop .12s cubic-bezier(.34,1.56,.64,1);
+}
+.fp-scrub-thumb--sm { width:14px; height:14px; }
+@keyframes thumb-pop { from{transform:translate(-50%,-50%) scale(0)} to{transform:translate(-50%,-50%) scale(1)} }
+
+/* Invisible native range input — overlaid on visual track */
+.fp-range-overlay {
+  position:absolute; inset:-14px 0; width:100%; height:calc(100% + 28px);
+  opacity:0; cursor:pointer; -webkit-appearance:none; appearance:none;
+  margin:0; padding:0; background:transparent; border:none; z-index:10;
+}
+.fp-range-overlay::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%; background:transparent; cursor:pointer; }
+.fp-range-overlay::-moz-range-thumb { width:28px; height:28px; border-radius:50%; background:transparent; cursor:pointer; border:none; }
 
 /* Controls */
 .fp-ctrls { display:flex; align-items:center; justify-content:center; gap:44px; padding-top:20px; }
 .fp-ctrl { display:flex; align-items:center; justify-content:center; background:none; border:none; color:var(--text-primary); cursor:pointer; padding:6px; }
 .fp-ctrl:active { opacity:.6; transform:scale(.88); }
 
-/* Volume — div-based, identical to scrubber, zero browser chrome */
+/* Volume bar */
 .fp-vol { display:flex; align-items:center; gap:10px; padding-top:20px; }
 .fp-vol-icon { color:var(--text-dim); flex-shrink:0; }
-.fp-vol-bar { flex:1; height:3px; position:relative; background:var(--glass-border-light); border-radius:2px; cursor:pointer; }
+.fp-vol-bar { flex:1; height:3px; position:relative; background:var(--glass-border-light); border-radius:2px; cursor:pointer; overflow:visible; }
 .fp-vol-fill { position:absolute; top:0; left:0; bottom:0; background:var(--text-primary); border-radius:2px; pointer-events:none; }
 
 /* Bottom 3 action buttons */

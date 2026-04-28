@@ -12,65 +12,33 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
-/* ── Drag helper: passive:false so we can preventDefault and block page scroll ── */
-function useDrag(elRef, onPct) {
-  const cbRef = useRef(onPct);
-  // keep callback ref fresh without re-running the effect
-  useEffect(() => { cbRef.current = onPct; });
-
-  useEffect(() => {
-    const el = elRef.current; if (!el) return;
-
-    function getX(e) { return (e.touches?.[0] ?? e.changedTouches?.[0] ?? e).clientX; }
-
-    function update(e) {
-      e.preventDefault();
-      const r = elRef.current?.getBoundingClientRect(); if (!r) return;
-      cbRef.current(Math.max(0, Math.min(1, (getX(e) - r.left) / r.width)));
-    }
-
-    function onEnd() {
-      document.removeEventListener('touchmove', update);
-      document.removeEventListener('touchend',  onEnd);
-    }
-
-    function onStart(e) {
-      e.stopPropagation();
-      e.preventDefault();
-      update(e);
-      document.addEventListener('touchmove', update, { passive: false });
-      document.addEventListener('touchend',  onEnd,  { once: true });
-    }
-
-    el.addEventListener('touchstart', onStart, { passive: false });
-    el.addEventListener('click', update);
-    return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('click', update);
-      document.removeEventListener('touchmove', update);
-      document.removeEventListener('touchend',  onEnd);
-    };
-  }, [elRef]);
-}
-
 /* ── Mini bar ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   const ref = useRef(null); const startY = useRef(0);
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const s = e => { startY.current = e.touches[0].clientY; };
+    const s  = e => { startY.current = e.touches[0].clientY; };
     const e2 = e => { if (startY.current - e.changedTouches[0].clientY > 30) onExpand(); };
-    el.addEventListener('touchstart', s, { passive:true });
-    el.addEventListener('touchend',   e2, { passive:true });
-    return () => { el.removeEventListener('touchstart',s); el.removeEventListener('touchend',e2); };
+    el.addEventListener('touchstart', s,  { passive: true });
+    el.addEventListener('touchend',   e2, { passive: true });
+    return () => { el.removeEventListener('touchstart', s); el.removeEventListener('touchend', e2); };
   }, [onExpand]);
   return (
     <div ref={ref} className="mini-bar" onClick={onExpand}>
-      {track.releaseCover ? <img src={track.releaseCover} className="mini-art" alt=""/> : <div className="mini-art mini-art-ph"><Music2 size={18}/></div>}
-      <div className="mini-info"><div className="mini-title">{track.title}</div><div className="mini-artist">{track.artistName}</div></div>
-      <div className="mini-ctrls" onClick={e=>e.stopPropagation()}>
-        <button className="mini-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>{isPlaying?<Pause size={22} fill="currentColor" strokeWidth={0}/>:<Play size={22} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>}</button>
-        <button className="mini-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={22} fill="currentColor" strokeWidth={0}/></button>
+      {track.releaseCover
+        ? <img src={track.releaseCover} className="mini-art" alt=""/>
+        : <div className="mini-art mini-art-ph"><Music2 size={18}/></div>}
+      <div className="mini-info">
+        <div className="mini-title">{track.title}</div>
+        <div className="mini-artist">{track.artistName}</div>
+      </div>
+      <div className="mini-ctrls" onClick={e => e.stopPropagation()}>
+        <button className="mini-btn" onClick={() => dispatch({ type:'TOGGLE_PLAY' })}>
+          {isPlaying ? <Pause size={22} fill="currentColor" strokeWidth={0}/> : <Play size={22} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>}
+        </button>
+        <button className="mini-btn" onClick={() => dispatch({ type:'NEXT_TRACK' })}>
+          <FastForward size={22} fill="currentColor" strokeWidth={0}/>
+        </button>
       </div>
     </div>
   );
@@ -78,82 +46,116 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume }) {
-  const fpRef    = useRef(null);
-  const handleRef= useRef(null);
-  const scrubRef = useRef(null);
-  const volRef   = useRef(null);
-  const startY   = useRef(0);
-  const dragging = useRef(false);   // flag: block collapse while scrubbing
-  const [showQueue, setShowQueue] = useState(false);
+  const fpRef     = useRef(null);
+  const handleRef = useRef(null);
+  const startY    = useRef(0);
+  const dragging  = useRef(false);
+  const [showQueue,   setShowQueue]   = useState(false);
+  const [scrubActive, setScrubActive] = useState(false);
+  const [volActive,   setVolActive]   = useState(false);
 
-  // Swipe-down to collapse — only fires when not dragging a scrubber
+  /* Swipe-down to collapse — blocked while a scrubber is active */
   useEffect(() => {
-    const el = fpRef.current; const hdl = handleRef.current;
+    const el  = fpRef.current;
+    const hdl = handleRef.current;
     if (!el || !hdl) return;
     const onTS = e => { startY.current = e.touches[0].clientY; };
     const onTE = e => {
       if (dragging.current) return;
       if (e.changedTouches[0].clientY - startY.current > 60) onCollapse();
     };
-    el.addEventListener('touchstart', onTS, { passive:true });
-    el.addEventListener('touchend',   onTE, { passive:true });
+    el.addEventListener('touchstart',  onTS, { passive: true });
+    el.addEventListener('touchend',    onTE, { passive: true });
     hdl.addEventListener('click', onCollapse);
     return () => {
-      el.removeEventListener('touchstart', onTS);
-      el.removeEventListener('touchend',   onTE);
+      el.removeEventListener('touchstart',  onTS);
+      el.removeEventListener('touchend',    onTE);
       hdl.removeEventListener('click', onCollapse);
     };
   }, [onCollapse]);
 
-  // Scrubber drag → seekTo
-  useDrag(scrubRef, pct => {
-    dragging.current = true;
-    seekTo(pct * (duration || 0));
-    // clear flag slightly after touch ends (useDrag handles touchend cleanup)
-    requestAnimationFrame(() => { dragging.current = false; });
-  });
-
-  // Volume drag → setVolume
-  useDrag(volRef, pct => {
-    dragging.current = true;
-    setVolume(pct);
-    requestAnimationFrame(() => { dragging.current = false; });
-  });
-
   const pct = duration ? (progress / duration) * 100 : 0;
   const rem = Math.max(0, (duration || 0) - (progress || 0));
-  const vol = Math.round((volume || 0.8) * 100);
+  const vol = Math.round((volume ?? 0.8) * 100);
 
   const Artwork = ({ big }) => track.releaseCover
-    ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
-    : <div className={big?'fp-art fp-art-ph':'fp-q-art fp-art-ph'}><Music2 size={big?72:24}/></div>;
+    ? <img src={track.releaseCover} className={big ? 'fp-art' : 'fp-q-art'} alt=""/>
+    : <div className={big ? 'fp-art fp-art-ph' : 'fp-q-art fp-art-ph'}><Music2 size={big ? 72 : 24}/></div>;
 
   const Bottom = () => (
     <>
+      {/* ── Progress scrubber ── */}
       <div className="fp-scrub-wrap">
-        <div ref={scrubRef} className="fp-scrub">
-          <div className="fp-scrub-fill" style={{width:`${pct}%`}}/>
+        <div className="fp-scrub">
+          <div className="fp-scrub-fill" style={{ width: `${pct}%` }}/>
+          {/* Circle thumb — visible only while scrubbing */}
+          {scrubActive && (
+            <div className="fp-scrub-thumb" style={{ left: `${Math.max(0, Math.min(100, pct))}%` }}/>
+          )}
+          {/* Invisible native range — handles all touch/pointer events natively */}
+          <input
+            type="range"
+            className="fp-range-overlay"
+            min={0}
+            max={duration || 100}
+            step={0.1}
+            value={progress || 0}
+            onChange={e => seekTo(parseFloat(e.target.value))}
+            onPointerDown={() => { setScrubActive(true);  dragging.current = true;  }}
+            onPointerUp={  () => { setScrubActive(false); requestAnimationFrame(() => { dragging.current = false; }); }}
+            onPointerCancel={() => { setScrubActive(false); dragging.current = false; }}
+          />
         </div>
-        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
+        <div className="fp-times">
+          <span>{fmt(progress)}</span>
+          <span>-{fmt(rem)}</span>
+        </div>
       </div>
+
+      {/* ── Transport ── */}
       <div className="fp-ctrls">
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
-          {isPlaying?<Pause size={48} fill="currentColor" strokeWidth={0}/>:<Play size={48} fill="currentColor" strokeWidth={0} style={{marginLeft:3}}/>}
+        <button className="fp-ctrl" onClick={() => dispatch({ type:'PREV_TRACK' })}>
+          <Rewind size={36} fill="currentColor" strokeWidth={0}/>
         </button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
+        <button className="fp-ctrl" onClick={() => dispatch({ type:'TOGGLE_PLAY' })}>
+          {isPlaying
+            ? <Pause size={48} fill="currentColor" strokeWidth={0}/>
+            : <Play  size={48} fill="currentColor" strokeWidth={0} style={{ marginLeft: 3 }}/>}
+        </button>
+        <button className="fp-ctrl" onClick={() => dispatch({ type:'NEXT_TRACK' })}>
+          <FastForward size={36} fill="currentColor" strokeWidth={0}/>
+        </button>
       </div>
+
+      {/* ── Volume ── */}
       <div className="fp-vol">
         <Volume size={15} className="fp-vol-icon"/>
-        <div ref={volRef} className="fp-vol-bar">
-          <div className="fp-vol-fill" style={{width:`${vol}%`}}/>
+        <div className="fp-vol-bar">
+          <div className="fp-vol-fill" style={{ width: `${vol}%` }}/>
+          {volActive && (
+            <div className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left: `${vol}%` }}/>
+          )}
+          <input
+            type="range"
+            className="fp-range-overlay"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume ?? 0.8}
+            onChange={e => setVolume(parseFloat(e.target.value))}
+            onPointerDown={() => { setVolActive(true);  dragging.current = true;  }}
+            onPointerUp={  () => { setVolActive(false); requestAnimationFrame(() => { dragging.current = false; }); }}
+            onPointerCancel={() => { setVolActive(false); dragging.current = false; }}
+          />
         </div>
         <Volume2 size={15} className="fp-vol-icon"/>
       </div>
+
+      {/* ── Action buttons ── */}
       <div className="fp-actions">
         <button className="fp-action-btn"><MessageSquare size={22}/></button>
         <button className="fp-action-btn"><Airplay size={22}/></button>
-        <button className={`fp-action-btn${showQueue?' fp-action-btn--on':''}`} onClick={()=>setShowQueue(q=>!q)}>
+        <button className={`fp-action-btn${showQueue ? ' fp-action-btn--on' : ''}`} onClick={() => setShowQueue(q => !q)}>
           <AlignJustify size={22}/>
         </button>
       </div>
@@ -161,8 +163,9 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
   );
 
   return (
-    <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
+    <div ref={fpRef} className={`fp${open ? ' fp--open' : ''}`}>
       <div ref={handleRef} className="fp-handle-row"><div className="fp-handle"/></div>
+
       {showQueue ? (
         <>
           <div className="fp-q-header">
@@ -188,7 +191,7 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
           <div className="fp-meta">
             <div className="fp-meta-text">
               <div className="fp-title">{track.title}</div>
-              <div className="fp-artist">{track.artistName||'—'}</div>
+              <div className="fp-artist">{track.artistName || '—'}</div>
             </div>
             <div className="fp-meta-btns">
               <button className="fp-icon-btn"><Star size={20}/></button>
@@ -212,17 +215,17 @@ export default function Player() {
 
   useEffect(() => {
     window.__kyoyuPlayerCmd = cmd => {
-      if (cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
-      if (cmd==='next')   dispatch({type:'NEXT_TRACK'});
-      if (cmd==='prev')   dispatch({type:'PREV_TRACK'});
-      if (cmd==='expand') { setExp(true); postNative({ expanded: true }); }
+      if (cmd === 'toggle') dispatch({ type:'TOGGLE_PLAY' });
+      if (cmd === 'next')   dispatch({ type:'NEXT_TRACK'  });
+      if (cmd === 'prev')   dispatch({ type:'PREV_TRACK'  });
+      if (cmd === 'expand') { setExp(true); postNative({ expanded: true }); }
     };
     return () => { delete window.__kyoyuPlayerCmd; };
   }, [dispatch]);
 
   useEffect(() => {
     if (currentTrack) postNative({ visible:true, playing:isPlaying, title:currentTrack.title||'', artwork:currentTrack.releaseCover||'' });
-    else postNative({ visible:false, playing:false, title:'', artwork:'' });
+    else              postNative({ visible:false, playing:false, title:'', artwork:'' });
   }, [currentTrack, isPlaying]);
 
   if (!currentTrack) return null;
@@ -230,9 +233,9 @@ export default function Player() {
     <>
       {!exp && !isNative() && <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
       <FullPlayer
-        track={currentTrack} isPlaying={isPlaying} progress={progress}
-        duration={duration} volume={volume} open={exp}
-        onCollapse={collapse} dispatch={dispatch}
+        track={currentTrack} isPlaying={isPlaying}
+        progress={progress} duration={duration} volume={volume}
+        open={exp} onCollapse={collapse} dispatch={dispatch}
         seekTo={seekTo} setVolume={setVolume}
       />
     </>
