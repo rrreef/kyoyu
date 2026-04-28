@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History } from 'lucide-react';
+import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History, MoreHorizontal } from 'lucide-react';
 import * as mm from 'music-metadata-browser';
 import InlinePlayer from '../components/player/InlinePlayer';
 import { useAuth } from '../contexts/AuthContext';
@@ -200,6 +200,8 @@ export default function UserUploads() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [saveErr,       setSaveErr]       = useState('');
+  const [editingTrack,  setEditingTrack]  = useState(null);
+  const [editMeta,      setEditMeta]      = useState({});
   const fileRef    = useRef();
   const artRefs    = useRef([]);
   const audioRef   = useRef(new Audio());
@@ -374,6 +376,21 @@ export default function UserUploads() {
     setSelectedIds(new Set()); setSelectMode(false);
     window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
   }
+  function openEdit(t) {
+    setEditingTrack(t);
+    setEditMeta({ title:t.title||'', artist:t.artist||'', album:t.album||'', genre:t.genre||'', year:t.year||'', label:t.label||'' });
+  }
+  function closeEdit() { setEditingTrack(null); }
+  function saveEdit() {
+    if (!editingTrack) return;
+    setSaved(prev => {
+      const next = prev.map(t => t.id === editingTrack.id ? { ...t, ...editMeta } : t);
+      if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
+    closeEdit();
+  }
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
 
   const m=metas[active]||emptyMeta('_');
@@ -479,6 +496,7 @@ export default function UserUploads() {
                           <div className="uu-track-title">{t.title}</div>
                           <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
                         </div>
+                        <button className="uu-more-btn" onClick={(e)=>{ e.stopPropagation(); openEdit(t); }}><MoreHorizontal size={16}/></button>
                         <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
                       </div>
                     </SwipeDeleteRow>
@@ -491,6 +509,33 @@ export default function UserUploads() {
       )}
 
       {saved.length===0&&files.length===0&&<div className="uu-empty"><Music2 size={32} strokeWidth={1.2}/><div>No uploads yet</div><div className="uu-empty-sub">Your private music lives here</div></div>}
+
+      {/* ── Edit Track Bottom Sheet ── */}
+      {editingTrack && (
+        <div className="uu-edit-overlay" onClick={closeEdit}>
+          <div className="uu-edit-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="uu-edit-handle"/>
+            <div className="uu-edit-header">
+              <h3 className="uu-edit-title">Edit Track</h3>
+              <button className="uu-edit-close" onClick={closeEdit}><X size={18}/></button>
+            </div>
+            {editingTrack.artworkUrl && <img src={editingTrack.artworkUrl} alt="" className="uu-edit-art"/>}
+            <div className="uu-fields glass" style={{margin:'0 16px 16px'}}>
+              {[{k:'title',l:'Title'},{k:'artist',l:'Artist'},{k:'album',l:'Album'},{k:'genre',l:'Genre'},{k:'year',l:'Year'},{k:'label',l:'Label'}].map(({k,l})=>(
+                <div key={k} className="uu-field">
+                  <label>{l}</label>
+                  <input
+                    value={editMeta[k]||''}
+                    onChange={e=>setEditMeta(p=>({...p,[k]:e.target.value}))}
+                    placeholder={l}
+                  />
+                </div>
+              ))}
+            </div>
+            <button className="uu-save-full" onClick={saveEdit}><Check size={18}/> Save Changes</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 

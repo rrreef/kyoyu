@@ -177,3 +177,18 @@
 .uu-save-full { display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 16px 120px;padding:15px;border-radius:16px;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.18);font-size:.9rem;font-weight:700;color:#fff;cursor:pointer;transition:background .2s,transform .15s; }
 .uu-save-full:hover { background:rgba(255,255,255,.15);transform:translateY(-1px); }
 .uu-save-err { margin:0 16px 12px;padding:10px 14px;border-radius:12px;background:rgba(239,68,68,.18);border:.5px solid rgba(239,68,68,.35);color:#fca5a5;font-size:.8rem; }
+
+/* "..." more button on track cards */
+.uu-more-btn { width:32px;height:32px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);cursor:pointer;flex-shrink:0;transition:color .2s;-webkit-tap-highlight-color:transparent; }
+.uu-more-btn:hover { color:rgba(255,255,255,.7); }
+
+/* Edit track bottom sheet */
+.uu-edit-overlay { position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:flex;align-items:flex-end; }
+.uu-edit-sheet { width:100%;max-height:88vh;background:rgba(12,12,16,.97);border-radius:24px 24px 0 0;border-top:.5px solid rgba(255,255,255,.1);overflow-y:auto;padding-bottom:calc(32px + env(safe-area-inset-bottom));animation:slideUp .28s cubic-bezier(.25,.46,.45,.94); }
+@keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+.uu-edit-handle { width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:12px auto 4px; }
+.uu-edit-header { display:flex;align-items:center;justify-content:space-between;padding:12px 20px 16px; }
+.uu-edit-title { font-size:1rem;font-weight:700;color:#fff;margin:0; }
+.uu-edit-close { width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);cursor:pointer; }
+.uu-edit-art { width:72px;height:72px;border-radius:12px;object-fit:cover;display:block;margin:0 auto 16px; }
+.uu-edit-sheet .uu-save-full { margin:16px 16px 0; }
