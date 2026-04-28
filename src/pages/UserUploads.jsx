@@ -190,7 +190,6 @@ export default function UserUploads() {
     try {
       const items = await Promise.all(metas.map(async (m, i) => {
         let artworkUrl = m.artworkUrl;
-        // Convert any blob/object URL to persistent base64 data URL
         if (m.artworkFile) {
           artworkUrl = await new Promise(res => {
             const r = new FileReader();
@@ -198,7 +197,6 @@ export default function UserUploads() {
             r.readAsDataURL(m.artworkFile);
           });
         } else if (artworkUrl && artworkUrl.startsWith('blob:')) {
-          // blob URLs are ephemeral — strip them so they don't corrupt saved data
           artworkUrl = null;
         }
         return {
@@ -211,10 +209,15 @@ export default function UserUploads() {
           savedAt:  Date.now(),
         };
       }));
-      setSaved(prev => [...items, ...prev]);
+      // Persist IMMEDIATELY — don't rely on useEffect which may not fire before unmount
+      const nextSaved = [...items, ...saved];
+      setSaved(nextSaved);
+      if (user?.id) {
+        try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(nextSaved)); } catch(e) { console.error('[persist]', e); }
+      }
       setFiles([]); setMetas([]); setStep(0); setActive(0);
-      setShowPrev(true);  // auto-expand so user sees newly saved tracks
-      window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed')); // notify Home shelf
+      setShowPrev(true);
+      window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
     } catch(err) {
       console.error('[saveAll]', err);
       alert(`Could not save: ${err.message}`);
