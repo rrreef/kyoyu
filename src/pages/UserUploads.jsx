@@ -138,7 +138,7 @@ function SwipeDeleteRow({ onDelete, children, disabled }) {
 
   return (
     <div ref={wrapRef} className="sdr-wrap" onClick={snapped ? close : undefined}>
-      <div className="sdr-bg" style={{ width: `${offset}px` }}>
+      <div className="sdr-bg" style={{ width: `${offset}px`, visibility: offset > 0 ? 'visible' : 'hidden' }}>
         {offset > 20 && (
           <button className="sdr-btn" onClick={(e) => { e.stopPropagation(); onDelete(); close(); }}>
             <Trash2 size={18} />
