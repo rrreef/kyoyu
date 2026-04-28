@@ -90,43 +90,51 @@ function sortUploads(arr, s) {
 }
 
 /* ── SwipeDeleteRow — iOS swipe-to-reveal delete ──────────────── */
-function SwipeDeleteRow({ onDelete, children }) {
+function SwipeDeleteRow({ onDelete, children, disabled }) {
+  const wrapRef     = useRef(null);
   const [offset, setOffset] = useState(0);
+  const [snapped, setSnapped] = useState(false);
   const startX      = useRef(null);
   const startOff    = useRef(0);
-  const liveOffset  = useRef(0);  // always current, avoids stale closure in onTouchEnd
+  const liveOffset  = useRef(0);
   const dragging    = useRef(false);
-  const DELETE_W    = 76;
   const THRESHOLD   = 36;
 
+  function maxW() { return Math.round((wrapRef.current?.offsetWidth || 340) * 0.25); }
+
   function onTouchStart(e) {
+    if (disabled) return;
     startX.current   = e.touches[0].clientX;
     startOff.current = liveOffset.current;
     dragging.current = true;
   }
   function onTouchMove(e) {
-    if (!dragging.current) return;
-    const dx   = startX.current - e.touches[0].clientX; // positive = swiping left
-    const next = Math.max(0, Math.min(startOff.current + dx, DELETE_W + 8));
+    if (!dragging.current || disabled) return;
+    const dx   = startX.current - e.touches[0].clientX;
+    const next = Math.max(0, Math.min(startOff.current + dx, maxW() + 6));
     liveOffset.current = next;
     setOffset(next);
   }
   function onTouchEnd() {
+    if (!dragging.current) return;
     dragging.current = false;
-    const snap = liveOffset.current >= THRESHOLD ? DELETE_W : 0;
+    const m = maxW();
+    const snap = liveOffset.current >= THRESHOLD ? m : 0;
     liveOffset.current = snap;
     setOffset(snap);
+    setSnapped(snap > 0);
   }
-  function close(e) { e?.stopPropagation(); liveOffset.current = 0; setOffset(0); }
-
-  const isOpen = offset >= DELETE_W;
+  function close(e) { e?.stopPropagation(); liveOffset.current = 0; setOffset(0); setSnapped(false); }
 
   return (
-    <div className="sdr-wrap" onClick={isOpen ? close : undefined}>
-      <div className="sdr-bg">
-        <button className="sdr-btn" onClick={(e) => { e.stopPropagation(); onDelete(); close(); }}>
-          <Trash2 size={20} />
-        </button>
+    <div ref={wrapRef} className="sdr-wrap" onClick={snapped ? close : undefined}>
+      {/* Red zone — grows from right as user swipes */}
+      <div className="sdr-bg" style={{ width: `${offset}px` }}>
+        {offset > 20 && (
+          <button className="sdr-btn" onClick={(e) => { e.stopPropagation(); onDelete(); close(); }}>
+            <Trash2 size={18} />
+          </button>
+        )}
       </div>
       <div
         className="sdr-content"
@@ -159,6 +167,8 @@ export default function UserUploads() {
   const [audioUrls,   setAudioUrls]   = useState({});
   const [showPrev,    setShowPrev]    = useState(false);
   const [prevSort,    setPrevSort]    = useState('newest');
+  const [selectMode,  setSelectMode]  = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [saveErr,       setSaveErr]       = useState('');
   const fileRef    = useRef();
@@ -321,6 +331,20 @@ export default function UserUploads() {
       return next;
     });
   }
+  function toggleSelect(id){
+    setSelectedIds(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  }
+  function selectAll(){ setSelectedIds(new Set(saved.map(t=>t.id))); }
+  function deleteSelected(){
+    const ids=selectedIds;
+    setSaved(prev=>{
+      const next=prev.filter(t=>!ids.has(t.id));
+      if(user?.id) try{ localStorage.setItem(`kyoyu-uploads-${user.id}`,JSON.stringify(next)); }catch{}
+      return next;
+    });
+    setSelectedIds(new Set()); setSelectMode(false);
+    window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
+  }
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
 
   const m=metas[active]||emptyMeta('_');
@@ -380,27 +404,56 @@ export default function UserUploads() {
 
           {showPrev&&(
             <>
-              {/* Sort pills */}
-              <div className="uu-prev-sorts">
-                {SORT_OPTS.map(o=>(
-                  <button key={o.key} className={`uu-prev-sort${prevSort===o.key?' active':''}`}
-                    onClick={()=>setPrevSort(o.key)}>{o.label}</button>
-                ))}
+              {/* Sort + Select row */}
+              <div className="uu-sort-select-row">
+                {selectMode ? (
+                  <button className="uu-prev-sort uu-select-cancel" onClick={()=>{setSelectMode(false);setSelectedIds(new Set());}}>✕ Select</button>
+                ) : (
+                  <div className="uu-prev-sorts">
+                    {SORT_OPTS.map(o=>(
+                      <button key={o.key} className={`uu-prev-sort${prevSort===o.key?' active':''}`}
+                        onClick={()=>setPrevSort(o.key)}>{o.label}</button>
+                    ))}
+                  </div>
+                )}
+                {selectMode ? (
+                  <button className="uu-select-all-btn" onClick={selectAll}>Select All</button>
+                ) : (
+                  <button className="uu-select-trigger" onClick={()=>setSelectMode(true)}>Select</button>
+                )}
               </div>
+
+              {/* Bulk delete bar */}
+              {selectMode&&selectedIds.size>0&&(
+                <button className="uu-delete-sel" onClick={deleteSelected}>
+                  <Trash2 size={15}/> Delete {selectedIds.size} Track{selectedIds.size>1?'s':''}
+                </button>
+              )}
 
               {/* List */}
               <div className="uu-prev-list">
                 {sortUploads(saved,prevSort).map(t=>(
-                  <SwipeDeleteRow key={t.id} onDelete={() => removeSaved(t.id)}>
-                    <div className={`uu-track glass${playing===t.id?' playing':''}`}>
+                  selectMode ? (
+                    <div key={t.id} className={`uu-track glass uu-selectable${selectedIds.has(t.id)?' sel':''}`} onClick={()=>toggleSelect(t.id)}>
+                      <div className={`uu-chk${selectedIds.has(t.id)?' checked':''}`}/>
                       {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
                       <div className="uu-track-info">
                         <div className="uu-track-title">{t.title}</div>
                         <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
                       </div>
-                      <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
                     </div>
-                  </SwipeDeleteRow>
+                  ) : (
+                    <SwipeDeleteRow key={t.id} onDelete={()=>removeSaved(t.id)}>
+                      <div className={`uu-track glass${playing===t.id?' playing':''}`}>
+                        {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-art"/>:<div className="uu-art-ph"><Music2 size={15}/></div>}
+                        <div className="uu-track-info">
+                          <div className="uu-track-title">{t.title}</div>
+                          <div className="uu-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                        </div>
+                        <button className="uu-play" onClick={()=>togglePlay(t)}>{playing===t.id?<Pause size={14} fill="currentColor"/>:<Play size={14} fill="currentColor"/>}</button>
+                      </div>
+                    </SwipeDeleteRow>
+                  )
                 ))}
               </div>
             </>
