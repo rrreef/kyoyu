@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useRef, useEffect } from 'react';
+import { createContext, useContext, useReducer, useRef, useEffect, useCallback } from 'react';
 import { releases, djSets } from '../data/mockData';
 
 const PlayerContext = createContext(null);
@@ -96,20 +96,29 @@ export function PlayerProvider({ children }) {
     else { audio.pause(); }
   }, [state.isPlaying]); // eslint-disable-line
 
-  function seekTo(seconds) {
+  // Stable seek — safe to use in drag handlers
+  const seekTo = useCallback((seconds) => {
     const audio = audioRef.current;
     if (!audio || !isFinite(seconds)) return;
     const t = Math.max(0, Math.min(seconds, audio.duration || 0));
     audio.currentTime = t;
     dispatch({ type:'SET_PROGRESS', value: t });
-  }
+  }, []);
 
-  function setVolume(v) {
+  // Set audio.volume immediately (no React dispatch) — for live drag
+  const setAudioVolumeDirect = useCallback((v) => {
+    const audio = audioRef.current;
+    if (audio) audio.volume = Math.max(0, Math.min(1, v));
+  }, []);
+
+  // Full volume setter — sets audio + updates React state — call on drag release
+  const setVolume = useCallback((v) => {
     const audio = audioRef.current;
     const vol = Math.max(0, Math.min(1, v));
     if (audio) audio.volume = vol;
     dispatch({ type:'SET_VOLUME', value: vol });
-  }
+  }, []);
+
 
   function playTrack(track, queue = []) {
     dispatch({ type:'PLAY_TRACK', track });
@@ -133,7 +142,7 @@ export function PlayerProvider({ children }) {
   }
 
   return (
-    <PlayerContext.Provider value={{ state, dispatch, playTrack, playRelease, seekTo, setVolume, allTracks }}>
+    <PlayerContext.Provider value={{ state, dispatch, playTrack, playRelease, seekTo, setVolume, setAudioVolumeDirect, allTracks }}>
       {children}
     </PlayerContext.Provider>
   );

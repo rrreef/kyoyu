@@ -116,17 +116,19 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek }) {
 });
 
 /* ── Volume slider ── */
-const VolSlider = memo(function VolSlider({ volume, onSet }) {
+const VolSlider = memo(function VolSlider({ volume, onSet, onSetDirect }) {
   const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
-  const setRef   = useRef(onSet);
-  useEffect(() => { setRef.current = onSet; }, [onSet]);
+  const setRef       = useRef(onSet);
+  const setDirectRef = useRef(onSetDirect);
+  useEffect(() => { setRef.current       = onSet;       }, [onSet]);
+  useEffect(() => { setDirectRef.current = onSetDirect; }, [onSetDirect]);
 
   useScrub(
     hitRef, fillRef, thumbRef,
-    pct => setRef.current(pct),
-    pct => setRef.current(pct)
+    pct => setDirectRef.current?.(pct),          // live drag: audio.volume only
+    pct => { setRef.current(pct); }              // release: also updates React state
   );
 
   useEffect(() => {
@@ -150,7 +152,7 @@ const VolSlider = memo(function VolSlider({ volume, onSet }) {
     on every progress tick, causing React to unmount/remount Scrubber
     and tear down its event listeners each second)                    ── */
 const PlayerControls = memo(function PlayerControls({
-  progress, duration, volume, isPlaying, dispatch, onSeek, onSetVol, showQueue, setShowQueue
+  progress, duration, volume, isPlaying, dispatch, onSeek, onSetVol, onSetVolDirect, showQueue, setShowQueue
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
   return (
@@ -168,7 +170,7 @@ const PlayerControls = memo(function PlayerControls({
       </div>
       <div className="fp-vol">
         <Volume size={15} className="fp-vol-icon"/>
-        <VolSlider volume={volume} onSet={onSetVol}/>
+        <VolSlider volume={volume} onSet={onSetVol} onSetDirect={onSetVolDirect}/>
         <Volume2 size={15} className="fp-vol-icon"/>
       </div>
       <div className="fp-actions">
@@ -207,7 +209,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume }) {
+function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume, setAudioVolumeDirect }) {
   const fpRef    = useRef(null);
   const handleRef= useRef(null);
   const startY   = useRef(0);
@@ -231,6 +233,7 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
 
   const controls = <PlayerControls progress={progress} duration={duration} volume={volume}
     isPlaying={isPlaying} dispatch={dispatch} onSeek={seekTo} onSetVol={setVolume}
+    onSetVolDirect={setAudioVolumeDirect}
     showQueue={showQueue} setShowQueue={setShowQueue}/>;
 
   return (
@@ -266,7 +269,7 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
 
 /* ── Root ── */
 export default function Player() {
-  const { state, dispatch, seekTo, setVolume } = usePlayer();
+  const { state, dispatch, seekTo, setVolume, setAudioVolumeDirect } = usePlayer();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, volume } = state;
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
@@ -289,7 +292,8 @@ export default function Player() {
     <>
       {!exp&&!isNative()&&<MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
       <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
-        volume={volume} open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo} setVolume={setVolume}/>
+        volume={volume} open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
+        setVolume={setVolume} setAudioVolumeDirect={setAudioVolumeDirect}/>
     </>
   );
 }
