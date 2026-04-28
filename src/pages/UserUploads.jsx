@@ -174,6 +174,15 @@ export default function UserUploads() {
   function removeFile(id){setFiles(p=>p.filter(f=>f.id!==id));}
   function setField(i,k){return v=>setMetas(m=>m.map((t,j)=>j===i?{...t,[k]:v}:t));}
   function copyAll(k,v){setMetas(m=>m.map(t=>({...t,[k]:v})));}
+  function copyArtToAll(){
+    const src = metas[active];
+    if (!src?.artworkUrl) return;
+    setMetas(prev => prev.map(t => ({
+      ...t,
+      artworkUrl:  src.artworkUrl,
+      artworkFile: src.artworkFile ?? null,
+    })));
+  }
   function pickArt(i,e){const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:f,artworkUrl:url}:t));e.target.value='';}
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
@@ -331,13 +340,18 @@ export default function UserUploads() {
             <div className="uu-art-preview">
               <img src={m.artworkUrl} alt="artwork" className="uu-art-big"/>
               <div className="uu-art-btns">
+                {files.length > 1 && (
+                  <button className="uu-art-copy-all" onClick={copyArtToAll}>Copy to all</button>
+                )}
                 <button onClick={()=>artRefs.current[active]?.click()}>Replace</button>
                 <button onClick={()=>rmArt(active)}><X size={12}/></button>
               </div>
             </div>
           ):(
             <div className="uu-art-empty" onClick={()=>artRefs.current[active]?.click()}>
-              <Image size={24} strokeWidth={1.5}/><span>Add artwork</span><span className="uu-art-hint">JPG, PNG · min 800×800</span>
+              <Image size={24} strokeWidth={1.5}/>
+              <span>Add artwork</span>
+              <span className="uu-art-hint">JPG, PNG · min 800×800</span>
             </div>
           )}
           <div className="uu-file-chip"><File size={11}/>{files[active]?.file.name}<span className="uu-fmt">{ext(files[active]?.file??{name:'x.mp3'})}</span></div>
