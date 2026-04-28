@@ -44,27 +44,29 @@ function playerReducer(state, action) {
 
 export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
-  const audioRef = useRef(null);
+  const audioRef    = useRef(null);
+  const gainRef     = useRef(null);   // Web Audio API GainNode — controls volume on iOS
+  const ctxRef      = useRef(null);   // AudioContext
+  const sourceReady = useRef(false);  // createMediaElementSource called only once
 
-  // Create audio element once
+  // ── Create audio element on mount ──
   useEffect(() => {
     const audio = document.createElement('audio');
-    audio.volume = 0.8;
     audio.preload = 'metadata';
     audioRef.current = audio;
 
-    const onTime     = () => dispatch({ type:'SET_PROGRESS', value: audio.currentTime });
-    const onMeta     = () => dispatch({ type:'SET_DURATION', value: audio.duration || 0 });
-    const onPlay     = () => dispatch({ type:'SET_PLAYING',  value: true  });
-    const onPause    = () => dispatch({ type:'SET_PLAYING',  value: false });
-    const onEnded    = () => dispatch({ type:'NEXT_TRACK' });
+    const onTime  = () => dispatch({ type:'SET_PROGRESS', value: audio.currentTime });
+    const onMeta  = () => dispatch({ type:'SET_DURATION', value: audio.duration || 0 });
+    const onPlay  = () => dispatch({ type:'SET_PLAYING',  value: true  });
+    const onPause = () => dispatch({ type:'SET_PLAYING',  value: false });
+    const onEnded = () => dispatch({ type:'NEXT_TRACK' });
 
-    audio.addEventListener('timeupdate',      onTime);
-    audio.addEventListener('loadedmetadata',  onMeta);
-    audio.addEventListener('durationchange',  onMeta);
-    audio.addEventListener('play',            onPlay);
-    audio.addEventListener('pause',           onPause);
-    audio.addEventListener('ended',           onEnded);
+    audio.addEventListener('timeupdate',     onTime);
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('durationchange', onMeta);
+    audio.addEventListener('play',           onPlay);
+    audio.addEventListener('pause',          onPause);
+    audio.addEventListener('ended',          onEnded);
 
     return () => {
       audio.pause();
@@ -77,7 +79,32 @@ export function PlayerProvider({ children }) {
     };
   }, []);
 
-  // When currentTrack changes → load + play
+  // ── Wire Web Audio API gain node (call once after first user gesture) ──
+  // On iOS, AudioContext must be created / resumed inside a user gesture.
+  // We call this from playTrack (which is always user-initiated).
+  function ensureGain() {
+    const audio = audioRef.current;
+    if (!audio || sourceReady.current) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx  = new Ctx();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.8;
+      const src  = ctx.createMediaElementSource(audio);
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      ctxRef.current  = ctx;
+      gainRef.current = gain;
+      sourceReady.current = true;
+      // Resume in case iOS started it suspended
+      ctx.resume().catch(() => {});
+    } catch(e) {
+      // Web Audio not available — fall back to audio.volume
+    }
+  }
+
+  // ── Track change → load + play ──
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
@@ -85,18 +112,25 @@ export function PlayerProvider({ children }) {
     if (!src) return;
     audio.src = src;
     audio.load();
+    // Resume AudioContext if needed (iOS suspends it)
+    ctxRef.current?.resume().catch(() => {});
     audio.play().catch(() => {});
   }, [state.currentTrack?.id]); // eslint-disable-line
 
-  // When isPlaying toggles → play/pause
+  // ── Play / pause sync ──
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
-    if (state.isPlaying) { audio.play().catch(() => {}); }
-    else { audio.pause(); }
+    if (state.isPlaying) {
+      ctxRef.current?.resume().catch(() => {});
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
   }, [state.isPlaying]); // eslint-disable-line
 
-  // Stable seek — safe to use in drag handlers
+  // ── Helpers (stable — safe in drag handlers) ──
+
   const seekTo = useCallback((seconds) => {
     const audio = audioRef.current;
     if (!audio || !isFinite(seconds)) return;
@@ -105,22 +139,29 @@ export function PlayerProvider({ children }) {
     dispatch({ type:'SET_PROGRESS', value: t });
   }, []);
 
-  // Set audio.volume immediately (no React dispatch) — for live drag
+  // Called on every drag frame — sets gain directly, no dispatch
   const setAudioVolumeDirect = useCallback((v) => {
-    const audio = audioRef.current;
-    if (audio) audio.volume = Math.max(0, Math.min(1, v));
+    const vol = Math.max(0, Math.min(1, v));
+    if (gainRef.current) {
+      gainRef.current.gain.value = vol;
+    } else if (audioRef.current) {
+      audioRef.current.volume = vol;   // fallback (non-iOS)
+    }
   }, []);
 
-  // Full volume setter — sets audio + updates React state — call on drag release
+  // Called on drag release — sets gain + syncs React state
   const setVolume = useCallback((v) => {
-    const audio = audioRef.current;
     const vol = Math.max(0, Math.min(1, v));
-    if (audio) audio.volume = vol;
+    if (gainRef.current) {
+      gainRef.current.gain.value = vol;
+    } else if (audioRef.current) {
+      audioRef.current.volume = vol;
+    }
     dispatch({ type:'SET_VOLUME', value: vol });
   }, []);
 
-
   function playTrack(track, queue = []) {
+    ensureGain();   // create Web Audio graph on first play (user gesture)
     dispatch({ type:'PLAY_TRACK', track });
     if (queue.length) dispatch({ type:'SET_QUEUE', queue });
     const audio = audioRef.current;
@@ -129,6 +170,7 @@ export function PlayerProvider({ children }) {
     if (!src) return;
     audio.src = src;
     audio.load();
+    ctxRef.current?.resume().catch(() => {});
     audio.play().catch(() => {});
   }
 
