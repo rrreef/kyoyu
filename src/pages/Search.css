@@ -1,3 +1,4 @@
+.search-page { overflow-x: hidden; }
 .search-bar-wrap { margin-bottom: var(--sp-5); }
 .search-bar {
   display: flex;
@@ -68,6 +69,7 @@
 
 .search-section { margin-bottom: var(--sp-8); }
 .search-grid { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+.search-grid > * { min-width: 0; }
 
 /* ── Browse genres ──────────────────────────────────────────── */
 .search-browse { margin-bottom: var(--sp-8); }
