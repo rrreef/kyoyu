@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, Shuffle, X, Music2 } from 'lucide-react';
+import { Play, Pause, Shuffle, X, Music2, MoreHorizontal, Check } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
+import { useAuth } from '../../contexts/AuthContext';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -191,6 +192,87 @@ export default function UploadShelf({ uploads }) {
 
       {activeAlb && (
         <AlbumModal alb={activeAlb} onClose={()=>setActiveAlb(null)}/>
+      )}
+    </>
+  );
+}
+
+/* ── Named export: vertical track list reused in Home & Library ── */
+export function UploadExpandedList({ uploads }) {
+  const { playTrack } = usePlayer();
+  const { user } = useAuth();
+  const [activeId,     setActiveId]     = useState(null);
+  const [editingTrack, setEditingTrack] = useState(null);
+  const [editMeta,     setEditMeta]     = useState({});
+  const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+
+  function play(t) {
+    const queue = sorted.map(u => ({
+      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '',
+      releaseCover: u.artworkUrl || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || '',
+    }));
+    playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
+    setActiveId(t.id);
+  }
+  function openEdit(t) {
+    setEditingTrack(t);
+    setEditMeta({ title:t.title||'', artist:t.artist||'', album:t.album||'', genre:t.genre||'', year:t.year||'', label:t.label||'' });
+  }
+  function closeEdit() { setEditingTrack(null); }
+  function saveEdit() {
+    if (!editingTrack || !user?.id) return;
+    try {
+      const key = `kyoyu-uploads-${user.id}`;
+      const all = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(all.map(t => t.id === editingTrack.id ? { ...t, ...editMeta } : t)));
+      window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
+    } catch {}
+    closeEdit();
+  }
+
+  return (
+    <>
+      <div className="upl-expanded-list">
+        {sorted.map(t => (
+          <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`}>
+            {t.artworkUrl
+              ? <img src={t.artworkUrl} alt="" className="upl-exp-art"/>
+              : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={15}/></div>
+            }
+            <div className="upl-exp-info">
+              <div className="upl-exp-title">{t.title || 'Untitled'}</div>
+              <div className="upl-exp-sub">{t.artist || ''}</div>
+            </div>
+            <button className="upl-exp-more" onClick={(e) => { e.stopPropagation(); openEdit(t); }}>
+              <MoreHorizontal size={16}/>
+            </button>
+            <button className="upl-exp-play" onClick={() => play(t)}>
+              {activeId === t.id ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {editingTrack && (
+        <div className="upl-edit-overlay" onClick={closeEdit}>
+          <div className="upl-edit-sheet" onClick={e => e.stopPropagation()}>
+            <div className="upl-edit-handle"/>
+            <div className="upl-edit-header">
+              <h3 className="upl-edit-title">Edit Track</h3>
+              <button className="upl-edit-close" onClick={closeEdit}><X size={18}/></button>
+            </div>
+            {editingTrack.artworkUrl && <img src={editingTrack.artworkUrl} alt="" className="upl-edit-art"/>}
+            <div className="upl-edit-fields">
+              {[{k:'title',l:'Title'},{k:'artist',l:'Artist'},{k:'album',l:'Album'},{k:'genre',l:'Genre'},{k:'year',l:'Year'},{k:'label',l:'Label'}].map(({k,l}) => (
+                <div key={k} className="upl-edit-field">
+                  <label>{l}</label>
+                  <input value={editMeta[k]||''} onChange={e => setEditMeta(p => ({...p,[k]:e.target.value}))} placeholder={l}/>
+                </div>
+              ))}
+            </div>
+            <button className="upl-edit-save" onClick={saveEdit}><Check size={18}/> Save Changes</button>
+          </div>
+        </div>
       )}
     </>
   );

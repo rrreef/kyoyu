@@ -5,7 +5,7 @@ import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
-import UploadShelf from '../components/uploads/UploadShelf';
+import { UploadExpandedList } from '../components/uploads/UploadShelf';
 import './Library.css';
 
 /* ── Shelf card — identical to Home ───────────────────────── */
@@ -244,7 +244,7 @@ export default function Library() {
           ? <div className="lib-empty"><p>No uploads yet.</p><Link to="/uploads" className="lib-empty-link">Upload your first track →</Link></div>
           : <>
               <div className="shelf-row-label" style={{display:'flex',alignItems:'center',gap:5}}><Lock size={11}/> My Uploads</div>
-              <UploadShelf uploads={myUploads}/>
+              <UploadExpandedList uploads={myUploads}/>
             </>
       )}
 
