@@ -34,8 +34,8 @@
 }
 .fp--open { transform: translateY(0); }
 
-/* Handle — thin bar only, no ball */
-.fp-handle-row { display:flex; justify-content:center; padding:10px 0 18px; cursor:pointer; }
+/* Handle — thin bar only, no ball; extra bottom padding pushes content lower */
+.fp-handle-row { display:flex; justify-content:center; padding:10px 0 40px; cursor:pointer; }
 .fp-handle { width:38px; height:4px; border-radius:2px; background:rgba(255,255,255,.32); }
 
 /* Artwork — slightly inset so handle has breathing room from DI */
@@ -70,15 +70,19 @@
 .fp-ctrl { display:flex; align-items:center; justify-content:center; background:none; border:none; color:#fff; cursor:pointer; padding:6px; }
 .fp-ctrl:active { opacity:.6; transform:scale(.88); }
 
-/* Volume — flat 3px bar, NO visible thumb (matches progress bar thickness) */
+/* Volume — same 2px flat bar as scrubber, NO thumb, NO default WebKit styling */
 .fp-vol { display:flex; align-items:center; gap:10px; padding-top:20px; }
 .fp-vol-icon { color:rgba(255,255,255,.4); flex-shrink:0; }
 .fp-vol-slider {
-  flex:1; -webkit-appearance:none; height:3px;
-  background:rgba(255,255,255,.22); border-radius:2px; outline:none;
+  flex:1; -webkit-appearance:none; appearance:none;
+  height:2px; background:transparent;
+  border-radius:2px; outline:none; cursor:pointer;
+}
+.fp-vol-slider::-webkit-slider-runnable-track {
+  height:2px; background:rgba(255,255,255,.22); border-radius:2px;
 }
 .fp-vol-slider::-webkit-slider-thumb {
-  -webkit-appearance:none; width:0; height:0; /* completely hidden */
+  -webkit-appearance:none; width:0; height:0;
 }
 
 /* Bottom 3 action buttons */
