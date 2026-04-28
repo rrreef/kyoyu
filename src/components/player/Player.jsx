@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X,
@@ -12,61 +12,54 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
-/* ─────────────────────────────────────────────────────────────
-   useScrub: custom touch/mouse tracking, document-level move
-   Works in WKWebView because we skip the native range input
-───────────────────────────────────────────────────────────── */
-function useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd }) {
-  const dragging = useRef(false);
+/* ── Custom drag hook ──────────────────────────────────────────
+   Attaches touchstart to a hit div; touchmove/touchend on document
+   so WKWebView's native scroll layer cannot intercept them.
+   All visual updates are direct DOM writes — zero React re-renders.
+────────────────────────────────────────────────────────────── */
+function useScrub(hitRef, fillRef, thumbRef, onMovePct, onEndPct) {
+  // Keep callbacks in refs so effect deps never change
+  const moveRef = useRef(onMovePct);
+  const endRef  = useRef(onEndPct);
+  useEffect(() => { moveRef.current = onMovePct; }, [onMovePct]);
+  useEffect(() => { endRef.current  = onEndPct;  }, [onEndPct]);
 
   useEffect(() => {
-    const hit = hitRef.current;
-    if (!hit) return;
+    const hit = hitRef.current; if (!hit) return;
 
     function pct(clientX) {
       const r = hitRef.current.getBoundingClientRect();
       return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
     }
-    function applyPct(p) {
+    function set(p) {
       if (fillRef.current)  fillRef.current.style.width = `${p*100}%`;
       if (thumbRef.current) thumbRef.current.style.left  = `${p*100}%`;
-      onMove(p);
     }
 
-    /* ── touch ── */
-    function tStart(e) {
-      dragging.current = true;
-      applyPct(pct(e.touches[0].clientX));
-      document.addEventListener('touchmove', tMove, { passive: false });
-      document.addEventListener('touchend',  tEnd,  { once: true });
-    }
-    function tMove(e) {
-      if (!dragging.current) return;
-      e.preventDefault();
-      applyPct(pct(e.touches[0].clientX));
-    }
-    function tEnd(e) {
-      dragging.current = false;
+    /* touch */
+    function tMove(e) { e.preventDefault(); const p = pct(e.touches[0].clientX); set(p); moveRef.current(p); }
+    function tEnd(e)  {
       document.removeEventListener('touchmove', tMove);
-      const p = pct(e.changedTouches[0].clientX);
-      applyPct(p);
-      onEnd(p);
+      const p = pct(e.changedTouches[0].clientX); set(p); endRef.current(p);
+    }
+    function tStart(e) {
+      e.stopPropagation();   // block fp swipe-collapse
+      const p = pct(e.touches[0].clientX); set(p); moveRef.current(p);
+      document.addEventListener('touchmove', tMove, { passive: false });
+      document.addEventListener('touchend',  tEnd,  { once: true, passive: true });
     }
 
-    /* ── mouse (desktop / simulator) ── */
+    /* mouse (desktop / simulator) */
+    function mMove(e) { const p = pct(e.clientX); set(p); moveRef.current(p); }
+    function mUp(e)   {
+      document.removeEventListener('mousemove', mMove);
+      const p = pct(e.clientX); set(p); endRef.current(p);
+    }
     function mDown(e) {
-      dragging.current = true;
-      applyPct(pct(e.clientX));
+      e.stopPropagation();
+      const p = pct(e.clientX); set(p); moveRef.current(p);
       document.addEventListener('mousemove', mMove);
       document.addEventListener('mouseup',   mUp, { once: true });
-    }
-    function mMove(e) { if (dragging.current) applyPct(pct(e.clientX)); }
-    function mUp(e) {
-      dragging.current = false;
-      document.removeEventListener('mousemove', mMove);
-      const p = pct(e.clientX);
-      applyPct(p);
-      onEnd(p);
     }
 
     hit.addEventListener('touchstart', tStart, { passive: true });
@@ -77,32 +70,28 @@ function useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd }) {
       document.removeEventListener('touchmove', tMove);
       document.removeEventListener('mousemove', mMove);
     };
-  }, [hitRef, fillRef, thumbRef, onMove, onEnd]); // eslint-disable-line
-
-  return dragging;
+  }, []); // eslint-disable-line — intentionally runs once; callbacks via refs
 }
 
 /* ── Progress scrubber ── */
-function Scrubber({ progress, duration, onSeek }) {
+const Scrubber = memo(function Scrubber({ progress, duration, onSeek }) {
   const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
-  const dragging = useRef(false);
+  const active   = useRef(false);
 
-  // Stable callbacks via refs
-  const seekRef = useRef(onSeek);
-  useEffect(() => { seekRef.current = onSeek; }, [onSeek]);
-  const durRef = useRef(duration);
+  const durRef  = useRef(duration);
   useEffect(() => { durRef.current = duration; }, [duration]);
 
-  const onMove = useCallback(() => {}, []); // visual only during drag
-  const onEnd  = useCallback(pct => { seekRef.current(pct * (durRef.current || 0)); }, []);
+  useScrub(
+    hitRef, fillRef, thumbRef,
+    () => { active.current = true; },
+    pct => { active.current = false; onSeek(pct * (durRef.current || 0)); }
+  );
 
-  useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd });
-
-  // Sync from audio when idle
+  // Sync from audio only when user is not dragging
   useEffect(() => {
-    if (dragging.current) return;
+    if (active.current) return;
     const p = duration ? (progress / duration) * 100 : 0;
     if (fillRef.current)  fillRef.current.style.width = `${p}%`;
     if (thumbRef.current) thumbRef.current.style.left  = `${p}%`;
@@ -112,27 +101,26 @@ function Scrubber({ progress, duration, onSeek }) {
   return (
     <div className="fp-scrub">
       <div ref={fillRef}  className="fp-scrub-fill"  style={{ width:`${p}%` }}/>
-      <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${p}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${p}%`  }}/>
       <div ref={hitRef}   className="fp-scrub-hit"/>
     </div>
   );
-}
+});
 
 /* ── Volume slider ── */
-function VolSlider({ volume, onSet }) {
+const VolSlider = memo(function VolSlider({ volume, onSet }) {
   const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
-
-  const setRef = useRef(onSet);
+  const setRef   = useRef(onSet);
   useEffect(() => { setRef.current = onSet; }, [onSet]);
 
-  const onMove = useCallback(pct => { setRef.current(pct); }, []);
-  const onEnd  = useCallback(pct => { setRef.current(pct); }, []);
+  useScrub(
+    hitRef, fillRef, thumbRef,
+    pct => setRef.current(pct),
+    pct => setRef.current(pct)
+  );
 
-  useScrub(hitRef, fillRef, thumbRef, { onMove, onEnd });
-
-  // Sync from state when idle
   useEffect(() => {
     const p = (volume ?? 0.8) * 100;
     if (fillRef.current)  fillRef.current.style.width = `${p}%`;
@@ -142,27 +130,63 @@ function VolSlider({ volume, onSet }) {
   const p = (volume ?? 0.8) * 100;
   return (
     <div className="fp-vol-bar">
-      <div ref={fillRef}  className="fp-vol-fill"             style={{ width:`${p}%` }}/>
-      <div ref={thumbRef} className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${p}%` }}/>
+      <div ref={fillRef}  className="fp-vol-fill"                   style={{ width:`${p}%` }}/>
+      <div ref={thumbRef} className="fp-scrub-thumb fp-scrub-thumb--sm" style={{ left:`${p}%`  }}/>
       <div ref={hitRef}   className="fp-scrub-hit"/>
     </div>
   );
-}
+});
+
+/* ── Transport + scrubbers — TOP-LEVEL so React never unmounts them ──
+   (defining this inside FullPlayer would recreate the function reference
+    on every progress tick, causing React to unmount/remount Scrubber
+    and tear down its event listeners each second)                    ── */
+const PlayerControls = memo(function PlayerControls({
+  progress, duration, volume, isPlaying, dispatch, onSeek, onSetVol, showQueue, setShowQueue
+}) {
+  const rem = Math.max(0, (duration||0) - (progress||0));
+  return (
+    <>
+      <div className="fp-scrub-wrap">
+        <Scrubber progress={progress} duration={duration} onSeek={onSeek}/>
+        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
+      </div>
+      <div className="fp-ctrls">
+        <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
+        <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
+          {isPlaying ? <Pause size={48} fill="currentColor" strokeWidth={0}/> : <Play size={48} fill="currentColor" strokeWidth={0} style={{marginLeft:3}}/>}
+        </button>
+        <button className="fp-ctrl" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
+      </div>
+      <div className="fp-vol">
+        <Volume size={15} className="fp-vol-icon"/>
+        <VolSlider volume={volume} onSet={onSetVol}/>
+        <Volume2 size={15} className="fp-vol-icon"/>
+      </div>
+      <div className="fp-actions">
+        <button className="fp-action-btn"><MessageSquare size={22}/></button>
+        <button className="fp-action-btn"><Airplay size={22}/></button>
+        <button className={`fp-action-btn${showQueue?' fp-action-btn--on':''}`} onClick={()=>setShowQueue(q=>!q)}>
+          <AlignJustify size={22}/>
+        </button>
+      </div>
+    </>
+  );
+});
 
 /* ── Mini bar ── */
 function MiniBar({ track, isPlaying, onExpand, dispatch }) {
   const ref = useRef(null); const startY = useRef(0);
   useEffect(() => {
-    const el = ref.current; if (!el) return;
-    const s  = e => { startY.current = e.touches[0].clientY; };
-    const e2 = e => { if (startY.current - e.changedTouches[0].clientY > 30) onExpand(); };
-    el.addEventListener('touchstart', s,  { passive:true });
-    el.addEventListener('touchend',   e2, { passive:true });
-    return () => { el.removeEventListener('touchstart',s); el.removeEventListener('touchend',e2); };
-  }, [onExpand]);
+    const el=ref.current; if(!el) return;
+    const s=e=>{ startY.current=e.touches[0].clientY; };
+    const e2=e=>{ if(startY.current-e.changedTouches[0].clientY>30) onExpand(); };
+    el.addEventListener('touchstart',s,{passive:true}); el.addEventListener('touchend',e2,{passive:true});
+    return ()=>{ el.removeEventListener('touchstart',s); el.removeEventListener('touchend',e2); };
+  },[onExpand]);
   return (
     <div ref={ref} className="mini-bar" onClick={onExpand}>
-      {track.releaseCover ? <img src={track.releaseCover} className="mini-art" alt=""/> : <div className="mini-art mini-art-ph"><Music2 size={18}/></div>}
+      {track.releaseCover?<img src={track.releaseCover} className="mini-art" alt=""/>:<div className="mini-art mini-art-ph"><Music2 size={18}/></div>}
       <div className="mini-info"><div className="mini-title">{track.title}</div><div className="mini-artist">{track.artistName}</div></div>
       <div className="mini-ctrls" onClick={e=>e.stopPropagation()}>
         <button className="mini-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
@@ -176,56 +200,27 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, volume, open, onCollapse, dispatch, seekTo, setVolume }) {
-  const fpRef     = useRef(null);
-  const handleRef = useRef(null);
-  const startY    = useRef(0);
+  const fpRef    = useRef(null);
+  const handleRef= useRef(null);
+  const startY   = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
 
   useEffect(() => {
     const el=fpRef.current; const hdl=handleRef.current; if(!el||!hdl) return;
     const onTS=e=>{ startY.current=e.touches[0].clientY; };
     const onTE=e=>{ if(e.changedTouches[0].clientY-startY.current>60) onCollapse(); };
-    el.addEventListener('touchstart',onTS,{passive:true});
-    el.addEventListener('touchend',  onTE,{passive:true});
+    el.addEventListener('touchstart',onTS,{passive:true}); el.addEventListener('touchend',onTE,{passive:true});
     hdl.addEventListener('click',onCollapse);
     return ()=>{ el.removeEventListener('touchstart',onTS); el.removeEventListener('touchend',onTE); hdl.removeEventListener('click',onCollapse); };
   },[onCollapse]);
-
-  const rem    = Math.max(0,(duration||0)-(progress||0));
-  const seekCb = useCallback(v=>seekTo(v),   [seekTo]);
-  const volCb  = useCallback(v=>setVolume(v), [setVolume]);
 
   const Artwork = ({big}) => track.releaseCover
     ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
     : <div className={big?'fp-art fp-art-ph':'fp-q-art fp-art-ph'}><Music2 size={big?72:24}/></div>;
 
-  const Bottom = () => (
-    <>
-      <div className="fp-scrub-wrap">
-        <Scrubber progress={progress} duration={duration} onSeek={seekCb}/>
-        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
-      </div>
-      <div className="fp-ctrls">
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
-          {isPlaying?<Pause size={48} fill="currentColor" strokeWidth={0}/>:<Play size={48} fill="currentColor" strokeWidth={0} style={{marginLeft:3}}/>}
-        </button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
-      </div>
-      <div className="fp-vol">
-        <Volume size={15} className="fp-vol-icon"/>
-        <VolSlider volume={volume} onSet={volCb}/>
-        <Volume2 size={15} className="fp-vol-icon"/>
-      </div>
-      <div className="fp-actions">
-        <button className="fp-action-btn"><MessageSquare size={22}/></button>
-        <button className="fp-action-btn"><Airplay size={22}/></button>
-        <button className={`fp-action-btn${showQueue?' fp-action-btn--on':''}`} onClick={()=>setShowQueue(q=>!q)}>
-          <AlignJustify size={22}/>
-        </button>
-      </div>
-    </>
-  );
+  const controls = <PlayerControls progress={progress} duration={duration} volume={volume}
+    isPlaying={isPlaying} dispatch={dispatch} onSeek={seekTo} onSetVol={setVolume}
+    showQueue={showQueue} setShowQueue={setShowQueue}/>;
 
   return (
     <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
@@ -238,13 +233,11 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
             <div className="fp-meta-btns"><button className="fp-icon-btn"><Star size={18}/></button><button className="fp-icon-btn"><MoreHorizontal size={18}/></button></div>
           </div>
           <div className="fp-q-modes">
-            <button className="fp-mode-btn"><Shuffle size={17}/></button>
-            <button className="fp-mode-btn"><Repeat size={17}/></button>
-            <button className="fp-mode-btn fp-mode-btn--on"><Infinity size={17}/></button>
-            <button className="fp-mode-btn"><X size={17}/></button>
+            <button className="fp-mode-btn"><Shuffle size={17}/></button><button className="fp-mode-btn"><Repeat size={17}/></button>
+            <button className="fp-mode-btn fp-mode-btn--on"><Infinity size={17}/></button><button className="fp-mode-btn"><X size={17}/></button>
           </div>
           <div className="fp-q-empty"><p>There's no music in the queue.</p></div>
-          <Bottom/>
+          {controls}
         </>
       ) : (
         <>
@@ -253,13 +246,14 @@ function FullPlayer({ track, isPlaying, progress, duration, volume, open, onColl
             <div className="fp-meta-text"><div className="fp-title">{track.title}</div><div className="fp-artist">{track.artistName||'—'}</div></div>
             <div className="fp-meta-btns"><button className="fp-icon-btn"><Star size={20}/></button><button className="fp-icon-btn"><MoreHorizontal size={20}/></button></div>
           </div>
-          <Bottom/>
+          {controls}
         </>
       )}
     </div>
   );
 }
 
+/* ── Root ── */
 export default function Player() {
   const { state, dispatch, seekTo, setVolume } = usePlayer();
   const [exp, setExp] = useState(false);
