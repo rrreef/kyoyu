@@ -88,7 +88,8 @@
 .uu-delete-sel:hover { background:rgba(239,68,68,.25); }
 
 .uu-track { display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;margin-bottom:0;transition:background .2s; }
-.sdr-wrap .uu-track { border-radius:0; } /* clipped by wrapper */
+
+
 .uu-track.playing { background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18); }
 .uu-art { width:42px;height:42px;border-radius:10px;object-fit:cover;flex-shrink:0; }
 .uu-art-ph { width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);flex-shrink:0; }
