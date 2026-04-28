@@ -187,7 +187,6 @@ export default function UserUploads() {
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
   async function saveAll(){
-    if (!user?.id) return;
     try {
       const items = await Promise.all(metas.map(async (m, i) => {
         let artworkUrl = m.artworkUrl;
@@ -208,12 +207,18 @@ export default function UserUploads() {
           savedAt:  Date.now(),
         };
       }));
-      // Always read from localStorage (ground truth) — never trust stale React closure
-      const key = `kyoyu-uploads-${user.id}`;
-      const existing = JSON.parse(localStorage.getItem(key) || '[]');
-      const nextSaved = [...items, ...existing];
-      localStorage.setItem(key, JSON.stringify(nextSaved));  // write first
-      setSaved(nextSaved);                                    // then update UI
+      // Read ground truth from localStorage, merge, write back
+      const uid = user?.id;
+      if (uid) {
+        const key = `kyoyu-uploads-${uid}`;
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        const nextSaved = [...items, ...existing];
+        localStorage.setItem(key, JSON.stringify(nextSaved));
+        setSaved(nextSaved);
+      } else {
+        // No user id yet — update UI only (persist effect will save once id arrives)
+        setSaved(prev => [...items, ...prev]);
+      }
       setFiles([]); setMetas([]); setStep(0); setActive(0); setShowPrev(true);
       window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
     } catch(err) {
