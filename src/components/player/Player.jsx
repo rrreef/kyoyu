@@ -249,6 +249,12 @@ export default function Player() {
     if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||''});
     else             postNative({visible:false,playing:false,title:'',artwork:''});
   },[currentTrack,isPlaying]);
+  // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
+  useEffect(()=>{
+    if(currentTrack) document.body.classList.add('has-mini-player');
+    else             document.body.classList.remove('has-mini-player');
+    return ()=>{ document.body.classList.remove('has-mini-player'); };
+  },[currentTrack]);
   if(!currentTrack) return null;
   return (
     <>

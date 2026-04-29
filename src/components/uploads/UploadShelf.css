@@ -23,17 +23,21 @@
   -webkit-backdrop-filter: blur(14px);
   z-index: 1200;
   display: flex; align-items: flex-end;
-  /* Sheet sits FLUSH on top of native tab bar — no extra gap */
-  padding-bottom: var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom)));
+  /* 10px gap above native tab bar */
+  padding-bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 10px);
   animation: upl-fade-in .2s ease;
+}
+/* When mini pill player is visible: push sheet up an extra 72px (62px bar + 10px gap) */
+.has-mini-player .upl-overlay {
+  padding-bottom: calc(var(--kyoyu-tab-h, calc(68px + env(safe-area-inset-bottom))) + 82px);
 }
 @keyframes upl-fade-in { from{opacity:0} to{opacity:1} }
 
 /* ── Bottom sheet ────────────────────────────────────────── */
 .upl-sheet {
   width: 100%;
-  /* cap height: leaves full player card + 20px gap visible above the sheet */
-  max-height: calc(100vh - var(--kyoyu-tab-h, 100px) - 210px);
+  /* Taller: leaves ~80px of space above the sheet */
+  max-height: calc(100dvh - var(--kyoyu-tab-h, 100px) - 80px);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   border-radius: 28px;
   /* Liquid glass */
@@ -76,10 +80,10 @@
 
 .upl-art-wrap {
   position: relative;
-  width: 130px;
-  height: 130px;
+  width: 180px;
+  height: 180px;
   margin: 4px auto 14px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   flex-shrink: 0;
 }
