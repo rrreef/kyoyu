@@ -159,6 +159,11 @@ function AlbumModal({ alb, onClose }) {
   const panelStyle = accent ? { background: `rgb(${accent})` } : {};
   const themeClass = isLight ? ' upl-theme-light' : ''
 
+  /* Tell the native pill player to flip its text/icon colour to match */
+  useEffect(() => {
+    postNative({ lightBg: isLight });
+  }, [isLight]);
+
   const panel = (
     <div ref={panelRef} className={`upl-fullscreen${themeClass}`} style={panelStyle}>
       {/* handle row — swipe DOWN here to close */}
