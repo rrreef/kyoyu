@@ -25,11 +25,11 @@
   -webkit-backdrop-filter: blur(60px) saturate(200%);
   animation: upl-sheet-up .32s cubic-bezier(.34,1.56,.64,1);
 }
-/* handle row — pill sits 33px below Dynamic Island; 44px tall for easy grab */
+/* handle row — pill sits 11px below Dynamic Island; easy grab target */
 .upl-fs-handle-row {
   flex-shrink: 0;
   display: flex; justify-content: center; align-items: flex-end;
-  padding-top: calc(var(--kyoyu-top-h, 59px) + 33px);
+  padding-top: calc(var(--kyoyu-top-h, 59px) + 11px);
   padding-bottom: 10px;
   height: auto;
 }
