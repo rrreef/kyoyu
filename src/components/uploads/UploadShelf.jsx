@@ -65,35 +65,51 @@ function postNative(obj) {
   window.webkit?.messageHandlers?.player?.postMessage(obj);
 }
 
-/* ── extract dominant colour from <img> via canvas ────────── */
-function getDominantColor(imgEl) {
-  try {
-    const SIZE = 64;
-    const cv = document.createElement('canvas');
-    cv.width = SIZE; cv.height = SIZE;
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(imgEl, 0, 0, SIZE, SIZE);
-    const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
-    const counts = {};
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 100) continue;           // skip near-transparent
-      const r = Math.round(data[i]     / 32) * 32;
-      const g = Math.round(data[i + 1] / 32) * 32;
-      const b = Math.round(data[i + 2] / 32) * 32;
-      const k = `${r},${g},${b}`;
-      counts[k] = (counts[k] || 0) + 1;
-    }
-    let max = 0, best = null;
-    for (const [k, n] of Object.entries(counts)) { if (n > max) { max = n; best = k; } }
-    return best;
-  } catch { return null; }
+/* ── module-level colour cache (persists across modal opens) ─ */
+const _colorCache = new Map();
+
+/* ── extract dominant colour via a fresh programmatic Image ── */
+function extractColor(url) {
+  return new Promise(resolve => {
+    if (!url) return resolve(null);
+    if (_colorCache.has(url)) return resolve(_colorCache.get(url));
+    const img = new Image();
+    // No crossOrigin: data-URL artworks are always same-origin.
+    // If it IS an external URL and canvas taints, getDominantColor returns null.
+    img.onload = () => {
+      try {
+        const SIZE = 64;
+        const cv = document.createElement('canvas');
+        cv.width = SIZE; cv.height = SIZE;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+        const counts = {};
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 100) continue;
+          const r = Math.round(data[i]     / 32) * 32;
+          const g = Math.round(data[i + 1] / 32) * 32;
+          const b = Math.round(data[i + 2] / 32) * 32;
+          const k = `${r},${g},${b}`;
+          counts[k] = (counts[k] || 0) + 1;
+        }
+        let max = 0, best = null;
+        for (const [k, n] of Object.entries(counts)) { if (n > max) { max = n; best = k; } }
+        if (best) _colorCache.set(url, best);
+        resolve(best);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 /* ── album full-screen modal ──────────────────────────────── */
 function AlbumModal({ alb, onClose }) {
   const { playTrack } = usePlayer();
   const [activeId, setActiveId] = useState(null);
-  const [accent,   setAccent]   = useState(null);
+  // Initialise from cache immediately — 2nd+ opens get colour before first paint
+  const [accent, setAccent] = useState(() => _colorCache.get(alb.artworkUrl) ?? null);
   const startY    = useRef(0);
   const panelRef  = useRef(null);
   const handleRef = useRef(null);
@@ -105,16 +121,12 @@ function AlbumModal({ alb, onClose }) {
     return () => postNative({ albumOpen: false });
   }, []);
 
-  /* Extract dominant colour — runs immediately after mount.
-     If the image was cached, onLoad fires before React attaches it,
-     so we check img.complete here as a guaranteed fallback. */
+  /* Extract colour via programmatic Image — works on first open,
+     caches result so subsequent opens are instant (no async at all). */
   useEffect(() => {
-    const img = imgRef.current;
-    if (img && img.complete && img.naturalWidth > 0) {
-      const c = getDominantColor(img);
-      if (c) setAccent(c);
-    }
-  }, []);
+    if (!alb.artworkUrl || _colorCache.has(alb.artworkUrl)) return;
+    extractColor(alb.artworkUrl).then(c => { if (c) setAccent(c); });
+  }, [alb.artworkUrl]);
 
   /* Swipe-down-to-close — HANDLE ROW ONLY */
   useEffect(() => {
@@ -159,9 +171,7 @@ function AlbumModal({ alb, onClose }) {
         {/* Artwork */}
         <div className="upl-art-wrap">
           {alb.artworkUrl
-            ? <img ref={imgRef} src={alb.artworkUrl} alt={alb.album} className="upl-art-big"
-                crossOrigin="anonymous"
-                onLoad={() => { const c = getDominantColor(imgRef.current); if (c) setAccent(c); }}/>
+            ? <img ref={imgRef} src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
             : <div className="upl-art-big upl-art-big-ph"><Music2 size={64} strokeWidth={1}/></div>
           }
         </div>
