@@ -143,7 +143,7 @@ function AlbumModal({ alb, onClose }) {
               </span>
               <div className="upl-track-info">
                 <div className="upl-track-title">{t.title || 'Untitled'}</div>
-                <div className="upl-track-sub">{[t.artist, t.format, t.size && (t.size/1048576).toFixed(1)+' MB'].filter(Boolean).join(' · ')}</div>
+                <div className="upl-track-sub">{[t.artist, t.format, (Number(t.size) > 0) ? (Number(t.size)/1048576).toFixed(1)+' MB' : null].filter(Boolean).join(' · ')}</div>
               </div>
             </button>
           ))}
