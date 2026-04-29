@@ -13,19 +13,19 @@ const stripExt = n => n.replace(/\.[^/.]+$/,'');
 const ok       = f => ACCEPTED.includes('.'+f.name.split('.').pop().toLowerCase());
 const emptyMeta= id => ({ id, title:'', artist:'', album:'', genre:'', year:String(new Date().getFullYear()), label:'', mixEng:'', masterEng:'', artworkUrl:null, artworkFile:null });
 
-/* Compress any data URL to a 120×120 JPEG thumbnail (~3-5 KB).
-   This keeps localStorage usage well under the 5 MB quota even with 100+ tracks. */
+/* Compress artwork to a high-quality 600×600 JPEG for localStorage.
+   600px @ q=0.92 ≈ 40-80 KB per track — sharp enough for all UI uses. */
 function compressArtwork(dataUrl) {
   if (!dataUrl || !dataUrl.startsWith('data:')) return Promise.resolve(dataUrl);
   return new Promise(resolve => {
-    const img = document.createElement('img'); // avoid Vite renaming Image → Image$1
+    const img = document.createElement('img');
     img.onload = () => {
       try {
-        const SIZE = 120;
+        const SIZE = 600;
         const cv = document.createElement('canvas');
         cv.width = SIZE; cv.height = SIZE;
         cv.getContext('2d').drawImage(img, 0, 0, SIZE, SIZE);
-        resolve(cv.toDataURL('image/jpeg', 0.65));
+        resolve(cv.toDataURL('image/jpeg', 0.92));
       } catch { resolve(dataUrl); } // if canvas fails, keep original
     };
     img.onerror = () => resolve(dataUrl);
