@@ -17,23 +17,21 @@
 
 /* ── Full-screen album panel ─────────────────────────────── */
 .upl-fullscreen {
-  position: fixed;
-  /* Start 33px below the Dynamic Island */
-  top: calc(var(--kyoyu-top-h, 59px) + 33px);
-  left: 0; right: 0; bottom: 0;
+  position: fixed; inset: 0;
   z-index: 1200;
   display: flex; flex-direction: column;
   background: rgba(10,10,16,.97);
   backdrop-filter: blur(60px) saturate(200%);
   -webkit-backdrop-filter: blur(60px) saturate(200%);
-  border-radius: 20px 20px 0 0;
   animation: upl-sheet-up .32s cubic-bezier(.34,1.56,.64,1);
 }
-/* handle row — always at top, tap target for swipe-down */
+/* handle row — pill sits 33px below Dynamic Island; 44px tall for easy grab */
 .upl-fs-handle-row {
   flex-shrink: 0;
-  display: flex; justify-content: center; align-items: center;
-  height: 44px;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding-top: calc(var(--kyoyu-top-h, 59px) + 33px);
+  padding-bottom: 10px;
+  height: auto;
 }
 /* scrollable body — bottom pad keeps track list above native tab bar */
 .upl-fs-scroll {
