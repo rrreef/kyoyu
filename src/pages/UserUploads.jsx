@@ -361,6 +361,7 @@ export default function UserUploads() {
       if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next)); } catch {}
       return next;
     });
+    window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
   }
   function toggleSelect(id){
     setSelectedIds(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
