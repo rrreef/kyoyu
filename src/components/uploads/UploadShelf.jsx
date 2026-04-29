@@ -105,6 +105,17 @@ function AlbumModal({ alb, onClose }) {
     return () => postNative({ albumOpen: false });
   }, []);
 
+  /* Extract dominant colour — runs immediately after mount.
+     If the image was cached, onLoad fires before React attaches it,
+     so we check img.complete here as a guaranteed fallback. */
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth > 0) {
+      const c = getDominantColor(img);
+      if (c) setAccent(c);
+    }
+  }, []);
+
   /* Swipe-down-to-close — HANDLE ROW ONLY */
   useEffect(() => {
     const el = handleRef.current; if (!el) return;
