@@ -15,43 +15,27 @@
 }
 .upl-sort-pill.active { background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff; }
 
-/* ── Modal overlay ───────────────────────────────────────── */
-.upl-overlay {
+/* ── Full-screen album panel ─────────────────────────────── */
+.upl-fullscreen {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   z-index: 1200;
-  display: flex; align-items: flex-end;
-  /* 10px gap above tab bar — matches native pill-to-tabbar gap.
-     Fallback 102px = 68px bar + 34px safe area (standard Face ID iPhone).
-     Swift always injects --kyoyu-tab-h after page load so fallback is rare. */
-  padding-bottom: calc(var(--kyoyu-tab-h, 102px) + 10px);
-  animation: upl-fade-in .2s ease;
-}
-/* When mini pill player is visible: push sheet up an extra 72px (62px bar + 10px gap) */
-.has-mini-player .upl-overlay {
-  padding-bottom: calc(var(--kyoyu-tab-h, 102px) + 82px);
-}
-@keyframes upl-fade-in { from{opacity:0} to{opacity:1} }
-
-/* ── Bottom sheet ────────────────────────────────────────── */
-.upl-sheet {
-  width: 100%;
-  /* Taller: leaves ~80px of space above the sheet */
-  max-height: calc(100dvh - var(--kyoyu-tab-h, 100px) - 80px);
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
-  border-radius: 28px;
-  /* Liquid glass */
-  background: rgba(14,14,22,.72);
+  display: flex; flex-direction: column;
+  background: rgba(10,10,16,.97);
   backdrop-filter: blur(60px) saturate(200%);
   -webkit-backdrop-filter: blur(60px) saturate(200%);
-  border: 1px solid rgba(255,255,255,.13);
-  box-shadow: 0 -24px 80px rgba(0,0,0,.55),
-              inset 0 1px 0 rgba(255,255,255,.12);
   animation: upl-sheet-up .32s cubic-bezier(.34,1.56,.64,1);
 }
-@keyframes upl-sheet-up { from{transform:translateY(100%)} to{transform:translateY(0)} }
+/* handle row — always at top, tap target for swipe-down */
+.upl-fs-handle-row {
+  flex-shrink: 0;
+  display: flex; justify-content: center;
+  padding: 14px 0 6px;
+}
+/* scrollable body — bottom pad keeps track list above native tab bar */
+.upl-fs-scroll {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--kyoyu-tab-h, 102px);
+}
 
 /* drag handle */
 .upl-handle {

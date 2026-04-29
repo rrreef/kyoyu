@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, Shuffle, X, Music2, MoreHorizontal, Check } from 'lucide-react';
+import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import './UploadShelf.css';
@@ -60,80 +60,90 @@ function Card({ cover, title, sub, badge, onClick }) {
   );
 }
 
-/* ── album bottom-sheet modal ─────────────────────────────── */
+/* ── notify native layer ──────────────────────────────────── */
+function postNative(obj) {
+  window.webkit?.messageHandlers?.player?.postMessage(obj);
+}
+
+/* ── album full-screen modal ──────────────────────────────── */
 function AlbumModal({ alb, onClose }) {
   const { playTrack } = usePlayer();
   const [activeId, setActiveId] = useState(null);
+  const startY  = useRef(0);
+  const panelRef = useRef(null);
 
-  /* Mark body so Player CSS can float above the sheet */
+  /* Tell Swift to hide top cluster; restore on unmount */
   useEffect(() => {
-    document.body.classList.add('upl-album-open');
-    return () => document.body.classList.remove('upl-album-open');
+    postNative({ albumOpen: true });
+    return () => postNative({ albumOpen: false });
   }, []);
+
+  /* Swipe-down-to-close on the whole panel */
+  useEffect(() => {
+    const el = panelRef.current; if (!el) return;
+    const onTS = e => { startY.current = e.touches[0].clientY; };
+    const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 70) onClose(); };
+    el.addEventListener('touchstart', onTS, { passive: true });
+    el.addEventListener('touchend',   onTE, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTS);
+      el.removeEventListener('touchend',   onTE);
+    };
+  }, [onClose]);
 
   function handlePlayTrack(t) {
     const pt    = toPlayerTrack(t, alb.artworkUrl);
     const queue = alb.tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
-    playTrack(pt, queue);
-    setActiveId(t.id);
+    playTrack(pt, queue); setActiveId(t.id);
   }
-
   function handlePlayAll(shuffle) {
-    const tracks = shuffle
-      ? [...alb.tracks].sort(() => Math.random() - .5)
-      : [...alb.tracks];
-    const queue = tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
-    playTrack(queue[0], queue);
-    setActiveId(queue[0].id);
+    const tracks = shuffle ? [...alb.tracks].sort(() => Math.random() - .5) : [...alb.tracks];
+    const queue  = tracks.map(x => toPlayerTrack(x, alb.artworkUrl));
+    playTrack(queue[0], queue); setActiveId(queue[0].id);
   }
 
-  const modal = (
-    <div className="upl-overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div className="upl-sheet" onClick={e=>e.stopPropagation()}>
+  const panel = (
+    <div ref={panelRef} className="upl-fullscreen">
+      {/* drag handle — swipe down anywhere to close */}
+      <div className="upl-fs-handle-row">
         <div className="upl-handle"/>
+      </div>
 
-        {/* ── Top bar: close button ── */}
-        <div className="upl-topbar">
-          <button className="upl-sheet-close" onClick={onClose}><X size={14}/></button>
-        </div>
-
-        {/* ── Artwork ── */}
+      {/* scrollable content */}
+      <div className="upl-fs-scroll">
+        {/* Artwork */}
         <div className="upl-art-wrap">
           {alb.artworkUrl
             ? <img src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
-            : <div className="upl-art-big upl-art-big-ph"><Music2 size={52} strokeWidth={1}/></div>
+            : <div className="upl-art-big upl-art-big-ph"><Music2 size={64} strokeWidth={1}/></div>
           }
         </div>
 
-        {/* ── Metadata ── */}
+        {/* Metadata */}
         <div className="upl-sheet-meta">
           <div className="upl-sheet-album">{alb.album}</div>
           <div className="upl-sheet-artist">{alb.artist}</div>
           <div className="upl-sheet-count">{alb.tracks.length} tracks · Private</div>
         </div>
 
-        {/* ── Play controls ── */}
+        {/* Play controls */}
         <div className="upl-sheet-ctrls">
-          <button className="upl-ctrl upl-ctrl-primary" onClick={()=>handlePlayAll(false)}>
-            <Play size={15} fill="currentColor"/> Play
-          </button>
-          <button className="upl-ctrl upl-ctrl-secondary" onClick={()=>handlePlayAll(true)}>
-            <Shuffle size={15}/> Shuffle
-          </button>
+          <button className="upl-ctrl upl-ctrl-primary"   onClick={() => handlePlayAll(false)}><Play size={15} fill="currentColor"/> Play</button>
+          <button className="upl-ctrl upl-ctrl-secondary" onClick={() => handlePlayAll(true)}><Shuffle size={15}/> Shuffle</button>
         </div>
 
-        {/* ── Track list ── */}
+        {/* Track list */}
         <div className="upl-sheet-tracks">
-          {alb.tracks.map((t,i) => (
+          {alb.tracks.map((t, i) => (
             <button key={t.id}
-              className={`upl-track-row${activeId===t.id?' active':''}`}
-              onClick={()=>handlePlayTrack(t)}>
+              className={`upl-track-row${activeId === t.id ? ' active' : ''}`}
+              onClick={() => handlePlayTrack(t)}>
               <span className="upl-track-n">
-                {activeId===t.id ? <Play size={12} fill="currentColor"/> : i+1}
+                {activeId === t.id ? <Play size={12} fill="currentColor"/> : i + 1}
               </span>
               <div className="upl-track-info">
-                <div className="upl-track-title">{t.title||'Untitled'}</div>
-                <div className="upl-track-sub">{[t.artist,t.format,t.size].filter(Boolean).join(' · ')}</div>
+                <div className="upl-track-title">{t.title || 'Untitled'}</div>
+                <div className="upl-track-sub">{[t.artist, t.format, t.size && (t.size/1048576).toFixed(1)+' MB'].filter(Boolean).join(' · ')}</div>
               </div>
             </button>
           ))}
@@ -142,7 +152,7 @@ function AlbumModal({ alb, onClose }) {
     </div>
   );
 
-  return createPortal(modal, document.body);
+  return createPortal(panel, document.body);
 }
 
 /* ── main export ──────────────────────────────────────────── */
