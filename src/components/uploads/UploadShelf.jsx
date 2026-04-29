@@ -93,10 +93,11 @@ function getDominantColor(imgEl) {
 function AlbumModal({ alb, onClose }) {
   const { playTrack } = usePlayer();
   const [activeId, setActiveId] = useState(null);
-  const [accent,   setAccent]   = useState(null);   // dominant colour from artwork
-  const startY   = useRef(0);
-  const panelRef = useRef(null);
-  const imgRef   = useRef(null);
+  const [accent,   setAccent]   = useState(null);
+  const startY    = useRef(0);
+  const panelRef  = useRef(null);
+  const handleRef = useRef(null);
+  const imgRef    = useRef(null);
 
   /* Tell Swift to hide top cluster; restore on unmount */
   useEffect(() => {
@@ -104,11 +105,11 @@ function AlbumModal({ alb, onClose }) {
     return () => postNative({ albumOpen: false });
   }, []);
 
-  /* Swipe-down-to-close on the whole panel */
+  /* Swipe-down-to-close — HANDLE ROW ONLY */
   useEffect(() => {
-    const el = panelRef.current; if (!el) return;
+    const el = handleRef.current; if (!el) return;
     const onTS = e => { startY.current = e.touches[0].clientY; };
-    const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 70) onClose(); };
+    const onTE = e => { if (e.changedTouches[0].clientY - startY.current > 50) onClose(); };
     el.addEventListener('touchstart', onTS, { passive: true });
     el.addEventListener('touchend',   onTE, { passive: true });
     return () => {
@@ -128,15 +129,17 @@ function AlbumModal({ alb, onClose }) {
     playTrack(queue[0], queue); setActiveId(queue[0].id);
   }
 
-  /* Build panel background: dominant-colour gradient when colour known */
-  const panelStyle = accent
-    ? { background: `linear-gradient(180deg, rgba(${accent},0.92) 0%, rgba(10,10,16,0.98) 55%)` }
-    : {};
+  /* Solid flat background + adaptive text theme */
+  const isLight = accent
+    ? (() => { const [r,g,b] = accent.split(',').map(Number); return 0.299*r + 0.587*g + 0.114*b > 128; })()
+    : false;
+  const panelStyle = accent ? { background: `rgb(${accent})` } : {};
+  const themeClass = isLight ? ' upl-theme-light' : ''
 
   const panel = (
-    <div ref={panelRef} className="upl-fullscreen" style={panelStyle}>
-      {/* drag handle — swipe down anywhere to close */}
-      <div className="upl-fs-handle-row">
+    <div ref={panelRef} className={`upl-fullscreen${themeClass}`} style={panelStyle}>
+      {/* handle row — swipe DOWN here to close */}
+      <div ref={handleRef} className="upl-fs-handle-row">
         <div className="upl-handle"/>
       </div>
 
