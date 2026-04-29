@@ -18,8 +18,8 @@
 /* ── Full-screen album panel ─────────────────────────────── */
 .upl-fullscreen {
   position: fixed;
-  /* Start at same height as native notification/profile cluster (safe-area-top + 55pt) */
-  top: calc(var(--kyoyu-top-h, 59px) + 55px);
+  /* Start 33px below the Dynamic Island */
+  top: calc(var(--kyoyu-top-h, 59px) + 33px);
   left: 0; right: 0; bottom: 0;
   z-index: 1200;
   display: flex; flex-direction: column;

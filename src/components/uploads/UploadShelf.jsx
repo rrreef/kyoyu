@@ -65,12 +65,38 @@ function postNative(obj) {
   window.webkit?.messageHandlers?.player?.postMessage(obj);
 }
 
+/* ── extract dominant colour from <img> via canvas ────────── */
+function getDominantColor(imgEl) {
+  try {
+    const SIZE = 64;
+    const cv = document.createElement('canvas');
+    cv.width = SIZE; cv.height = SIZE;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, SIZE, SIZE);
+    const { data } = ctx.getImageData(0, 0, SIZE, SIZE);
+    const counts = {};
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 100) continue;           // skip near-transparent
+      const r = Math.round(data[i]     / 32) * 32;
+      const g = Math.round(data[i + 1] / 32) * 32;
+      const b = Math.round(data[i + 2] / 32) * 32;
+      const k = `${r},${g},${b}`;
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    let max = 0, best = null;
+    for (const [k, n] of Object.entries(counts)) { if (n > max) { max = n; best = k; } }
+    return best;
+  } catch { return null; }
+}
+
 /* ── album full-screen modal ──────────────────────────────── */
 function AlbumModal({ alb, onClose }) {
   const { playTrack } = usePlayer();
   const [activeId, setActiveId] = useState(null);
-  const startY  = useRef(0);
+  const [accent,   setAccent]   = useState(null);   // dominant colour from artwork
+  const startY   = useRef(0);
   const panelRef = useRef(null);
+  const imgRef   = useRef(null);
 
   /* Tell Swift to hide top cluster; restore on unmount */
   useEffect(() => {
@@ -102,8 +128,13 @@ function AlbumModal({ alb, onClose }) {
     playTrack(queue[0], queue); setActiveId(queue[0].id);
   }
 
+  /* Build panel background: dominant-colour gradient when colour known */
+  const panelStyle = accent
+    ? { background: `linear-gradient(180deg, rgba(${accent},0.92) 0%, rgba(10,10,16,0.98) 55%)` }
+    : {};
+
   const panel = (
-    <div ref={panelRef} className="upl-fullscreen">
+    <div ref={panelRef} className="upl-fullscreen" style={panelStyle}>
       {/* drag handle — swipe down anywhere to close */}
       <div className="upl-fs-handle-row">
         <div className="upl-handle"/>
@@ -114,7 +145,9 @@ function AlbumModal({ alb, onClose }) {
         {/* Artwork */}
         <div className="upl-art-wrap">
           {alb.artworkUrl
-            ? <img src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
+            ? <img ref={imgRef} src={alb.artworkUrl} alt={alb.album} className="upl-art-big"
+                crossOrigin="anonymous"
+                onLoad={() => { const c = getDominantColor(imgRef.current); if (c) setAccent(c); }}/>
             : <div className="upl-art-big upl-art-big-ph"><Music2 size={64} strokeWidth={1}/></div>
           }
         </div>
