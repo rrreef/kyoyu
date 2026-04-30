@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History, MoreHorizontal, Share2, UserPlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { uploadRelease, getSignedUrl } from '../lib/uploadPipeline';
@@ -631,8 +632,8 @@ export default function UserUploads() {
 
       {saved.length===0&&files.length===0&&<div className="uu-empty"><Music2 size={32} strokeWidth={1.2}/><div>No uploads yet</div><div className="uu-empty-sub">Your private music lives here</div></div>}
 
-      {/* ── Edit Track — full screen ── */}
-      {editingTrack && (
+      {/* ── Edit Track — full screen via portal (escapes parent transform) ── */}
+      {editingTrack && createPortal(
         <div className="uu-edit-overlay">
           {/* Handle row — swipe down to close */}
           <div className="uu-edit-handle-row" ref={editHandleRef}>
@@ -693,7 +694,7 @@ export default function UserUploads() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 
