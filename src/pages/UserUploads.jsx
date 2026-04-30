@@ -386,6 +386,7 @@ export default function UserUploads() {
     window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
   }
   function openEdit(t) {
+    window.webkit?.messageHandlers?.overlay?.postMessage('open');
     setEditingTrack(t);
     setEditMeta({ title:t.title||'', artist:t.artist||'', album:t.album||'', genre:t.genre||'', year:t.year||'', label:t.label||'' });
     setShareEmail(''); setShareList([]); setShareMsg({ text:'', ok:true });
@@ -405,7 +406,10 @@ export default function UserUploads() {
         });
     }
   }
-  function closeEdit() { setEditingTrack(null); setShareEmail(''); setShareList([]); setShareMsg({ text:'', ok:true }); }
+  function closeEdit() {
+    window.webkit?.messageHandlers?.overlay?.postMessage('close');
+    setEditingTrack(null); setShareEmail(''); setShareList([]); setShareMsg({ text:'', ok:true });
+  }
   function saveEdit() {
     if (!editingTrack) return;
     setSaved(prev => {
