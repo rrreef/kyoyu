@@ -36,7 +36,6 @@ import Messages      from './pages/Messages';
 import Events        from './pages/Events';
 import MyReleases    from './pages/MyReleases';
 
-// Creator pages
 import Dashboard     from './pages/Dashboard';
 import Upload        from './pages/Upload';
 import Releases      from './pages/Releases';
@@ -44,6 +43,9 @@ import Settings      from './pages/Settings';
 import CreatorArtists from './pages/CreatorArtists';
 import VisualIdentity from './pages/VisualIdentity';
 import ListenerPreview from './pages/ListenerPreview';
+
+// Admin
+import AdminApp from './pages/admin/AdminApp';
 
 import './index.css';
 
@@ -158,9 +160,10 @@ function CreatorApp() {
 // ─── Role gate ────────────────────────────────────────────
 function RoleGate() {
   const { role, loading } = useAuth();
-  useTheme(); // applies saved data-theme on mount
-  if (loading)           return <div className="auth-loading" />;
-  if (!role)             return <EntryScreen />;
+  useTheme();
+  if (loading)            return <div className="auth-loading" />;
+  if (!role)              return <EntryScreen />;
+  if (role === 'admin')   return <AdminApp />;
   if (role === 'listener') return <ListenerApp />;
   if (role === 'creator')  return <CreatorApp />;
   return <EntryScreen />;
