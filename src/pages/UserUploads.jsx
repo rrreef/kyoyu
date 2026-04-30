@@ -666,7 +666,7 @@ export default function UserUploads() {
                 <input
                   className="uu-share-email"
                   type="email"
-                  placeholder="Enter recipient's email…"
+                  placeholder="Email or username…"
                   value={shareEmail}
                   onChange={e => setShareEmail(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addShare(editingTrack)}

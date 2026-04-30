@@ -187,13 +187,19 @@
   position: fixed; inset: 0; z-index: 900;
   background: rgb(8, 8, 13);
   display: flex; flex-direction: column;
-  animation: upl-sheet-up .32s cubic-bezier(.34,1.56,.64,1);
+  overflow: hidden;
+  animation: upl-sheet-up .25s ease;
+}
+@keyframes upl-sheet-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .uu-edit-handle-row {
   flex-shrink: 0;
   display: flex; justify-content: center; align-items: flex-end;
   padding-top: calc(var(--kyoyu-top-h, 59px) + 11px);
   padding-bottom: 10px;
+  background: rgb(8, 8, 13); /* opaque so content can't bleed through */
   cursor: grab;
 }
 .uu-edit-handle {
@@ -201,12 +207,21 @@
   background: rgba(255,255,255,.22);
 }
 .uu-edit-scroll {
-  flex: 1; overflow-y: auto;
-  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .uu-edit-header { padding: 14px 20px 8px; }
 .uu-edit-title  { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 0; }
-.uu-edit-art    { width: 120px; height: 120px; border-radius: 14px; object-fit: cover; display: block; margin: 0 auto 20px; }
+/* Artwork — same size as album page (full-width square with side padding) */
+.uu-edit-art {
+  width: calc(100vw - 48px);
+  height: calc(100vw - 48px);
+  border-radius: 18px; object-fit: cover; display: block; margin: 0 auto 24px;
+  box-shadow: 0 16px 56px rgba(0,0,0,.7);
+}
 .uu-edit-scroll .uu-save-full { margin: 8px 16px 0; }
 
 /* cloud badge */
@@ -241,12 +256,16 @@
   color: #fff; font-size: 13px; outline: none;
 }
 .uu-share-email::placeholder { color: rgba(255,255,255,.3); }
+/* Share button — identical look to Save Changes button */
 .uu-share-btn {
   width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
-  background: #6366f1; border: none; color: #fff;
+  background: rgba(255,255,255,.1);
+  border: .5px solid rgba(255,255,255,.18);
+  color: #fff;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 16px;
+  cursor: pointer; transition: background .2s;
 }
+.uu-share-btn:hover    { background: rgba(255,255,255,.15); }
 .uu-share-btn:disabled { opacity: .5; }
 .uu-share-list { display: flex; flex-direction: column; gap: 8px; }
 .uu-share-item {
