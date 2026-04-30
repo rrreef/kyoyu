@@ -182,13 +182,89 @@
 .uu-more-btn { width:32px;height:32px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);cursor:pointer;flex-shrink:0;transition:color .2s;-webkit-tap-highlight-color:transparent; }
 .uu-more-btn:hover { color:rgba(255,255,255,.7); }
 
-/* Edit track bottom sheet */
-.uu-edit-overlay { position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:flex;align-items:flex-end; }
-.uu-edit-sheet { width:100%;max-height:88vh;background:rgba(12,12,16,.97);border-radius:24px 24px 0 0;border-top:.5px solid rgba(255,255,255,.1);overflow-y:auto;padding-bottom:calc(32px + env(safe-area-inset-bottom));animation:slideUp .28s cubic-bezier(.25,.46,.45,.94); }
-@keyframes slideUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
-.uu-edit-handle { width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:12px auto 4px; }
-.uu-edit-header { display:flex;align-items:center;justify-content:space-between;padding:12px 20px 16px; }
-.uu-edit-title { font-size:1rem;font-weight:700;color:#fff;margin:0; }
-.uu-edit-close { width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);cursor:pointer; }
-.uu-edit-art { width:72px;height:72px;border-radius:12px;object-fit:cover;display:block;margin:0 auto 16px; }
-.uu-edit-sheet .uu-save-full { margin:16px 16px 0; }
+/* ── Edit track — full-screen panel (matches AlbumModal) ──────── */
+.uu-edit-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgb(8, 8, 13);
+  display: flex; flex-direction: column;
+  animation: upl-sheet-up .32s cubic-bezier(.34,1.56,.64,1);
+}
+.uu-edit-handle-row {
+  flex-shrink: 0;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding-top: calc(var(--kyoyu-top-h, 59px) + 11px);
+  padding-bottom: 10px;
+  cursor: grab;
+}
+.uu-edit-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,.22);
+}
+.uu-edit-scroll {
+  flex: 1; overflow-y: auto;
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+}
+.uu-edit-header { padding: 14px 20px 8px; }
+.uu-edit-title  { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 0; }
+.uu-edit-art    { width: 120px; height: 120px; border-radius: 14px; object-fit: cover; display: block; margin: 0 auto 20px; }
+.uu-edit-scroll .uu-save-full { margin: 8px 16px 0; }
+
+/* cloud badge */
+.uu-cloud-badge { font-size: 11px; color: #6366f1; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+
+/* ── Share section ────────────────────────────────────────────── */
+.uu-share-section {
+  margin: 24px 16px 0;
+  background: rgba(255,255,255,.04);
+  border: .5px solid rgba(255,255,255,.1);
+  border-radius: 16px;
+  padding: 16px;
+}
+.uu-share-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,.7);
+  margin-bottom: 12px;
+}
+.uu-share-note {
+  font-size: 12px; color: rgba(255,255,255,.4);
+  margin-bottom: 12px; line-height: 1.5;
+}
+.uu-share-input-row {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.uu-share-email {
+  flex: 1;
+  background: rgba(255,255,255,.06);
+  border: .5px solid rgba(255,255,255,.15);
+  border-radius: 10px;
+  padding: 10px 13px;
+  color: #fff; font-size: 13px; outline: none;
+}
+.uu-share-email::placeholder { color: rgba(255,255,255,.3); }
+.uu-share-btn {
+  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+  background: #6366f1; border: none; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px;
+}
+.uu-share-btn:disabled { opacity: .5; }
+.uu-share-list { display: flex; flex-direction: column; gap: 8px; }
+.uu-share-item {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.04); border-radius: 10px; padding: 8px 10px;
+}
+.uu-share-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: #6366f1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+}
+.uu-share-name { flex: 1; font-size: 13px; font-weight: 500; color: #fff; }
+.uu-share-sub  { font-size: 11px; color: rgba(255,255,255,.4); }
+.uu-share-remove {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(239,68,68,.15); border: none; color: #f87171;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.uu-share-err { font-size: 12px; color: #f87171; margin-top: 6px; }
+.uu-share-ok  { font-size: 12px; color: #34d399; margin-top: 6px; }

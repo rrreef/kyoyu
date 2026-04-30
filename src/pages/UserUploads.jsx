@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History, MoreHorizontal } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Upload as UploadIcon, Music2, File, X, Play, Pause, Trash2, ChevronLeft, ChevronRight, ChevronDown, Check, Image, Lock, AlertCircle, Clock, User, Tag, History, MoreHorizontal, Share2, UserPlus } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { uploadRelease, getSignedUrl } from '../lib/uploadPipeline';
 import * as mm from 'music-metadata-browser';
 import InlinePlayer from '../components/player/InlinePlayer';
 import { useAuth } from '../contexts/AuthContext';
@@ -202,9 +204,14 @@ export default function UserUploads() {
   const [saveErr,       setSaveErr]       = useState('');
   const [editingTrack,  setEditingTrack]  = useState(null);
   const [editMeta,      setEditMeta]      = useState({});
-  const fileRef    = useRef();
-  const artRefs    = useRef([]);
-  const audioRef   = useRef(new Audio());
+  const [shareEmail,    setShareEmail]    = useState('');
+  const [shareList,     setShareList]     = useState([]);
+  const [sharing,       setSharing]       = useState(false);
+  const [shareMsg,      setShareMsg]      = useState({ text:'', ok:true });
+  const fileRef       = useRef();
+  const artRefs       = useRef([]);
+  const audioRef      = useRef(new Audio());
+  const editHandleRef = useRef(null);
 
   /* Load saved uploads from localStorage once user ID is known */
   useEffect(() => {
@@ -380,8 +387,24 @@ export default function UserUploads() {
   function openEdit(t) {
     setEditingTrack(t);
     setEditMeta({ title:t.title||'', artist:t.artist||'', album:t.album||'', genre:t.genre||'', year:t.year||'', label:t.label||'' });
+    setShareEmail(''); setShareList([]); setShareMsg({ text:'', ok:true });
+    // Load existing shares if track is in cloud
+    if (t.supabaseId) {
+      supabase
+        .from('track_shares')
+        .select('id, shared_with, profiles!track_shares_shared_with_fkey(display_name, email)')
+        .eq('track_id', t.supabaseId)
+        .then(({ data }) => {
+          setShareList((data||[]).map(s => ({
+            shareId: s.id,
+            id: s.shared_with,
+            display_name: s.profiles?.display_name,
+            email: s.profiles?.email,
+          })));
+        });
+    }
   }
-  function closeEdit() { setEditingTrack(null); }
+  function closeEdit() { setEditingTrack(null); setShareEmail(''); setShareList([]); setShareMsg({ text:'', ok:true }); }
   function saveEdit() {
     if (!editingTrack) return;
     setSaved(prev => {
@@ -393,6 +416,103 @@ export default function UserUploads() {
     closeEdit();
   }
   function togglePlay(t){if(playing===t.id){audioRef.current.pause();setPlaying(null);}else{audioRef.current.src=t.fileUrl;audioRef.current.play();setPlaying(t.id);audioRef.current.onended=()=>setPlaying(null);}}
+
+  /* ── Swipe-to-close edit handle ── */
+  useEffect(() => {
+    const el = editHandleRef.current;
+    if (!el || !editingTrack) return;
+    let sy = 0;
+    const onTS = e => { sy = e.touches[0].clientY; };
+    const onTE = e => { if (e.changedTouches[0].clientY - sy > 60) closeEdit(); };
+    el.addEventListener('touchstart', onTS, { passive: true });
+    el.addEventListener('touchend',   onTE, { passive: true });
+    return () => { el.removeEventListener('touchstart', onTS); el.removeEventListener('touchend', onTE); };
+  }, [editingTrack]);
+
+  /* ── Cloud upload after save ── */
+  async function pushToCloud(savedItems, fileObjs, metaObjs) {
+    if (!user?.id) return;
+    try {
+      const cloudTracks = await uploadRelease({
+        audioFiles: fileObjs,
+        trackMetas: metaObjs.map((m, i) => ({
+          ...m,
+          artwork: m.artworkFile || undefined,
+          visibility: 'private',
+        })),
+        globalForm: {},
+        onProgress: null,
+      });
+      setSaved(prev => {
+        const updated = prev.map((t, i) => {
+          const match = savedItems.find(s => s.id === t.id);
+          if (!match) return t;
+          const idx = savedItems.indexOf(match);
+          return cloudTracks[idx] ? { ...t, supabaseId: cloudTracks[idx].id } : t;
+        });
+        const key = `kyoyu-uploads-${user.id}`;
+        try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+    } catch (e) {
+      console.warn('[UserUploads] Cloud upload failed (local copy kept):', e.message);
+    }
+  }
+
+  /* ── Share with user ── */
+  async function addShare(track) {
+    const email = shareEmail.trim().toLowerCase();
+    if (!email) return;
+    setSharing(true); setShareMsg({ text:'', ok:true });
+    try {
+      // Ensure track is in cloud first
+      let sid = track.supabaseId;
+      if (!sid) {
+        setShareMsg({ text: 'Syncing to cloud first…', ok: true });
+        const fileEntry = files.find(f => f.id === track.id);
+        if (fileEntry) {
+          const results = await uploadRelease({
+            audioFiles: [{ file: fileEntry.file, id: fileEntry.id }],
+            trackMetas: [{ ...track, artwork: track.artworkFile, visibility: 'private' }],
+            globalForm: {}, onProgress: null,
+          });
+          sid = results[0]?.id;
+          if (sid) {
+            setSaved(prev => {
+              const next = prev.map(t => t.id === track.id ? { ...t, supabaseId: sid } : t);
+              try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next)); } catch {}
+              return next;
+            });
+            setEditingTrack(t => ({ ...t, supabaseId: sid }));
+          }
+        }
+        if (!sid) throw new Error('Could not sync track. Try again.');
+      }
+      // Lookup recipient
+      const { data: recipient, error: rpErr } = await supabase
+        .from('profiles').select('id, display_name, email').eq('email', email).single();
+      if (rpErr || !recipient) throw new Error('No user found with that email.');
+      if (recipient.id === user.id) throw new Error('You cannot share with yourself.');
+      // Create share
+      const { data: shareRow, error: shareErr } = await supabase
+        .from('track_shares')
+        .insert({ track_id: sid, shared_by: user.id, shared_with: recipient.id })
+        .select('id').single();
+      if (shareErr) throw new Error(shareErr.code === '23505' ? 'Already shared with this user.' : shareErr.message);
+      setShareList(prev => [...prev, { shareId: shareRow.id, id: recipient.id, display_name: recipient.display_name, email: recipient.email }]);
+      setShareEmail('');
+      setShareMsg({ text: `Shared with ${recipient.display_name || recipient.email}`, ok: true });
+    } catch (e) {
+      setShareMsg({ text: e.message, ok: false });
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  async function removeShare(shareId) {
+    const { error } = await supabase.from('track_shares').delete().eq('id', shareId);
+    if (!error) setShareList(prev => prev.filter(s => s.shareId !== shareId));
+  }
 
   const m=metas[active]||emptyMeta('_');
 
@@ -511,29 +631,66 @@ export default function UserUploads() {
 
       {saved.length===0&&files.length===0&&<div className="uu-empty"><Music2 size={32} strokeWidth={1.2}/><div>No uploads yet</div><div className="uu-empty-sub">Your private music lives here</div></div>}
 
-      {/* ── Edit Track Bottom Sheet ── */}
+      {/* ── Edit Track — full screen ── */}
       {editingTrack && (
-        <div className="uu-edit-overlay" onClick={closeEdit}>
-          <div className="uu-edit-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="uu-edit-overlay">
+          {/* Handle row — swipe down to close */}
+          <div className="uu-edit-handle-row" ref={editHandleRef}>
             <div className="uu-edit-handle"/>
+          </div>
+          <div className="uu-edit-scroll">
             <div className="uu-edit-header">
-              <h3 className="uu-edit-title">Edit Track</h3>
-              <button className="uu-edit-close" onClick={closeEdit}><X size={18}/></button>
+              <h3 className="uu-edit-title">
+                Edit Track
+                {editingTrack.supabaseId && <span className="uu-cloud-badge">☁ Synced</span>}
+              </h3>
             </div>
             {editingTrack.artworkUrl && <img src={editingTrack.artworkUrl} alt="" className="uu-edit-art"/>}
             <div className="uu-fields glass" style={{margin:'0 16px 16px'}}>
               {[{k:'title',l:'Title'},{k:'artist',l:'Artist'},{k:'album',l:'Album'},{k:'genre',l:'Genre'},{k:'year',l:'Year'},{k:'label',l:'Label'}].map(({k,l})=>(
                 <div key={k} className="uu-field">
                   <label>{l}</label>
-                  <input
-                    value={editMeta[k]||''}
-                    onChange={e=>setEditMeta(p=>({...p,[k]:e.target.value}))}
-                    placeholder={l}
-                  />
+                  <input value={editMeta[k]||''} onChange={e=>setEditMeta(p=>({...p,[k]:e.target.value}))} placeholder={l}/>
                 </div>
               ))}
             </div>
             <button className="uu-save-full" onClick={saveEdit}><Check size={18}/> Save Changes</button>
+
+            {/* Share section */}
+            <div className="uu-share-section">
+              <div className="uu-share-header"><Share2 size={15}/> Share with a user</div>
+              {!editingTrack.supabaseId && (
+                <div className="uu-share-note">Track will be synced to the platform when you share it for the first time.</div>
+              )}
+              <div className="uu-share-input-row">
+                <input
+                  className="uu-share-email"
+                  type="email"
+                  placeholder="Enter recipient's email…"
+                  value={shareEmail}
+                  onChange={e => setShareEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addShare(editingTrack)}
+                />
+                <button className="uu-share-btn" onClick={() => addShare(editingTrack)} disabled={sharing}>
+                  {sharing ? '…' : <UserPlus size={16}/>}
+                </button>
+              </div>
+              {shareMsg.text && <div className={shareMsg.ok ? 'uu-share-ok' : 'uu-share-err'}>{shareMsg.text}</div>}
+              {shareList.length > 0 && (
+                <div className="uu-share-list">
+                  {shareList.map(s => (
+                    <div key={s.shareId} className="uu-share-item">
+                      <div className="uu-share-avatar">{(s.display_name||s.email||'?')[0].toUpperCase()}</div>
+                      <div className="uu-share-name">
+                        <div>{s.display_name || s.email}</div>
+                        <div className="uu-share-sub">{s.email}</div>
+                      </div>
+                      <button className="uu-share-remove" onClick={() => removeShare(s.shareId)}><X size={13}/></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
