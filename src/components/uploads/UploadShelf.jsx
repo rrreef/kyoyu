@@ -74,8 +74,8 @@ function extractColor(url) {
     if (!url) return resolve(null);
     if (_colorCache.has(url)) return resolve(_colorCache.get(url));
     const img = new Image();
-    // No crossOrigin: data-URL artworks are always same-origin.
-    // If it IS an external URL and canvas taints, getDominantColor returns null.
+    // Allow canvas to read external (Supabase/CDN) artwork without CORS taint
+    if (!url.startsWith('data:')) img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
         const SIZE = 64;

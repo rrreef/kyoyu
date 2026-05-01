@@ -209,6 +209,7 @@ export default function UserUploads() {
   const [shareList,     setShareList]     = useState([]);
   const [sharing,       setSharing]       = useState(false);
   const [shareMsg,      setShareMsg]      = useState({ text:'', ok:true });
+  const [uploadProgress, setUploadProgress] = useState(null); // { phase, current, total, pct }
   const fileRef       = useRef();
   const artRefs       = useRef([]);
   const audioRef      = useRef(new Audio());
@@ -221,11 +222,27 @@ export default function UserUploads() {
       const s = localStorage.getItem(`kyoyu-uploads-${user.id}`);
       if (s) setSaved(JSON.parse(s));
     } catch {}
-    setStorageLoaded(true);  // only now is it safe to persist
+    setStorageLoaded(true);
   }, [user?.id]);
 
-  /* Persistence is handled directly inside saveAll() and removeSaved()
-     with artwork compression — no separate effect needed */
+  /* Refresh expired signed URLs for cloud-stored tracks */
+  useEffect(() => {
+    if (!user?.id || !storageLoaded) return;
+    const key = `kyoyu-uploads-${user.id}`;
+    let current = [];
+    try { current = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+    const needRefresh = current.filter(t => t.storage_key);
+    if (!needRefresh.length) return;
+    (async () => {
+      const refreshed = await Promise.all(current.map(async t => {
+        if (!t.storage_key) return t;
+        const { data } = await supabase.storage.from('audio').createSignedUrl(t.storage_key, 7 * 24 * 3600);
+        return data?.signedUrl ? { ...t, fileUrl: data.signedUrl } : t;
+      }));
+      setSaved(refreshed);
+      try { localStorage.setItem(key, JSON.stringify(refreshed)); } catch {}
+    })();
+  }, [storageLoaded, user?.id]);
 
   /* Register native upload result handler */
   useEffect(() => {
@@ -308,48 +325,78 @@ export default function UserUploads() {
   function pickArt(i,e){const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:f,artworkUrl:url}:t));e.target.value='';}
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
-  async function saveAll(){
+  async function saveAll() {
     setSaveErr('');
     try {
+      // ── Step 1: Fix artwork (convert blob URLs → data URLs) ──
+      setUploadProgress({ phase: 'artwork', current: 0, total: files.length, pct: 5 });
       const items = await Promise.all(metas.map(async (m, i) => {
         let artworkUrl = m.artworkUrl;
         if (m.artworkFile) {
-          artworkUrl = await new Promise(res => {
-            const r = new FileReader();
-            r.onload = e => res(e.target.result);
-            r.readAsDataURL(m.artworkFile);
-          });
+          artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(m.artworkFile); });
         } else if (artworkUrl && artworkUrl.startsWith('blob:')) {
-          artworkUrl = null;
+          // Embedded metadata artwork — convert while blob is still alive
+          try {
+            const blob = await fetch(artworkUrl).then(r => r.blob());
+            artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(blob); });
+          } catch { artworkUrl = null; }
         }
-        // Compress artwork thumbnail before storing
         artworkUrl = await compressArtwork(artworkUrl);
         return {
           ...m, artworkUrl, artworkFile: undefined,
-          fileUrl:  audioUrls[files[i]?.id] || null,
-          format:   files[i]?.file ? ext(files[i].file) : '',
-          size:     files[i]?.file ? fmtBytes(files[i].file.size) : '',
-          savedAt:  Date.now(),
+          fileUrl:     audioUrls[files[i]?.id] || null, // temp; replaced by signed URL below
+          storage_key: null,
+          format:      files[i]?.file ? ext(files[i].file) : '',
+          size:        files[i]?.file ? fmtBytes(files[i].file.size) : '',
+          savedAt:     Date.now(),
         };
       }));
+
+      // ── Step 2: Upload audio to Supabase Storage ──
+      if (user?.id) {
+        for (let i = 0; i < files.length; i++) {
+          const { file } = files[i];
+          if (!file || file.native) continue;
+          setUploadProgress({ phase: 'audio', current: i + 1, total: files.length, pct: 10 + Math.round((i / files.length) * 80) });
+          const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const audioKey  = `${user.id}/${Date.now()}-${safeName}`;
+          const { error: audioErr } = await supabase.storage.from('audio').upload(audioKey, file, {
+            contentType: file.type || 'application/octet-stream', upsert: false,
+          });
+          if (!audioErr) {
+            items[i].storage_key = audioKey;
+            const { data: urlData } = await supabase.storage.from('audio').createSignedUrl(audioKey, 7 * 24 * 3600);
+            if (urlData?.signedUrl) items[i].fileUrl = urlData.signedUrl;
+            // Insert into tracks table
+            const { data: track } = await supabase.from('tracks').insert({
+              creator_id: user.id,
+              title:      items[i].title?.trim()  || file.name,
+              artist:     items[i].artist?.trim() || null,
+              album:      items[i].album?.trim()  || null,
+              genre:      items[i].genre?.trim()  || null,
+              year:       items[i].year ? parseInt(items[i].year) : null,
+              format:     items[i].format,
+              visibility: 'private',
+              status:     'pending',
+              storage_key: audioKey,
+            }).select('id').single();
+            if (track?.id) items[i].supabaseId = track.id;
+          } else {
+            console.warn('[saveAll] cloud upload failed for', file.name, audioErr.message);
+          }
+        }
+      }
+
+      // ── Step 3: Save to localStorage ──
+      setUploadProgress({ phase: 'saving', current: files.length, total: files.length, pct: 95 });
       const uid = user?.id;
       if (uid) {
         const key = `kyoyu-uploads-${uid}`;
         let existing = [];
-        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch { existing = []; }
-        // Compress existing artwork too (in case older saves had large data URLs)
-        const existingCompressed = await Promise.all(
-          existing.map(async t => ({
-            ...t,
-            artworkUrl: await compressArtwork(t.artworkUrl),
-          }))
-        );
-        const nextSaved = [...items, ...existingCompressed];
-        try {
-          localStorage.setItem(key, JSON.stringify(nextSaved));
-        } catch(qe) {
-          console.error('[saveAll] localStorage quota:', qe);
-          // Never strip artwork — just log and keep going (data still in React state)
+        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+        const nextSaved = [...items, ...existing];
+        try { localStorage.setItem(key, JSON.stringify(nextSaved)); } catch(qe) {
+          console.warn('[saveAll] localStorage quota:', qe);
         }
         setSaved(nextSaved);
       } else {
@@ -360,6 +407,8 @@ export default function UserUploads() {
     } catch(err) {
       console.error('[saveAll]', err);
       setSaveErr(`Save failed: ${err.message}`);
+    } finally {
+      setUploadProgress(null);
     }
   }
   function removeSaved(id){
@@ -825,7 +874,26 @@ export default function UserUploads() {
       </div>
 
       {saveErr && <div className="uu-save-err">{saveErr}</div>}
-      <button className="uu-save-full" onClick={saveAll}><Check size={18}/> Save {files.length} Track{files.length>1?'s':''} to Library</button>
+
+      {/* Upload progress */}
+      {uploadProgress && (
+        <div className="uu-upload-cover">
+          <div className="uu-upload-cover-content">
+            <div className="uu-upload-spinner"/>
+            <div className="uu-upload-cover-label">
+              {uploadProgress.phase === 'artwork' && 'Preparing files…'}
+              {uploadProgress.phase === 'audio'   && `Uploading track ${uploadProgress.current} of ${uploadProgress.total}…`}
+              {uploadProgress.phase === 'saving'  && 'Saving to library…'}
+            </div>
+            <div className="uu-upload-bar"><div className="uu-upload-bar-fill" style={{width:`${uploadProgress.pct}%`}}/></div>
+            <div className="uu-upload-cover-sub">Your tracks are being stored in Kyoyu. You can delete the originals once this finishes.</div>
+          </div>
+        </div>
+      )}
+
+      <button className="uu-save-full" onClick={saveAll} disabled={!!uploadProgress}>
+        <Check size={18}/> Save {files.length} Track{files.length>1?'s':''} to Library
+      </button>
     </div>
   );
 }
