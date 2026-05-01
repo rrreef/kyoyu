@@ -875,25 +875,32 @@ export default function UserUploads() {
 
       {saveErr && <div className="uu-save-err">{saveErr}</div>}
 
-      {/* Upload progress */}
-      {uploadProgress && (
-        <div className="uu-upload-cover">
-          <div className="uu-upload-cover-content">
-            <div className="uu-upload-spinner"/>
-            <div className="uu-upload-cover-label">
-              {uploadProgress.phase === 'artwork' && 'Preparing files…'}
-              {uploadProgress.phase === 'audio'   && `Uploading track ${uploadProgress.current} of ${uploadProgress.total}…`}
-              {uploadProgress.phase === 'saving'  && 'Saving to library…'}
-            </div>
-            <div className="uu-upload-bar"><div className="uu-upload-bar-fill" style={{width:`${uploadProgress.pct}%`}}/></div>
-            <div className="uu-upload-cover-sub">Your tracks are being stored in Kyoyu. You can delete the originals once this finishes.</div>
-          </div>
-        </div>
-      )}
-
       <button className="uu-save-full" onClick={saveAll} disabled={!!uploadProgress}>
         <Check size={18}/> Save {files.length} Track{files.length>1?'s':''} to Library
       </button>
     </div>
   );
+
+  /* ── Upload progress overlay — portal so position:fixed works despite parent transform ── */
+  const progressPortal = uploadProgress && createPortal(
+    <div className="uu-upload-cover">
+      <div className="uu-upload-cover-content">
+        <div className="uu-upload-spinner"/>
+        <div className="uu-upload-cover-label">
+          {uploadProgress.phase === 'artwork' && 'Preparing files…'}
+          {uploadProgress.phase === 'audio'   && `Uploading track ${uploadProgress.current} of ${uploadProgress.total}…`}
+          {uploadProgress.phase === 'saving'  && 'Saving to library…'}
+        </div>
+        <div className="uu-upload-bar">
+          <div className="uu-upload-bar-fill" style={{width:`${uploadProgress.pct}%`}}/>
+        </div>
+        <div className="uu-upload-cover-sub">
+          Tracks are being stored in Kyoyu — you can delete the original files once complete.
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+
+  return <>{page}{progressPortal}</>;
 }
