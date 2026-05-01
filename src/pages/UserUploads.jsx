@@ -220,12 +220,18 @@ export default function UserUploads() {
   /* Load saved uploads from localStorage once user ID is known */
   useEffect(() => {
     if (!user?.id) return;
+    const uid = user.id;
     try {
-      const s = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      const s = localStorage.getItem(`kyoyu-uploads-${uid}`);
       if (s) {
         const parsed = JSON.parse(s);
-        setSaved(parsed);
-        if (parsed.length > 0) setShowPrev(true); // auto-expand
+        // Rehydrate artworkUrls from per-track keys (stored separately to avoid quota bloat)
+        const hydrated = parsed.map(t => ({
+          ...t,
+          artworkUrl: localStorage.getItem(`kyoyu-art-${uid}-${t.id}`) || t.artworkUrl || null,
+        }));
+        setSaved(hydrated);
+        if (hydrated.length > 0) setShowPrev(true);
       }
     } catch {}
     setStorageLoaded(true);
@@ -409,25 +415,25 @@ export default function UserUploads() {
         const key = `kyoyu-uploads-${uid}`;
         let existing = [];
         try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
-        const nextSaved = [...items, ...existing];
-        let writeOk = false;
-        try {
-          localStorage.setItem(key, JSON.stringify(nextSaved));
-          writeOk = true;
-        } catch {
-          // Quota hit — retry stripping artwork from older entries to save space
-          try {
-            const slim = nextSaved.map((t, i) => i < items.length ? t : { ...t, artworkUrl: null });
-            localStorage.setItem(key, JSON.stringify(slim));
-            writeOk = true;
-          } catch(qe2) {
-            setSaveErr(`⚠️ Could not save to device storage: ${qe2.message}. Tracks will appear until you close the app.`);
+
+        // Save each artwork to its own key — completely independent from each other
+        items.forEach(item => {
+          if (item.artworkUrl) {
+            try { localStorage.setItem(`kyoyu-art-${uid}-${item.id}`, item.artworkUrl); }
+            catch {} // one artwork failing never affects the others
           }
+        });
+
+        // Save slim track metadata (no artwork blobs) to main key
+        const slim = t => ({ ...t, artworkUrl: null });
+        const nextSaved = [...items, ...existing];
+        try {
+          localStorage.setItem(key, JSON.stringify(nextSaved.map(slim)));
+        } catch(qe) {
+          setSaveErr(`⚠️ Could not save track list: ${qe.message}`);
         }
-        if (writeOk) console.log('[saveAll] wrote', nextSaved.length, 'tracks to localStorage');
-        setSaved(nextSaved);
+        setSaved(nextSaved); // React state keeps artworkUrls for immediate display
       } else {
-        // No user ID — still update React state but warn
         setSaveErr('⚠️ Not signed in — tracks saved for this session only.');
         setSaved(prev => [...items, ...prev]);
       }
@@ -439,11 +445,12 @@ export default function UserUploads() {
       setSaveErr(`Save failed: ${err.message}`);
     }
   }
-  function removeSaved(id){
-    if (playing===id){audioRef.current.pause();setPlaying(null);}
+  function removeSaved(id) {
+    if (playing === id) { audioRef.current.pause(); setPlaying(null); }
+    if (user?.id) try { localStorage.removeItem(`kyoyu-art-${user.id}-${id}`); } catch {} // clean up art key
     setSaved(prev => {
       const next = prev.filter(t => t.id !== id);
-      if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next)); } catch {}
+      if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next.map(t => ({ ...t, artworkUrl: null })))); } catch {}
       return next;
     });
     window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
@@ -452,11 +459,13 @@ export default function UserUploads() {
     setSelectedIds(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
   }
   function selectAll(){ setSelectedIds(new Set(saved.map(t=>t.id))); }
-  function deleteSelected(){
-    const ids=selectedIds;
-    setSaved(prev=>{
-      const next=prev.filter(t=>!ids.has(t.id));
-      if(user?.id) try{ localStorage.setItem(`kyoyu-uploads-${user.id}`,JSON.stringify(next)); }catch{}
+  function deleteSelected() {
+    const ids = selectedIds;
+    // Clean up per-track art keys for deleted items
+    if (user?.id) ids.forEach(id => { try { localStorage.removeItem(`kyoyu-art-${user.id}-${id}`); } catch {} });
+    setSaved(prev => {
+      const next = prev.filter(t => !ids.has(t.id));
+      if (user?.id) try { localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next.map(t => ({ ...t, artworkUrl: null })))); } catch {}
       return next;
     });
     setSelectedIds(new Set()); setSelectMode(false);
