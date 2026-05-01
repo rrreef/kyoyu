@@ -196,6 +196,7 @@
 .uu-review-title { font-size:.875rem;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .uu-review-sub { font-size:.72rem;color:rgba(255,255,255,.4);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .uu-review-tags { display:flex;gap:4px;margin-top:5px;flex-wrap:wrap; }
+.uu-review-err  { font-size:.65rem;color:rgba(239,68,68,.9);margin-top:4px;line-height:1.3; }
 .uu-review-edit { width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.07);border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);cursor:pointer;flex-shrink:0; }
 
 .uu-save-full { display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 16px 120px;padding:15px;border-radius:16px;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.18);font-size:.9rem;font-weight:700;color:#fff;cursor:pointer;transition:background .2s,transform .15s; }

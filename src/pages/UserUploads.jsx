@@ -210,6 +210,7 @@ export default function UserUploads() {
   const [sharing,       setSharing]       = useState(false);
   const [shareMsg,      setShareMsg]      = useState({ text:'', ok:true });
   const [trackUploadState, setTrackUploadState] = useState({}); // {[fileId]: 'uploading'|'done'|'error'}
+  const [trackUploadError, setTrackUploadError] = useState({}); // {[fileId]: errorString}
   const [uploadedTracks,   setUploadedTracks]   = useState({}); // {[fileId]: {storage_key,fileUrl,supabaseId,artworkUrl}}
   const fileRef       = useRef();
   const artRefs       = useRef([]);
@@ -251,6 +252,7 @@ export default function UserUploads() {
     const initial = {};
     files.forEach(f => { initial[f.id] = 'uploading'; });
     setTrackUploadState(initial);
+    setTrackUploadError({});
     setUploadedTracks({});
     (async () => {
       for (let i = 0; i < files.length; i++) {
@@ -276,20 +278,23 @@ export default function UserUploads() {
           const { error: audioErr } = await supabase.storage.from('audio').upload(audioKey, file, {
             contentType: file.type || 'application/octet-stream', upsert: false,
           });
-          if (audioErr) throw audioErr;
+          if (audioErr) throw new Error(`Storage: ${audioErr.message}`);
           const { data: urlData } = await supabase.storage.from('audio').createSignedUrl(audioKey, 7 * 24 * 3600);
           const m = metas[i];
-          const { data: track } = await supabase.from('tracks').insert({
+          const { data: track, error: trackErr } = await supabase.from('tracks').insert({
             creator_id: user.id, title: m.title?.trim() || file.name, artist: m.artist?.trim() || null,
             album: m.album?.trim() || null, genre: m.genre?.trim() || null,
             year: m.year ? parseInt(m.year) : null, format: ext(file),
             visibility: 'private', status: 'pending', storage_key: audioKey,
           }).select('id').single();
+          if (trackErr) console.warn('[autoUpload] tracks insert:', trackErr.message);
           setUploadedTracks(prev => ({ ...prev, [id]: { storage_key: audioKey, fileUrl: urlData?.signedUrl || null, supabaseId: track?.id || null, artworkUrl } }));
           setTrackUploadState(prev => ({ ...prev, [id]: 'done' }));
         } catch (err) {
           console.error('[autoUpload]', err);
-          setUploadedTracks(prev => ({ ...prev, [id]: { artworkUrl } }));
+          // Still save with local blob URL so track appears in Previously Uploaded
+          setUploadedTracks(prev => ({ ...prev, [id]: { artworkUrl, fileUrl: audioUrls[id] || null } }));
+          setTrackUploadError(prev => ({ ...prev, [id]: err.message }));
           setTrackUploadState(prev => ({ ...prev, [id]: 'error' }));
         }
       }
@@ -874,14 +879,14 @@ export default function UserUploads() {
         {metas.map((t,i) => {
           const fid    = files[i]?.id;
           const status = trackUploadState[fid];
+          const errMsg = trackUploadError[fid];
           return (
-            <div key={t.id} className="uu-review-card glass">
+            <div key={t.id} className="uu-review-card glass" style={status==='error'?{border:'.5px solid rgba(239,68,68,.4)'}:{}}>
               <div className="uu-review-art-wrap">
                 {t.artworkUrl
                   ? <img src={t.artworkUrl} alt="" className="uu-review-art"/>
                   : <div className="uu-review-art uu-art-ph"><Music2 size={20}/></div>
                 }
-                {/* Per-track upload status badge */}
                 {status === 'uploading' && <div className="uu-track-status uploading"><div className="uu-card-spinner"/></div>}
                 {status === 'done'      && <div className="uu-track-status done"><Check size={12} strokeWidth={3}/></div>}
                 {status === 'error'     && <div className="uu-track-status error">!</div>}
@@ -889,7 +894,10 @@ export default function UserUploads() {
               <div className="uu-review-info">
                 <div className="uu-review-title">{t.title||'Untitled'}</div>
                 <div className="uu-review-sub">{t.artist}{t.album?' — '+t.album:''}</div>
-                <div className="uu-review-tags">{[t.genre,t.year,files[i]?.file ? ext(files[i].file) : ''].filter(Boolean).map(v=><span key={v} className="uu-fmt">{v}</span>)}</div>
+                {errMsg
+                  ? <div className="uu-review-err">{errMsg}</div>
+                  : <div className="uu-review-tags">{[t.genre,t.year,files[i]?.file ? ext(files[i].file) : ''].filter(Boolean).map(v=><span key={v} className="uu-fmt">{v}</span>)}</div>
+                }
               </div>
               <button className="uu-review-edit" onClick={()=>{setActive(i);setStep(1);}} disabled={status==='uploading'}><ChevronRight size={16}/></button>
             </div>
