@@ -248,10 +248,15 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     isPlaying={isPlaying} dispatch={dispatch} onSeek={seekTo}
     showQueue={showQueue} setShowQueue={setShowQueue}/>;
 
-  /* Gradient: accent colour at top → near-black at bottom */
-  const fpStyle = accent
-    ? { background: `linear-gradient(180deg, rgb(${accent}) 0%, rgba(8,8,13,0.85) 55%, rgb(8,8,13) 80%)` }
-    : {};
+  /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
+  const fpStyle = (() => {
+    if (!accent) return {};
+    const [r, g, b] = accent.split(',').map(Number);
+    const d = (v) => Math.round(v * 0.45); // darker shade
+    return {
+      background: `linear-gradient(180deg, rgb(${r},${g},${b}) 0%, rgb(${d(r)},${d(g)},${d(b)}) 100%)`,
+    };
+  })();
 
   return (
     <div ref={fpRef} className={`fp${open?' fp--open':''}`} style={fpStyle}>
