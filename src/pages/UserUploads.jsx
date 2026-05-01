@@ -428,25 +428,21 @@ export default function UserUploads() {
         const key = `kyoyu-uploads-${uid}`;
         const artKey = id => `kyoyu-art-${uid}-${id}`;
 
-        // Read existing tracks and immediately rehydrate their artwork from per-art keys
-        let existingRaw = [];
-        try { existingRaw = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
-        const existing = existingRaw.map(t => ({
-          ...t,
-          artworkUrl: localStorage.getItem(artKey(t.id)) || t.artworkUrl || null,
-        }));
+        // Use current React state as existing — it already has correct artworkUrls in memory.
+        // Re-reading from localStorage loses artwork because stored JSON has artworkUrl:null.
+        const existing = saved;
 
-        // Push every track's artwork into its own key (best-effort; existing tracks already in per-art keys)
+        // Save each track's artwork to its own key (new items + any existing not yet migrated)
         [...items, ...existing].forEach(t => {
           if (t.artworkUrl && !localStorage.getItem(artKey(t.id))) {
             try { localStorage.setItem(artKey(t.id), t.artworkUrl); } catch {}
           }
         });
 
-        // Build React state — always has artworkUrls for immediate display
+        // Build next state — all tracks have artwork
         const nextSaved = [...items, ...existing];
 
-        // Persist slim metadata — only null artworkUrl if per-art key confirmed to exist
+        // Persist slim metadata: only strip artworkUrl if per-art key confirmed to exist
         const toStore = nextSaved.map(t => ({
           ...t,
           artworkUrl: localStorage.getItem(artKey(t.id)) ? null : (t.artworkUrl || null),
@@ -456,7 +452,7 @@ export default function UserUploads() {
         } catch(qe) {
           setSaveErr(`⚠️ Could not save track list: ${qe.message}`);
         }
-        setSaved(nextSaved); // all tracks have artwork here — no flash of missing art
+        setSaved(nextSaved); // artwork intact — no re-read from localStorage needed
       } else {
         setSaveErr('⚠️ Not signed in — tracks saved for this session only.');
         setSaved(prev => [...items, ...prev]);
