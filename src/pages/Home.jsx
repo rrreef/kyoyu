@@ -5,6 +5,7 @@ import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, 
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useLibrary } from '../contexts/LibraryContext';
 import UploadShelf, { UploadExpandedList } from '../components/uploads/UploadShelf';
 import './Home.css';
 
@@ -33,6 +34,7 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
 export default function Home() {
   const { playRelease, playTrack } = usePlayer();
   const { user } = useAuth();
+  const { getLikedUploads } = useLibrary();
   const featured = releases[0];
   const [myUploads, setMyUploads] = useState([]);
   const [showAllUploads, setShowAllUploads] = useState(false);
@@ -112,10 +114,10 @@ export default function Home() {
           )}
         </div>
 
-        {/* My Playlists */}
+        {/* Playlists */}
         {showPlaylists && (
           <>
-            <div className="shelf-row-label">My Playlists</div>
+            <div className="shelf-row-label">Playlists</div>
             <div className="scroll-row">
               {myPlaylists.map(pl => (
                 <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.trackCount} tracks`} />
@@ -124,17 +126,30 @@ export default function Home() {
           </>
         )}
 
-        {/* Liked Albums */}
-        {showLiked && (
-          <>
-            <div className="shelf-row-label">Liked Albums</div>
-            <div className="scroll-row">
-              {likedAlbums.map(a => (
-                <ShelfCard key={a.id} cover={a.cover} title={a.title} sub={a.artist} />
-              ))}
-            </div>
-          </>
-        )}
+        {/* Liked — public albums + private liked uploads */}
+        {showLiked && (() => {
+          const likedUpl = getLikedUploads(user?.id);
+          const totalLiked = likedUpl.length + likedAlbums.length;
+          if (totalLiked === 0) return null;
+          return (
+            <>
+              <div className="shelf-row-label">Liked</div>
+              <div className="scroll-row">
+                {likedUpl.map(t => (
+                  <ShelfCard
+                    key={t.id}
+                    cover={t.artworkUrl || ''}
+                    title={t.title || 'Untitled'}
+                    sub={t.artist || ''}
+                  />
+                ))}
+                {likedAlbums.map(a => (
+                  <ShelfCard key={a.id} cover={a.cover} title={a.title} sub={a.artist} />
+                ))}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Saved Playlists / Podcasts */}
         {showPodcasts && (
@@ -175,7 +190,7 @@ export default function Home() {
         {/* Events */}
         {showEvents && (
           <>
-            <div className="shelf-row-label">Upcoming Events</div>
+            <div className="shelf-row-label">Events</div>
             <div className="scroll-row">
               {upcomingEvents.map(e => (
                 <ShelfCard key={e.id} cover={e.cover} title={e.title} sub={`${e.date} · ${e.venue}`} badge={e.date} />
