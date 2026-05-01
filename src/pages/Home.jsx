@@ -72,7 +72,6 @@ export default function Home() {
   const showLiked       = shelfFilter === 'all' || shelfFilter === 'music';
   const showPodcasts    = shelfFilter === 'all' || shelfFilter === 'podcast';
   const showRadios      = shelfFilter === 'all' || shelfFilter === 'music' || shelfFilter === 'radios';
-  const showMerch       = shelfFilter === 'all' || shelfFilter === 'merch';
   const showEvents      = shelfFilter === 'all' || shelfFilter === 'events';
 
 
@@ -159,18 +158,6 @@ export default function Home() {
             <div className="scroll-row">
               {artistRadios.map(r => (
                 <ShelfCard key={r.id} cover={r.cover} title={r.name} sub={r.artist} badge="Radio" badgeIcon={Radio} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Merch */}
-        {showMerch && (
-          <>
-            <div className="shelf-row-label">Merch</div>
-            <div className="scroll-row">
-              {merchItems.map(m => (
-                <ShelfCard key={m.id} cover={m.cover} title={m.title} sub={m.price} />
               ))}
             </div>
           </>
