@@ -426,20 +426,27 @@ export default function UserUploads() {
       const uid = user?.id;
       if (uid) {
         const key = `kyoyu-uploads-${uid}`;
-        let existing = [];
-        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
-
-        // Push every track's artwork into its own key (best-effort)
         const artKey = id => `kyoyu-art-${uid}-${id}`;
+
+        // Read existing tracks and immediately rehydrate their artwork from per-art keys
+        let existingRaw = [];
+        try { existingRaw = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+        const existing = existingRaw.map(t => ({
+          ...t,
+          artworkUrl: localStorage.getItem(artKey(t.id)) || t.artworkUrl || null,
+        }));
+
+        // Push every track's artwork into its own key (best-effort; existing tracks already in per-art keys)
         [...items, ...existing].forEach(t => {
           if (t.artworkUrl && !localStorage.getItem(artKey(t.id))) {
             try { localStorage.setItem(artKey(t.id), t.artworkUrl); } catch {}
           }
         });
 
-        // Only null out artworkUrl in the stored JSON if the per-art key actually exists now.
-        // If the write above failed (quota), keep the artworkUrl inline as fallback.
+        // Build React state — always has artworkUrls for immediate display
         const nextSaved = [...items, ...existing];
+
+        // Persist slim metadata — only null artworkUrl if per-art key confirmed to exist
         const toStore = nextSaved.map(t => ({
           ...t,
           artworkUrl: localStorage.getItem(artKey(t.id)) ? null : (t.artworkUrl || null),
@@ -449,7 +456,7 @@ export default function UserUploads() {
         } catch(qe) {
           setSaveErr(`⚠️ Could not save track list: ${qe.message}`);
         }
-        setSaved(nextSaved);
+        setSaved(nextSaved); // all tracks have artwork here — no flash of missing art
       } else {
         setSaveErr('⚠️ Not signed in — tracks saved for this session only.');
         setSaved(prev => [...items, ...prev]);
