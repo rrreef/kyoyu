@@ -428,31 +428,28 @@ export default function UserUploads() {
         const key = `kyoyu-uploads-${uid}`;
         let existing = [];
         try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
-        // MIGRATE: save existing tracks' artwork to per-art keys (for tracks saved before this system)
-        existing.forEach(item => {
-          if (item.artworkUrl && !localStorage.getItem(`kyoyu-art-${uid}-${item.id}`)) {
-            try { localStorage.setItem(`kyoyu-art-${uid}-${item.id}`, item.artworkUrl); }
-            catch {} // failure here only loses that one track's art
+
+        // Push every track's artwork into its own key (best-effort)
+        const artKey = id => `kyoyu-art-${uid}-${id}`;
+        [...items, ...existing].forEach(t => {
+          if (t.artworkUrl && !localStorage.getItem(artKey(t.id))) {
+            try { localStorage.setItem(artKey(t.id), t.artworkUrl); } catch {}
           }
         });
 
-        // Save each new track's artwork to its own key
-        items.forEach(item => {
-          if (item.artworkUrl) {
-            try { localStorage.setItem(`kyoyu-art-${uid}-${item.id}`, item.artworkUrl); }
-            catch {}
-          }
-        });
-
-        // Save slim track metadata (no artwork blobs) to main key
-        const slim = t => ({ ...t, artworkUrl: null });
+        // Only null out artworkUrl in the stored JSON if the per-art key actually exists now.
+        // If the write above failed (quota), keep the artworkUrl inline as fallback.
         const nextSaved = [...items, ...existing];
+        const toStore = nextSaved.map(t => ({
+          ...t,
+          artworkUrl: localStorage.getItem(artKey(t.id)) ? null : (t.artworkUrl || null),
+        }));
         try {
-          localStorage.setItem(key, JSON.stringify(nextSaved.map(slim)));
+          localStorage.setItem(key, JSON.stringify(toStore));
         } catch(qe) {
           setSaveErr(`⚠️ Could not save track list: ${qe.message}`);
         }
-        setSaved(nextSaved); // React state keeps artworkUrls for immediate display
+        setSaved(nextSaved);
       } else {
         setSaveErr('⚠️ Not signed in — tracks saved for this session only.');
         setSaved(prev => [...items, ...prev]);
