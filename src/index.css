@@ -2,16 +2,19 @@
 
 /* Eliminate 300ms tap delay in WKWebView / mobile Safari */
 *, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
 input, textarea, select {
   font-size: 16px !important;
 }
-
-
 
 /* ===== KYO — iOS 26 Liquid Glass Design System ===== */
 :root {
@@ -232,17 +235,11 @@ input, textarea, select {
   background: rgba(0,0,0,0.15);
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 html {
   font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -251,8 +248,9 @@ body {
   font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
+  height: 100%;
   overflow-x: hidden;
-  min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 #root {
@@ -287,6 +285,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.2;
   color: var(--text-primary);
+  user-select: none;
 }
 h1 { font-size: 2rem;      color: var(--text-heading); }
 h2 { font-size: 1.5rem;    color: var(--text-heading); }
@@ -304,7 +303,17 @@ button {
   border: none;
   background: none;
   color: inherit;
-  transition: var(--transition-base);
+  user-select: none;
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.14s ease, background-color 0.18s ease;
+}
+/* Instant press feedback on all buttons — critical for native-feel on iOS */
+button:active:not(:disabled) {
+  transform: scale(0.95);
+  opacity: 0.85;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ─── Inputs — glass style ─── */
@@ -336,7 +345,12 @@ input:focus, textarea:focus, select:focus {
 }
 input::placeholder { color: var(--text-muted); }
 
-img { display: block; max-width: 100%; }
+img {
+  display: block;
+  max-width: 100%;
+  /* GPU hint for composited images */
+  transform: translateZ(0);
+}
 
 /* ═══════════════════════════════════════════
    iOS 26 LIQUID GLASS UTILITY CLASSES
@@ -357,6 +371,7 @@ img { display: block; max-width: 100%; }
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-md);
   isolation: isolate;
+  user-select: none;
 }
 /* No shine pseudo-element — matte style */
 .glass::before { display: none; }
@@ -396,6 +411,7 @@ img { display: block; max-width: 100%; }
   transition: var(--transition-base);
   overflow: hidden;
   isolation: isolate;
+  contain: layout paint style;
 }
 /* No shine pseudo-element */
 .glass-card::before { display: none; }
@@ -403,6 +419,8 @@ img { display: block; max-width: 100%; }
   background: var(--glass-bg-hover);
   border-color: rgba(255, 107, 26, 0.18);
   box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+  transition: transform 0.15s ease, border-color 0.15s ease;
 }
 /* Disable card lift on touch devices */
 @media (hover: none) {
@@ -427,6 +445,8 @@ img { display: block; max-width: 100%; }
   margin-left: var(--sidebar-width);
   padding-top: var(--topbar-height);
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;   /* bounce only inside scroll area, not whole page */
+  scroll-behavior: auto;            /* instant for programmatic scrolls */
 }
 
 /* ─── Scroll rows ─── */
@@ -556,9 +576,10 @@ img { display: block; max-width: 100%; }
   50%       { box-shadow: 0 0 40px rgba(255,107,26,0.55); }
 }
 
-.animate-in    { animation: fadeIn  0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.animate-up    { animation: slideUp 0.40s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.animate-float { animation: floatUp 0.36s cubic-bezier(0.34, 1.3, 0.64, 1) forwards; }
+/* Page entry — snappy at 0.18s feels instant, 0.32s feels sluggish */
+.animate-in    { animation: fadeIn  0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-up    { animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-float { animation: floatUp 0.20s cubic-bezier(0.34, 1.3, 0.64, 1) forwards; }
 
 /* ─── Mobile performance: disable backdrop-filter on touch devices ─── */
 /* backdrop-filter blur is GPU-intensive and causes scroll jank on mobile */

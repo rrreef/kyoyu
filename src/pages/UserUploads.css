@@ -15,12 +15,12 @@
 .uu-steps { display:flex;gap:0;padding:0 18px 16px;position:relative; }
 .uu-steps::before { content:'';position:absolute;top:14px;left:36px;right:36px;height:1px;background:rgba(255,255,255,.08); }
 .uu-step { flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative; }
-.uu-step span { width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.07);border:.5px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:rgba(255,255,255,.35);transition:all .25s; }
+.uu-step span { width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.07);border:.5px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:rgba(255,255,255,.35);transition:background-color .18s,color .18s,border-color .18s; }
 .uu-step.active span { background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.3);color:#fff; }
 .uu-step.done span { background:rgba(255,255,255,.12);color:#fff; }
 
 /* Drop zone */
-.uu-dropzone { margin:0 16px;border-radius:20px;padding:30px 20px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:1.5px dashed rgba(255,255,255,.1);background:rgba(255,255,255,.025);transition:all .2s; }
+.uu-dropzone { margin:0 16px;border-radius:20px;padding:30px 20px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:1.5px dashed rgba(255,255,255,.1);background:rgba(255,255,255,.025);transition:border-color .18s,background-color .18s; }
 .uu-dropzone.dragging,.uu-dropzone:hover { border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.05); }
 .uu-drop-title { font-size:.88rem;font-weight:600;color:rgba(255,255,255,.65); }
 .uu-drop-formats { display:flex;gap:6px;flex-wrap:wrap;justify-content:center; }
@@ -43,9 +43,8 @@
 .uu-privacy { display:flex;align-items:center;gap:6px;font-size:.67rem;color:rgba(255,255,255,.25);padding:10px 24px 0; }
 
 /* Next btn */
-.uu-next-btn { display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 16px 0;padding:15px;border-radius:16px;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.18);font-size:.9rem;font-weight:700;color:#fff;cursor:pointer;transition:background .2s,transform .15s; }
-.uu-next-btn:hover { background:rgba(255,255,255,.15);transform:translateY(-1px); }
-.uu-next-btn:hover { transform:translateY(-1px); }
+.uu-next-btn { display:flex;align-items:center;justify-content:center;gap:8px;margin:20px 16px 0;padding:15px;border-radius:16px;background:rgba(255,255,255,.1);border:.5px solid rgba(255,255,255,.18);font-size:.9rem;font-weight:700;color:#fff;cursor:pointer;transition:background .18s,transform .1s; }
+.uu-next-btn:active:not(:disabled) { transform:scale(.97); background:rgba(255,255,255,.14); }
 
 /* Library section */
 .uu-library { padding:24px 16px 120px; }
@@ -107,7 +106,7 @@
 /* ── Step 1: Track Info ──────────────────────────────────────── */
 .uu-tabs { display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none; }
 .uu-tabs::-webkit-scrollbar { display:none; }
-.uu-tab { display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:100px;background:rgba(255,255,255,.05);border:.5px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0; }
+.uu-tab { display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:100px;background:rgba(255,255,255,.05);border:.5px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color .15s,color .15s,border-color .15s;flex-shrink:0; }
 .uu-tab.active { background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28);color:#fff; }
 .uu-tab-art { width:22px;height:22px;border-radius:6px;object-fit:cover;flex-shrink:0; }
 .uu-tab-num { width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.1);font-size:.63rem;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
@@ -159,7 +158,7 @@
 .uu-prev-toggle:hover { background:rgba(255,255,255,.08); }
 .uu-prev-count { margin-left:auto;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.55); }
 .uu-prev-sorts { display:flex;gap:6px;flex-wrap:wrap;padding:8px 0 6px; }
-.uu-prev-sort { padding:5px 12px;border-radius:100px;font-size:.72rem;font-weight:600;background:rgba(255,255,255,.06);border:.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);cursor:pointer;transition:all .15s; }
+.uu-prev-sort { padding:5px 12px;border-radius:100px;font-size:.72rem;font-weight:600;background:rgba(255,255,255,.06);border:.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);cursor:pointer;transition:background-color .12s,color .12s; }
 .uu-prev-sort.active { background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff; }
 .uu-prev-list { display:flex;flex-direction:column;gap:6px;padding-top:4px; }
 

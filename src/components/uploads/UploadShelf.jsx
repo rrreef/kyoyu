@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
@@ -47,7 +47,7 @@ function Card({ cover, title, sub, badge, onClick }) {
     <div className="shelf-card upl-shelf-card" onClick={onClick}>
       <div className="shelf-card-art">
         {cover
-          ? <img src={cover} alt={title}/>
+          ? <img src={cover} alt={title} loading="lazy" decoding="async"/>
           : <div className="upl-card-ph"><Music2 size={20} strokeWidth={1.3}/></div>
         }
         {badge && <div className="shelf-card-badge">{badge}</div>}
@@ -176,7 +176,7 @@ function AlbumModal({ alb, onClose }) {
         {/* Artwork */}
         <div className="upl-art-wrap">
           {alb.artworkUrl
-            ? <img ref={imgRef} src={alb.artworkUrl} alt={alb.album} className="upl-art-big"/>
+            ? <img ref={imgRef} src={alb.artworkUrl} alt={alb.album} className="upl-art-big" loading="eager" decoding="async"/>
             : <div className="upl-art-big upl-art-big-ph"><Music2 size={64} strokeWidth={1}/></div>
           }
         </div>
@@ -308,7 +308,7 @@ export function UploadExpandedList({ uploads }) {
         {sorted.map(t => (
           <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`}>
             {t.artworkUrl
-              ? <img src={t.artworkUrl} alt="" className="upl-exp-art"/>
+              ? <img src={t.artworkUrl} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
               : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={15}/></div>
             }
             <div className="upl-exp-info">
