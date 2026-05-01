@@ -222,7 +222,11 @@ export default function UserUploads() {
     if (!user?.id) return;
     try {
       const s = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-      if (s) setSaved(JSON.parse(s));
+      if (s) {
+        const parsed = JSON.parse(s);
+        setSaved(parsed);
+        if (parsed.length > 0) setShowPrev(true); // auto-expand
+      }
     } catch {}
     setStorageLoaded(true);
   }, [user?.id]);
@@ -406,11 +410,25 @@ export default function UserUploads() {
         let existing = [];
         try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
         const nextSaved = [...items, ...existing];
-        try { localStorage.setItem(key, JSON.stringify(nextSaved)); } catch(qe) {
-          console.warn('[saveAll] localStorage quota:', qe);
+        let writeOk = false;
+        try {
+          localStorage.setItem(key, JSON.stringify(nextSaved));
+          writeOk = true;
+        } catch {
+          // Quota hit — retry stripping artwork from older entries to save space
+          try {
+            const slim = nextSaved.map((t, i) => i < items.length ? t : { ...t, artworkUrl: null });
+            localStorage.setItem(key, JSON.stringify(slim));
+            writeOk = true;
+          } catch(qe2) {
+            setSaveErr(`⚠️ Could not save to device storage: ${qe2.message}. Tracks will appear until you close the app.`);
+          }
         }
+        if (writeOk) console.log('[saveAll] wrote', nextSaved.length, 'tracks to localStorage');
         setSaved(nextSaved);
       } else {
+        // No user ID — still update React state but warn
+        setSaveErr('⚠️ Not signed in — tracks saved for this session only.');
         setSaved(prev => [...items, ...prev]);
       }
       setFiles([]); setMetas([]); setStep(0); setActive(0); setShowPrev(true);
