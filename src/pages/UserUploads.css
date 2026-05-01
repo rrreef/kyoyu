@@ -171,14 +171,22 @@
 .uu-review-art-wrap { position:relative; flex-shrink:0; width:52px; height:52px; }
 .uu-review-art-wrap .uu-review-art { width:100%; height:100%; }
 /* Per-track upload status badge */
-.uu-track-status {
-  position:absolute; inset:0; border-radius:12px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:.75rem; font-weight:700;
+.uu-track-status { position: absolute; display: flex; align-items: center; justify-content: center; }
+/* Uploading: full overlay with centred spinner */
+.uu-track-status.uploading {
+  inset: 0; border-radius: 12px; background: rgba(8,8,13,.45);
 }
-.uu-track-status.uploading { background:rgba(8,8,13,.55); }
-.uu-track-status.done      { background:rgba(34,197,94,.72); color:#fff; }
-.uu-track-status.error     { background:rgba(239,68,68,.72);  color:#fff; }
+/* Done / Error: small circle badge at bottom-right corner */
+.uu-track-status.done,
+.uu-track-status.error {
+  width: 20px; height: 20px; border-radius: 50%;
+  bottom: 4px; right: 4px;
+  border: 1.5px solid rgba(0,0,0,.35);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  font-size: .6rem; font-weight: 800; color: #fff;
+}
+.uu-track-status.done  { background: #22c55e; }
+.uu-track-status.error { background: #ef4444; }
 /* Spinning loader inside the art card */
 .uu-card-spinner {
   width:22px; height:22px; border-radius:50%;
