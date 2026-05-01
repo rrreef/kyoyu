@@ -84,7 +84,7 @@ export default function Library() {
     if(user?.id) localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next));
   }
 
-  const { savedReleases, playlists, downloads, followedArtists, createPlaylist, likedUploads } = useLibrary();
+  const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
   const { playRelease } = usePlayer();
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
@@ -168,15 +168,15 @@ export default function Library() {
             </>
       )}
 
-      {/* Likes → Tracks (private uploads) */}
-      {activeFilter === 'likes' && likesSub === 'tracks' && (
-        likedUploads.length === 0
+      {activeFilter === 'likes' && likesSub === 'tracks' && (() => {
+        const liked = getLikedUploads(user?.id);
+        return liked.length === 0
           ? <div className="lib-empty"><p>No liked tracks yet.</p><p style={{fontSize:'0.75rem',opacity:0.5}}>Tap ♡ on any of your uploads to add it here.</p></div>
           : <>
               <div className="shelf-row-label">Liked Tracks</div>
-              <UploadExpandedList uploads={likedUploads}/>
-            </>
-      )}
+              <UploadExpandedList uploads={liked}/>
+            </>;
+      })()}
 
       {/* Likes → Playlists */}
       {activeFilter === 'likes' && likesSub === 'playlists' && (
