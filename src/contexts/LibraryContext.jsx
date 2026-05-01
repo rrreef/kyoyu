@@ -7,6 +7,9 @@ export function LibraryProvider({ children }) {
   const [likedTracks, setLikedTracks] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-liked') || '[]'); } catch { return []; }
   });
+  const [likedUploads, setLikedUploads] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]'); } catch { return []; }
+  });
   const [savedReleases, setSavedReleases] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-saved') || '["void-sequence","echo-chamber"]'); } catch { return []; }
   });
@@ -21,6 +24,9 @@ export function LibraryProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('reef-liked', JSON.stringify(likedTracks));
   }, [likedTracks]);
+  useEffect(() => {
+    localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(likedUploads));
+  }, [likedUploads]);
   useEffect(() => {
     localStorage.setItem('reef-saved', JSON.stringify(savedReleases));
   }, [savedReleases]);
@@ -37,6 +43,14 @@ export function LibraryProvider({ children }) {
     );
   }
   function isLiked(trackId) { return likedTracks.includes(trackId); }
+
+  function toggleLikeUpload(track) {
+    setLikedUploads(prev => {
+      const exists = prev.find(t => t.id === track.id);
+      return exists ? prev.filter(t => t.id !== track.id) : [...prev, track];
+    });
+  }
+  function isLikedUpload(trackId) { return likedUploads.some(t => t.id === trackId); }
 
   function toggleSave(releaseId) {
     setSavedReleases(prev =>
@@ -66,8 +80,8 @@ export function LibraryProvider({ children }) {
 
   return (
     <LibraryContext.Provider value={{
-      likedTracks, savedReleases, playlists, downloads, followedArtists,
-      toggleLike, isLiked, toggleSave, isSaved, toggleFollow, isFollowing,
+      likedTracks, likedUploads, savedReleases, playlists, downloads, followedArtists,
+      toggleLike, isLiked, toggleLikeUpload, isLikedUpload, toggleSave, isSaved, toggleFollow, isFollowing,
       addDownload, createPlaylist,
     }}>
       {children}

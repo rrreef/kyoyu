@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check } from 'lucide-react';
+import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check, Heart } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLibrary } from '../../contexts/LibraryContext';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -273,6 +274,7 @@ export default function UploadShelf({ uploads }) {
 export function UploadExpandedList({ uploads }) {
   const { playTrack } = usePlayer();
   const { user } = useAuth();
+  const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const [activeId,     setActiveId]     = useState(null);
   const [editingTrack, setEditingTrack] = useState(null);
   const [editMeta,     setEditMeta]     = useState({});
@@ -315,6 +317,13 @@ export function UploadExpandedList({ uploads }) {
               <div className="upl-exp-title">{t.title || 'Untitled'}</div>
               <div className="upl-exp-sub">{t.artist || ''}</div>
             </div>
+            <button
+              className={`upl-exp-heart${isLikedUpload(t.id) ? ' liked' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleLikeUpload(t); }}
+              aria-label={isLikedUpload(t.id) ? 'Unlike' : 'Like'}
+            >
+              <Heart size={15} fill={isLikedUpload(t.id) ? 'currentColor' : 'none'} strokeWidth={2}/>
+            </button>
             <button className="upl-exp-more" onClick={(e) => { e.stopPropagation(); openEdit(t); }}>
               <MoreHorizontal size={16}/>
             </button>

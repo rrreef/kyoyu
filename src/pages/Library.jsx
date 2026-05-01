@@ -41,6 +41,7 @@ const FILTERS = [
 const LIKES_SUB = [
   { key: 'releases',  label: 'Releases'  },
   { key: 'playlists', label: 'Playlists' },
+  { key: 'tracks',    label: 'Tracks'    },
 ];
 
 export default function Library() {
@@ -83,7 +84,7 @@ export default function Library() {
     if(user?.id) localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next));
   }
 
-  const { savedReleases, playlists, downloads, followedArtists, createPlaylist } = useLibrary();
+  const { savedReleases, playlists, downloads, followedArtists, createPlaylist, likedUploads } = useLibrary();
   const { playRelease } = usePlayer();
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
@@ -164,6 +165,16 @@ export default function Library() {
                   <ShelfCard key={r.id} cover={r.cover} title={r.title} sub={r.artist}/>
                 ))}
               </div>
+            </>
+      )}
+
+      {/* Likes → Tracks (private uploads) */}
+      {activeFilter === 'likes' && likesSub === 'tracks' && (
+        likedUploads.length === 0
+          ? <div className="lib-empty"><p>No liked tracks yet.</p><p style={{fontSize:'0.75rem',opacity:0.5}}>Tap ♡ on any of your uploads to add it here.</p></div>
+          : <>
+              <div className="shelf-row-label">Liked Tracks</div>
+              <UploadExpandedList uploads={likedUploads}/>
             </>
       )}
 

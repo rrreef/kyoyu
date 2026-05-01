@@ -157,6 +157,12 @@
 .upl-exp-more { width:28px;height:28px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);cursor:pointer;flex-shrink:0;transition:color .15s;-webkit-tap-highlight-color:transparent; }
 .upl-exp-more:hover { color:rgba(255,255,255,.7); }
 
+/* ── Heart / like button ─────────────────────────────────────── */
+.upl-exp-heart { width:28px;height:28px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.35);cursor:pointer;flex-shrink:0;transition:color .15s,transform .12s;-webkit-tap-highlight-color:transparent; }
+.upl-exp-heart:hover { color:rgba(255,255,255,.75); }
+.upl-exp-heart.liked { color:#ff4d6d; }
+.upl-exp-heart:active { transform:scale(1.3); }
+
 /* ── Edit track bottom sheet (expanded list) ────────────────── */
 .upl-edit-overlay { position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:flex;align-items:flex-end; }
 .upl-edit-sheet { width:100%;max-height:88vh;background:rgba(12,12,16,.97);border-radius:24px 24px 0 0;border-top:.5px solid rgba(255,255,255,.1);overflow-y:auto;padding-bottom:calc(32px + env(safe-area-inset-bottom));animation:slideUp .28s cubic-bezier(.25,.46,.45,.94); }
