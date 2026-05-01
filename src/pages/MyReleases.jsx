@@ -13,7 +13,13 @@ export default function MyReleases() {
     if (!user?.id) return;
     try {
       const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-      setUploads(raw ? JSON.parse(raw) : []);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setUploads(parsed.map(t => ({
+          ...t,
+          artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
+        })));
+      } else { setUploads([]); }
     } catch {}
   }, [user?.id]);
 

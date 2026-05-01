@@ -57,7 +57,16 @@ export default function Library() {
     if (!user?.id) return;
     try {
       const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-      setMyUploads(raw ? JSON.parse(raw) : []);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const hydrated = parsed.map(t => ({
+          ...t,
+          artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
+        }));
+        setMyUploads(hydrated);
+      } else {
+        setMyUploads([]);
+      }
     } catch {}
   }, [user?.id, activeFilter]);
 

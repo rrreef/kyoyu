@@ -42,7 +42,16 @@ export default function Home() {
       if (!user?.id) return;
       try {
         const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
-        setMyUploads(raw ? JSON.parse(raw) : []);   // load all — slice happens at render
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const hydrated = parsed.map(t => ({
+            ...t,
+            artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
+          }));
+          setMyUploads(hydrated);
+        } else {
+          setMyUploads([]);
+        }
       } catch {}
     }
     loadUploads();
