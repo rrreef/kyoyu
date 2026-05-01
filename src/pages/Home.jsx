@@ -151,22 +151,11 @@ export default function Home() {
           );
         })()}
 
-        {/* Saved Playlists / Podcasts */}
-        {showPodcasts && (
-          <>
-            <div className="shelf-row-label">{shelfFilter === 'podcast' ? 'Podcasts & DJ Sets' : 'Saved Playlists'}</div>
-            <div className="scroll-row">
-              {savedPlaylists.map(pl => (
-                <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI ? 'AI' : null} />
-              ))}
-            </div>
-          </>
-        )}
 
         {/* Artist Radio */}
         {showRadios && (
           <>
-            <div className="shelf-row-label">Artist Radio</div>
+            <div className="shelf-row-label">Radio</div>
             <div className="scroll-row">
               {artistRadios.map(r => (
                 <ShelfCard key={r.id} cover={r.cover} title={r.name} sub={r.artist} badge="Radio" badgeIcon={Radio} />
