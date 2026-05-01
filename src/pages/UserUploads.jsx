@@ -209,7 +209,8 @@ export default function UserUploads() {
   const [shareList,     setShareList]     = useState([]);
   const [sharing,       setSharing]       = useState(false);
   const [shareMsg,      setShareMsg]      = useState({ text:'', ok:true });
-  const [uploadProgress, setUploadProgress] = useState(null); // { phase, current, total, pct }
+  const [trackUploadState, setTrackUploadState] = useState({}); // {[fileId]: 'uploading'|'done'|'error'}
+  const [uploadedTracks,   setUploadedTracks]   = useState({}); // {[fileId]: {storage_key,fileUrl,supabaseId,artworkUrl}}
   const fileRef       = useRef();
   const artRefs       = useRef([]);
   const audioRef      = useRef(new Audio());
@@ -243,6 +244,57 @@ export default function UserUploads() {
       try { localStorage.setItem(key, JSON.stringify(refreshed)); } catch {}
     })();
   }, [storageLoaded, user?.id]);
+
+  /* Auto-upload each track to Supabase Storage as soon as Review step opens */
+  useEffect(() => {
+    if (step !== 2 || !files.length) return;
+    const initial = {};
+    files.forEach(f => { initial[f.id] = 'uploading'; });
+    setTrackUploadState(initial);
+    setUploadedTracks({});
+    (async () => {
+      for (let i = 0; i < files.length; i++) {
+        const { file, id } = files[i];
+        // Fix artwork: blob URL → data URL while blob is still alive
+        let artworkUrl = metas[i]?.artworkUrl;
+        if (metas[i]?.artworkFile) {
+          artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(metas[i].artworkFile); });
+        } else if (artworkUrl?.startsWith('blob:')) {
+          try { const b = await fetch(artworkUrl).then(r => r.blob()); artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(b); }); }
+          catch { artworkUrl = null; }
+        }
+        artworkUrl = await compressArtwork(artworkUrl);
+        // Native / no-file tracks: mark done immediately
+        if (!file || file.native || !user?.id) {
+          setUploadedTracks(prev => ({ ...prev, [id]: { artworkUrl, fileUrl: audioUrls[id] || null } }));
+          setTrackUploadState(prev => ({ ...prev, [id]: 'done' }));
+          continue;
+        }
+        try {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const audioKey = `${user.id}/${Date.now()}-${safeName}`;
+          const { error: audioErr } = await supabase.storage.from('audio').upload(audioKey, file, {
+            contentType: file.type || 'application/octet-stream', upsert: false,
+          });
+          if (audioErr) throw audioErr;
+          const { data: urlData } = await supabase.storage.from('audio').createSignedUrl(audioKey, 7 * 24 * 3600);
+          const m = metas[i];
+          const { data: track } = await supabase.from('tracks').insert({
+            creator_id: user.id, title: m.title?.trim() || file.name, artist: m.artist?.trim() || null,
+            album: m.album?.trim() || null, genre: m.genre?.trim() || null,
+            year: m.year ? parseInt(m.year) : null, format: ext(file),
+            visibility: 'private', status: 'pending', storage_key: audioKey,
+          }).select('id').single();
+          setUploadedTracks(prev => ({ ...prev, [id]: { storage_key: audioKey, fileUrl: urlData?.signedUrl || null, supabaseId: track?.id || null, artworkUrl } }));
+          setTrackUploadState(prev => ({ ...prev, [id]: 'done' }));
+        } catch (err) {
+          console.error('[autoUpload]', err);
+          setUploadedTracks(prev => ({ ...prev, [id]: { artworkUrl } }));
+          setTrackUploadState(prev => ({ ...prev, [id]: 'error' }));
+        }
+      }
+    })();
+  }, [step]); // eslint-disable-line
 
   /* Register native upload result handler */
   useEffect(() => {
@@ -325,70 +377,24 @@ export default function UserUploads() {
   function pickArt(i,e){const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:f,artworkUrl:url}:t));e.target.value='';}
   function rmArt(i){setMetas(m=>m.map((t,j)=>j===i?{...t,artworkFile:null,artworkUrl:null}:t));}
 
+  /* saveAll: tracks are already uploaded — just persist metadata */
   async function saveAll() {
     setSaveErr('');
     try {
-      // ── Step 1: Fix artwork (convert blob URLs → data URLs) ──
-      setUploadProgress({ phase: 'artwork', current: 0, total: files.length, pct: 5 });
-      const items = await Promise.all(metas.map(async (m, i) => {
-        let artworkUrl = m.artworkUrl;
-        if (m.artworkFile) {
-          artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(m.artworkFile); });
-        } else if (artworkUrl && artworkUrl.startsWith('blob:')) {
-          // Embedded metadata artwork — convert while blob is still alive
-          try {
-            const blob = await fetch(artworkUrl).then(r => r.blob());
-            artworkUrl = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(blob); });
-          } catch { artworkUrl = null; }
-        }
-        artworkUrl = await compressArtwork(artworkUrl);
+      const items = files.map((f, i) => {
+        const m  = metas[i];
+        const up = uploadedTracks[f.id] || {};
         return {
-          ...m, artworkUrl, artworkFile: undefined,
-          fileUrl:     audioUrls[files[i]?.id] || null, // temp; replaced by signed URL below
-          storage_key: null,
-          format:      files[i]?.file ? ext(files[i].file) : '',
-          size:        files[i]?.file ? fmtBytes(files[i].file.size) : '',
-          savedAt:     Date.now(),
+          ...m, artworkFile: undefined,
+          artworkUrl:  up.artworkUrl  || m.artworkUrl  || null,
+          fileUrl:     up.fileUrl     || audioUrls[f.id] || null,
+          storage_key: up.storage_key || null,
+          supabaseId:  up.supabaseId  || null,
+          format: f.file ? ext(f.file) : '',
+          size:   f.file ? fmtBytes(f.file.size) : '',
+          savedAt: Date.now(),
         };
-      }));
-
-      // ── Step 2: Upload audio to Supabase Storage ──
-      if (user?.id) {
-        for (let i = 0; i < files.length; i++) {
-          const { file } = files[i];
-          if (!file || file.native) continue;
-          setUploadProgress({ phase: 'audio', current: i + 1, total: files.length, pct: 10 + Math.round((i / files.length) * 80) });
-          const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const audioKey  = `${user.id}/${Date.now()}-${safeName}`;
-          const { error: audioErr } = await supabase.storage.from('audio').upload(audioKey, file, {
-            contentType: file.type || 'application/octet-stream', upsert: false,
-          });
-          if (!audioErr) {
-            items[i].storage_key = audioKey;
-            const { data: urlData } = await supabase.storage.from('audio').createSignedUrl(audioKey, 7 * 24 * 3600);
-            if (urlData?.signedUrl) items[i].fileUrl = urlData.signedUrl;
-            // Insert into tracks table
-            const { data: track } = await supabase.from('tracks').insert({
-              creator_id: user.id,
-              title:      items[i].title?.trim()  || file.name,
-              artist:     items[i].artist?.trim() || null,
-              album:      items[i].album?.trim()  || null,
-              genre:      items[i].genre?.trim()  || null,
-              year:       items[i].year ? parseInt(items[i].year) : null,
-              format:     items[i].format,
-              visibility: 'private',
-              status:     'pending',
-              storage_key: audioKey,
-            }).select('id').single();
-            if (track?.id) items[i].supabaseId = track.id;
-          } else {
-            console.warn('[saveAll] cloud upload failed for', file.name, audioErr.message);
-          }
-        }
-      }
-
-      // ── Step 3: Save to localStorage ──
-      setUploadProgress({ phase: 'saving', current: files.length, total: files.length, pct: 95 });
+      });
       const uid = user?.id;
       if (uid) {
         const key = `kyoyu-uploads-${uid}`;
@@ -403,12 +409,11 @@ export default function UserUploads() {
         setSaved(prev => [...items, ...prev]);
       }
       setFiles([]); setMetas([]); setStep(0); setActive(0); setShowPrev(true);
+      setTrackUploadState({}); setUploadedTracks({});
       window.dispatchEvent(new CustomEvent('kyoyu-uploads-changed'));
     } catch(err) {
       console.error('[saveAll]', err);
       setSaveErr(`Save failed: ${err.message}`);
-    } finally {
-      setUploadProgress(null);
     }
   }
   function removeSaved(id){
@@ -850,57 +855,59 @@ export default function UserUploads() {
   );
 
   /* ── STEP 2: Review ──────────────────────────────────── */
+  const allDone = files.length > 0 && files.every(f =>
+    trackUploadState[f.id] === 'done' || trackUploadState[f.id] === 'error'
+  );
+  const doneCount  = files.filter(f => trackUploadState[f.id] === 'done').length;
+  const errorCount = files.filter(f => trackUploadState[f.id] === 'error').length;
+
   return (
     <div className="page uu-page animate-in">
       <div className="uu-header">
         <button className="uu-back-btn" onClick={()=>setStep(1)}><ChevronLeft size={18}/></button>
         <h1>Review</h1>
-        <button className="uu-save-hdr" onClick={saveAll}><Check size={14}/> Save All</button>
+        <button className="uu-save-hdr" onClick={saveAll} disabled={!allDone}><Check size={14}/> Save All</button>
       </div>
       <div className="uu-steps">{STEPS.map((s,i)=><div key={s} className={`uu-step${i===step?' active':i<step?' done':''}`}><span>{i<step?'✓':i+1}</span>{s}</div>)}</div>
 
       <div className="uu-review-list">
-        {metas.map((t,i)=>(
-          <div key={t.id} className="uu-review-card glass">
-            {t.artworkUrl?<img src={t.artworkUrl} alt="" className="uu-review-art"/>:<div className="uu-review-art uu-art-ph"><Music2 size={20}/></div>}
-            <div className="uu-review-info">
-              <div className="uu-review-title">{t.title||'Untitled'}</div>
-              <div className="uu-review-sub">{t.artist}{t.album?' — '+t.album:''}</div>
-              <div className="uu-review-tags">{[t.genre,t.year,files[i]?.file ? ext(files[i].file) : ''].filter(Boolean).map(v=><span key={v} className="uu-fmt">{v}</span>)}</div>
+        {metas.map((t,i) => {
+          const fid    = files[i]?.id;
+          const status = trackUploadState[fid];
+          return (
+            <div key={t.id} className="uu-review-card glass">
+              <div className="uu-review-art-wrap">
+                {t.artworkUrl
+                  ? <img src={t.artworkUrl} alt="" className="uu-review-art"/>
+                  : <div className="uu-review-art uu-art-ph"><Music2 size={20}/></div>
+                }
+                {/* Per-track upload status badge */}
+                {status === 'uploading' && <div className="uu-track-status uploading"><div className="uu-card-spinner"/></div>}
+                {status === 'done'      && <div className="uu-track-status done"><Check size={12} strokeWidth={3}/></div>}
+                {status === 'error'     && <div className="uu-track-status error">!</div>}
+              </div>
+              <div className="uu-review-info">
+                <div className="uu-review-title">{t.title||'Untitled'}</div>
+                <div className="uu-review-sub">{t.artist}{t.album?' — '+t.album:''}</div>
+                <div className="uu-review-tags">{[t.genre,t.year,files[i]?.file ? ext(files[i].file) : ''].filter(Boolean).map(v=><span key={v} className="uu-fmt">{v}</span>)}</div>
+              </div>
+              <button className="uu-review-edit" onClick={()=>{setActive(i);setStep(1);}} disabled={status==='uploading'}><ChevronRight size={16}/></button>
             </div>
-            <button className="uu-review-edit" onClick={()=>{setActive(i);setStep(1);}}><ChevronRight size={16}/></button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {saveErr && <div className="uu-save-err">{saveErr}</div>}
 
-      <button className="uu-save-full" onClick={saveAll} disabled={!!uploadProgress}>
-        <Check size={18}/> Save {files.length} Track{files.length>1?'s':''} to Library
+      <button className="uu-save-full" onClick={saveAll} disabled={!allDone}>
+        {!allDone ? (
+          <><div className="uu-inline-spinner"/> Uploading {doneCount}/{files.length}…</>
+        ) : errorCount > 0 ? (
+          <><Check size={18}/> Save {files.length - errorCount} Track{files.length - errorCount !== 1 ? 's' : ''} to Library</>
+        ) : (
+          <><Check size={18}/> Save {files.length} Track{files.length > 1 ? 's' : ''} to Library</>
+        )}
       </button>
     </div>
   );
-
-  /* ── Upload progress overlay — portal so position:fixed works despite parent transform ── */
-  const progressPortal = uploadProgress && createPortal(
-    <div className="uu-upload-cover">
-      <div className="uu-upload-cover-content">
-        <div className="uu-upload-spinner"/>
-        <div className="uu-upload-cover-label">
-          {uploadProgress.phase === 'artwork' && 'Preparing files…'}
-          {uploadProgress.phase === 'audio'   && `Uploading track ${uploadProgress.current} of ${uploadProgress.total}…`}
-          {uploadProgress.phase === 'saving'  && 'Saving to library…'}
-        </div>
-        <div className="uu-upload-bar">
-          <div className="uu-upload-bar-fill" style={{width:`${uploadProgress.pct}%`}}/>
-        </div>
-        <div className="uu-upload-cover-sub">
-          Tracks are being stored in Kyoyu — you can delete the original files once complete.
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-
-  return <>{page}{progressPortal}</>;
 }
