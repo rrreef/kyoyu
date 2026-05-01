@@ -11,6 +11,47 @@ function fmt(s) {
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
 const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
+/* ── Dominant colour extraction (canvas-based, cached per URL) ── */
+const _fpColorCache = new Map();
+function extractColor(url) {
+  return new Promise(resolve => {
+    if (!url) return resolve(null);
+    if (_fpColorCache.has(url)) return resolve(_fpColorCache.get(url));
+    const img = new Image();
+    if (!url.startsWith('data:')) img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const S = 80, cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, S, S);
+        const { data } = ctx.getImageData(0, 0, S, S);
+        const counts = {};
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i+3] < 100) continue;
+          const r = Math.round(data[i]   / 32)*32;
+          const g = Math.round(data[i+1] / 32)*32;
+          const b = Math.round(data[i+2] / 32)*32;
+          const k = `${r},${g},${b}`;
+          counts[k] = (counts[k]||0)+1;
+        }
+        let max=0, best=null;
+        for (const [k,n] of Object.entries(counts)) { if(n>max){max=n;best=k;} }
+        // Avoid near-black/near-white (boring)
+        if (best) {
+          const [r,g,b] = best.split(',').map(Number);
+          const lum = 0.299*r + 0.587*g + 0.114*b;
+          if (lum < 20) best = null;  // too dark
+        }
+        if (best) _fpColorCache.set(url, best);
+        resolve(best);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 // Shared flag: true while any scrubber/volume drag is active.
 // Checked by FullPlayer's swipe-collapse handler to avoid collapsing on scrub release.
 const scrubState = { dragging: false };
@@ -177,6 +218,15 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const handleRef= useRef(null);
   const startY   = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
+  const [accent,    setAccent]    = useState(() => _fpColorCache.get(track?.releaseCover) ?? null);
+
+  /* Extract dominant colour whenever artwork changes — instant from cache */
+  useEffect(() => {
+    const url = track?.releaseCover;
+    if (!url) { setAccent(null); return; }
+    if (_fpColorCache.has(url)) { setAccent(_fpColorCache.get(url)); return; }
+    extractColor(url).then(c => { if (c) setAccent(c); });
+  }, [track?.releaseCover]);
 
   useEffect(() => {
     const el=fpRef.current; const hdl=handleRef.current; if(!el||!hdl) return;
@@ -198,8 +248,13 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     isPlaying={isPlaying} dispatch={dispatch} onSeek={seekTo}
     showQueue={showQueue} setShowQueue={setShowQueue}/>;
 
+  /* Gradient: accent colour at top → near-black at bottom */
+  const fpStyle = accent
+    ? { background: `linear-gradient(180deg, rgb(${accent}) 0%, rgba(8,8,13,0.85) 55%, rgb(8,8,13) 80%)` }
+    : {};
+
   return (
-    <div ref={fpRef} className={`fp${open?' fp--open':''}`}>
+    <div ref={fpRef} className={`fp${open?' fp--open':''}`} style={fpStyle}>
       <div ref={handleRef} className="fp-handle-row"><div className="fp-handle"/></div>
       {showQueue ? (
         <>
