@@ -225,7 +225,20 @@ export default function UserUploads() {
       const s = localStorage.getItem(`kyoyu-uploads-${uid}`);
       if (s) {
         const parsed = JSON.parse(s);
-        // Rehydrate artworkUrls from per-track keys (stored separately to avoid quota bloat)
+        // Migrate any artwork still embedded in the main JSON to per-art keys
+        let needsRewrite = false;
+        parsed.forEach(t => {
+          if (t.artworkUrl && !localStorage.getItem(`kyoyu-art-${uid}-${t.id}`)) {
+            try { localStorage.setItem(`kyoyu-art-${uid}-${t.id}`, t.artworkUrl); needsRewrite = true; }
+            catch {}
+          }
+        });
+        // Rewrite main JSON without artwork blobs if we migrated anything
+        if (needsRewrite) {
+          try { localStorage.setItem(`kyoyu-uploads-${uid}`, JSON.stringify(parsed.map(t => ({ ...t, artworkUrl: null })))); }
+          catch {}
+        }
+        // Rehydrate artworkUrls from per-track keys
         const hydrated = parsed.map(t => ({
           ...t,
           artworkUrl: localStorage.getItem(`kyoyu-art-${uid}-${t.id}`) || t.artworkUrl || null,
@@ -415,12 +428,19 @@ export default function UserUploads() {
         const key = `kyoyu-uploads-${uid}`;
         let existing = [];
         try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+        // MIGRATE: save existing tracks' artwork to per-art keys (for tracks saved before this system)
+        existing.forEach(item => {
+          if (item.artworkUrl && !localStorage.getItem(`kyoyu-art-${uid}-${item.id}`)) {
+            try { localStorage.setItem(`kyoyu-art-${uid}-${item.id}`, item.artworkUrl); }
+            catch {} // failure here only loses that one track's art
+          }
+        });
 
-        // Save each artwork to its own key — completely independent from each other
+        // Save each new track's artwork to its own key
         items.forEach(item => {
           if (item.artworkUrl) {
             try { localStorage.setItem(`kyoyu-art-${uid}-${item.id}`, item.artworkUrl); }
-            catch {} // one artwork failing never affects the others
+            catch {}
           }
         });
 
