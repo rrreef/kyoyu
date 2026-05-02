@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Play, Pause, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
+import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
