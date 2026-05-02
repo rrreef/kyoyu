@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, LayoutGrid, List } from 'lucide-react';
-import { useDisplay } from '../contexts/DisplayContext';
+import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check } from 'lucide-react';
 import './AppSettings.css';
 
 const isNativeApp = navigator.userAgent.includes('KyoyuApp');
@@ -14,16 +13,6 @@ const QUALITIES  = [
   { id:'lossless',label:'Lossless',sub:'FLAC / ALAC — best quality' },
 ];
 
-// Layout options: list + 1–5 grid columns
-const LAYOUT_OPTIONS = [
-  { id: 'list', label: 'List', icon: 'list' },
-  { id: '1',    label: '1',    icon: 'grid' },
-  { id: '2',    label: '2',    icon: 'grid' },
-  { id: '3',    label: '3',    icon: 'grid' },
-  { id: '4',    label: '4',    icon: 'grid' },
-  { id: '5',    label: '5',    icon: 'grid' },
-];
-
 function Toggle({ on, onChange }) {
   return (
     <button className={`appsettings-toggle${on?' on':''}`} onClick={()=>onChange(!on)}>
@@ -32,34 +21,8 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function LayoutPicker({ value, onChange }) {
-  // value is { mode: 'list'|'grid', cols: 1–5 }
-  const current = value.mode === 'list' ? 'list' : String(value.cols);
-  return (
-    <div className="appsettings-layout-picker">
-      {LAYOUT_OPTIONS.map(opt => (
-        <button
-          key={opt.id}
-          className={`appsettings-layout-btn${current === opt.id ? ' active' : ''}`}
-          onClick={() => onChange(
-            opt.id === 'list'
-              ? { mode: 'list', cols: 1 }
-              : { mode: 'grid', cols: parseInt(opt.id) }
-          )}
-        >
-          {opt.id === 'list'
-            ? <List size={14} strokeWidth={2}/>
-            : <span className="appsettings-layout-num">{opt.label}</span>
-          }
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function AppSettings() {
   const navigate = useNavigate();
-  const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
   const [notifications,    setNotifications]    = useState(true);
   const [dynamicIsland,    setDynamicIsland]    = useState(true);
   const [tracking,         setTracking]         = useState(false);
@@ -83,36 +46,6 @@ export default function AppSettings() {
           <ChevronLeft size={18} />
         </button>}
         <h1>Settings</h1>
-      </div>
-
-      {/* ── Appearance ── */}
-      <div className="appsettings-section">
-        <div className="appsettings-label">Appearance</div>
-        <div className="appsettings-appearance-card glass">
-
-          <div className="appsettings-appearance-row">
-            <div className="appsettings-appearance-row-label">
-              <LayoutGrid size={14} className="appsettings-icon-sm"/>
-              <span>Home</span>
-            </div>
-            <LayoutPicker value={homeLayout} onChange={setHomeLayout}/>
-          </div>
-
-          <div className="appsettings-appearance-divider"/>
-
-          <div className="appsettings-appearance-row">
-            <div className="appsettings-appearance-row-label">
-              <LayoutGrid size={14} className="appsettings-icon-sm"/>
-              <span>Library</span>
-            </div>
-            <LayoutPicker value={libraryLayout} onChange={setLibraryLayout}/>
-          </div>
-
-          <div className="appsettings-appearance-hint">
-            <span><List size={11}/> List — artwork + title + artist per row</span>
-            <span><LayoutGrid size={11}/> 1–5 — grid columns of artwork tiles</span>
-          </div>
-        </div>
       </div>
 
       {/* Notifications */}
