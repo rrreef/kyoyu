@@ -4,7 +4,7 @@ import { Play, Plus, Wand2, ChevronDown, Music2, Trash2, Lock, ArrowRight, Radio
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useDisplay } from '../contexts/DisplayContext';
+import { useDisplay, useLibraryLayoutLive } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import './Library.css';
@@ -86,15 +86,7 @@ export default function Library() {
 
   const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
   const { playRelease } = usePlayer();
-  // Re-read from localStorage on every mount so settings changes are always picked up
-  const [libraryLayout, setLibraryLayout] = useState(() => {
-    const DEFAULT = { mode: 'grid', cols: 3 };
-    try { return JSON.parse(localStorage.getItem('kyoyu-display-library')) || DEFAULT; } catch { return DEFAULT; }
-  });
-  useEffect(() => {
-    const DEFAULT = { mode: 'grid', cols: 3 };
-    try { setLibraryLayout(JSON.parse(localStorage.getItem('kyoyu-display-library')) || DEFAULT); } catch {}
-  }, []);
+  const libraryLayout = useLibraryLayoutLive();
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
 
