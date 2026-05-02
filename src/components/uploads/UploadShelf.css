@@ -181,14 +181,14 @@
 .upl-edit-save:hover { background:rgba(255,255,255,.16); }
 
 /* ── Grid view ───────────────────────────────────────────────── */
-.upl-grid { display:grid; gap:10px; padding:6px 16px 20px; }
+.upl-grid { display:grid; gap:10px; padding:6px 16px 20px; width:100%; box-sizing:border-box; }
 .upl-grid-1 { grid-template-columns: 1fr; }
 .upl-grid-2 { grid-template-columns: repeat(2, 1fr); }
 .upl-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .upl-grid-4 { grid-template-columns: repeat(4, 1fr); gap:7px; }
 .upl-grid-5 { grid-template-columns: repeat(5, 1fr); gap:5px; padding:6px 12px 20px; }
 
-.upl-grid-cell { display:flex;flex-direction:column;cursor:pointer;-webkit-tap-highlight-color:transparent; }
+.upl-grid-cell { display:flex;flex-direction:column;cursor:pointer;-webkit-tap-highlight-color:transparent;min-width:0;overflow:hidden; }
 .upl-grid-cell:active { opacity:.75; }
 .upl-grid-cell.active .upl-grid-title { color:rgba(255,255,255,.6); }
 
