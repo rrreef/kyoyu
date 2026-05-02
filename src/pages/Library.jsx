@@ -41,7 +41,6 @@ const FILTERS = [
 const LIKES_SUB = [
   { key: 'releases',  label: 'Releases'  },
   { key: 'playlists', label: 'Playlists' },
-  { key: 'tracks',    label: 'Tracks'    },
 ];
 
 export default function Library() {
@@ -155,27 +154,32 @@ export default function Library() {
       {/* ── Content ── */}
 
       {/* Likes → Releases */}
-      {activeFilter === 'likes' && likesSub === 'releases' && (
-        savedReleaseObjects.length === 0
-          ? <div className="lib-empty"><p>No liked releases yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>
-          : <>
-              <div className="shelf-row-label">Liked Releases</div>
-              <div className="scroll-row">
-                {sortByDate(savedReleaseObjects).map(r => (
-                  <ShelfCard key={r.id} cover={r.cover} title={r.title} sub={r.artist}/>
-                ))}
-              </div>
-            </>
-      )}
-
-      {activeFilter === 'likes' && likesSub === 'tracks' && (() => {
-        const liked = getLikedUploads(user?.id);
-        return liked.length === 0
-          ? <div className="lib-empty"><p>No liked tracks yet.</p><p style={{fontSize:'0.75rem',opacity:0.5}}>Tap ♡ on any of your uploads to add it here.</p></div>
-          : <>
-              <div className="shelf-row-label">Liked Tracks</div>
-              <UploadExpandedList uploads={liked}/>
-            </>;
+      {activeFilter === 'likes' && likesSub === 'releases' && (() => {
+        const likedTracks = getLikedUploads(user?.id);
+        const hasReleases = savedReleaseObjects.length > 0;
+        const hasTracks   = likedTracks.length > 0;
+        if (!hasReleases && !hasTracks)
+          return <div className="lib-empty"><p>No liked titles yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>;
+        return (
+          <>
+            {hasTracks && (
+              <>
+                <div className="shelf-row-label">Liked Tracks</div>
+                <UploadExpandedList uploads={likedTracks}/>
+              </>
+            )}
+            {hasReleases && (
+              <>
+                <div className="shelf-row-label" style={{marginTop: hasTracks ? 16 : 0}}>Liked Releases</div>
+                <div className="scroll-row">
+                  {sortByDate(savedReleaseObjects).map(r => (
+                    <ShelfCard key={r.id} cover={r.cover} title={r.title} sub={r.artist}/>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        );
       })()}
 
       {/* Likes → Playlists */}
