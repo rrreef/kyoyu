@@ -44,7 +44,7 @@ export default class ErrorBoundary extends Component {
       }}>
         <div style={{ fontSize: 48 }}>⚠️</div>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Something went wrong</h1>
-        <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)', maxWidth: 420, fontSize: 14 }}>
+        <p style={{ margin: 0, color: '#ff8080', maxWidth: 420, fontSize: 13, fontFamily:'monospace', background:'rgba(255,0,0,0.08)', padding:'10px 14px', borderRadius:10, wordBreak:'break-all' }}>
           {msg}
         </p>
         <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
