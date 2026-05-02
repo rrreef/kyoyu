@@ -10,6 +10,11 @@ import { useDisplay } from '../contexts/DisplayContext';
 import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import './Home.css';
 
+function readLayout(key) {
+  const DEFAULT = { mode: 'grid', cols: 3 };
+  try { return JSON.parse(localStorage.getItem(key)) || DEFAULT; } catch { return DEFAULT; }
+}
+
 /* ── Compact shelf card for playlists / radios ── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
   return (
@@ -31,14 +36,13 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
   );
 }
 
-
 export default function Home() {
   const { playRelease, playTrack } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
-  const { homeLayout } = useDisplay();
-  const featured = releases[0];
-  const [myUploads, setMyUploads] = useState([]);
+  // Re-read from localStorage on every mount so settings changes are always picked up
+  const [homeLayout, setHomeLayout] = useState(() => readLayout('kyoyu-display-home'));
+  useEffect(() => { setHomeLayout(readLayout('kyoyu-display-home')); }, []);
 
   useEffect(() => {
     function loadUploads() {

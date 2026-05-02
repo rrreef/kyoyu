@@ -86,7 +86,15 @@ export default function Library() {
 
   const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
   const { playRelease } = usePlayer();
-  const { libraryLayout } = useDisplay();
+  // Re-read from localStorage on every mount so settings changes are always picked up
+  const [libraryLayout, setLibraryLayout] = useState(() => {
+    const DEFAULT = { mode: 'grid', cols: 3 };
+    try { return JSON.parse(localStorage.getItem('kyoyu-display-library')) || DEFAULT; } catch { return DEFAULT; }
+  });
+  useEffect(() => {
+    const DEFAULT = { mode: 'grid', cols: 3 };
+    try { setLibraryLayout(JSON.parse(localStorage.getItem('kyoyu-display-library')) || DEFAULT); } catch {}
+  }, []);
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
 
