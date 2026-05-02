@@ -41,6 +41,19 @@ export function AuthProvider({ children }) {
   });
   const userRef = useRef(cached.user);
 
+  // ── Immediately notify native shell from cache (no network wait) ──
+  useEffect(() => {
+    if (cached.role && cached.user) {
+      notifyNative('loggedIn');
+      // Restore avatar to native bridge from cache
+      const av = localStorage.getItem('kyoyu-avatar-' + cached.user.id);
+      if (av) {
+        try { window.webkit?.messageHandlers?.avatar?.postMessage(av); } catch (_) {}
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function setAvatarSrc(dataUrl, userId) {
     setAvatarSrcRaw(dataUrl);
     try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl ?? ''); } catch (_) {}
