@@ -126,7 +126,7 @@ export default function Home() {
           </>
         )}
 
-        {/* Liked — public albums + private liked uploads */}
+        {/* Liked — private liked uploads + public albums */}
         {showLiked && (() => {
           const likedUpl = getLikedUploads(user?.id);
           const totalLiked = likedUpl.length + likedAlbums.length;
@@ -134,23 +134,21 @@ export default function Home() {
           return (
             <>
               <div className="shelf-row-label">Liked</div>
-              <div className="scroll-row">
-                {likedUpl.map(t => (
-                  <ShelfCard
-                    key={t.id}
-                    cover={t.artworkUrl || ''}
-                    title={t.title || 'Untitled'}
-                    sub={t.artist || ''}
-                  />
-                ))}
-                {likedAlbums.map(a => (
-                  <ShelfCard key={a.id} cover={a.cover} title={a.title} sub={a.artist} />
-                ))}
-              </div>
+              {likedUpl.length > 0 && (
+                homeLayout.mode === 'list'
+                  ? <UploadExpandedList uploads={likedUpl}/>
+                  : <UploadGridView uploads={likedUpl} cols={homeLayout.cols}/>
+              )}
+              {likedAlbums.length > 0 && (
+                <div className="scroll-row" style={{marginTop: likedUpl.length > 0 ? 10 : 0}}>
+                  {likedAlbums.map(a => (
+                    <ShelfCard key={a.id} cover={a.cover} title={a.title} sub={a.artist} />
+                  ))}
+                </div>
+              )}
             </>
           );
         })()}
-
 
         {/* Artist Radio */}
         {showRadios && (
