@@ -43,6 +43,8 @@ export default function Home() {
   // Re-read from localStorage on every mount so settings changes are always picked up
   const [homeLayout, setHomeLayout] = useState(() => readLayout('kyoyu-display-home'));
   useEffect(() => { setHomeLayout(readLayout('kyoyu-display-home')); }, []);
+  const featured = releases[0];
+  const [myUploads, setMyUploads] = useState([]);
 
   useEffect(() => {
     function loadUploads() {
