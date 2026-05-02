@@ -110,3 +110,76 @@
 }
 .appsettings-check-btn:hover { color: var(--text-primary); }
 .appsettings-check-btn:disabled { opacity: 0.5; }
+
+/* ── Appearance section ──────────────────────────────────────── */
+.appsettings-appearance-card {
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.appsettings-appearance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+}
+.appsettings-appearance-row-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.8);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+.appsettings-icon-sm { color: rgba(255,255,255,.45); flex-shrink: 0; }
+.appsettings-appearance-divider { height: .5px; background: rgba(255,255,255,.08); margin: 2px 0; }
+
+/* Layout picker */
+.appsettings-layout-picker {
+  display: flex;
+  gap: 5px;
+}
+.appsettings-layout-btn {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.07);
+  border: .5px solid rgba(255,255,255,.1);
+  color: rgba(255,255,255,.45);
+  font-size: .78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .14s, border-color .14s, color .14s, transform .1s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.appsettings-layout-btn:active { transform: scale(.9); }
+.appsettings-layout-btn.active {
+  background: rgba(255,255,255,.22);
+  border-color: rgba(255,255,255,.4);
+  color: #fff;
+}
+.appsettings-layout-num { font-size: .8rem; font-weight: 700; }
+
+.appsettings-appearance-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: .5px solid rgba(255,255,255,.07);
+}
+.appsettings-appearance-hint span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .7rem;
+  color: rgba(255,255,255,.3);
+}

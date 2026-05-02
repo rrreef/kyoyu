@@ -4,8 +4,9 @@ import { Play, Plus, Wand2, ChevronDown, Music2, Trash2, Lock, ArrowRight, Radio
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useDisplay } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
-import { UploadExpandedList } from '../components/uploads/UploadShelf';
+import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import './Library.css';
 
 /* ── Shelf card — identical to Home ───────────────────────── */
@@ -85,6 +86,7 @@ export default function Library() {
 
   const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
   const { playRelease } = usePlayer();
+  const { libraryLayout } = useDisplay();
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
 
@@ -165,7 +167,10 @@ export default function Library() {
             {hasTracks && (
               <>
                 <div className="shelf-row-label">Liked Tracks</div>
-                <UploadExpandedList uploads={likedTracks}/>
+                {libraryLayout.mode === 'list'
+                  ? <UploadExpandedList uploads={likedTracks}/>
+                  : <UploadGridView uploads={likedTracks} cols={libraryLayout.cols}/>
+                }
               </>
             )}
             {hasReleases && (
@@ -268,7 +273,10 @@ export default function Library() {
           ? <div className="lib-empty"><p>No uploads yet.</p><Link to="/uploads" className="lib-empty-link">Upload your first track →</Link></div>
           : <>
               <div className="shelf-row-label" style={{display:'flex',alignItems:'center',gap:5}}><Lock size={11}/> My Uploads</div>
-              <UploadExpandedList uploads={myUploads}/>
+              {libraryLayout.mode === 'list'
+                ? <UploadExpandedList uploads={myUploads}/>
+                : <UploadGridView uploads={myUploads} cols={libraryLayout.cols}/>
+              }
             </>
       )}
 

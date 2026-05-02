@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-ro
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { DisplayProvider } from './contexts/DisplayContext';
 import { useTheme } from './hooks/useTheme';
 
 // Nav
@@ -181,10 +182,12 @@ export default function App() {
       <AuthProvider>
         <PlayerProvider>
           <LibraryProvider>
-            {splash
-              ? <SplashScreen onDone={handleSplashDone} />
-              : <RoleGate />
-            }
+            <DisplayProvider>
+              {splash
+                ? <SplashScreen onDone={handleSplashDone} />
+                : <RoleGate />
+              }
+            </DisplayProvider>
           </LibraryProvider>
         </PlayerProvider>
       </AuthProvider>

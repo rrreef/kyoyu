@@ -358,3 +358,53 @@ export function UploadExpandedList({ uploads }) {
     </>
   );
 }
+
+/* ── Named export: grid view for configurable N-column layout ── */
+export function UploadGridView({ uploads, cols = 2 }) {
+  const { playTrack, activeTrack } = usePlayer();
+  const { toggleLikeUpload, isLikedUpload } = useLibrary();
+  const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+
+  function play(t) {
+    const queue = sorted.map(u => ({
+      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '',
+      releaseCover: u.artworkUrl || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || '',
+    }));
+    playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
+  }
+
+  const safeCols = Math.min(5, Math.max(1, cols));
+
+  return (
+    <div className={`upl-grid upl-grid-${safeCols}`}>
+      {sorted.map(t => {
+        const isActive = activeTrack?.id === t.id;
+        const liked    = isLikedUpload(t.id);
+        return (
+          <div key={t.id} className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => play(t)}>
+            <div className="upl-grid-art">
+              {t.artworkUrl
+                ? <img src={t.artworkUrl} alt={t.title} loading="lazy" decoding="async"/>
+                : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
+              }
+              {isActive && (
+                <div className="upl-grid-playing">
+                  <Pause size={safeCols >= 4 ? 10 : 16} fill="currentColor"/>
+                </div>
+              )}
+              <button
+                className={`upl-grid-heart${liked ? ' liked' : ''}`}
+                onClick={e => { e.stopPropagation(); toggleLikeUpload(t); }}
+                aria-label={liked ? 'Unlike' : 'Like'}
+              >
+                <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? 'currentColor' : 'none'} strokeWidth={2}/>
+              </button>
+            </div>
+            <div className="upl-grid-title">{t.title || 'Untitled'}</div>
+            {safeCols <= 3 && <div className="upl-grid-artist">{t.artist || ''}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

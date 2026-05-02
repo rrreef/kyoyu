@@ -6,7 +6,8 @@ import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
-import UploadShelf, { UploadExpandedList } from '../components/uploads/UploadShelf';
+import { useDisplay } from '../contexts/DisplayContext';
+import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import './Home.css';
 
 /* ── Compact shelf card for playlists / radios ── */
@@ -35,6 +36,7 @@ export default function Home() {
   const { playRelease, playTrack } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
+  const { homeLayout } = useDisplay();
   const featured = releases[0];
   const [myUploads, setMyUploads] = useState([]);
   const [showAllUploads, setShowAllUploads] = useState(false);
@@ -223,10 +225,13 @@ export default function Home() {
               <ArrowRight size={12} style={{marginLeft:3,verticalAlign:'middle',transform: showAllUploads ? 'rotate(90deg)' : 'none',transition:'transform .2s'}}/>
             </button>
           </div>
-          {showAllUploads
-            ? <UploadExpandedList uploads={myUploads} />
-            : <UploadShelf uploads={myUploads.slice(0, 10)} />
-          }
+          {showAllUploads ? (
+            homeLayout.mode === 'list'
+              ? <UploadExpandedList uploads={myUploads}/>
+              : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
+          ) : (
+            <UploadShelf uploads={myUploads.slice(0, 10)}/>
+          )}
         </section>
       )}
 
