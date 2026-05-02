@@ -6,22 +6,44 @@ function notifyNative(type) {
   try { window.webkit?.messageHandlers?.auth?.postMessage({ type }); } catch(_) {}
 }
 
+// ── Cache helpers ──────────────────────────────────────────────────────────
+const ROLE_KEY = 'kyoyu-cached-role';
+const USER_KEY = 'kyoyu-cached-user';
 
+function readCache() {
+  try {
+    const role = localStorage.getItem(ROLE_KEY) || null;
+    const user = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+    return { role, user };
+  } catch { return { role: null, user: null }; }
+}
+function writeCache(role, user) {
+  try {
+    localStorage.setItem(ROLE_KEY, role || '');
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {}
+}
+function clearCache() {
+  try { localStorage.removeItem(ROLE_KEY); localStorage.removeItem(USER_KEY); } catch {}
+}
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [role, setRole]           = useState(null);
-  const [user, setUser]              = useState(null);
-  const [loading, setLoading]        = useState(true);
-  const [avatarSrc, setAvatarSrcRaw] = useState(null);
-  const userRef = useRef(null); // mirrors user state for use inside closures
+  // Initialise synchronously from cache — app renders immediately on reopen
+  const cached = readCache();
+  const [role,      setRole]        = useState(cached.role);
+  const [user,      setUser]        = useState(cached.user);
+  // Only show loading spinner if there is no cached session to display
+  const [loading,   setLoading]     = useState(!cached.role);
+  const [avatarSrc, setAvatarSrcRaw] = useState(() => {
+    try { return cached.user ? localStorage.getItem('kyoyu-avatar-' + cached.user.id) || null : null; } catch { return null; }
+  });
+  const userRef = useRef(cached.user);
 
-  // Wrapper: updates React state, persists to localStorage, and pushes to native iOS bridge
   function setAvatarSrc(dataUrl, userId) {
     setAvatarSrcRaw(dataUrl);
     try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl ?? ''); } catch (_) {}
-    // Persist per-user so it survives refreshes
     const uid = userId || userRef.current?.id;
     if (uid) {
       if (dataUrl) localStorage.setItem('kyoyu-avatar-' + uid, dataUrl);
@@ -29,13 +51,21 @@ export function AuthProvider({ children }) {
     }
   }
 
-  /* ── Restore session on mount ── */
+  /* ── Restore / validate session on mount ── */
   useEffect(() => {
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
-        if (session) await hydrateUser(session.user);
+        if (session) {
+          await hydrateUser(session.user);
+        } else {
+          // No valid session — clear stale cache and show login
+          clearCache();
+          setRole(null);
+          setUser(null);
+          userRef.current = null;
+        }
       })
-      .catch(() => { /* network error — proceed as logged out */ })
+      .catch(() => { /* network error — keep showing cached state */ })
       .finally(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -43,8 +73,10 @@ export function AuthProvider({ children }) {
         if (session) {
           await hydrateUser(session.user);
         } else {
+          clearCache();
           setRole(null);
           setUser(null);
+          userRef.current = null;
         }
       }
     );
@@ -72,8 +104,8 @@ export function AuthProvider({ children }) {
     userRef.current = hydrated;
     setRole(userRole);
     setUser(hydrated);
+    writeCache(userRole, hydrated); // persist so next open is instant
 
-    // Restore avatar: Supabase URL (cross-device) takes priority over localStorage
     const supabaseAvatar = profile?.avatar_url || null;
     const localAvatar    = localStorage.getItem('kyoyu-avatar-' + authUser.id);
     const avatarToUse    = supabaseAvatar || localAvatar || null;
@@ -83,49 +115,40 @@ export function AuthProvider({ children }) {
     }
   }
 
-  /* ── Sign in ── */
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   }
 
-  /* ── Sign up ── */
   async function signUp(email, password, meta = {}) {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: meta },
+      email, password, options: { data: meta },
     });
     if (error) throw error;
     return data;
   }
 
-  /* ── Sign out ── */
   async function logout() {
-    const uid = userRef.current?.id;
     await supabase.auth.signOut();
     notifyNative('loggedOut');
+    clearCache();
     setRole(null);
     setUser(null);
     userRef.current = null;
     setAvatarSrcRaw(null);
     try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
-    // Don't clear localStorage avatar on logout — restore on next login of same user
   }
 
-  /* ── Demo bypass (local only — no real account) ── */
   function demoLogin(roleType, userData) {
     setRole(roleType);
     setUser({ ...userData, demo: true });
   }
 
-  /* ── Update profile (artist name, bio, location) ── */
   async function updateProfile(updates) {
-    // Immediately reflect in UI
-    setUser(prev => ({ ...prev, ...updates }));
-
-    // Persist to DB for real (non-demo) users
+    const updated = { ...user, ...updates };
+    setUser(updated);
+    writeCache(role, updated);
     if (user && !user.demo) {
       await supabase.from('profiles').upsert({
         id:           user.id,
@@ -142,6 +165,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export function useAuth() { return useContext(AuthContext); }

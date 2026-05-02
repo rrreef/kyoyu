@@ -161,7 +161,8 @@ function CreatorApp() {
 function RoleGate() {
   const { role, loading } = useAuth();
   useTheme();
-  if (loading)            return <div className="auth-loading" />;
+  // Only show blank screen if we have no session data at all (first-ever launch or logged out)
+  if (loading && !role)   return <div className="auth-loading" />;
   if (!role)              return <EntryScreen />;
   if (role === 'admin')   return <AdminApp />;
   if (role === 'listener') return <ListenerApp />;
