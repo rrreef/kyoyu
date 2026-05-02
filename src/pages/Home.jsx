@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
+import { Play, Pause, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
 import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -39,7 +39,6 @@ export default function Home() {
   const { homeLayout } = useDisplay();
   const featured = releases[0];
   const [myUploads, setMyUploads] = useState([]);
-  const [showAllUploads, setShowAllUploads] = useState(false);
 
   useEffect(() => {
     function loadUploads() {
@@ -215,23 +214,16 @@ export default function Home() {
       </section>
       )}
 
-      {/* My Uploads — private section */}
       {myUploads.length > 0 && (
         <section className="home-section">
           <div className="section-title">
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <button className="see-all-toggle" onClick={() => setShowAllUploads(p => !p)}>
-              {showAllUploads ? 'Show Less' : `See All (${myUploads.length})`}
-              <ArrowRight size={12} style={{marginLeft:3,verticalAlign:'middle',transform: showAllUploads ? 'rotate(90deg)' : 'none',transition:'transform .2s'}}/>
-            </button>
+            <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.3)'}}>{myUploads.length} tracks</span>
           </div>
-          {showAllUploads ? (
-            homeLayout.mode === 'list'
-              ? <UploadExpandedList uploads={myUploads}/>
-              : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
-          ) : (
-            <UploadShelf uploads={myUploads.slice(0, 10)}/>
-          )}
+          {homeLayout.mode === 'list'
+            ? <UploadExpandedList uploads={myUploads}/>
+            : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
+          }
         </section>
       )}
 
