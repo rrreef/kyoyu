@@ -361,7 +361,7 @@ export function UploadExpandedList({ uploads }) {
 
 /* ── Named export: grid view for configurable N-column layout ── */
 export function UploadGridView({ uploads, cols = 2 }) {
-  const { playTrack, activeTrack } = usePlayer();
+  const { playTrack, state } = usePlayer();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
@@ -378,7 +378,7 @@ export function UploadGridView({ uploads, cols = 2 }) {
   return (
     <div className={`upl-grid upl-grid-${safeCols}`}>
       {sorted.map(t => {
-        const isActive = activeTrack?.id === t.id;
+        const isActive = state.currentTrack?.id === t.id;
         const liked    = isLikedUpload(t.id);
         return (
           <div key={t.id} className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => play(t)}>
