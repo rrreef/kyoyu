@@ -35,11 +35,16 @@ export default function CreatorLogin({ onBack, onListener }) {
     setLoading(true);
     try {
       if (isNew) {
-        await signUp(email, password, {
+        const result = await signUp(email, password, {
           role:         'creator',
           artist_name:  artistName || email.split('@')[0],
           display_name: artistName || email.split('@')[0],
         });
+        // Supabase silently succeeds for existing emails (empty identities)
+        if (result?.user?.identities?.length === 0) {
+          setError('An account with this email already exists. Try signing in instead.');
+          return;
+        }
         setAwaitingConfirm(true);
       } else {
         await signIn(email, password);

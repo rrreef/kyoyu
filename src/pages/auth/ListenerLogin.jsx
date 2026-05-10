@@ -36,11 +36,16 @@ export default function ListenerLogin({ onBack, onCreator }) {
     setLoading(true);
     try {
       if (isNew) {
-        await signUp(email, password, {
+        const result = await signUp(email, password, {
           role:         'listener',
           username:     username.trim(),
           display_name: username.trim() || email.split('@')[0],
         });
+        // Supabase silently succeeds for existing emails (empty identities)
+        if (result?.user?.identities?.length === 0) {
+          setError('An account with this email already exists. Try signing in instead.');
+          return;
+        }
         setAwaitingConfirm(true);
       } else {
         await signIn(email, password);
