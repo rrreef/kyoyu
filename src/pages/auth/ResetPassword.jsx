@@ -47,13 +47,11 @@ export default function ResetPassword() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      // Hard redirect — short timeout to show success flash, then navigate
-      setDone(true);
-      setTimeout(() => { window.location.href = '/'; }, 300);
+      // Redirect immediately — don't touch React state, avoids USER_UPDATED re-render race
+      window.location.href = '/';
     } catch (err) {
-      setError(err.message || 'Failed to reset password. The link may have expired.');
-    } finally {
       setLoading(false);
+      setError(err.message || 'Failed to reset password. The link may have expired.');
     }
   }
 
