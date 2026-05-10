@@ -14,14 +14,7 @@
   background: #060606;
 }
 
-.check-email-orb {
-  position: absolute;
-  width: 500px; height: 500px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,107,26,0.08) 0%, transparent 70%);
-  top: -150px; left: -100px;
-  pointer-events: none;
-}
+
 
 .check-email-card {
   width: 100%;

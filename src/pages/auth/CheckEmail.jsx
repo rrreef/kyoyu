@@ -30,7 +30,7 @@ export default function CheckEmail({ email, onConfirmed }) {
 
   return (
     <div className="check-email-screen">
-      <div className="check-email-orb" />
+
 
       <div className="check-email-card">
         <div className="check-email-logo">
