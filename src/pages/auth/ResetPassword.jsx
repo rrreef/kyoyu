@@ -47,26 +47,9 @@ export default function ResetPassword() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-
-      // Password updated — get role to redirect correctly
+      // Show success then navigate — RoleGate handles routing by role automatically
       setDone(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      let role = 'listener';
-      if (userId) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .single();
-        if (profile?.role) role = profile.role;
-      }
-
-      // Redirect to correct home after brief success message
-      setTimeout(() => {
-        navigate(role === 'creator' ? '/dashboard' : '/');
-      }, 2000);
-
+      setTimeout(() => navigate('/'), 1500);
     } catch (err) {
       setError(err.message || 'Failed to reset password. The link may have expired.');
     } finally {
