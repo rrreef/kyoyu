@@ -71,7 +71,8 @@ export function AuthProvider({ children }) {
         if (session) {
           await hydrateUser(session.user);
         } else {
-          // No valid session — clear stale cache and show login
+          // No valid session — clear stale cache, hide native UI, show login
+          notifyNative('loggedOut');
           clearCache();
           setRole(null);
           setUser(null);
@@ -86,6 +87,7 @@ export function AuthProvider({ children }) {
         if (session) {
           await hydrateUser(session.user);
         } else {
+          notifyNative('loggedOut');
           clearCache();
           setRole(null);
           setUser(null);
