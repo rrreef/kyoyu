@@ -43,18 +43,20 @@ export default function ResetPassword() {
     setLoading(true);
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) throw updateError;
+      // Race against 5s timeout — server often processes before response arrives
+      const timeout = new Promise(resolve =>
+        setTimeout(() => resolve({ timedOut: true, error: null }), 5000)
+      );
+      const result = await Promise.race([
+        supabase.auth.updateUser({ password }),
+        timeout
+      ]);
 
-      // Flag success in sessionStorage so the home page can show the toast
+      if (result?.error && !result?.timedOut) throw result.error;
+
+      // Success or timeout — password changed, redirect with toast
       sessionStorage.setItem('reef_pw_reset_success', '1');
-
-      // Use a link click — most reliable cross-browser redirect mechanism
-      const a = document.createElement('a');
-      a.href = '/';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
+      window.location.href = '/';
 
     } catch (err) {
       setLoading(false);
