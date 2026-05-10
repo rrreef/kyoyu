@@ -12,19 +12,28 @@ export default function ResetPassword() {
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
   const [done,      setDone]      = useState(false);
-  const [validLink, setValidLink] = useState(true);
+  const [validLink, setValidLink] = useState(null); // null = checking
 
-  // Supabase puts the recovery token in the URL hash; it auto-sets the session
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event) => {
+    // Supabase embeds the token in the URL hash: #access_token=...&type=recovery
+    // The client SDK auto-exchanges it and fires PASSWORD_RECOVERY
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setValidLink(true);
       }
     });
-    // If no hash params, the link is invalid/expired
-    if (!window.location.hash.includes('access_token')) {
-      setValidLink(false);
+
+    // Fallback: if no token in hash at all, mark invalid immediately
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace('#', '?'));
+    const hasToken = params.get('access_token') || hash.includes('access_token');
+    if (!hasToken) {
+      // Give Supabase 800ms to fire the event before declaring invalid
+      const t = setTimeout(() => setValidLink(v => v === null ? false : v), 800);
+      return () => { clearTimeout(t); subscription.unsubscribe(); };
     }
+
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleReset(e) {
@@ -34,15 +43,45 @@ export default function ResetPassword() {
     setLoading(true);
     setError('');
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+
+      // Password updated — get role to redirect correctly
       setDone(true);
-      setTimeout(() => navigate('/'), 2500);
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      let role = 'listener';
+      if (userId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        if (profile?.role) role = profile.role;
+      }
+
+      // Redirect to correct home after brief success message
+      setTimeout(() => {
+        navigate(role === 'creator' ? '/dashboard' : '/');
+      }, 2000);
+
     } catch (err) {
       setError(err.message || 'Failed to reset password. The link may have expired.');
     } finally {
       setLoading(false);
     }
+  }
+
+  // Still checking token
+  if (validLink === null) {
+    return (
+      <div className="check-email-screen">
+        <div className="check-email-card" style={{ gap: 24, alignItems: 'center' }}>
+          <AnimatedLogoMark size={48} spin={true}/>
+          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem' }}>Verifying link…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -54,20 +93,36 @@ export default function ResetPassword() {
           <span style={{ fontSize: '0.85rem', letterSpacing: '0.25em', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>REEF</span>
         </div>
 
+        {/* ── Invalid / expired link ── */}
         {!validLink ? (
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ color: 'rgba(255,255,255,0.88)', marginBottom: 8 }}>Link expired</h2>
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', marginBottom: 20 }}>
-              This reset link is invalid or has expired. Please request a new one.
+              This reset link is invalid or has expired.<br/>Please request a new one.
             </p>
-            <button className="auth-btn auth-btn--ghost" onClick={() => navigate('/')}>Back to Login</button>
+            <button className="auth-btn auth-btn--ghost" onClick={() => navigate('/')}>
+              Back to Login
+            </button>
           </div>
+
+        /* ── Success ── */
         ) : done ? (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>✓</div>
-            <h2 style={{ color: 'rgba(255,255,255,0.88)', marginBottom: 8 }}>Password updated!</h2>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>Redirecting you to the app…</p>
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: '50%',
+              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+              color: 'rgba(34,197,94,0.85)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+            <h2 style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2rem' }}>Password updated!</h2>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.83rem' }}>Taking you back to the app…</p>
           </div>
+
+        /* ── Reset form ── */
         ) : (
           <>
             <div style={{ textAlign: 'center' }}>
@@ -103,7 +158,7 @@ export default function ResetPassword() {
               {error && <p className="auth-error">{error}</p>}
 
               <button type="submit" className="auth-btn auth-btn--primary" disabled={loading}>
-                {loading ? <span className="auth-spinner"/> : 'Update Password'}
+                {loading ? <span className="auth-spinner"/> : 'Save Password'}
               </button>
             </form>
           </>
