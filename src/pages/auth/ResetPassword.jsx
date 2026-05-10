@@ -47,9 +47,9 @@ export default function ResetPassword() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      // Show success then navigate — RoleGate handles routing by role automatically
+      // Hard redirect — React Router navigate unreliable after auth token exchange
       setDone(true);
-      setTimeout(() => navigate('/'), 1500);
+      setTimeout(() => { window.location.replace('/'); }, 1500);
     } catch (err) {
       setError(err.message || 'Failed to reset password. The link may have expired.');
     } finally {
