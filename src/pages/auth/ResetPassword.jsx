@@ -15,20 +15,22 @@ export default function ResetPassword() {
   const [validLink, setValidLink] = useState(null); // null = checking
 
   useEffect(() => {
-    // Supabase embeds the token in the URL hash: #access_token=...&type=recovery
-    // The client SDK auto-exchanges it and fires PASSWORD_RECOVERY
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setValidLink(true);
-      }
-    });
-
-    // Fallback: if no token in hash at all, mark invalid immediately
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', '?'));
-    const hasToken = params.get('access_token') || hash.includes('access_token');
-    if (!hasToken) {
-      // Give Supabase 800ms to fire the event before declaring invalid
+
+    // Supabase error (expired/invalid link) — show immediately
+    if (params.get('error') || params.get('error_code')) {
+      setValidLink(false);
+      return;
+    }
+
+    // Valid recovery token — wait for PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setValidLink(true);
+    });
+
+    // Fallback: if no token at all, mark invalid after brief wait
+    if (!hash.includes('access_token')) {
       const t = setTimeout(() => setValidLink(v => v === null ? false : v), 800);
       return () => { clearTimeout(t); subscription.unsubscribe(); };
     }

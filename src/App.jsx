@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -172,6 +172,25 @@ function RoleGate() {
   return <EntryScreen />;
 }
 
+// ─── Hash Redirector ──────────────────────────────────────
+// Supabase sends error/recovery tokens as URL hash on the Site URL (root).
+// This component detects them and bounces to /auth/reset so the page handles it.
+function HashRedirector() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+    // Supabase error: #error=access_denied&error_code=otp_expired...
+    // Supabase recovery: #access_token=...&type=recovery
+    const isAuthHash = hash.includes('error=') || 
+                       (hash.includes('access_token=') && hash.includes('type=recovery'));
+    if (isAuthHash && window.location.pathname !== '/auth/reset') {
+      navigate('/auth/reset' + hash, { replace: true });
+    }
+  }, [navigate]);
+  return null;
+}
+
 // ─── Root ─────────────────────────────────────────────────
 export default function App() {
   // Always show on fresh app load (state is in-memory only)
@@ -180,6 +199,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <HashRedirector />
       <AuthProvider>
         <PlayerProvider>
           <LibraryProvider>
