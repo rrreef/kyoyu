@@ -47,9 +47,9 @@ export default function ResetPassword() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      // Hard redirect — React Router navigate unreliable after auth token exchange
+      // Hard redirect — short timeout to show success flash, then navigate
       setDone(true);
-      setTimeout(() => { window.location.replace('/'); }, 1500);
+      setTimeout(() => { window.location.href = '/'; }, 300);
     } catch (err) {
       setError(err.message || 'Failed to reset password. The link may have expired.');
     } finally {
@@ -104,7 +104,14 @@ export default function ResetPassword() {
               </svg>
             </div>
             <h2 style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.2rem' }}>Password updated!</h2>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.83rem' }}>Taking you back to the app…</p>
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.83rem' }}>Redirecting you to the app…</p>
+            <button
+              className="auth-btn auth-btn--primary"
+              style={{ marginTop: 8 }}
+              onClick={() => { window.location.href = '/'; }}
+            >
+              Open App →
+            </button>
           </div>
 
         /* ── Reset form ── */
