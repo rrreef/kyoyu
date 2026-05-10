@@ -155,6 +155,13 @@ export function AuthProvider({ children }) {
     try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
   }
 
+  async function resetPassword(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/auth/reset',
+    });
+    if (error) throw error;
+  }
+
   function demoLogin(roleType, userData) {
     setRole(roleType);
     setUser({ ...userData, demo: true });
@@ -174,7 +181,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ role, user, loading, avatarSrc, setAvatarSrc, signIn, signUp, logout, demoLogin, updateProfile }}>
+    <AuthContext.Provider value={{ role, user, loading, avatarSrc, setAvatarSrc, signIn, signUp, logout, demoLogin, updateProfile, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

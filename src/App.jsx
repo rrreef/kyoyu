@@ -14,8 +14,9 @@ import TopBar from './components/nav/TopBar';
 import Player from './components/player/Player';
 
 // Auth screens
-import EntryScreen from './pages/auth/EntryScreen';
-import SplashScreen from './pages/auth/SplashScreen';
+import EntryScreen    from './pages/auth/EntryScreen';
+import SplashScreen   from './pages/auth/SplashScreen';
+import ResetPassword  from './pages/auth/ResetPassword';
 
 // Listener pages
 import Home from './pages/Home';
@@ -183,10 +184,13 @@ export default function App() {
         <PlayerProvider>
           <LibraryProvider>
             <DisplayProvider>
-              {splash
-                ? <SplashScreen onDone={handleSplashDone} />
-                : <RoleGate />
-              }
+              {/* Password reset — accessible without being logged in */}
+              <Routes>
+                <Route path="/auth/reset" element={<ResetPassword />} />
+                <Route path="*" element={
+                  splash ? <SplashScreen onDone={handleSplashDone} /> : <RoleGate />
+                } />
+              </Routes>
             </DisplayProvider>
           </LibraryProvider>
         </PlayerProvider>

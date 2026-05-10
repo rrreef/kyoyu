@@ -2,7 +2,20 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedLogoMark } from './EntryScreen';
 import CheckEmail from './CheckEmail';
+import ForgotPassword from './ForgotPassword';
 import './Auth.css';
+
+function friendlyError(msg = '') {
+  if (msg.includes('already registered') || msg.includes('already been registered'))
+    return 'An account with this email already exists. Try signing in instead.';
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid credentials'))
+    return 'Incorrect email or password. Check your details and try again.';
+  if (msg.includes('Email not confirmed'))
+    return 'Please confirm your email first — check your inbox.';
+  if (msg.includes('rate limit') || msg.includes('too many'))
+    return 'Too many attempts. Please wait a moment and try again.';
+  return msg || 'Something went wrong. Please try again.';
+}
 
 export default function ListenerLogin({ onBack, onCreator }) {
   const { signIn, signUp } = useAuth();
@@ -13,6 +26,7 @@ export default function ListenerLogin({ onBack, onCreator }) {
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,7 +46,7 @@ export default function ListenerLogin({ onBack, onCreator }) {
         await signIn(email, password);
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed.');
+      setError(friendlyError(err.message));
     } finally {
       setLoading(false);
     }
@@ -45,6 +59,8 @@ export default function ListenerLogin({ onBack, onCreator }) {
   return (
     <div className="auth-screen auth-screen--listener">
       <div className="auth-orb auth-orb--orange" />
+
+      {showForgot && <ForgotPassword onClose={() => setShowForgot(false)} />}
 
       <div className="auth-card">
         <button className="auth-back" onClick={onBack} aria-label="Back">
@@ -90,6 +106,7 @@ export default function ListenerLogin({ onBack, onCreator }) {
               autoComplete="email"
             />
           </div>
+
           <div className="auth-field">
             <label htmlFor="l-password">Password</label>
             <input
@@ -113,6 +130,14 @@ export default function ListenerLogin({ onBack, onCreator }) {
           <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); setUsername(''); }}>
             {isNew ? 'Already have an account? Sign in' : 'No account? Create one'}
           </button>
+          {!isNew && (
+            <>
+              <span>·</span>
+              <button className="auth-link" onClick={() => setShowForgot(true)}>
+                Forgot password?
+              </button>
+            </>
+          )}
         </div>
 
         <div className="auth-switch">

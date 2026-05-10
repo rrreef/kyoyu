@@ -2,7 +2,20 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AnimatedLogoMark } from './EntryScreen';
 import CheckEmail from './CheckEmail';
+import ForgotPassword from './ForgotPassword';
 import './Auth.css';
+
+function friendlyError(msg = '') {
+  if (msg.includes('already registered') || msg.includes('already been registered'))
+    return 'An account with this email already exists. Try signing in instead.';
+  if (msg.includes('Invalid login credentials') || msg.includes('invalid credentials'))
+    return 'Incorrect email or password. Check your details and try again.';
+  if (msg.includes('Email not confirmed'))
+    return 'Please confirm your email first — check your inbox.';
+  if (msg.includes('rate limit') || msg.includes('too many'))
+    return 'Too many attempts. Please wait a moment and try again.';
+  return msg || 'Something went wrong. Please try again.';
+}
 
 export default function CreatorLogin({ onBack, onListener }) {
   const { signIn, signUp } = useAuth();
@@ -13,6 +26,7 @@ export default function CreatorLogin({ onBack, onListener }) {
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
   const [error,      setError]      = useState('');
   const [loading,    setLoading]    = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -21,7 +35,6 @@ export default function CreatorLogin({ onBack, onListener }) {
     setLoading(true);
     try {
       if (isNew) {
-        // Sign up — include role + artist_name in metadata
         await signUp(email, password, {
           role:         'creator',
           artist_name:  artistName || email.split('@')[0],
@@ -30,10 +43,9 @@ export default function CreatorLogin({ onBack, onListener }) {
         setAwaitingConfirm(true);
       } else {
         await signIn(email, password);
-        // AuthContext hydrates role automatically via onAuthStateChange
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed.');
+      setError(friendlyError(err.message));
     } finally {
       setLoading(false);
     }
@@ -46,6 +58,8 @@ export default function CreatorLogin({ onBack, onListener }) {
   return (
     <div className="auth-screen auth-screen--creator">
       <div className="auth-orb auth-orb--silver" />
+
+      {showForgot && <ForgotPassword onClose={() => setShowForgot(false)} />}
 
       <div className="auth-card auth-card--creator">
         <button className="auth-back" onClick={onBack} aria-label="Back">
@@ -107,11 +121,18 @@ export default function CreatorLogin({ onBack, onListener }) {
           </button>
         </form>
 
-
         <div className="auth-links">
           <button className="auth-link" onClick={() => { setIsNew(s => !s); setError(''); }}>
             {isNew ? 'Already have an account? Sign in' : 'New creator? Create account'}
           </button>
+          {!isNew && (
+            <>
+              <span>·</span>
+              <button className="auth-link" onClick={() => setShowForgot(true)}>
+                Forgot password?
+              </button>
+            </>
+          )}
         </div>
 
         <div className="auth-switch">
