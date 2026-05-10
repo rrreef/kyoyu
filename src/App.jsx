@@ -12,6 +12,7 @@ import CreatorSidebar from './components/nav/CreatorSidebar';
 import MobileNav from './components/nav/MobileNav';
 import TopBar from './components/nav/TopBar';
 import Player from './components/player/Player';
+import SuccessToast from './components/ui/SuccessToast';
 
 // Auth screens
 import EntryScreen    from './pages/auth/EntryScreen';
@@ -166,10 +167,15 @@ function RoleGate() {
   // Only show blank screen if we have no session data at all (first-ever launch or logged out)
   if (loading && !role)   return <div className="auth-loading" />;
   if (!role)              return <EntryScreen />;
-  if (role === 'admin')   return <AdminApp />;
-  if (role === 'listener') return <ListenerApp />;
-  if (role === 'creator')  return <CreatorApp />;
-  return <EntryScreen />;
+  return (
+    <>
+      <SuccessToast />
+      {role === 'admin'    && <AdminApp />}
+      {role === 'listener' && <ListenerApp />}
+      {role === 'creator'  && <CreatorApp />}
+      {!['admin','listener','creator'].includes(role) && <EntryScreen />}
+    </>
+  );
 }
 
 // ─── Hash Redirector ──────────────────────────────────────
