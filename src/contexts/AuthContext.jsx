@@ -145,14 +145,13 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    notifyNative('loggedOut');
+    try { await supabase.auth.signOut(); } catch (_) {}
+    // Clear all client-side state regardless of network result
     clearCache();
-    setRole(null);
-    setUser(null);
-    userRef.current = null;
-    setAvatarSrcRaw(null);
+    notifyNative('loggedOut');
     try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+    // Hard redirect — guaranteed clean slate, no React state race conditions
+    window.location.href = '/';
   }
 
   async function resetPassword(email) {
