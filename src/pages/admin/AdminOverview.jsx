@@ -46,29 +46,26 @@ export default function AdminOverview() {
   const load = useCallback(async () => {
     setLoadError('');
     try {
-      // 8-second timeout so skeletons don't spin forever
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out — Supabase may be cold-starting. Please refresh.')), 8000)
-      );
-      const { data, error } = await Promise.race([
-        supabase.rpc('get_admin_stats'),
-        timeout
+      const [
+        { count: totalUsers  },
+        { count: creators    },
+        { count: totalTracks },
+        { count: pending     },
+        { count: banned      },
+        { data: recentUsers  },
+        { data: recentTracks },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'creator'),
+        supabase.from('tracks').select('*',   { count: 'exact', head: true }),
+        supabase.from('tracks').select('*',   { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('banned', true),
+        supabase.from('profiles').select('id,display_name,role,created_at').order('created_at', { ascending: false }).limit(8),
+        supabase.from('tracks').select('id,title,artist,status,created_at').order('created_at', { ascending: false }).limit(8),
       ]);
-      if (error) throw error;
 
-      const newStats = {
-        totalUsers:  data.totalUsers  ?? 0,
-        creators:    data.creators    ?? 0,
-        listeners:   (data.totalUsers ?? 0) - (data.creators ?? 0),
-        totalTracks: data.totalTracks ?? 0,
-        pending:     data.pending     ?? 0,
-        banned:      data.banned      ?? 0,
-      };
-      const newRecent = {
-        users:  data.recentUsers  ?? [],
-        tracks: data.recentTracks ?? [],
-      };
-
+      const newStats  = { totalUsers, creators, listeners: (totalUsers ?? 0) - (creators ?? 0), totalTracks, pending, banned };
+      const newRecent = { users: recentUsers ?? [], tracks: recentTracks ?? [] };
       setStats(newStats);
       setRecent(newRecent);
       setCache({ stats: newStats, recent: newRecent });
