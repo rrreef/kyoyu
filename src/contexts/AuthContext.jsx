@@ -35,7 +35,9 @@ export function AuthProvider({ children }) {
   const [role,      setRole]        = useState(cached.role);
   const [user,      setUser]        = useState(cached.user);
   // Only show loading spinner if there is no cached session to display
-  const [loading,   setLoading]     = useState(!cached.role);
+  // Don't show loading spinner when there's no cached session (e.g. after logout redirect)
+  // — EntryScreen appears instantly instead of a blank flash
+  const [loading,   setLoading]     = useState(false);
   const [avatarSrc, setAvatarSrcRaw] = useState(() => {
     try { return cached.user ? localStorage.getItem('kyoyu-avatar-' + cached.user.id) || null : null; } catch { return null; }
   });
@@ -144,14 +146,16 @@ export function AuthProvider({ children }) {
     return data;
   }
 
-  async function logout() {
-    try { await supabase.auth.signOut(); } catch (_) {}
-    // Clear all client-side state regardless of network result
-    clearCache();
+  function logout() {
+    // No network call — wipe storage NOW, redirect instantly
+    try { localStorage.clear(); } catch (_) {}
+    try { sessionStorage.clear(); } catch (_) {}
     notifyNative('loggedOut');
     try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
-    // Hard redirect — guaranteed clean slate, no React state race conditions
-    window.location.href = '/';
+    // Kick off server-side session invalidation in the background (non-blocking)
+    supabase.auth.signOut().catch(() => {});
+    // Hard redirect — replace so back-button doesn't return to the protected page
+    window.location.replace('/');
   }
 
   async function resetPassword(email) {
