@@ -1,17 +1,13 @@
 import { supabase } from './supabase';
 
-/* ─── Timeout helper ─────────────────────────────────────────
-   Races any promise against a 4-minute ceiling so a hung upload
-   never freezes the UI indefinitely.
-─────────────────────────────────────────────────────────────── */
+const R2_PUBLIC = import.meta.env.VITE_R2_PUBLIC_URL || 'https://audio.ree.fm';
+
+/* ─── Helpers ────────────────────────────────────────────── */
+
 function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(
-        `${label} timed out — check your internet connection and that ` +
-        `storage bucket policies have been applied in Supabase.`
-      )),
-      ms
+      () => reject(new Error(`${label} timed out — check your internet connection.`)), ms
     );
     promise
       .then(v => { clearTimeout(timer); resolve(v); })
@@ -20,13 +16,67 @@ function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
 }
 
 /**
- * Uploads a full release (multiple tracks) to Supabase Storage + saves metadata to DB.
- * @param {object} opts
- * @param {Array}  opts.audioFiles   - [{ file, id }]
- * @param {Array}  opts.trackMetas   - one metadata object per audioFile
- * @param {object} opts.globalForm   - pricing / contract settings
- * @param {function} opts.onProgress - ({ track, total, phase }) callback
- * @returns {Promise<Array>} array of inserted track rows
+ * Upload a file directly to Cloudflare R2 via presigned URL.
+ * Returns the R2 key (stored in DB) and the public streaming URL.
+ * Uses XHR so we get real upload progress.
+ */
+async function uploadToR2(file, userId, onProgress) {
+  // 1. Get a presigned PUT URL from our Vercel API
+  const res = await fetch('/api/r2-presign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename:    file.name,
+      contentType: file.type || guessMime(file.name),
+      fileSize:    file.size,
+      userId,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Presign request failed (${res.status})`);
+  }
+  const { presignedUrl, key } = await res.json();
+
+  // 2. Upload directly to R2 (browser → Cloudflare, no Vercel body limit)
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload  = () => xhr.status >= 200 && xhr.status < 300
+      ? resolve()
+      : reject(new Error(`R2 upload failed: ${xhr.status} ${xhr.statusText}`));
+    xhr.onerror = () => reject(new Error('Network error during upload — check your connection.'));
+    xhr.open('PUT', presignedUrl);
+    xhr.setRequestHeader('Content-Type', file.type || guessMime(file.name));
+    xhr.send(file);
+  });
+
+  return key;
+}
+
+function guessMime(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const map = { wav: 'audio/wav', aif: 'audio/aiff', aiff: 'audio/aiff',
+                mp3: 'audio/mpeg', flac: 'audio/flac', m4a: 'audio/mp4' };
+  return map[ext] || 'application/octet-stream';
+}
+
+/** Returns the public streaming URL for a track stored in R2 */
+export function r2Url(key) {
+  if (!key) return null;
+  // Already a full URL (legacy Supabase tracks)
+  if (key.startsWith('http')) return key;
+  return `${R2_PUBLIC}/${key}`;
+}
+
+/* ─── Main upload pipeline ───────────────────────────────── */
+
+/**
+ * Uploads a full release (multiple tracks) to R2 (audio) + Supabase (artwork + DB).
  */
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   // ── Auth check ──────────────────────────────────────────────
@@ -34,22 +84,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     supabase.auth.getUser(), 15_000, 'Auth check'
   );
   if (authErr || !user) {
-    throw new Error(
-      'You are not logged in. Please sign in to your creator account before uploading.'
-    );
-  }
-
-  // ── File size guard (Supabase free tier = 50 MB per file) ──
-  const MAX_MB = 50;
-  const MAX_BYTES = MAX_MB * 1024 * 1024;
-  for (const { file } of audioFiles) {
-    if (file.size > MAX_BYTES) {
-      throw new Error(
-        `"${file.name}" is ${Math.round(file.size / 1024 / 1024)} MB — ` +
-        `Supabase Storage limits uploads to ${MAX_MB} MB per file on the free plan. ` +
-        `Upgrade to the Pro plan or compress the file before uploading.`
-      );
-    }
+    throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
   }
 
   const results = [];
@@ -58,82 +93,53 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const { file } = audioFiles[i];
     const meta = trackMetas[i] || {};
 
-    // ── 1. Upload audio ──────────────────────────────────────
+    // ── 1. Upload audio to R2 ────────────────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'audio' });
+    console.log('[Reef] Uploading audio to R2:', file.name, Math.round(file.size / 1024 / 1024) + ' MB');
 
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const audioKey = `${user.id}/${Date.now()}-${safeName}`;
+    const audioKey = await uploadToR2(file, user.id, (pct) => {
+      // Forward XHR progress as an extended progress object
+      onProgress?.({ track: i, total: audioFiles.length, phase: 'audio', pct });
+    });
 
-    console.log('[Reef] Uploading audio:', audioKey, Math.round(file.size / 1024 / 1024) + ' MB');
-
-    const audioUpload = supabase.storage
-      .from('audio')
-      .upload(audioKey, file, {
-        contentType: file.type || 'application/octet-stream',
-        upsert: false,
-      });
-
-    const { error: audioErr } = await withTimeout(audioUpload, 4 * 60 * 1000, 'Audio upload');
-
-    if (audioErr) {
-      console.error('[Reef] Audio upload error:', audioErr);
-      const hint = audioErr.message?.toLowerCase().includes('security')
-        ? ' (Storage policies may not be applied — run the storage SQL in Supabase.)'
-        : '';
-      throw new Error(`Audio upload failed: ${audioErr.message}${hint}`);
-    }
-
-    // ── 2. Upload artwork ────────────────────────────────────
+    // ── 2. Upload artwork to Supabase Storage ────────────────
     let artworkKey = null;
     if (meta.artwork) {
       onProgress?.({ track: i, total: audioFiles.length, phase: 'artwork' });
       const ext = (meta.artwork.name?.split('.').pop() || 'jpg').toLowerCase();
       artworkKey = `${user.id}/${Date.now()}-artwork.${ext}`;
 
-      const artUpload = supabase.storage
-        .from('artwork')
-        .upload(artworkKey, meta.artwork, {
+      const { error: artErr } = await withTimeout(
+        supabase.storage.from('artwork').upload(artworkKey, meta.artwork, {
           contentType: meta.artwork.type || 'image/jpeg',
           upsert: false,
-        });
-
-      const { error: artErr } = await withTimeout(artUpload, 60_000, 'Artwork upload');
-      if (artErr) {
-        console.error('[Reef] Artwork upload error:', artErr);
-        throw new Error(`Artwork upload failed: ${artErr.message}`);
-      }
+        }),
+        60_000, 'Artwork upload'
+      );
+      if (artErr) throw new Error(`Artwork upload failed: ${artErr.message}`);
     }
 
     // ── 3. Save metadata to tracks table ────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'saving' });
 
     const { data: track, error: dbErr } = await withTimeout(
-      supabase
-        .from('tracks')
-        .insert({
-          creator_id:  user.id,
-          title:       meta.title?.trim()  || file.name,
-          artist:      meta.artist?.trim() || null,
-          album:       meta.album?.trim()  || null,
-          genre:       meta.genre?.trim()  || null,
-          year:        meta.year ? parseInt(meta.year) : null,
-          format:      file.name.split('.').pop().toUpperCase(),
-          tags:        [meta.genre].filter(Boolean),
-          visibility:  meta.visibility || 'private',
-          status:      'pending',
-          storage_key: audioKey,
-          artwork_key: artworkKey,
-        })
-        .select()
-        .single(),
-      30_000,
-      'Metadata save'
+      supabase.from('tracks').insert({
+        creator_id:  user.id,
+        title:       meta.title?.trim()  || file.name,
+        artist:      meta.artist?.trim() || null,
+        album:       meta.album?.trim()  || null,
+        genre:       meta.genre?.trim()  || null,
+        year:        meta.year ? parseInt(meta.year) : null,
+        format:      file.name.split('.').pop().toUpperCase(),
+        tags:        [meta.genre].filter(Boolean),
+        visibility:  meta.visibility || 'private',
+        status:      'pending',
+        storage_key: audioKey,     // R2 key — use r2Url(key) to get the full URL
+        artwork_key: artworkKey,
+      }).select().single(),
+      30_000, 'Metadata save'
     );
-
-    if (dbErr) {
-      console.error('[Reef] DB insert error:', dbErr);
-      throw new Error(`Metadata save failed: ${dbErr.message}`);
-    }
+    if (dbErr) throw new Error(`Metadata save failed: ${dbErr.message}`);
 
     // ── 4. Save per-track credits ────────────────────────────
     if (meta.credits?.length && track?.id) {
@@ -142,7 +148,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
         .map(c => ({ track_id: track.id, role: c.role?.trim() || null, name: c.name.trim() }));
       if (rows.length) {
         const { error: credErr } = await supabase.from('track_credits').insert(rows);
-        if (credErr) console.warn('[Reef] Credits insert error (non-fatal):', credErr);
+        if (credErr) console.warn('[Reef] Credits insert (non-fatal):', credErr);
       }
     }
 
@@ -152,22 +158,24 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
   return results;
 }
 
+/* ─── Streaming helpers ──────────────────────────────────── */
+
 /**
- * Fetches a signed URL for a private audio or artwork file.
- * URL expires in 1 hour.
+ * Returns the artwork URL for a track.
+ * Artwork stays on Supabase Storage (small files, not streamed).
  */
-export async function getSignedUrl(bucket, key, expiresIn = 3600) {
-  if (!key) return null;
+export async function getArtworkUrl(artworkKey, expiresIn = 43200) {
+  if (!artworkKey) return null;
   const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(key, expiresIn);
+    .from('artwork')
+    .createSignedUrl(artworkKey, expiresIn);
   if (error) return null;
   return data.signedUrl;
 }
 
 /**
  * Fetches the authenticated creator's tracks from the DB,
- * enriched with a short-lived signed artwork URL.
+ * enriched with artwork URLs.
  */
 export async function fetchMyTracks() {
   const { data, error } = await supabase
@@ -177,12 +185,14 @@ export async function fetchMyTracks() {
   if (error) throw error;
 
   const enriched = await Promise.all(
-    (data || []).map(async t => {
-      const artworkUrl = t.artwork_key
-        ? await getSignedUrl('artwork', t.artwork_key, 43200)
-        : null;
-      return { ...t, artworkUrl };
-    })
+    (data || []).map(async t => ({
+      ...t,
+      audioUrl:   r2Url(t.storage_key),
+      artworkUrl: t.artwork_key ? await getArtworkUrl(t.artwork_key) : null,
+    }))
   );
   return enriched;
 }
+
+// Legacy alias — kept for any existing imports
+export { getArtworkUrl as getSignedUrl };
