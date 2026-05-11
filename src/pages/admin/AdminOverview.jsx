@@ -41,10 +41,19 @@ export default function AdminOverview() {
   const [recent,  setRecent]  = useState(cached?.recent ?? { users: [], tracks: [] });
   const [loading, setLoading] = useState(!cached);
 
+  const [loadError, setLoadError] = useState('');
+
   const load = useCallback(async () => {
+    setLoadError('');
     try {
-      // Single RPC — all stats in one Postgres call, one network round-trip
-      const { data, error } = await supabase.rpc('get_admin_stats');
+      // 8-second timeout so skeletons don't spin forever
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out — Supabase may be cold-starting. Please refresh.')), 8000)
+      );
+      const { data, error } = await Promise.race([
+        supabase.rpc('get_admin_stats'),
+        timeout
+      ]);
       if (error) throw error;
 
       const newStats = {
@@ -65,6 +74,7 @@ export default function AdminOverview() {
       setCache({ stats: newStats, recent: newRecent });
     } catch (e) {
       console.error('AdminOverview load error:', e);
+      setLoadError(e.message || 'Failed to load stats.');
     } finally {
       setLoading(false);
     }
@@ -92,6 +102,22 @@ export default function AdminOverview() {
     <div>
       <div className="adm-page-title">Overview</div>
       <div className="adm-page-sub">Platform health at a glance</div>
+
+      {loadError && (
+        <div style={{
+          margin: '16px 0', padding: '14px 18px', borderRadius: 10,
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          color: 'rgba(239,68,68,0.9)', fontSize: '0.83rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12
+        }}>
+          <span>{loadError}</span>
+          <button onClick={() => { setLoading(true); load(); }} style={{
+            background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+            color: 'rgba(239,68,68,0.9)', borderRadius: 6, padding: '4px 12px',
+            fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap'
+          }}>Retry</button>
+        </div>
+      )}
 
       {/* KPI cards */}
       {loading && !stats ? (
