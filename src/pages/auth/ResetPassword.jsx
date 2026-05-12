@@ -10,6 +10,7 @@ export default function ResetPassword() {
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
   const [validLink, setValidLink] = useState(null); // null = checking
+  const [debugMsg,  setDebugMsg]  = useState('');
 
   useEffect(() => {
     // ── Approach 1: query-param token_hash (email link → ree.fm/auth/reset?token_hash=X)
@@ -23,6 +24,7 @@ export default function ResetPassword() {
         .then(({ error }) => {
           if (error) {
             console.error('verifyOtp error:', error.message);
+            setDebugMsg(error.message);
             setValidLink(false);
           } else {
             setValidLink(true);
@@ -42,14 +44,25 @@ export default function ResetPassword() {
       return;
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') setValidLink(true);
+      // Also catch INITIAL_SESSION/SIGNED_IN if PASSWORD_RECOVERY already fired
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && session) {
+        setValidLink(true);
+      }
     });
 
     if (!hash.includes('access_token')) {
+      // No token anywhere — show expired after short wait
+      setDebugMsg('No token found in URL. Was the template updated in Supabase?');
       const t = setTimeout(() => setValidLink(v => v === null ? false : v), 900);
       return () => { clearTimeout(t); subscription.unsubscribe(); };
     }
+
+    // Hash has access_token — also try getSession() in case event already fired
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setValidLink(true);
+    });
 
     return () => subscription.unsubscribe();
   }, []);
@@ -111,6 +124,11 @@ export default function ResetPassword() {
             <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', marginBottom: 20 }}>
               This reset link is invalid or has expired.<br/>Please request a new one from the login page.
             </p>
+            {debugMsg && (
+              <p style={{ color: 'rgba(255,100,100,0.7)', fontSize: '0.75rem', fontFamily: 'monospace', marginBottom: 12 }}>
+                {debugMsg}
+              </p>
+            )}
             <button className="auth-btn auth-btn--ghost" onClick={() => { window.location.href = '/'; }}>
               Back to Login
             </button>
