@@ -1,5 +1,5 @@
 /* ─── Artist page layout ─────────────────────────────────── */
-.creator-artists-page { max-width: 800px; }
+.creator-artists-page { width: 100%; }
 
 .ca-header {
   display: flex;

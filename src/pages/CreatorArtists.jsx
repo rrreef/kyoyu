@@ -221,36 +221,7 @@ function ArtistDetail({ artist }) {
       {/* Two-column body */}
       <div className="ca-detail-columns">
 
-        {/* LEFT — media */}
-        <div className="ca-col-media">
-          <Section icon={<Package size={11}/>} title="Promo Material">
-            <p className="ca-section-hint">Images, artworks, videos for press and bookings</p>
-            <DropZone items={promoItems} setItems={setPromoItems} label="Drop promo files here"/>
-          </Section>
-
-          <Section icon={<Layout size={11}/>} title="Page Decoration">
-            <p className="ca-section-hint">Images arranged freely on the artist's public page</p>
-            <DropZone items={pageItems} setItems={setPageItems} label="Drop images or short videos" accept="image/*,video/*"/>
-            {pageItems.length > 0 && (
-              <div className="ca-page-deco-grid">
-                {pageItems.map(item => (
-                  <div key={item.id} className="ca-deco-item">
-                    <div className="ca-deco-drag"><GripVertical size={12}/></div>
-                    {item.type === 'video'
-                      ? <video src={item.url} muted playsInline className="ca-deco-media"/>
-                      : <img src={item.url} alt={item.name} className="ca-deco-media"/>
-                    }
-                    <button className="ca-media-remove" onClick={() => setPageItems(prev => prev.filter(x => x.id !== item.id))}>
-                      <X size={10}/>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
-        </div>
-
-        {/* RIGHT — data fields */}
+        {/* LEFT — data fields */}
         <div className="ca-col-data">
           <div className="ca-data-row-two">
             <Section icon={<MapPin size={11}/>} title="Location">
@@ -284,6 +255,35 @@ function ArtistDetail({ artist }) {
               />
             ))}
             <button className="ca-add-row-btn" onClick={addPerf}><Plus size={12}/> Add performance</button>
+          </Section>
+        </div>
+
+        {/* RIGHT — media */}
+        <div className="ca-col-media">
+          <Section icon={<Package size={11}/>} title="Promo Material">
+            <p className="ca-section-hint">Images, artworks, videos for press and bookings</p>
+            <DropZone items={promoItems} setItems={setPromoItems} label="Drop promo files here"/>
+          </Section>
+
+          <Section icon={<Layout size={11}/>} title="Page Decoration">
+            <p className="ca-section-hint">Images arranged freely on the artist's public page</p>
+            <DropZone items={pageItems} setItems={setPageItems} label="Drop images or short videos" accept="image/*,video/*"/>
+            {pageItems.length > 0 && (
+              <div className="ca-page-deco-grid">
+                {pageItems.map(item => (
+                  <div key={item.id} className="ca-deco-item">
+                    <div className="ca-deco-drag"><GripVertical size={12}/></div>
+                    {item.type === 'video'
+                      ? <video src={item.url} muted playsInline className="ca-deco-media"/>
+                      : <img src={item.url} alt={item.name} className="ca-deco-media"/>
+                    }
+                    <button className="ca-media-remove" onClick={() => setPageItems(prev => prev.filter(x => x.id !== item.id))}>
+                      <X size={10}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
         </div>
 
