@@ -218,77 +218,74 @@ function ArtistDetail({ artist }) {
         </div>
       </div>
 
-      <div className="ca-detail-grid">
+      {/* Two-column body */}
+      <div className="ca-detail-columns">
 
-        {/* Location */}
-        <Section icon={<MapPin size={11}/>} title="Location">
-          <input className="ca-field-input" value={location}
-            onChange={e => setLocation(e.target.value)} placeholder="City, Country"/>
-        </Section>
+        {/* LEFT — media */}
+        <div className="ca-col-media">
+          <Section icon={<Package size={11}/>} title="Promo Material">
+            <p className="ca-section-hint">Images, artworks, videos for press and bookings</p>
+            <DropZone items={promoItems} setItems={setPromoItems} label="Drop promo files here"/>
+          </Section>
 
-        {/* Disciplines */}
-        <Section icon={<Mic2 size={11}/>} title="Disciplines">
-          <TagList tags={disciplines} setTags={setDisciplines}/>
-        </Section>
+          <Section icon={<Layout size={11}/>} title="Page Decoration">
+            <p className="ca-section-hint">Images arranged freely on the artist's public page</p>
+            <DropZone items={pageItems} setItems={setPageItems} label="Drop images or short videos" accept="image/*,video/*"/>
+            {pageItems.length > 0 && (
+              <div className="ca-page-deco-grid">
+                {pageItems.map(item => (
+                  <div key={item.id} className="ca-deco-item">
+                    <div className="ca-deco-drag"><GripVertical size={12}/></div>
+                    {item.type === 'video'
+                      ? <video src={item.url} muted playsInline className="ca-deco-media"/>
+                      : <img src={item.url} alt={item.name} className="ca-deco-media"/>
+                    }
+                    <button className="ca-media-remove" onClick={() => setPageItems(prev => prev.filter(x => x.id !== item.id))}>
+                      <X size={10}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        </div>
 
-        {/* Bio — full width */}
-        <Section icon={<FileText size={11}/>} title="Artist Bio">
-          <textarea className="ca-field-textarea" rows={4} value={bio}
-            onChange={e => setBio(e.target.value)}/>
-        </Section>
+        {/* RIGHT — data fields */}
+        <div className="ca-col-data">
+          <div className="ca-data-row-two">
+            <Section icon={<MapPin size={11}/>} title="Location">
+              <input className="ca-field-input" value={location}
+                onChange={e => setLocation(e.target.value)} placeholder="City, Country"/>
+            </Section>
 
-        {/* Statement — full width */}
-        <Section icon={<Quote size={11}/>} title="Statement">
-          <textarea className="ca-field-textarea ca-field-statement" rows={3} value={statement}
-            onChange={e => setStatement(e.target.value)}
-            placeholder="A short statement or manifesto from the artist…"/>
-        </Section>
+            <Section icon={<Mic2 size={11}/>} title="Disciplines">
+              <TagList tags={disciplines} setTags={setDisciplines}/>
+            </Section>
+          </div>
 
-        {/* Performances — full width */}
-        <Section icon={<Calendar size={11}/>} title="Performances">
-          {performances.map(p => (
-            <PerformanceRow
-              key={p.id}
-              perf={p}
-              onChange={updated => setPerformances(prev => prev.map(x => x.id === p.id ? updated : x))}
-              onRemove={() => setPerformances(prev => prev.filter(x => x.id !== p.id))}
-            />
-          ))}
-          <button className="ca-add-row-btn" onClick={addPerf}><Plus size={12}/> Add performance</button>
-        </Section>
+          <Section icon={<FileText size={11}/>} title="Artist Bio">
+            <textarea className="ca-field-textarea" rows={4} value={bio}
+              onChange={e => setBio(e.target.value)}/>
+          </Section>
 
-        {/* Promo Material — full width */}
-        <Section icon={<Package size={11}/>} title="Promo Material">
-          <p className="ca-section-hint">Images, artworks, videos for press and bookings</p>
-          <DropZone items={promoItems} setItems={setPromoItems} label="Drop promo files here"/>
-        </Section>
+          <Section icon={<Quote size={11}/>} title="Statement">
+            <textarea className="ca-field-textarea ca-field-statement" rows={3} value={statement}
+              onChange={e => setStatement(e.target.value)}
+              placeholder="A short statement or manifesto from the artist…"/>
+          </Section>
 
-        {/* Page Decoration — full width */}
-        <Section icon={<Layout size={11}/>} title="Page Decoration">
-          <p className="ca-section-hint">Images arranged freely on the artist's public page</p>
-          <DropZone
-            items={pageItems}
-            setItems={setPageItems}
-            label="Drop images or short videos"
-            accept="image/*,video/*"
-          />
-          {pageItems.length > 0 && (
-            <div className="ca-page-deco-grid">
-              {pageItems.map((item, i) => (
-                <div key={item.id} className="ca-deco-item">
-                  <div className="ca-deco-drag"><GripVertical size={12}/></div>
-                  {item.type === 'video'
-                    ? <video src={item.url} muted playsInline className="ca-deco-media"/>
-                    : <img src={item.url} alt={item.name} className="ca-deco-media"/>
-                  }
-                  <button className="ca-media-remove" onClick={() => setPageItems(prev => prev.filter(x => x.id !== item.id))}>
-                    <X size={10}/>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
+          <Section icon={<Calendar size={11}/>} title="Performances">
+            {performances.map(p => (
+              <PerformanceRow
+                key={p.id}
+                perf={p}
+                onChange={updated => setPerformances(prev => prev.map(x => x.id === p.id ? updated : x))}
+                onRemove={() => setPerformances(prev => prev.filter(x => x.id !== p.id))}
+              />
+            ))}
+            <button className="ca-add-row-btn" onClick={addPerf}><Plus size={12}/> Add performance</button>
+          </Section>
+        </div>
 
       </div>
 
