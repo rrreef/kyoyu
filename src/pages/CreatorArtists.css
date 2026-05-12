@@ -390,14 +390,14 @@
 /* ─── Roster: grid view ──────────────────────────────────── */
 .ca-roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: var(--sp-5) var(--sp-4);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-6) var(--sp-5);
   padding: var(--sp-2) 0;
 }
 .ca-roster-grid-item {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
   background: none; border: none; cursor: pointer;
-  padding: var(--sp-3);
+  padding: var(--sp-4);
   border-radius: var(--radius-lg);
   transition: background 0.14s;
   color: inherit;
@@ -405,24 +405,24 @@
 .ca-roster-grid-item:hover { background: rgba(255,255,255,0.04); }
 
 .ca-roster-avatar-lg {
-  width: 64px; height: 64px;
+  width: 192px; height: 192px;
   border-radius: 50%;
   border: 1.5px solid;
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.2rem; font-weight: 700;
+  font-size: 3.6rem; font-weight: 700;
   transition: transform 0.15s;
 }
-.ca-roster-grid-item:hover .ca-roster-avatar-lg { transform: scale(1.06); }
+.ca-roster-grid-item:hover .ca-roster-avatar-lg { transform: scale(1.04); }
 
 /* ─── Roster: list view ──────────────────────────────────── */
 .ca-roster-list {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 4px;
   padding: var(--sp-2) 0;
 }
 .ca-roster-list-item {
-  display: flex; align-items: center; gap: var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-5);
   background: none; border: none; cursor: pointer;
-  padding: 8px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   transition: background 0.14s;
   color: inherit; text-align: left; width: 100%;
@@ -430,14 +430,14 @@
 .ca-roster-list-item:hover { background: rgba(255,255,255,0.04); }
 
 .ca-roster-avatar-sm {
-  width: 36px; height: 36px; flex-shrink: 0;
+  width: 108px; height: 108px; flex-shrink: 0;
   border-radius: 50%;
   border: 1.5px solid;
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.85rem; font-weight: 700;
+  font-size: 2.4rem; font-weight: 700;
 }
 
 .ca-roster-name {
-  font-size: 0.9rem; font-weight: 500;
+  font-size: 1.8rem; font-weight: 500;
   color: rgba(255,255,255,0.82);
 }
