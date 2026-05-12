@@ -316,7 +316,9 @@
   width: 150px;
   opacity: 1;
   pointer-events: all;
-  padding: 0 4px 0 14px; /* 14px left = aligns text to pill's straight section */
+  padding: 0 4px 0 14px;
+  height: 20px;       /* cursor height = same gap to border as the icon */
+  align-self: center;
 }
 
 /* Results dropdown */
