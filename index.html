@@ -2,15 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- PWA manifest — enables "Add to Home Screen" on iOS/Android -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS home screen meta — hides Safari chrome, sets app name & status bar -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Reef" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- SEO & Social -->
     <meta name="description" content="REEF — A fair music platform combining streaming, DJ downloads, vinyl commerce, and intelligent discovery. Stream fairly. Buy directly. Discover deeply." />
-    <meta name="theme-color" content="#ff6b1a" />
+    <meta name="theme-color" content="#0a0a0a" />
     <meta property="og:title" content="REEF — Fair Music Platform" />
     <meta property="og:description" content="Stream fairly. Buy directly. Discover deeply." />
     <meta property="og:url" content="https://ree.fm" />
+    <meta property="og:image" content="https://ree.fm/icon-512.png" />
     <link rel="canonical" href="https://ree.fm" />
-    <title>REEF — ree.fm</title>
+    <title>Reef — ree.fm</title>
   </head>
   <body>
     <div id="root"></div>
