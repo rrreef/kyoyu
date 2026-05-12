@@ -40,8 +40,9 @@ export default function CreatorSidebar() {
   const isDashboard    = location.pathname === '/dashboard';
   const isReleasesPath = location.pathname.startsWith('/releases');
 
-  // Auto-open submenu if on a releases route
+  // Auto-open submenu if on a releases route; always stays open on releases routes
   const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
+  const subOpen = releasesOpen || isReleasesPath;
 
   const toggleReleases = () => setReleasesOpen(o => !o);
 
@@ -76,19 +77,19 @@ export default function CreatorSidebar() {
           <div className={`creator-nav-group ${isReleasesPath ? 'active' : ''}`}>
             <button
               className={`creator-nav-item creator-nav-group__header ${isReleasesPath ? 'active' : ''}`}
-              onClick={toggleReleases}
+              onClick={() => { navigate('/releases'); setReleasesOpen(true); }}
             >
               <Music size={18} strokeWidth={1.8} />
               <span>Releases</span>
               <ChevronDown
                 size={13}
                 strokeWidth={2}
-                className={`creator-nav-chevron ${releasesOpen ? 'open' : ''}`}
+                className={`creator-nav-chevron ${subOpen ? 'open' : ''}`}
               />
             </button>
 
             {/* Submenu */}
-            <div className={`creator-submenu ${releasesOpen ? 'open' : ''}`}>
+            <div className={`creator-submenu ${subOpen ? 'open' : ''}`}>
               {RELEASE_SUB.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
