@@ -196,7 +196,7 @@ function AccountPanel({ user }) {
         <p>Manage your creator profile information</p>
       </div>
 
-      <div className="s-card glass">
+      <div className="s-card glass" style={{ position: 'relative', zIndex: avatarMenu ? 50 : 'auto' }}>
         <div className="s-avatar-row">
 
           {/* Circle avatar — click to open popover */}
