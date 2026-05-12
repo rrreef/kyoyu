@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
          ChevronDown, Globe, Lock, User } from 'lucide-react';
@@ -42,12 +42,12 @@ export default function CreatorSidebar() {
 
   const isArtistsPath = location.pathname === '/artists';
 
-  // Auto-open submenu if on a releases route; always stays open on releases routes
   const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
-  const subOpen = releasesOpen || isReleasesPath;
+  const [artistsOpen,  setArtistsOpen]  = useState(isArtistsPath);
 
-  const [artistsOpen, setArtistsOpen] = useState(isArtistsPath);
-  const artistsSubOpen = artistsOpen || isArtistsPath;
+  // Auto-open when landing on route from outside (e.g. deep link)
+  useEffect(() => { if (isReleasesPath) setReleasesOpen(true); }, [isReleasesPath]);
+  useEffect(() => { if (isArtistsPath)  setArtistsOpen(true);  }, [isArtistsPath]);
 
   // Active artist id from URL
   const activeArtistId = isArtistsPath
@@ -87,19 +87,19 @@ export default function CreatorSidebar() {
           <div className={`creator-nav-group ${isReleasesPath ? 'active' : ''}`}>
             <button
               className={`creator-nav-item creator-nav-group__header ${isReleasesPath ? 'active' : ''}`}
-              onClick={() => { navigate('/releases'); setReleasesOpen(true); }}
+              onClick={() => { navigate('/releases'); setReleasesOpen(o => !o); }}
             >
               <Music size={18} strokeWidth={1.8} />
               <span>Releases</span>
               <ChevronDown
                 size={13}
                 strokeWidth={2}
-                className={`creator-nav-chevron ${subOpen ? 'open' : ''}`}
+                className={`creator-nav-chevron ${releasesOpen ? 'open' : ''}`}
               />
             </button>
 
             {/* Submenu */}
-            <div className={`creator-submenu ${subOpen ? 'open' : ''}`}>
+            <div className={`creator-submenu ${releasesOpen ? 'open' : ''}`}>
               {RELEASE_SUB.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
@@ -117,19 +117,19 @@ export default function CreatorSidebar() {
           <div className={`creator-nav-group ${isArtistsPath ? 'active' : ''}`}>
             <button
               className={`creator-nav-item creator-nav-group__header ${isArtistsPath ? 'active' : ''}`}
-              onClick={() => { navigate('/artists'); setArtistsOpen(true); }}
+              onClick={() => { navigate('/artists'); setArtistsOpen(o => !o); }}
             >
               <Users size={18} strokeWidth={1.8} />
               <span>Artists</span>
               <ChevronDown
                 size={13}
                 strokeWidth={2}
-                className={`creator-nav-chevron ${artistsSubOpen ? 'open' : ''}`}
+                className={`creator-nav-chevron ${artistsOpen ? 'open' : ''}`}
               />
             </button>
 
-            <div className={`creator-submenu ${artistsSubOpen ? 'open' : ''}`}
-              style={{ maxHeight: artistsSubOpen ? `${MOCK_ARTISTS.length * 38}px` : '0' }}
+            <div className={`creator-submenu ${artistsOpen ? 'open' : ''}`}
+              style={{ maxHeight: artistsOpen ? `${MOCK_ARTISTS.length * 38}px` : '0' }}
             >
               {MOCK_ARTISTS.map(a => (
                 <button
