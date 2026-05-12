@@ -133,63 +133,147 @@ export default function CreatorArtists() {
   const location = useLocation();
   const [selected, setSelected] = useState(null);
 
-  // Auto-open artist from sidebar link (?id=N)
+  // Sync selected artist from URL ?id=N
   useEffect(() => {
     const id = new URLSearchParams(location.search).get('id');
     if (id) {
       const found = MOCK_ARTISTS.find(a => String(a.id) === id);
       setSelected(found || null);
+    } else {
+      setSelected(null);
     }
   }, [location.search]);
-
-  const handleSelect = (a) => {
-    setSelected(prev => prev?.id === a.id ? null : a);
-  };
 
   return (
     <div className="page creator-artists-page animate-in">
       <div className="ca-header">
         <div>
-          <h1>Artists</h1>
-          <p className="ca-header-sub">Manage artists releasing on your label</p>
+          <h1>{selected ? selected.name : 'Artists'}</h1>
+          <p className="ca-header-sub">
+            {selected ? selected.genre : 'Select an artist from the sidebar'}
+          </p>
         </div>
         <button className="ca-add-btn"><Plus size={14}/> Add Artist</button>
       </div>
 
-      <div className={`ca-layout ${selected ? 'ca-layout--split' : ''}`}>
-        {/* Artist grid */}
-        <div className="ca-grid">
-          {MOCK_ARTISTS.map(a => {
-            const isSelected = selected?.id === a.id;
-            const isDimmed   = selected && !isSelected;
-            return (
-              <div
-                key={a.id}
-                className={`ca-card ${isSelected ? 'ca-card--selected' : ''} ${isDimmed ? 'ca-card--dimmed' : ''}`}
-                onClick={() => handleSelect(a)}
-              >
-                <div
-                  className="ca-card-avatar"
-                  style={{
-                    background: `radial-gradient(circle at 40% 40%, ${a.color}33, ${a.color}11)`,
-                    border: `1.5px solid ${a.color}44`,
-                  }}
-                >
-                  <span style={{ color: a.color }}>{a.initials}</span>
-                  {isSelected && <div className="ca-card-selected-ring" style={{ borderColor: a.color }}/>}
-                </div>
-                <div className="ca-card-name">{a.name}</div>
-                <div className="ca-card-genre">{a.genre}</div>
-                <div className="ca-card-loc"><MapPin size={9}/> {a.location}</div>
-              </div>
-            );
-          })}
+      {selected ? (
+        <ArtistDetail artist={selected} />
+      ) : (
+        <div className="ca-empty-state">
+          <div className="ca-empty-icon">
+            <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="12" r="5" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
+              <path d="M6 26c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <p className="ca-empty-text">Select an artist from the left menu</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Full-width artist detail ───────────────────────────────── */
+function ArtistDetail({ artist }) {
+  const [name,         setName]         = useState(artist.name);
+  const [location,     setLocation]     = useState(artist.location);
+  const [disciplines,  setDisciplines]  = useState([...artist.disciplines]);
+  const [bio,          setBio]          = useState(artist.bio);
+  const [performances, setPerformances] = useState([...artist.performances]);
+  const [newPerf,      setNewPerf]      = useState('');
+  const [saved,        setSaved]        = useState(false);
+
+  // Reset form when artist changes
+  useEffect(() => {
+    setName(artist.name);
+    setLocation(artist.location);
+    setDisciplines([...artist.disciplines]);
+    setBio(artist.bio);
+    setPerformances([...artist.performances]);
+    setSaved(false);
+  }, [artist.id]);
+
+  const addPerf = () => {
+    if (!newPerf.trim()) return;
+    setPerformances(p => [...p, newPerf.trim()]);
+    setNewPerf('');
+  };
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <div className="ca-artist-detail">
+      {/* Hero header */}
+      <div className="ca-detail-hero" style={{ borderColor: artist.color + '33' }}>
+        <div
+          className="ca-detail-avatar"
+          style={{
+            background: `radial-gradient(circle at 40% 40%, ${artist.color}44, ${artist.color}11)`,
+            borderColor: artist.color + '55',
+          }}
+        >
+          <span style={{ color: artist.color }}>{artist.initials}</span>
+        </div>
+        <div>
+          <input
+            className="ca-detail-name-input"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+          <div className="ca-detail-genre">{artist.genre}</div>
+        </div>
+      </div>
+
+      {/* Fields grid */}
+      <div className="ca-detail-grid">
+        {/* Location */}
+        <div className="ca-panel-field">
+          <label><MapPin size={12}/> Location</label>
+          <input value={location} onChange={e => setLocation(e.target.value)} placeholder="City, Country" />
         </div>
 
-        {/* Detail panel */}
-        {selected && (
-          <DetailPanel artist={selected} onClose={() => setSelected(null)} />
-        )}
+        {/* Disciplines */}
+        <div className="ca-panel-field">
+          <label><Mic2 size={12}/> Disciplines</label>
+          <TagList tags={disciplines} setTags={setDisciplines} />
+        </div>
+
+        {/* Bio — full width */}
+        <div className="ca-panel-field ca-field-full">
+          <label><FileText size={12}/> Artist Bio</label>
+          <textarea rows={5} value={bio} onChange={e => setBio(e.target.value)} />
+        </div>
+
+        {/* Performances — full width */}
+        <div className="ca-panel-field ca-field-full">
+          <label><Calendar size={12}/> Performances</label>
+          <div className="ca-perf-list">
+            {performances.map((p, i) => (
+              <div key={i} className="ca-perf-row">
+                <span>{p}</span>
+                <button onClick={() => setPerformances(prev => prev.filter((_,j) => j !== i))}><X size={10}/></button>
+              </div>
+            ))}
+          </div>
+          <div className="ca-tag-input-row" style={{ marginTop: 8 }}>
+            <input
+              value={newPerf}
+              onChange={e => setNewPerf(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addPerf()}
+              placeholder="Add performance (e.g. Venue, City — Month Year)"
+            />
+            <button className="ca-tag-add" onClick={addPerf}><Plus size={12}/></button>
+          </div>
+        </div>
+      </div>
+
+      {/* Save */}
+      <div className="ca-panel-actions">
+        {saved && <span className="ca-saved-toast"><CheckCircle2 size={13}/> Saved</span>}
+        <button className="ca-save-btn" onClick={handleSave}><Save size={13}/> Save Changes</button>
       </div>
     </div>
   );

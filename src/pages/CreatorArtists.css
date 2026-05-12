@@ -266,3 +266,81 @@
   .ca-layout { flex-direction: column; }
   .ca-detail-panel { width: 100%; max-height: unset; }
 }
+
+/* ─── Full-width artist detail (new layout) ────────────────── */
+.ca-artist-detail {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.ca-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-5) 0 var(--sp-5);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.ca-detail-avatar {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  border: 1.5px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ca-detail-name-input {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.92);
+  font-family: var(--font-body);
+  letter-spacing: -0.01em;
+  width: 100%;
+  padding: 0;
+}
+.ca-detail-name-input:hover,
+.ca-detail-name-input:focus {
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.ca-detail-genre {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.38);
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Two-column responsive grid for fields */
+.ca-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-5);
+}
+.ca-field-full { grid-column: 1 / -1; }
+
+/* Empty state */
+.ca-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: 80px 0;
+  color: rgba(255,255,255,0.2);
+}
+.ca-empty-icon { opacity: 0.5; }
+.ca-empty-text {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 600px) {
+  .ca-detail-grid { grid-template-columns: 1fr; }
+  .ca-field-full  { grid-column: 1; }
+}
