@@ -135,6 +135,52 @@ export function AuthProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  /* ── Window focus / visibility: re-fetch avatar from DB (cross-browser fallback) ──
+     Works even without Supabase Realtime enabled on the profiles table.
+     Fires when user switches tabs/browsers, wakes device, or returns to the app. */
+  useEffect(() => {
+    const uid = userRef.current?.id;
+    if (!uid) return;
+
+    async function syncAvatar() {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', uid)
+          .single();
+        const newUrl = data?.avatar_url ?? null;
+        setAvatarSrcRaw(prev => {
+          if (prev === newUrl) return prev; // nothing changed
+          if (newUrl) {
+            try { localStorage.setItem('kyoyu-avatar-' + uid, newUrl); } catch (_) {}
+            try { window.webkit?.messageHandlers?.avatar?.postMessage(newUrl); } catch (_) {}
+          } else {
+            try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
+            try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+          }
+          return newUrl;
+        });
+      } catch (_) {}
+    }
+
+    // Sync immediately and on tab focus / page visibility change
+    syncAvatar();
+    window.addEventListener('focus', syncAvatar);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncAvatar();
+    });
+
+    // Poll every 60s as final fallback (covers background tabs that never get focus)
+    const poll = setInterval(syncAvatar, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', syncAvatar);
+      clearInterval(poll);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   /* ── Pull role + profile from DB ── */
   async function hydrateUser(authUser) {
     const { data: profile } = await supabase
