@@ -696,3 +696,4 @@
 .s-layout-btn.active { background:var(--glass-bg-elevated);border-color:var(--glass-border-light);color:var(--text-primary); }
 .s-layout-hint { display:flex;flex-direction:column;gap:3px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--glass-border-subtle); }
 .s-layout-hint span { display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text-dim); }
+/* cache bust 1778610993 */
