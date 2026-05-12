@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   User, BarChart3, Bell, Globe, ShieldCheck, CreditCard,
   ChevronRight, RotateCcw, Check, Wifi, WifiOff, CheckCircle2,
-  Camera, Paintbrush2,
+  Camera, Paintbrush2, LogOut,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
@@ -10,6 +10,7 @@ import { setVIState, useVIStore } from '../lib/visualIdentityStore';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
 import './Settings.css';
+import '../components/nav/Sidebar.css'; // sidebar-logout class
 
 /* ─── Helpers: resize image via canvas ───────────────────────── */
 function resizeViaCanvas(imgEl, maxPx, mimeType = 'image/jpeg', quality = 0.85) {
@@ -678,7 +679,7 @@ function BillingPanel() {
 /* ─── Main Settings page ─────────────────────────────────── */
 export default function Settings() {
   const [active, setActive] = useState('dashboard');
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const panels = {
     account:       <AccountPanel user={user} />,
@@ -706,6 +707,12 @@ export default function Settings() {
             <ChevronRight size={12} className="s-nav-chevron" />
           </button>
         ))}
+
+        {/* Sign out — same design as listener sidebar */}
+        <button className="sidebar-logout" onClick={logout} title="Sign out">
+          <LogOut size={14} strokeWidth={1.8} />
+          <span>Sign out</span>
+        </button>
       </aside>
 
       {/* Right content */}
