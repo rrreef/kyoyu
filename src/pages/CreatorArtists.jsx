@@ -249,8 +249,7 @@ function ArtistRoster({ artists, view, navigate }) {
     return (
       <div className="ca-roster-list">
         {artists.map(a => (
-          <button key={a.id} className="ca-roster-list-item" onClick={() => navigate(`/artists?id=${a.id}`)}
-          >
+          <button key={a.id} className="ca-roster-list-item" onClick={() => navigate(`/artists?id=${a.id}`)}>
             <div className="ca-roster-avatar-sm" style={{
               background: `radial-gradient(circle at 40% 40%, ${a.color}33, ${a.color}11)`,
               borderColor: a.color + '44',
@@ -258,6 +257,7 @@ function ArtistRoster({ artists, view, navigate }) {
               <span style={{ color: a.color }}>{a.initials}</span>
             </div>
             <span className="ca-roster-name">{a.name}</span>
+            {a.location && <span className="ca-roster-location">{a.location}</span>}
           </button>
         ))}
       </div>
