@@ -242,7 +242,7 @@ const KPI_CFG = {
   streams:   { icon:TrendingUp, label:'Total Streams', fmtT: v=>fmtBig(v),      fmtI: v=>fmtBig(v),        cls:'' },
   downloads: { icon:Download,   label:'Downloads',     fmtT: v=>fmtBig(v),      fmtI: v=>fmtBig(v),        cls:'' },
   vinyl:     { icon:Disc3,      label:'Vinyl Sold',    fmtT: v=>v.toLocaleString(), fmtI: v=>`${v} copies`, cls:'' },
-  revenue:   { icon:DollarSign, label:'Total Revenue', fmtT: v=>fmtEurFull(v),  fmtI: v=>`€${v.toFixed(2)}`,cls:'highlight' },
+  revenue:   { icon:DollarSign, label:'Total Revenue', fmtT: v=>fmtEurFull(v),  fmtI: v=>`€${v.toFixed(2)}`,cls:'' },
 };
 
 function KpiCard({ type, layout, accent = 'orange' }) {
