@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   User, BarChart3, Bell, Globe, ShieldCheck, CreditCard,
   ChevronRight, RotateCcw, Check, Wifi, WifiOff, CheckCircle2,
@@ -130,6 +130,19 @@ function AccountPanel({ user }) {
   const avatarObjPos   = vi.avatarPosition ? `${vi.avatarPosition.x}% ${vi.avatarPosition.y}%` : '50% 50%';
   const [avatarMenu, setAvatarMenu] = useState(false);
   const avatarFileRef = useRef();
+  const avatarWrapRef = useRef();
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!avatarMenu) return;
+    function handleOutside(e) {
+      if (avatarWrapRef.current && !avatarWrapRef.current.contains(e.target)) {
+        setAvatarMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [avatarMenu]);
 
   /* Handle file from input or drop — convert to data URL for persistence + native sync */
   const processAvatarFile = async (f) => {
@@ -187,7 +200,7 @@ function AccountPanel({ user }) {
         <div className="s-avatar-row">
 
           {/* Circle avatar — click to open popover */}
-          <div className="s-avatar-wrap" onClick={() => setAvatarMenu(m => !m)}>
+          <div ref={avatarWrapRef} className="s-avatar-wrap" onClick={() => setAvatarMenu(m => !m)}>
             {avatarImage
               ? <img src={avatarImage} alt="profile" className="s-avatar-img" style={{ objectPosition: avatarObjPos }}/>
               : <div className="s-avatar-initial">{displayInitial}</div>
@@ -197,11 +210,6 @@ function AccountPanel({ user }) {
             </div>
             <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:'none' }}
               onChange={e => { handleAvatarInput(e); setAvatarMenu(false); }}/>
-            {avatarImage && (
-              <button type="button" className="s-avatar-remove"
-                onClick={e => { e.stopPropagation(); setVIState({ avatarImage: null }); setAvatarSrc(null); }}
-                title="Remove">×</button>
-            )}
             {avatarMenu && (
               <div className="avatar-menu" onClick={e => e.stopPropagation()}>
                 <button className="avatar-menu-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
