@@ -12,21 +12,40 @@ export default function ResetPassword() {
   const [validLink, setValidLink] = useState(null); // null = checking
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.replace('#', '?'));
+    // ── Approach 1: query-param token_hash (email link → ree.fm/auth/reset?token_hash=X)
+    // Safe from email scanners — scanners fetch HTML but don't run JS
+    const searchParams = new URLSearchParams(window.location.search);
+    const tokenHash = searchParams.get('token_hash');
+    const type      = searchParams.get('type') || 'recovery';
 
-    // Supabase error hash (expired/invalid) — show expired immediately
-    if (params.get('error') || params.get('error_code')) {
+    if (tokenHash) {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+        .then(({ error }) => {
+          if (error) {
+            console.error('verifyOtp error:', error.message);
+            setValidLink(false);
+          } else {
+            setValidLink(true);
+            // Clean the token out of the URL bar
+            window.history.replaceState({}, '', '/auth/reset');
+          }
+        });
+      return;
+    }
+
+    // ── Approach 2: hash access_token (legacy Supabase redirect flow)
+    const hash = window.location.hash;
+    const hashParams = new URLSearchParams(hash.replace('#', '?'));
+
+    if (hashParams.get('error') || hashParams.get('error_code')) {
       setValidLink(false);
       return;
     }
 
-    // Listen for PASSWORD_RECOVERY session event
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setValidLink(true);
     });
 
-    // No token in hash at all → mark invalid after brief wait
     if (!hash.includes('access_token')) {
       const t = setTimeout(() => setValidLink(v => v === null ? false : v), 900);
       return () => { clearTimeout(t); subscription.unsubscribe(); };
