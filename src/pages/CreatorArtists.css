@@ -65,18 +65,16 @@
 }
 .ca-avatar-wrap:hover .ca-avatar-overlay { opacity: 1; }
 
-/* Avatar popover menu (matches Profile.css pattern) */
+/* Avatar popover menu */
 .avatar-menu {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
   z-index: 200;
-  background: rgba(28,28,34,0.95);
-  border: 1px solid rgba(255,255,255,0.10);
+  background: #0f0f12;
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.8);
   overflow: hidden;
   min-width: 130px;
   animation: popoverIn 0.15s cubic-bezier(0.16,1,0.3,1) both;
