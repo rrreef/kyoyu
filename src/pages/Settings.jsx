@@ -33,12 +33,14 @@ function loadImage(file) {
   });
 }
 
-async function uploadAvatarToSupabase(file, userId) {
-  if (!userId) return null;
+async function uploadAvatarToSupabase(dataUrl, userId) {
+  if (!userId || !dataUrl) return null;
   try {
+    // Convert canvas data URL → real JPEG blob (guaranteed format, correct MIME)
+    const blob = await fetch(dataUrl).then(r => r.blob());
     const { error } = await supabase.storage
       .from('avatars')
-      .upload(`${userId}/avatar.jpg`, file, { contentType: 'image/jpeg', upsert: true });
+      .upload(`${userId}/avatar.jpg`, blob, { contentType: 'image/jpeg', upsert: true });
     if (error) { console.warn('[avatar upload]', error.message); return null; }
     const { data } = supabase.storage.from('avatars').getPublicUrl(`${userId}/avatar.jpg`);
     return data?.publicUrl || null;
@@ -116,7 +118,7 @@ function SavedToast({ visible }) {
 /* ─── Section panels ─────────────────────────────────────── */
 
 function AccountPanel({ user }) {
-  const { updateProfile, setAvatarSrc } = useAuth();
+  const { updateProfile, setAvatarSrc, avatarSrc } = useAuth();
   const [vi]         = useVIStore();
   const [artistName, setArtistName] = useState(user?.artistName || '');
   const [bio,        setBio]        = useState(user?.bio        || '');
@@ -126,7 +128,8 @@ function AccountPanel({ user }) {
   let _avatarUid = 'acct-avatar-upload';
 
   const displayInitial = (artistName || user?.name || 'A')[0].toUpperCase();
-  const avatarImage    = vi.avatarImage;
+  // vi.avatarImage is the freshly-uploaded preview; fall back to persisted avatarSrc on refresh
+  const avatarImage    = vi.avatarImage || avatarSrc || null;
   const avatarObjPos   = vi.avatarPosition ? `${vi.avatarPosition.x}% ${vi.avatarPosition.y}%` : '50% 50%';
   const [avatarMenu, setAvatarMenu] = useState(false);
   const avatarFileRef = useRef();
@@ -153,17 +156,24 @@ function AccountPanel({ user }) {
       // 1️⃣ Immediate local preview — TopBar + Settings card both update NOW
       const displayDataUrl = resizeViaCanvas(img, 800);
       setVIState({ avatarImage: displayDataUrl });
-      setAvatarSrc(displayDataUrl, user?.id); // ← instant TopBar update
+      setAvatarSrc(displayDataUrl, user?.id);
 
       // 2️⃣ Send tiny thumbnail to native bridge RIGHT NOW
       const thumbDataUrl = resizeViaCanvas(img, 80, 'image/jpeg', 0.8);
       try { window.webkit?.messageHandlers?.avatar?.postMessage(thumbDataUrl); } catch (_) {}
 
-      // 3️⃣ Upload to Supabase — stable URL for cross-device sync (triggers Realtime)
-      const publicUrl = await uploadAvatarToSupabase(f, user?.id);
+      // 3️⃣ Upload JPEG blob to Supabase Storage for stable cross-device URL
+      const publicUrl = await uploadAvatarToSupabase(displayDataUrl, user?.id);
       if (publicUrl) {
+        // Storage succeeded — save public CDN URL to profile
         await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl });
-        setAvatarSrc(publicUrl, user?.id); // replace local blob with stable CDN URL
+        setAvatarSrc(publicUrl, user?.id);
+      } else {
+        // Storage failed — save compressed data URL directly to DB as fallback
+        // Smaller size so it fits in DB and Realtime payload
+        const fallbackUrl = resizeViaCanvas(img, 400, 'image/jpeg', 0.72);
+        await supabase.from('profiles').upsert({ id: user.id, avatar_url: fallbackUrl }).catch(console.warn);
+        // avatarSrc already set to displayDataUrl above — no extra call needed
       }
     } catch (e) {
       console.warn('[processAvatarFile]', e);
