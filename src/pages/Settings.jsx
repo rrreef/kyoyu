@@ -211,7 +211,11 @@ function AccountPanel({ user }) {
             <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:'none' }}
               onChange={e => { handleAvatarInput(e); setAvatarMenu(false); }}/>
             {avatarMenu && (
-              <div className="s-avatar-popover" onClick={e => e.stopPropagation()}>
+              <div
+                className="s-avatar-popover"
+                style={{ background: '#0f0f12', backdropFilter: 'none' }}
+                onClick={e => e.stopPropagation()}
+              >
                 <button className="s-avatar-popover-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
                   {avatarImage ? 'Replace photo' : 'Add photo'}
                 </button>

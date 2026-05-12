@@ -36,7 +36,7 @@ export default function Profile() {
       {avatarMenu && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setAvatarMenu(false)} />
-          <div className="avatar-menu">
+          <div className="avatar-menu" style={{ background: '#0f0f12', backdropFilter: 'none' }}>
             <button className="avatar-menu-item" onClick={() => fileRef.current.click()}>
               {avatarSrc ? 'Replace' : 'Add photo'}
             </button>
