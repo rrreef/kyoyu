@@ -136,16 +136,11 @@ function ListenerApp() {
 }
 
 // ─── Creator shell ────────────────────────────────────────
-// Only hide the creator sidebar for the full-screen profile page.
-// Settings is part of the creator portal and should keep the sidebar visible.
-const CREATOR_HIDE_SIDEBAR = new Set(['/profile']);
-
+// The creator sidebar is always visible — no route hides it.
 function CreatorApp() {
-  const { pathname } = useLocation();
-  const hideSidebar = CREATOR_HIDE_SIDEBAR.has(pathname);
   return (
     <div className="app-layout">
-      {!hideSidebar && <CreatorSidebar />}
+      <CreatorSidebar />
       <div className="main-content" style={{ paddingBottom: '32px' }}>
         <TopBar showSearch={false} />
         <Routes>
