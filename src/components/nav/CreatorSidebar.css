@@ -120,7 +120,7 @@
   padding-left: 28px; /* indent = icon (18) + gap (10) */
 }
 .creator-submenu.open {
-  max-height: 120px;
+  max-height: 320px; /* enough for 6+ artists */
   opacity: 1;
 }
 

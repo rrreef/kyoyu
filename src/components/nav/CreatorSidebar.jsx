@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
-         ChevronDown, Globe, Lock } from 'lucide-react';
+         ChevronDown, Globe, Lock, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { MOCK_ARTISTS } from '../../data/artistsData';
 import './CreatorSidebar.css';
 
 const LogoMark = () => (
@@ -14,7 +15,6 @@ const LogoMark = () => (
 
 const creatorNav = [
   { to: '/upload',          label: 'Upload',           icon: Upload   },
-  { to: '/artists',         label: 'Artists',          icon: Users    },
   { to: '/visual-identity', label: 'Visual Identity',  icon: Palette  },
   { to: '/settings',        label: 'Settings',         icon: Settings },
 ];
@@ -40,9 +40,19 @@ export default function CreatorSidebar() {
   const isDashboard    = location.pathname === '/dashboard';
   const isReleasesPath = location.pathname.startsWith('/releases');
 
+  const isArtistsPath = location.pathname === '/artists';
+
   // Auto-open submenu if on a releases route; always stays open on releases routes
   const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
   const subOpen = releasesOpen || isReleasesPath;
+
+  const [artistsOpen, setArtistsOpen] = useState(isArtistsPath);
+  const artistsSubOpen = artistsOpen || isArtistsPath;
+
+  // Active artist id from URL
+  const activeArtistId = isArtistsPath
+    ? new URLSearchParams(location.search).get('id')
+    : null;
 
   const toggleReleases = () => setReleasesOpen(o => !o);
 
@@ -99,6 +109,37 @@ export default function CreatorSidebar() {
                   <Icon size={13} strokeWidth={1.8} />
                   <span>{label}</span>
                 </NavLink>
+              ))}
+            </div>
+          </div>
+
+          {/* Artists — with submenu */}
+          <div className={`creator-nav-group ${isArtistsPath ? 'active' : ''}`}>
+            <button
+              className={`creator-nav-item creator-nav-group__header ${isArtistsPath ? 'active' : ''}`}
+              onClick={() => { navigate('/artists'); setArtistsOpen(true); }}
+            >
+              <Users size={18} strokeWidth={1.8} />
+              <span>Artists</span>
+              <ChevronDown
+                size={13}
+                strokeWidth={2}
+                className={`creator-nav-chevron ${artistsSubOpen ? 'open' : ''}`}
+              />
+            </button>
+
+            <div className={`creator-submenu ${artistsSubOpen ? 'open' : ''}`}
+              style={{ maxHeight: artistsSubOpen ? `${MOCK_ARTISTS.length * 38}px` : '0' }}
+            >
+              {MOCK_ARTISTS.map(a => (
+                <button
+                  key={a.id}
+                  className={`creator-submenu-item ${activeArtistId === String(a.id) ? 'active' : ''}`}
+                  onClick={() => navigate(`/artists?id=${a.id}`)}
+                >
+                  <User size={12} strokeWidth={1.8} />
+                  <span>{a.name}</span>
+                </button>
               ))}
             </div>
           </div>

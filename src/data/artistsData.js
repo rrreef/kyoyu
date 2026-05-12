@@ -1,0 +1,28 @@
+/* ─── Shared artist roster ─────────────────────────────────── */
+/* Source of truth for mock data — imported by sidebar + page   */
+export const MOCK_ARTISTS = [
+  { id:1, name:'Valeria Moor',    genre:'Techno / Industrial',       location:'Berlin, DE',          initials:'VM', color:'#9b6dff',
+    disciplines:['DJ','Producer','Vocalist'],
+    bio:'Valeria Moor crafts relentless techno landscapes where rhythm meets narratives of solitude and urban decay.',
+    performances:['Berghain, Berlin — Apr 2026','Tresor, Berlin — Feb 2026','Fabric, London — Dec 2025'] },
+  { id:2, name:'Oskar Lund',      genre:'Ambient / Drone',           location:'Stockholm, SE',        initials:'OL', color:'#29b6f6',
+    disciplines:['Composer','Sound Designer'],
+    bio:'Oskar Lund sculpts immersive soundscapes that blur the boundary between acoustic and electronic worlds.',
+    performances:['Moderna Museet, Stockholm — Mar 2026','Atonal Festival — Aug 2025'] },
+  { id:3, name:'Léa Fontaine',    genre:'Deep House',                location:'Paris, FR',            initials:'LF', color:'#ce93d8',
+    disciplines:['DJ','Producer'],
+    bio:'Léa Fontaine is a Paris-based selector and producer known for her late-night deep house sets.',
+    performances:['Rex Club, Paris — Apr 2026','Concrete, Paris — Jan 2026'] },
+  { id:4, name:'Mir Hashemi',     genre:'Experimental',              location:'Tehran / Amsterdam',   initials:'MH', color:'#50c878',
+    disciplines:['Composer','Performer','Visual Artist'],
+    bio:'Mir bridges Persian classical structures with modular synthesis in a genre-defying live act.',
+    performances:['Unsound, Kraków — Oct 2025','CTM Festival — Feb 2025'] },
+  { id:5, name:'Dela Cruz',       genre:'Electronic / Breakbeat',    location:'Manila, PH',           initials:'DC', color:'#ff6b1a',
+    disciplines:['Producer','DJ'],
+    bio:'Dela Cruz brings the rhythmic density of Filipino percussion into contemporary electronic music.',
+    performances:['Moni Club, Manila — Mar 2026'] },
+  { id:6, name:'Hanna Strøm',     genre:'Nordic Folk / Electronic',  location:'Oslo, NO',             initials:'HS', color:'#f43f5e',
+    disciplines:['Singer-Songwriter','Multi-Instrumentalist'],
+    bio:'Hanna weaves Norse mythology into fragile electronic folk that resonates across cultural boundaries.',
+    performances:['Øya Festival — Aug 2025','Rockefeller, Oslo — Apr 2026'] },
+];
