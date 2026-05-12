@@ -211,12 +211,12 @@ function AccountPanel({ user }) {
             <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:'none' }}
               onChange={e => { handleAvatarInput(e); setAvatarMenu(false); }}/>
             {avatarMenu && (
-              <div className="avatar-menu" onClick={e => e.stopPropagation()}>
-                <button className="avatar-menu-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
+              <div className="s-avatar-popover" onClick={e => e.stopPropagation()}>
+                <button className="s-avatar-popover-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
                   {avatarImage ? 'Replace photo' : 'Add photo'}
                 </button>
                 {avatarImage && (
-                  <button className="avatar-menu-item avatar-menu-remove-item"
+                  <button className="s-avatar-popover-item s-avatar-popover-remove"
                     onClick={() => { setVIState({ avatarImage: null }); setAvatarSrc(null); setAvatarMenu(false); }}>
                     Remove photo
                   </button>
