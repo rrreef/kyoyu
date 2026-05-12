@@ -358,3 +358,86 @@
   .ca-detail-columns  { grid-template-columns: 1fr; }
   .ca-data-row-two    { grid-template-columns: 1fr; }
 }
+
+/* ─── Header actions (toggle + add button) ───────────────── */
+.ca-header-actions {
+  display: flex; align-items: center; gap: var(--sp-3);
+}
+
+.ca-view-toggle {
+  display: flex;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.ca-view-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: none; border: none;
+  color: rgba(255,255,255,0.28);
+  cursor: pointer; transition: all 0.14s;
+}
+.ca-view-btn:hover { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.05); }
+.ca-view-btn.active { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.07); }
+
+/* ─── Add artist inline form ─────────────────────────────── */
+.ca-add-artist-form {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) 0 var(--sp-2);
+  animation: fade-in 0.15s ease;
+}
+
+/* ─── Roster: grid view ──────────────────────────────────── */
+.ca-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: var(--sp-5) var(--sp-4);
+  padding: var(--sp-2) 0;
+}
+.ca-roster-grid-item {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: none; border: none; cursor: pointer;
+  padding: var(--sp-3);
+  border-radius: var(--radius-lg);
+  transition: background 0.14s;
+  color: inherit;
+}
+.ca-roster-grid-item:hover { background: rgba(255,255,255,0.04); }
+
+.ca-roster-avatar-lg {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; font-weight: 700;
+  transition: transform 0.15s;
+}
+.ca-roster-grid-item:hover .ca-roster-avatar-lg { transform: scale(1.06); }
+
+/* ─── Roster: list view ──────────────────────────────────── */
+.ca-roster-list {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--sp-2) 0;
+}
+.ca-roster-list-item {
+  display: flex; align-items: center; gap: var(--sp-4);
+  background: none; border: none; cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  transition: background 0.14s;
+  color: inherit; text-align: left; width: 100%;
+}
+.ca-roster-list-item:hover { background: rgba(255,255,255,0.04); }
+
+.ca-roster-avatar-sm {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700;
+}
+
+.ca-roster-name {
+  font-size: 0.9rem; font-weight: 500;
+  color: rgba(255,255,255,0.82);
+}

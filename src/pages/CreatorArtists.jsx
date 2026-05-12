@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import {
   MapPin, Mic2, FileText, Calendar, Plus, X, Save, CheckCircle2,
   Link2, Video, Image, Film, Quote, Package, Layout, Upload, GripVertical,
-  Camera,
+  Camera, LayoutGrid, List, Check,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MOCK_ARTISTS } from '../data/artistsData';
 import './CreatorArtists.css';
 
@@ -141,18 +141,39 @@ function Section({ icon, title, children }) {
 
 /* ─── Main page ─────────────────────────────────────────── */
 export default function CreatorArtists() {
-  const location = useLocation();
+  const location  = useLocation();
+  const navigate  = useNavigate();
   const [selected, setSelected] = useState(null);
+  const [view,     setView]     = useState('grid'); // 'grid' | 'list'
+  const [artists,  setArtists]  = useState(MOCK_ARTISTS);
+  const [adding,   setAdding]   = useState(false);
+  const [newName,  setNewName]  = useState('');
 
   useEffect(() => {
     const id = new URLSearchParams(location.search).get('id');
     if (id) {
-      const found = MOCK_ARTISTS.find(a => String(a.id) === id);
+      const found = artists.find(a => String(a.id) === id);
       setSelected(found || null);
     } else {
       setSelected(null);
     }
-  }, [location.search]);
+  }, [location.search, artists]);
+
+  function handleAddArtist() {
+    const name = newName.trim();
+    if (!name) { setAdding(false); return; }
+    const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const newArtist = {
+      id: Date.now(), name, initials,
+      genre: 'Genre TBD', location: '',
+      color: '#9b6dff',
+      disciplines: [], bio: '', performances: [],
+    };
+    setArtists(prev => [newArtist, ...prev]);
+    setNewName('');
+    setAdding(false);
+    navigate(`/artists?id=${newArtist.id}`);
+  }
 
   return (
     <div className="page creator-artists-page animate-in">
@@ -160,25 +181,103 @@ export default function CreatorArtists() {
         <div>
           <h1>{selected ? selected.name : 'Artists'}</h1>
           <p className="ca-header-sub">
-            {selected ? selected.genre : 'Select an artist from the sidebar'}
+            {selected ? selected.genre : `${artists.length} artists on your roster`}
           </p>
         </div>
-        <button className="ca-add-btn"><Plus size={14}/> Add Artist</button>
+        <div className="ca-header-actions">
+          {!selected && (
+            <div className="ca-view-toggle">
+              <button
+                className={`ca-view-btn ${view === 'grid' ? 'active' : ''}`}
+                onClick={() => setView('grid')} title="Grid view"
+              ><LayoutGrid size={14}/></button>
+              <button
+                className={`ca-view-btn ${view === 'list' ? 'active' : ''}`}
+                onClick={() => setView('list')} title="List view"
+              ><List size={14}/></button>
+            </div>
+          )}
+          <button className="ca-add-btn" onClick={() => setAdding(true)}>
+            <Plus size={14}/> Add Artist
+          </button>
+        </div>
       </div>
+
+      {/* Inline add-artist form */}
+      {adding && (
+        <div className="ca-add-artist-form">
+          <input
+            autoFocus
+            className="ca-field-input"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddArtist(); if (e.key === 'Escape') { setAdding(false); setNewName(''); } }}
+            placeholder="Artist name…"
+            style={{ maxWidth: 280 }}
+          />
+          <button className="ca-icon-btn" onClick={handleAddArtist} title="Confirm"><Check size={13}/></button>
+          <button className="ca-icon-btn" onClick={() => { setAdding(false); setNewName(''); }} title="Cancel"><X size={13}/></button>
+        </div>
+      )}
 
       {selected ? (
         <ArtistDetail key={selected.id} artist={selected} />
       ) : (
-        <div className="ca-empty-state">
-          <div className="ca-empty-icon">
-            <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
-              <circle cx="16" cy="12" r="5" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
-              <path d="M6 26c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <p className="ca-empty-text">Select an artist from the left menu</p>
-        </div>
+        <ArtistRoster artists={artists} view={view} navigate={navigate} />
       )}
+    </div>
+  );
+}
+
+/* ─── Artist roster (list / grid) ────────────────────────── */
+function ArtistRoster({ artists, view, navigate }) {
+  if (artists.length === 0) {
+    return (
+      <div className="ca-empty-state">
+        <div className="ca-empty-icon">
+          <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="12" r="5" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
+            <path d="M6 26c0-5.523 4.477-10 10-10s10 4.477 10 10" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <p className="ca-empty-text">No artists yet — add your first one</p>
+      </div>
+    );
+  }
+
+  if (view === 'list') {
+    return (
+      <div className="ca-roster-list">
+        {artists.map(a => (
+          <button key={a.id} className="ca-roster-list-item" onClick={() => navigate(`/artists?id=${a.id}`)}
+          >
+            <div className="ca-roster-avatar-sm" style={{
+              background: `radial-gradient(circle at 40% 40%, ${a.color}33, ${a.color}11)`,
+              borderColor: a.color + '44',
+            }}>
+              <span style={{ color: a.color }}>{a.initials}</span>
+            </div>
+            <span className="ca-roster-name">{a.name}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ca-roster-grid">
+      {artists.map(a => (
+        <button key={a.id} className="ca-roster-grid-item" onClick={() => navigate(`/artists?id=${a.id}`)}
+        >
+          <div className="ca-roster-avatar-lg" style={{
+            background: `radial-gradient(circle at 40% 40%, ${a.color}33, ${a.color}11)`,
+            borderColor: a.color + '44',
+          }}>
+            <span style={{ color: a.color }}>{a.initials}</span>
+          </div>
+          <span className="ca-roster-name">{a.name}</span>
+        </button>
+      ))}
     </div>
   );
 }
