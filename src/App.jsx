@@ -142,7 +142,7 @@ function CreatorApp() {
     <div className="app-layout">
       <CreatorSidebar />
       <div className="main-content" style={{ paddingBottom: '32px' }}>
-        <TopBar showSearch={false} />
+        <TopBar showSearch={true} />
         <Routes>
           <Route path="/dashboard"       element={<Dashboard />} />
           <Route path="/upload"          element={<Upload />} />
