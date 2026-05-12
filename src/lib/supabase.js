@@ -15,6 +15,10 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      // 'implicit' uses hash-based token flow — required for verifyOtp({ token_hash })
+      // PKCE (default) generates a code_verifier that verifyOtp doesn't send, causing
+      // "Email link is invalid or has expired" errors.
+      flowType: 'implicit',
     },
   }
 );
