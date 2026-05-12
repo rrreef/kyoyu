@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   MapPin, Mic2, FileText, Calendar, Plus, X, Save, CheckCircle2,
   Link2, Video, Image, Film, Quote, Package, Layout, Upload, GripVertical,
+  Camera,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { MOCK_ARTISTS } from '../data/artistsData';
@@ -195,6 +196,17 @@ function ArtistDetail({ artist }) {
   const [promoItems,  setPromoItems]  = useState([]);
   const [pageItems,   setPageItems]   = useState([]);
   const [saved,       setSaved]       = useState(false);
+  const [avatarSrc,   setAvatarSrc]   = useState(null);
+  const [avatarMenu,  setAvatarMenu]  = useState(false);
+  const fileRef = useRef();
+
+  function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setAvatarSrc(url);
+    setAvatarMenu(false);
+  }
 
   const addPerf = () =>
     setPerformances(p => [...p, { id: Date.now(), text:'', link:'', video:'', gif:'', photo:'' }]);
@@ -206,11 +218,34 @@ function ArtistDetail({ artist }) {
 
       {/* Hero */}
       <div className="ca-detail-hero">
-        <div className="ca-detail-avatar" style={{
-          background: `radial-gradient(circle at 40% 40%, ${artist.color}33, ${artist.color}11)`,
-          borderColor: artist.color + '44',
-        }}>
-          <span style={{ color: artist.color }}>{artist.initials}</span>
+        {/* Avatar — circle, click to upload */}
+        <div className="ca-avatar-wrap" onClick={() => setAvatarMenu(m => !m)}>
+          {avatarSrc
+            ? <img src={avatarSrc} alt={artist.name} className="ca-avatar-img"
+                style={{ borderColor: artist.color + '44' }}/>
+            : <div className="ca-avatar-initials" style={{
+                background: `radial-gradient(circle at 40% 40%, ${artist.color}33, ${artist.color}11)`,
+                borderColor: artist.color + '44',
+              }}>
+                <span style={{ color: artist.color }}>{artist.initials}</span>
+              </div>
+          }
+          <div className="ca-avatar-overlay"><Camera size={16}/></div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}
+            onChange={handleAvatarChange}/>
+          {avatarMenu && (
+            <div className="avatar-menu" onClick={e => e.stopPropagation()}>
+              <button className="avatar-menu-item" onClick={() => { fileRef.current.click(); setAvatarMenu(false); }}>
+                {avatarSrc ? 'Replace photo' : 'Add photo'}
+              </button>
+              {avatarSrc && (
+                <button className="avatar-menu-item avatar-menu-remove"
+                  onClick={() => { setAvatarSrc(null); setAvatarMenu(false); }}>
+                  Remove photo
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <input className="ca-detail-name-input" value={name} onChange={e => setName(e.target.value)}/>

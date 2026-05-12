@@ -28,16 +28,76 @@
   display: flex; align-items: center; gap: var(--sp-5);
   padding-bottom: var(--sp-5);
   margin-bottom: var(--sp-2);
-  /* no colored border */
 }
 
-.ca-detail-avatar {
-  width: 68px; height: 68px;
-  border-radius: 16px;
+/* Circle avatar — click to upload */
+.ca-avatar-wrap {
+  position: relative;
+  width: 72px; height: 72px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.ca-avatar-initials {
+  width: 72px; height: 72px;
+  border-radius: 50%;
   border: 1.5px solid;
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.4rem; font-weight: 700; flex-shrink: 0;
+  font-size: 1.5rem; font-weight: 700;
 }
+
+.ca-avatar-img {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  object-fit: cover; display: block;
+}
+
+.ca-avatar-overlay {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; opacity: 0;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+.ca-avatar-wrap:hover .ca-avatar-overlay { opacity: 1; }
+
+/* Avatar popover menu (matches Profile.css pattern) */
+.avatar-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 200;
+  background: rgba(28,28,34,0.95);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  overflow: hidden;
+  min-width: 130px;
+  animation: popoverIn 0.15s cubic-bezier(0.16,1,0.3,1) both;
+}
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+.avatar-menu-item {
+  display: block; width: 100%;
+  padding: 10px 16px;
+  background: none; border: none;
+  text-align: left; font-size: 0.8rem; font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  cursor: pointer; font-family: var(--font-body);
+  transition: background 0.15s, color 0.15s;
+}
+.avatar-menu-item:hover { background: rgba(255,255,255,0.06); color: white; }
+.avatar-menu-item + .avatar-menu-item { border-top: 1px solid rgba(255,255,255,0.06); }
+.avatar-menu-remove { color: rgba(200,60,60,0.7) !important; }
+.avatar-menu-remove:hover { color: rgba(220,60,60,0.95) !important; }
 
 .ca-detail-name-input {
   background: none; border: none; border-bottom: 1px solid transparent;
