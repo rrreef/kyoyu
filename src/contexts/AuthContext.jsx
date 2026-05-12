@@ -100,6 +100,41 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  /* ── Supabase Realtime: sync avatar across devices/browsers ── */
+  useEffect(() => {
+    const uid = userRef.current?.id;
+    if (!uid) return;
+
+    const channel = supabase
+      .channel('avatar-sync-' + uid)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${uid}`,
+      }, (payload) => {
+        const newUrl = payload.new?.avatar_url ?? null;
+        // Only act if the URL actually changed (avoids self-echo)
+        setAvatarSrcRaw(prev => {
+          if (prev === newUrl) return prev;
+          // Sync localStorage + native bridge
+          if (newUrl) {
+            try { localStorage.setItem('kyoyu-avatar-' + uid, newUrl); } catch (_) {}
+            try { window.webkit?.messageHandlers?.avatar?.postMessage(newUrl); } catch (_) {}
+          } else {
+            try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
+            try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+          }
+          return newUrl;
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // Re-subscribe when user changes (e.g. after login)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   /* ── Pull role + profile from DB ── */
   async function hydrateUser(authUser) {
     const { data: profile } = await supabase

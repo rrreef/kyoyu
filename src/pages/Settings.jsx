@@ -150,21 +150,20 @@ function AccountPanel({ user }) {
     try {
       const img = await loadImage(f);
 
-      // 1️⃣ Immediate local preview (full quality)
+      // 1️⃣ Immediate local preview — TopBar + Settings card both update NOW
       const displayDataUrl = resizeViaCanvas(img, 800);
       setVIState({ avatarImage: displayDataUrl });
+      setAvatarSrc(displayDataUrl, user?.id); // ← instant TopBar update
 
-      // 2️⃣ Send tiny thumbnail to native bridge RIGHT NOW — small enough to never fail
+      // 2️⃣ Send tiny thumbnail to native bridge RIGHT NOW
       const thumbDataUrl = resizeViaCanvas(img, 80, 'image/jpeg', 0.8);
       try { window.webkit?.messageHandlers?.avatar?.postMessage(thumbDataUrl); } catch (_) {}
 
-      // 3️⃣ Upload to Supabase and save permanent URL for cross-device sync
+      // 3️⃣ Upload to Supabase — stable URL for cross-device sync (triggers Realtime)
       const publicUrl = await uploadAvatarToSupabase(f, user?.id);
       if (publicUrl) {
         await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl });
-        setAvatarSrc(publicUrl, user?.id); // stores in localStorage + posts URL to native
-      } else {
-        setAvatarSrc(displayDataUrl, user?.id); // fallback: data URL
+        setAvatarSrc(publicUrl, user?.id); // replace local blob with stable CDN URL
       }
     } catch (e) {
       console.warn('[processAvatarFile]', e);
@@ -221,7 +220,12 @@ function AccountPanel({ user }) {
                 </button>
                 {avatarImage && (
                   <button className="s-avatar-popover-item s-avatar-popover-remove"
-                    onClick={() => { setVIState({ avatarImage: null }); setAvatarSrc(null); setAvatarMenu(false); }}>
+                    onClick={() => {
+                      setVIState({ avatarImage: null });
+                      setAvatarSrc(null, user?.id);
+                      if (user?.id) supabase.from('profiles').upsert({ id: user.id, avatar_url: null }).catch(console.warn);
+                      setAvatarMenu(false);
+                    }}>
                     Remove photo
                   </button>
                 )}
