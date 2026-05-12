@@ -509,7 +509,7 @@ export default function Dashboard() {
         <div className="dash-artist-avatar">{displayName[0].toUpperCase()}</div>
         <div className="dash-artist-info">
           <h1>{displayName}</h1>
-          <p>{d.artist.genre} · {d.artist.location}</p>
+          <p>{d.artist?.genre}{d.artist?.genre && d.artist?.location ? ' · ' : ''}{d.artist?.location}</p>
         </div>
         <div className="dash-header-right">
           {prefs.autoRefresh !== 'off' && (
