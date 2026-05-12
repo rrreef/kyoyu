@@ -316,7 +316,7 @@
   width: 150px;
   opacity: 1;
   pointer-events: all;
-  padding: 0 4px;
+  padding: 0 4px 0 14px; /* 14px left = aligns text to pill's straight section */
 }
 
 /* Results dropdown */
