@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   User, BarChart3, Bell, Globe, ShieldCheck, CreditCard,
   ChevronRight, RotateCcw, Check, Wifi, WifiOff, CheckCircle2,
@@ -128,6 +128,8 @@ function AccountPanel({ user }) {
   const displayInitial = (artistName || user?.name || 'A')[0].toUpperCase();
   const avatarImage    = vi.avatarImage;
   const avatarObjPos   = vi.avatarPosition ? `${vi.avatarPosition.x}% ${vi.avatarPosition.y}%` : '50% 50%';
+  const [avatarMenu, setAvatarMenu] = useState(false);
+  const avatarFileRef = useRef();
 
   /* Handle file from input or drop — convert to data URL for persistence + native sync */
   const processAvatarFile = async (f) => {
@@ -184,46 +186,40 @@ function AccountPanel({ user }) {
       <div className="s-card glass">
         <div className="s-avatar-row">
 
-          {/* ── Avatar upload zone ── */}
-          <div
-            className={`s-avatar-upload ${isDragging ? 's-avatar-upload--drag' : ''}`}
-            onDragOver={onDragOver}
-            onDragEnter={onDragEnter}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-          >
-            <input
-              id={_avatarUid}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarInput}
-              className="s-avatar-file-hidden"
-            />
-            {/* Avatar image or initials */}
+          {/* Circle avatar — click to open popover */}
+          <div className="s-avatar-wrap" onClick={() => setAvatarMenu(m => !m)}>
             {avatarImage
-              ? <img src={avatarImage} alt="profile" className="s-avatar-img" style={{ objectPosition: avatarObjPos }} />
-              : <span className="s-avatar-initial">{isDragging ? '↓' : displayInitial}</span>
+              ? <img src={avatarImage} alt="profile" className="s-avatar-img" style={{ objectPosition: avatarObjPos }}/>
+              : <div className="s-avatar-initial">{displayInitial}</div>
             }
-            {/* Camera overlay — appears on hover */}
-            <label htmlFor={_avatarUid} className="s-avatar-overlay" title="Change profile picture">
-              <Camera size={16}/>
-              <span>{avatarImage ? 'Change' : 'Upload'}</span>
-            </label>
-            {/* Remove btn */}
+            <div className="s-avatar-overlay">
+              <Camera size={18}/>
+            </div>
+            <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:'none' }}
+              onChange={e => { handleAvatarInput(e); setAvatarMenu(false); }}/>
             {avatarImage && (
-              <button
-                type="button"
-                className="s-avatar-remove"
-                onClick={() => { setVIState({ avatarImage: null }); setAvatarSrc(null); }}
-                title="Remove photo"
-              >×</button>
+              <button type="button" className="s-avatar-remove"
+                onClick={e => { e.stopPropagation(); setVIState({ avatarImage: null }); setAvatarSrc(null); }}
+                title="Remove">×</button>
+            )}
+            {avatarMenu && (
+              <div className="avatar-menu" onClick={e => e.stopPropagation()}>
+                <button className="avatar-menu-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
+                  {avatarImage ? 'Replace photo' : 'Add photo'}
+                </button>
+                {avatarImage && (
+                  <button className="avatar-menu-item avatar-menu-remove-item"
+                    onClick={() => { setVIState({ avatarImage: null }); setAvatarSrc(null); setAvatarMenu(false); }}>
+                    Remove photo
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
           <div>
             <div className="s-avatar-name">{artistName || user?.name || 'Artist'}</div>
             <div className="s-avatar-email">{user?.email || '—'}</div>
-            <div className="s-avatar-hint">Click or drag an image to set your photo</div>
           </div>
         </div>
       </div>
