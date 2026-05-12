@@ -317,7 +317,7 @@
   opacity: 1;
   pointer-events: all;
   padding: 0 4px 0 14px;
-  height: 20px;       /* cursor height = same gap to border as the icon */
+  height: 16px;       /* exact match to the 16×16 icon SVG */
   align-self: center;
 }
 
