@@ -10,13 +10,16 @@ export default function handler(req, res) {
     return res.status(400).send('Missing token — link may have expired.');
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const siteUrl     = 'https://ree.fm';
+  // Use env var if available, otherwise fall back to the known project URL
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+    || 'https://mbcwqglsovpvdrycenzx.supabase.co';
 
-  // Build the Supabase verify URL — it will verify the token then
-  // redirect back to ree.fm/auth/reset where the user sets their new password
-  const redirectTo = encodeURIComponent(`${siteUrl}/auth/reset`);
-  const verifyUrl  = `${supabaseUrl}/auth/v1/verify?token=${token}&type=${type}&redirect_to=${redirectTo}`;
+  // Redirect back to ree.fm root — this is already in Supabase's allowed
+  // redirect URL list. App.jsx detects the access_token hash and routes to
+  // /auth/reset automatically, so we don't need to specify the sub-path here.
+  const redirectTo = encodeURIComponent('https://ree.fm');
+
+  const verifyUrl = `${supabaseUrl}/auth/v1/verify?token=${token}&type=${type}&redirect_to=${redirectTo}`;
 
   return res.redirect(302, verifyUrl);
 }
