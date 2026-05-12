@@ -146,7 +146,9 @@ function CreatorApp() {
         <Routes>
           <Route path="/dashboard"       element={<Dashboard />} />
           <Route path="/upload"          element={<Upload />} />
-          <Route path="/releases"        element={<Releases />} />
+          <Route path="/releases"         element={<Releases filter="all"     />} />
+          <Route path="/releases/public"  element={<Releases filter="public"  />} />
+          <Route path="/releases/private" element={<Releases filter="private" />} />
           <Route path="/artists"         element={<CreatorArtists />} />
           <Route path="/visual-identity" element={<VisualIdentity />} />
           <Route path="/preview"         element={<ListenerPreview />} />

@@ -66,7 +66,7 @@ function artBg(rel) {
 }
 
 /* ─── Component ──────────────────────────────────────────── */
-export default function Releases() {
+export default function Releases({ filter = 'all' }) {
   const [releases,  setReleases]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -89,17 +89,19 @@ export default function Releases() {
   /* Derived filtered + sorted releases */
   const filteredReleases = useMemo(() => {
     const now = new Date();
-    let list = [...releases];
-    // Artist
+    // Route-level visibility filter (from sidebar submenu)
+    let list = filter === 'public'  ? releases.filter(r => r.visibility === 'public')
+             : filter === 'private' ? releases.filter(r => r.visibility !== 'public')
+             : [...releases];
+    // User pill filters on top
     if (fArtist !== 'All') list = list.filter(r => r.artist === fArtist);
-    // Collab
-    if (fCollab === 'Solo')  list = list.filter(r => !/[&,]|feat\.|vs\./i.test(r.artist));
+    if (fCollab === 'Solo')   list = list.filter(r => !/[&,]|feat\.|vs\./i.test(r.artist));
     if (fCollab === 'Collab') list = list.filter(r => /[&,]|feat\.|vs\./i.test(r.artist));
-    // Status
-    if (fStatus === 'Published') list = list.filter(r => r.visibility === 'public');
-    if (fStatus === 'Private')   list = list.filter(r => r.visibility === 'private');
-    if (fStatus === 'Pending')   list = list.filter(r => r.status === 'pending');
-    // Date
+    if (filter === 'all') {
+      if (fStatus === 'Published') list = list.filter(r => r.visibility === 'public');
+      if (fStatus === 'Private')   list = list.filter(r => r.visibility === 'private');
+      if (fStatus === 'Pending')   list = list.filter(r => r.status === 'pending');
+    }
     if (fDate === 'This Year')  list = list.filter(r => r.uploadDate?.startsWith(String(now.getFullYear())));
     if (fDate === 'This Month') {
       const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -108,7 +110,7 @@ export default function Releases() {
     if (fDate === 'Newest') list.sort((a,b) => (b.uploadDate||'') > (a.uploadDate||'') ? 1 : -1);
     if (fDate === 'Oldest') list.sort((a,b) => (a.uploadDate||'') > (b.uploadDate||'') ? 1 : -1);
     return list;
-  }, [releases, fArtist, fDate, fCollab, fStatus]);
+  }, [releases, filter, fArtist, fDate, fCollab, fStatus]);
 
   const anyFilterActive = fArtist!=='All' || fDate!=='All' || fCollab!=='All' || fStatus!=='All';
 
@@ -152,12 +154,19 @@ export default function Releases() {
     setToggling(false);
   }
 
+  const PAGE_TITLE = filter === 'public' ? 'Public Releases'
+                   : filter === 'private' ? 'Private Releases'
+                   : 'Releases';
+  const PAGE_SUB = filter === 'public'  ? 'Published & live on the platform'
+                 : filter === 'private' ? 'Drafts, scheduled & shared-only'
+                 : `${releases.length} release${releases.length !== 1 ? 's' : ''} in your catalog`;
+
   /* ── Loading state ─────────────────────────────────────── */
   if (loading) {
     return (
       <div className="page releases-page animate-in">
         <div className="rel-page-header">
-          <div><h1>Releases</h1></div>
+          <div><h1>{PAGE_TITLE}</h1></div>
         </div>
         <div className="rel-loading-spinner">
           <Loader size={22} className="rel-spinner-icon" />
@@ -171,7 +180,7 @@ export default function Releases() {
     return (
       <div className="page releases-page animate-in">
         <div className="rel-page-header">
-          <div><h1>Releases</h1></div>
+          <div><h1>{PAGE_TITLE}</h1></div>
         </div>
         <div className="rel-empty">
           <p className="rel-empty-error">{error}</p>
@@ -189,10 +198,10 @@ export default function Releases() {
       {/* Header */}
       <div className="rel-page-header">
         <div>
-          <h1>Releases</h1>
+          <h1>{PAGE_TITLE}</h1>
           <p className="rel-page-sub">
-            {releases.length} release{releases.length !== 1 ? 's' : ''} in your catalog
-            {releases.length > 0 && <>&nbsp;·&nbsp; click a release to see insights</>}
+            {PAGE_SUB}
+            {releases.length > 0 && filter === 'all' && <>&nbsp;·&nbsp; click a release to see insights</>}
           </p>
         </div>
         <button className="rel-upload-btn" onClick={() => navigate('/upload')}>
@@ -226,14 +235,17 @@ export default function Releases() {
               ))}
             </div>
           </div>
-          <div className="rel-filter-group">
-            <span className="rel-filter-label">Status</span>
-            <div className="rel-filter-pills">
-              {['All','Published','Private','Pending'].map(s => (
-                <button key={s} className={`rel-filter-pill ${fStatus===s?'active':''}`} onClick={()=>setFStatus(s)}>{s}</button>
-              ))}
+          {/* Status filter — only shown in 'all' view since public/private routes pre-filter */}
+          {filter === 'all' && (
+            <div className="rel-filter-group">
+              <span className="rel-filter-label">Status</span>
+              <div className="rel-filter-pills">
+                {['All','Published','Private','Pending'].map(s => (
+                  <button key={s} className={`rel-filter-pill ${fStatus===s?'active':''}`} onClick={()=>setFStatus(s)}>{s}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {anyFilterActive && (
             <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
           )}

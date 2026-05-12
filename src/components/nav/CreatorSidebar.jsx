@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette } from 'lucide-react';
+import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
+         ChevronDown, Globe, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import './CreatorSidebar.css';
 
@@ -12,19 +14,22 @@ const LogoMark = () => (
 
 const creatorNav = [
   { to: '/upload',          label: 'Upload',           icon: Upload   },
-  { to: '/releases',        label: 'Releases',         icon: Music    },
   { to: '/artists',         label: 'Artists',          icon: Users    },
   { to: '/visual-identity', label: 'Visual Identity',  icon: Palette  },
   { to: '/settings',        label: 'Settings',         icon: Settings },
 ];
 
-// Condensed 5-item mobile bottom bar for creator portal
 const creatorMobileNav = [
   { to: '/dashboard',       label: 'Dashboard', icon: BarChart3 },
   { to: '/upload',          label: 'Upload',    icon: Upload    },
-  { to: '/releases',        label: 'Releases',  icon: Music     },
+  { to: '/releases/public', label: 'Releases',  icon: Music     },
   { to: '/visual-identity', label: 'Identity',  icon: Palette   },
   { to: '/settings',        label: 'Settings',  icon: Settings  },
+];
+
+const RELEASE_SUB = [
+  { to: '/releases/public',  label: 'Public',  icon: Globe, hint: 'Published releases' },
+  { to: '/releases/private', label: 'Private', icon: Lock,  hint: 'Drafts & scheduled' },
 ];
 
 export default function CreatorSidebar() {
@@ -32,7 +37,13 @@ export default function CreatorSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isDashboard = location.pathname === '/dashboard';
+  const isDashboard    = location.pathname === '/dashboard';
+  const isReleasesPath = location.pathname.startsWith('/releases');
+
+  // Auto-open submenu if on a releases route
+  const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
+
+  const toggleReleases = () => setReleasesOpen(o => !o);
 
   return (
     <>
@@ -40,16 +51,14 @@ export default function CreatorSidebar() {
       <aside className="creator-sidebar glass">
         {/* Logo */}
         <div className="creator-sidebar__logo">
-          <span className="logo-mark">
-            <LogoMark />
-          </span>
+          <span className="logo-mark"><LogoMark /></span>
         </div>
 
         {/* Portal label */}
         <div className="creator-sidebar__portal-label">Creator Portal</div>
 
-        {/* Dashboard — top link, styled separately */}
         <nav className="creator-sidebar__nav">
+          {/* Dashboard */}
           <button
             className={`creator-nav-item creator-nav-dashboard ${isDashboard ? 'active' : ''}`}
             onClick={() => navigate('/dashboard')}
@@ -58,7 +67,43 @@ export default function CreatorSidebar() {
             <span>Dashboard</span>
           </button>
 
-          {creatorNav.map(({ to, label, icon: Icon }) => (
+          {/* Upload */}
+          <NavLink to="/upload" className={({ isActive }) => `creator-nav-item ${isActive ? 'active' : ''}`}>
+            <Upload size={18} strokeWidth={1.8} /><span>Upload</span>
+          </NavLink>
+
+          {/* Releases — with submenu */}
+          <div className={`creator-nav-group ${isReleasesPath ? 'active' : ''}`}>
+            <button
+              className={`creator-nav-item creator-nav-group__header ${isReleasesPath ? 'active' : ''}`}
+              onClick={toggleReleases}
+            >
+              <Music size={18} strokeWidth={1.8} />
+              <span>Releases</span>
+              <ChevronDown
+                size={13}
+                strokeWidth={2}
+                className={`creator-nav-chevron ${releasesOpen ? 'open' : ''}`}
+              />
+            </button>
+
+            {/* Submenu */}
+            <div className={`creator-submenu ${releasesOpen ? 'open' : ''}`}>
+              {RELEASE_SUB.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) => `creator-submenu-item ${isActive ? 'active' : ''}`}
+                >
+                  <Icon size={13} strokeWidth={1.8} />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          {/* Other nav items */}
+          {creatorNav.slice(1).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -70,7 +115,7 @@ export default function CreatorSidebar() {
           ))}
         </nav>
 
-        {/* Footer — artist info + logout */}
+        {/* Footer */}
         <div className="creator-sidebar__footer">
           <div className="creator-artist-badge">
             <div className="creator-artist-avatar">
@@ -88,7 +133,7 @@ export default function CreatorSidebar() {
         </div>
       </aside>
 
-      {/* ── Mobile bottom nav (smartphone only) ── */}
+      {/* ── Mobile bottom nav ── */}
       <nav className="creator-mobile-nav">
         {creatorMobileNav.map(({ to, label, icon: Icon }) => (
           <NavLink
