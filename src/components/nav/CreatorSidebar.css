@@ -70,11 +70,9 @@
   color: rgba(255,255,255,0.85);
 }
 .creator-nav-item.active {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.92);
-  border: 1px solid rgba(255,255,255,0.12);
-  /* left-bar indicator */
-  box-shadow: inset 3px 0 0 rgba(255,255,255,0.72), inset 0 1px 0 rgba(255,255,255,0.08);
+  box-shadow: inset 3px 0 0 rgba(255,255,255,0.70);
 }
 
 /* ── Releases group + submenu ─────────────────────────────── */
@@ -95,10 +93,10 @@
 }
 /* Active state for the Releases group header */
 .creator-nav-group__header.active {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.92);
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: inset 3px 0 0 rgba(255,255,255,0.72), inset 0 1px 0 rgba(255,255,255,0.08);
+  border-color: transparent;
+  box-shadow: inset 3px 0 0 rgba(255,255,255,0.70);
 }
 .creator-nav-group__header .creator-nav-chevron {
   margin-left: auto;
@@ -132,23 +130,19 @@
   gap: 8px;
   padding: 6px 10px;
   border-radius: var(--radius-md);
-  color: rgba(255,255,255,0.38);
+  color: rgba(255,255,255,0.32);
   font-size: 0.8rem;
   font-weight: 500;
   text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s;
   letter-spacing: 0.01em;
-  border-left: 1px solid rgba(255,255,255,0.07);
-  margin-left: -1px;
 }
 .creator-submenu-item:hover {
-  color: rgba(255,255,255,0.75);
-  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.65);
 }
 .creator-submenu-item.active {
   color: rgba(255,255,255,0.88);
-  background: rgba(255,255,255,0.07);
-  border-left: 2px solid rgba(255,255,255,0.72);
+  font-weight: 600;
 }
 
 
