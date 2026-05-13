@@ -234,6 +234,7 @@ function TrackPlayer({ url, ext, file }) {
       <span className="cp-time">{fmt(current)}</span>
       <div className="cp-bar" onClick={seek}>
         <div className="cp-fill" style={{ width: `${pct}%` }} />
+        <div className="cp-thumb" style={{ left: `${pct}%` }} />
       </div>
       <span className="cp-dur">{fmt(dur)}</span>
     </div>
