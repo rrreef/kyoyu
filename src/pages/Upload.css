@@ -1037,7 +1037,7 @@
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
   transition: border-color 0.15s, background 0.15s;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-family: var(--font-body);
   color: var(--text-primary);
 }
@@ -1050,18 +1050,18 @@
   background: transparent;
   outline: none;
   color: var(--text-primary);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-family: var(--font-body);
   text-align: center;
   padding: 0;
   min-width: 0;
 }
-.pdc-seg--2  { width: 2.4ch; min-width: 28px; }
-.pdc-seg--4  { width: 4.4ch; min-width: 46px; }
+.pdc-seg--2  { width: 22px; }
+.pdc-seg--4  { width: 40px; }
 .pdc-seg::placeholder { color: rgba(255,255,255,0.40); opacity: 1; }
 .pdc-sep {
   color: rgba(255,255,255,0.40);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   user-select: none;
   flex-shrink: 0;
   padding: 0 1px;
