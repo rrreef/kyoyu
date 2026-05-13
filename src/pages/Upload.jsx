@@ -76,6 +76,28 @@ function ScheduleDateInput({ value, onChange }) {
   );
 }
 
+/* ─── TrackPlayer: native audio with graceful error fallback ─ */
+function TrackPlayer({ url, ext }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="track-preview-unavailable">
+        <span>{ext.toUpperCase()} preview not available in this browser — file is ready to upload</span>
+      </div>
+    );
+  }
+  return (
+    <audio
+      controls
+      preload="metadata"
+      className="track-inline-player"
+      onError={() => setFailed(true)}
+    >
+      <source src={url} type={`audio/${ext === 'mp3' ? 'mpeg' : ext}`} onError={() => setFailed(true)} />
+    </audio>
+  );
+}
+
 /* ─── Metadata extractor (ID3v2, FLAC, AIFF, WAV) ───────── */
 
 function decodeTxt(enc, bytes, s, e) {
@@ -698,23 +720,13 @@ export default function Upload() {
                     <span>{formatBytes(audioFiles[activeTrack]?.file.size ?? 0)}</span>
                   </div>
 
-                  {/* Inline audio player — AIFF not natively supported in browsers */}
+                  {/* Inline audio player — tries native playback, falls back on error */}
                   {(() => {
                     const activeFile = audioFiles[activeTrack];
-                    const ext = getExt(activeFile?.file?.name ?? '').toLowerCase();
-                    const browserPlayable = ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'mp4'].includes(ext);
                     const url = audioUrls[activeFile?.id];
-                    if (!url) return null;
-                    if (!browserPlayable) return (
-                      <div className="track-preview-unavailable">
-                        <span>{ext.toUpperCase()} preview not available in browser — file is ready to upload</span>
-                      </div>
-                    );
-                    return (
-                      <audio key={activeFile.id} controls preload="metadata" className="track-inline-player">
-                        <source src={url} type={activeFile.file.type || `audio/${ext}`} />
-                      </audio>
-                    );
+                    if (!url || !activeFile) return null;
+                    const ext = getExt(activeFile.file.name).toLowerCase();
+                    return <TrackPlayer key={activeFile.id} url={url} ext={ext} />;
                   })()}
 
                   {/* Visibility toggle */}
