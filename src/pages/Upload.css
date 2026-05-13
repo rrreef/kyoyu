@@ -948,7 +948,7 @@
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   margin-top: var(--sp-2);
 }
 .cp-play {
@@ -977,33 +977,38 @@
   min-width: 34px;
 }
 .cp-dur { text-align: right; }
-.cp-bar {
+/* range-input scrubber */
+.cp-seek {
   flex: 1;
-  height: 3px;
-  background: rgba(255,255,255,0.12);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
   border-radius: 99px;
+  outline: none;
   cursor: pointer;
-  position: relative;
-  overflow: visible;
+  background: linear-gradient(
+    to right,
+    rgba(255,255,255,0.75) var(--pct, 0%),
+    rgba(255,255,255,0.14) var(--pct, 0%)
+  );
 }
-.cp-fill {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  background: rgba(255,255,255,0.70);
-  border-radius: 99px;
-  transition: width 0.1s linear;
-}
-.cp-thumb {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 11px;
-  height: 11px;
+.cp-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
   background: #fff;
   border-radius: 50%;
-  pointer-events: none;
-  box-shadow: 0 0 4px rgba(0,0,0,0.4);
-  transition: left 0.1s linear;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,0,0,0.35);
+}
+.cp-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 5px rgba(0,0,0,0.35);
 }
 
 /* ══ Visibility toggle ═══════════════════════════════════════ */
