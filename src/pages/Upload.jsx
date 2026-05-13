@@ -175,18 +175,84 @@ function TrackPlayer({ url, ext, file }) {
     return () => { if (revoke) URL.revokeObjectURL(revoke); };
   }, [file, ext]);
 
-  /* Playback state */
-  const audioRef              = useRef(null);
+  /* Refs — all hot-path updates go straight to the DOM, no React re-renders */
+  const audioRef   = useRef(null);
+  const barRef     = useRef(null);
+  const fillRef    = useRef(null);
+  const thumbRef   = useRef(null);
+  const timeRef    = useRef(null);   // <span> for current time text
+  const durRef     = useRef(null);
+  const isDragging = useRef(false);
+  const durVal     = useRef(0);      // duration without React state
+
+  /* React state only for things that affect structure/play-button */
   const [playing, setPlaying] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [dur,     setDur]     = useState(0);
 
   const fmt = (t) => {
-    if (!isFinite(t)) return '0:00';
+    if (!isFinite(t) || t < 0) return '0:00';
     const m = Math.floor(t / 60);
     const s = Math.floor(t % 60);
     return `${m}:${String(s).padStart(2, '0')}`;
   };
+
+  /* Update fill + thumb + time display directly in the DOM */
+  const applyPct = (val) => {
+    const d = durVal.current;
+    const pct = d ? (val / d) * 100 : 0;
+    if (fillRef.current)  fillRef.current.style.width = `${pct}%`;
+    if (thumbRef.current) thumbRef.current.style.left  = `${pct}%`;
+    if (timeRef.current)  timeRef.current.textContent  = fmt(val);
+  };
+
+  const getSeekVal = (clientX) => {
+    const bar = barRef.current;
+    if (!bar || !durVal.current) return 0;
+    const rect = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * durVal.current;
+  };
+
+  /* Mouse drag */
+  const handleBarMouseDown = (e) => {
+    e.preventDefault();
+    isDragging.current = true;
+    const startVal = getSeekVal(e.clientX);
+    applyPct(startVal);
+    if (audioRef.current) audioRef.current.currentTime = startVal;
+
+    let raf, lastX = e.clientX;
+    const onMove = (e) => {
+      lastX = e.clientX;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const val = getSeekVal(lastX);
+        applyPct(val);
+        if (audioRef.current) audioRef.current.currentTime = val;
+      });
+    };
+    const onUp = () => {
+      cancelAnimationFrame(raf);
+      isDragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  };
+
+  /* Touch drag */
+  const handleBarTouchStart = (e) => {
+    isDragging.current = true;
+    const val = getSeekVal(e.touches[0].clientX);
+    applyPct(val);
+    if (audioRef.current) audioRef.current.currentTime = val;
+  };
+  const handleBarTouchMove = (e) => {
+    e.preventDefault();
+    const val = getSeekVal(e.touches[0].clientX);
+    applyPct(val);
+    if (audioRef.current) audioRef.current.currentTime = val;
+  };
+  const handleBarTouchEnd = () => { isDragging.current = false; };
 
   const togglePlay = () => {
     const a = audioRef.current;
@@ -195,39 +261,6 @@ function TrackPlayer({ url, ext, file }) {
     else         { a.play().catch(() => setState('failed')); setPlaying(true); }
   };
 
-  /* Drag-to-seek with mouse and touch */
-  const barRef = useRef(null);
-
-  const getSeekVal = (clientX) => {
-    const bar = barRef.current;
-    if (!bar || !dur) return 0;
-    const rect = bar.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * dur;
-  };
-
-  const applySeek = (val) => {
-    if (audioRef.current) audioRef.current.currentTime = val;
-    setCurrent(val);
-  };
-
-  const handleBarMouseDown = (e) => {
-    e.preventDefault();
-    applySeek(getSeekVal(e.clientX));
-    const onMove = (e) => applySeek(getSeekVal(e.clientX));
-    const onUp   = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup',   onUp);
-  };
-
-  const handleBarTouchStart = (e) => {
-    applySeek(getSeekVal(e.touches[0].clientX));
-  };
-  const handleBarTouchMove = (e) => {
-    e.preventDefault();
-    applySeek(getSeekVal(e.touches[0].clientX));
-  };
-
-  const pct = dur ? (current / dur) * 100 : 0;
   const playUrl = isAiff ? wavUrl : url;
 
   if (state === 'converting') return (
@@ -245,8 +278,13 @@ function TrackPlayer({ url, ext, file }) {
         ref={audioRef}
         src={playUrl}
         preload="metadata"
-        onTimeUpdate={e => setCurrent(e.target.currentTime)}
-        onLoadedMetadata={e => setDur(e.target.duration)}
+        onTimeUpdate={e => {
+          if (!isDragging.current) applyPct(e.target.currentTime);
+        }}
+        onLoadedMetadata={e => {
+          durVal.current = e.target.duration;
+          if (durRef.current) durRef.current.textContent = fmt(e.target.duration);
+        }}
         onEnded={() => setPlaying(false)}
         onError={() => setState('failed')}
       />
@@ -256,18 +294,19 @@ function TrackPlayer({ url, ext, file }) {
           : <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor"><path d="M0 0 L12 7 L0 14 Z"/></svg>
         }
       </button>
-      <span className="cp-time">{fmt(current)}</span>
+      <span ref={timeRef} className="cp-time">0:00</span>
       <div
         ref={barRef}
         className="cp-bar"
         onMouseDown={handleBarMouseDown}
         onTouchStart={handleBarTouchStart}
         onTouchMove={handleBarTouchMove}
+        onTouchEnd={handleBarTouchEnd}
       >
-        <div className="cp-fill" style={{ width: `${pct}%` }} />
-        <div className="cp-thumb" style={{ left: `${pct}%` }} />
+        <div ref={fillRef}  className="cp-fill" />
+        <div ref={thumbRef} className="cp-thumb" />
       </div>
-      <span className="cp-dur">{fmt(dur)}</span>
+      <span ref={durRef} className="cp-dur">0:00</span>
     </div>
   );
 }
