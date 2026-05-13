@@ -1050,7 +1050,7 @@
 }
 .psi-date {
   flex: 1;
-  text-align: left;
+  text-align: center;
 }
 .psi-time {
   flex-shrink: 0;
