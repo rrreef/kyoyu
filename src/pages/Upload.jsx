@@ -26,54 +26,58 @@ function emptyMeta() {
   return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), format: 'Digital', description: '', artwork: null, artworkUrl: null, visibility: 'private', publishAt: '', credits: [] };
 }
 
-/* ─── Custom segmented date-time input ──────────────────── */
+/* ─── Custom masked date-time input ─────────────────────── */
 function ScheduleDateInput({ value, onChange }) {
-  // Parse ISO string → { dd, mm, yyyy, hh, mi }
-  const parse = (v) => ({
-    dd:   v ? v.slice(8, 10)  : '',
-    mm:   v ? v.slice(5, 7)   : '',
-    yyyy: v ? v.slice(0, 4)   : '',
-    hh:   v ? v.slice(11, 13) : '',
-    mi:   v ? v.slice(14, 16) : '',
-  });
-
-  const [parts, setParts] = useState(() => parse(value));
-  const ddRef   = useRef();
-  const mmRef   = useRef();
-  const yyyyRef = useRef();
-  const hhRef   = useRef();
-  const miRef   = useRef();
-
-  // Rebuild ISO string and notify parent
-  const emit = (p) => {
-    const { dd, mm, yyyy, hh, mi } = p;
-    if (dd.length === 2 && mm.length === 2 && yyyy.length === 4 && hh.length === 2 && mi.length === 2) {
-      onChange(`${yyyy}-${mm}-${dd}T${hh}:${mi}`);
-    } else {
-      onChange('');
-    }
+  // ISO → display string
+  const toDisplay = (iso) => {
+    if (!iso || iso.length < 16) return '';
+    const [date, time] = iso.split('T');
+    const [yyyy, mm, dd] = date.split('-');
+    const [hh, mi] = (time || '').split(':');
+    return `${dd}.${mm}.${yyyy}, ${hh}:${mi}`;
   };
 
-  const update = (field, raw, nextRef, maxLen) => {
-    const val = raw.replace(/\D/g, '').slice(0, maxLen);
-    const next = { ...parts, [field]: val };
-    setParts(next);
-    emit(next);
-    if (val.length === maxLen && nextRef?.current) nextRef.current.focus();
+  // raw digits → ISO string
+  const toISO = (digits) => {
+    if (digits.length < 12) return '';
+    const dd   = digits.slice(0, 2);
+    const mm   = digits.slice(2, 4);
+    const yyyy = digits.slice(4, 8);
+    const hh   = digits.slice(8, 10);
+    const mi   = digits.slice(10, 12);
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  };
+
+  // digits → formatted display
+  const format = (d) => {
+    let r = '';
+    if (d.length > 0)  r += d.slice(0, 2);
+    if (d.length > 2)  r += '.' + d.slice(2, 4);
+    if (d.length > 4)  r += '.' + d.slice(4, 8);
+    if (d.length > 8)  r += ', ' + d.slice(8, 10);
+    if (d.length > 10) r += ':' + d.slice(10, 12);
+    return r;
+  };
+
+  const [display, setDisplay] = useState(() => toDisplay(value));
+
+  const handleChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
+    const formatted = format(digits);
+    setDisplay(formatted);
+    onChange(toISO(digits));
   };
 
   return (
-    <div className="pdc-wrap">
-      <input ref={ddRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="DD"   value={parts.dd}   onChange={e => update('dd',   e.target.value, mmRef,   2)} />
-      <span className="pdc-sep">.</span>
-      <input ref={mmRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mm}   onChange={e => update('mm',   e.target.value, yyyyRef, 2)} />
-      <span className="pdc-sep">.</span>
-      <input ref={yyyyRef} className="pdc-seg pdc-seg--4"    type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" value={parts.yyyy} onChange={e => update('yyyy', e.target.value, hhRef,   4)} />
-      <span className="pdc-sep pdc-sep--space">,</span>
-      <input ref={hhRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="HH"   value={parts.hh}   onChange={e => update('hh',   e.target.value, miRef,   2)} />
-      <span className="pdc-sep">:</span>
-      <input ref={miRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mi}   onChange={e => update('mi',   e.target.value, null,    2)} />
-    </div>
+    <input
+      className="publish-schedule-input"
+      type="text"
+      inputMode="numeric"
+      placeholder="DD.MM.YYYY, HH:MM"
+      value={display}
+      onChange={handleChange}
+      maxLength={18}
+    />
   );
 }
 
