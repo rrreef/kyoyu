@@ -1028,23 +1028,44 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.publish-schedule-input {
-  width: 100%;
-  padding: 7px 10px;
+.pdc-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
   border-radius: 8px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  font-family: var(--font-body);
-  color-scheme: dark;
   transition: border-color 0.15s, background 0.15s;
-  outline: none;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  color: var(--text-primary);
 }
-.publish-schedule-input:focus {
+.pdc-wrap:focus-within {
   border-color: rgba(255,255,255,0.25);
   background: rgba(255,255,255,0.07);
 }
+.pdc-seg {
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  text-align: center;
+  padding: 0;
+  min-width: 0;
+}
+.pdc-seg--2  { width: 22px; }
+.pdc-seg--4  { width: 40px; }
+.pdc-seg::placeholder { color: var(--text-dim); }
+.pdc-sep {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  user-select: none;
+  flex-shrink: 0;
+}
+.pdc-sep--space { margin: 0 3px; }
 .publish-schedule-hint {
   font-size: 0.65rem;
   color: var(--text-dim);

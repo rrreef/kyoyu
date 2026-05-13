@@ -26,6 +26,57 @@ function emptyMeta() {
   return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), format: 'Digital', description: '', artwork: null, artworkUrl: null, visibility: 'private', publishAt: '', credits: [] };
 }
 
+/* ─── Custom segmented date-time input ──────────────────── */
+function ScheduleDateInput({ value, onChange }) {
+  // Parse ISO string → { dd, mm, yyyy, hh, mi }
+  const parse = (v) => ({
+    dd:   v ? v.slice(8, 10)  : '',
+    mm:   v ? v.slice(5, 7)   : '',
+    yyyy: v ? v.slice(0, 4)   : '',
+    hh:   v ? v.slice(11, 13) : '',
+    mi:   v ? v.slice(14, 16) : '',
+  });
+
+  const [parts, setParts] = useState(() => parse(value));
+  const ddRef   = useRef();
+  const mmRef   = useRef();
+  const yyyyRef = useRef();
+  const hhRef   = useRef();
+  const miRef   = useRef();
+
+  // Rebuild ISO string and notify parent
+  const emit = (p) => {
+    const { dd, mm, yyyy, hh, mi } = p;
+    if (dd.length === 2 && mm.length === 2 && yyyy.length === 4 && hh.length === 2 && mi.length === 2) {
+      onChange(`${yyyy}-${mm}-${dd}T${hh}:${mi}`);
+    } else {
+      onChange('');
+    }
+  };
+
+  const update = (field, raw, nextRef, maxLen) => {
+    const val = raw.replace(/\D/g, '').slice(0, maxLen);
+    const next = { ...parts, [field]: val };
+    setParts(next);
+    emit(next);
+    if (val.length === maxLen && nextRef?.current) nextRef.current.focus();
+  };
+
+  return (
+    <div className="pdc-wrap">
+      <input ref={ddRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="DD"   value={parts.dd}   onChange={e => update('dd',   e.target.value, mmRef,   2)} />
+      <span className="pdc-sep">.</span>
+      <input ref={mmRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mm}   onChange={e => update('mm',   e.target.value, yyyyRef, 2)} />
+      <span className="pdc-sep">.</span>
+      <input ref={yyyyRef} className="pdc-seg pdc-seg--4"    type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" value={parts.yyyy} onChange={e => update('yyyy', e.target.value, hhRef,   4)} />
+      <span className="pdc-sep pdc-sep--space">,</span>
+      <input ref={hhRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="HH"   value={parts.hh}   onChange={e => update('hh',   e.target.value, miRef,   2)} />
+      <span className="pdc-sep">:</span>
+      <input ref={miRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mi}   onChange={e => update('mi',   e.target.value, null,    2)} />
+    </div>
+  );
+}
+
 /* ─── Metadata extractor (ID3v2, FLAC, AIFF, WAV) ───────── */
 
 function decodeTxt(enc, bytes, s, e) {
@@ -698,12 +749,9 @@ export default function Upload() {
                           </svg>
                           Goes public on
                         </label>
-                        <input
-                          type="datetime-local"
-                          className="publish-schedule-input"
+                        <ScheduleDateInput
                           value={meta.publishAt || ''}
-                          min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                          onChange={e => updateMeta(activeTrack, 'publishAt', e.target.value)}
+                          onChange={v => updateMeta(activeTrack, 'publishAt', v)}
                         />
                         {!meta.publishAt && (
                           <span className="publish-schedule-hint">Leave blank to keep private indefinitely</span>
