@@ -100,17 +100,17 @@
 .upload-drop-btn {
   padding: var(--sp-2) var(--sp-5);
   border-radius: var(--radius-full);
-  background: var(--orange-500);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   font-family: var(--font-body);
   margin-top: var(--sp-2);
   transition: var(--transition-fast);
-  box-shadow: 0 0 14px rgba(255,255,255,0.3);
 }
-.upload-drop-btn:hover { background: var(--orange-400); }
+.upload-drop-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.24); }
 
 /* ── File list ─────────────────────────────────────────── */
 .upload-file-list {
@@ -1225,64 +1225,31 @@
   background: rgba(255,255,255,0.04);
 }
 
-/* ═══ Theme — neutralise orange in Upload flow ═════════════════ */
+/* ═══ Theme overrides — Upload flow (all values explicit, no undefined vars) ═ */
 /* Active step indicator */
 .upload-step.active .upload-step-num {
-  background: var(--btn-primary-bg) !important;
-  color: var(--btn-primary-text) !important;
-  border-color: transparent !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.90) !important;
+  border-color: rgba(255, 255, 255, 0.20) !important;
   box-shadow: none !important;
 }
 .upload-step.active .upload-step-label {
   color: var(--text-primary) !important;
   font-weight: 600;
 }
-/* Drop zone */
-.upload-drop-zone:hover,
-.upload-drop-zone--drag {
-  border-color: var(--glass-border-light) !important;
-  background: var(--accent-interactive-dim) !important;
-}
-/* Drop button */
+/* Browse Files button */
 .upload-drop-btn {
-  background: var(--btn-primary-bg) !important;
-  color: var(--btn-primary-text) !important;
-  box-shadow: 0 4px 14px var(--btn-primary-glow) !important;
-}
-.upload-drop-btn:hover { background: var(--btn-primary-hover) !important; }
-/* Add more / copy text links */
-.upload-add-more,
-.copy-all-btn,
-.review-edit-btn { color: var(--text-muted) !important; }
-.upload-add-more:hover,
-.copy-all-btn:hover { color: var(--text-primary) !important; }
-.review-edit-btn:hover { background: var(--glass-bg-hover) !important; color: var(--text-primary) !important; }
-/* Tags */
-.upload-tag,
-.upload-genre-tag {
-  background: var(--accent-interactive-dim) !important;
-  color: var(--text-secondary) !important;
-  border-color: var(--glass-border) !important;
-}
-/* Toggle on */
-.toggle-btn.on {
-  background: var(--accent-interactive) !important;
-  color: var(--btn-primary-text) !important;
-  border-color: transparent !important;
+  border-radius: var(--radius-full) !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
   box-shadow: none !important;
 }
-/* Contract selected */
-.contract-option.selected-contract {
-  border-color: var(--glass-border-light) !important;
-  background: var(--accent-interactive-dim) !important;
+.upload-drop-btn:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
 }
-/* Track tab active */
-.track-tab.active .track-tab-num,
-.adv-track-tab.active .adv-tab-num {
-  background: var(--accent-interactive-dim) !important;
-  color: var(--text-primary) !important;
-}
-/* Next / Success buttons */
+/* Next / Submit buttons */
 .upload-next-btn,
 .upload-success-btn {
   border-radius: var(--radius-full) !important;
@@ -1296,9 +1263,41 @@
   background: rgba(255, 255, 255, 0.16) !important;
   border-color: rgba(255, 255, 255, 0.24) !important;
 }
-/* Progress bar */
+/* Add more / copy text links */
+.upload-add-more,
+.copy-all-btn,
+.review-edit-btn { color: var(--text-muted) !important; }
+.upload-add-more:hover,
+.copy-all-btn:hover { color: var(--text-primary) !important; }
+.review-edit-btn:hover { background: var(--glass-bg-hover) !important; color: var(--text-primary) !important; }
+/* Tags */
+.upload-tag,
+.upload-genre-tag {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--glass-border) !important;
+}
+/* Toggle on (pricing) */
+.toggle-btn.on {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  box-shadow: none !important;
+}
+/* Contract selected */
+.contract-option.selected-contract {
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+/* Track tab active */
+.track-tab.active .track-tab-num,
+.adv-track-tab.active .adv-tab-num {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--text-primary) !important;
+}
+/* Progress ring */
 .upload-progress-bar {
-  background: var(--accent-interactive) !important;
+  background: rgba(255, 255, 255, 0.70) !important;
 }
 /* Upload icon */
 .upload-uploading-icon { color: var(--text-primary) !important; }
