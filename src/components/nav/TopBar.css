@@ -61,12 +61,12 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 .topbar-btn:hover {
-  background: rgba(255, 107, 26, 0.12);
-  color: var(--orange-300);
-  border-color: rgba(255, 107, 26, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.22);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.10),
-    0 0 12px rgba(255, 107, 26, 0.12);
+    0 0 12px rgba(255, 255, 255, 0.06);
 }
 
 .topbar-title {
@@ -88,10 +88,10 @@
   border-radius: var(--radius-full);
   background: linear-gradient(
     135deg,
-    rgba(255, 107, 26, 0.4) 0%,
-    rgba(255, 107, 26, 0.2) 100%
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.10) 100%
   );
-  border: 1px solid rgba(255, 107, 26, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
   display: flex;
   align-items: center;
@@ -99,7 +99,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   font-family: var(--font-heading);
-  box-shadow: 0 0 10px rgba(255, 107, 26, 0.2);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.06);
 }
 
 @media (max-width: 768px) {
@@ -204,9 +204,9 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
 }
 [data-theme="white"] .topbar-btn:hover {
-  background: rgba(255, 107, 26, 0.10);
+  background: rgba(255, 255, 255, 0.10);
   color: hsl(24, 100%, 30%);
-  border-color: rgba(255, 107, 26, 0.25);
+  border-color: rgba(255, 255, 255, 0.25);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
 }
 [data-theme="white"] .topbar-title {
@@ -280,9 +280,9 @@
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
 .topbar-search-wrap:not(.open) .topbar-search-btn:hover {
-  background: rgba(255, 107, 26, 0.12);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--orange-300);
-  border-color: rgba(255, 107, 26, 0.28);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 /* When pill is open — icon button is transparent (pill border is the container) */

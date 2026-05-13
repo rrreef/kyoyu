@@ -26,13 +26,13 @@ input, textarea, select {
   /* ─── Liquid Glass fills — near-zero opacity ─── */
   --glass-bg:           rgba(255, 255, 255, 0.022);
   --glass-bg-hover:     rgba(255, 255, 255, 0.048);
-  --glass-bg-active:    rgba(255, 107, 26, 0.10);
+  --glass-bg-active:    rgba(255, 255, 255, 0.10);
   --glass-bg-elevated:  rgba(255, 255, 255, 0.038);
 
   /* ─── Glass borders ─── */
   --glass-border:        rgba(255, 255, 255, 0.09);
   --glass-border-light:  rgba(255, 255, 255, 0.18);
-  --glass-border-hover:  rgba(255, 107, 26, 0.40);
+  --glass-border-hover:  rgba(255, 255, 255, 0.22);
   --glass-border-subtle: rgba(255, 255, 255, 0.05);
 
   /* ─── Specular highlights ─── */
@@ -79,8 +79,8 @@ input, textarea, select {
   /* ─── Accent ─── */
   --accent:        var(--orange-400);
   --accent-bright: var(--orange-300);
-  --accent-dim:    rgba(255, 107, 26, 0.7);
-  --accent-subtle: rgba(255, 107, 26, 0.12);
+  --accent-dim:    rgba(255, 255, 255, 0.7);
+  --accent-subtle: rgba(255, 255, 255, 0.12);
 
   /* ─── Spacing ─── */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
@@ -181,8 +181,7 @@ input, textarea, select {
   --glass-bg-hover:     rgba(255, 255, 255, 0.88);
   --glass-bg-elevated:  rgba(255, 255, 255, 0.90);
   --glass-border:        rgba(0, 0, 0, 0.09);
-  --glass-border-light:  rgba(0, 0, 0, 0.15);
-  --glass-border-hover:  rgba(255, 107, 26, 0.40);
+  --glass-border-hover:  rgba(0, 0, 0, 0.12);
   --glass-border-subtle: rgba(0, 0, 0, 0.06);
   --glass-shine:         rgba(255, 255, 255, 0.90);
   --glass-shine-strong:  rgba(255, 255, 255, 0.98);
@@ -277,7 +276,7 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 107, 26, 0.3); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
 /* ─── Typography ─── */
 h1, h2, h3, h4, h5, h6 {
@@ -417,11 +416,17 @@ img {
 .glass-card::before { display: none; }
 .glass-card:hover {
   background: var(--glass-bg-hover);
-  border-color: rgba(255, 107, 26, 0.18);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow: var(--shadow-lg);
   transform: translateY(-1px);
   transition: transform 0.15s ease, border-color 0.15s ease;
 }
+
+.s-toggle.on .s-toggle-thumb {
+  transform: translateX(18px);
+  background: #0f0f12;
+}
+
 /* Disable card lift on touch devices */
 @media (hover: none) {
   .glass-card:hover {

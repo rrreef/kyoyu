@@ -475,7 +475,7 @@
 }
 .upload-ring-fill {
   fill: none;
-  stroke: rgba(255, 107, 26, 0.85);
+  stroke: rgba(255, 255, 255, 0.85);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-dasharray: 226;
@@ -488,7 +488,7 @@
   inset: -3px;
   border-radius: 50%;
   border: 2px solid transparent;
-  border-top-color: rgba(255, 107, 26, 0.4);
+  border-top-color: rgba(255, 255, 255, 0.4);
   animation: spinAnim 2s linear infinite;
 }
 .upload-logo-center {
@@ -513,7 +513,7 @@
 .upload-loading-pct {
   font-size: 2rem;
   font-weight: 700;
-  color: rgba(255, 107, 26, 0.9);
+  color: rgba(255, 255, 255, 0.9);
   line-height: 1;
 }
 

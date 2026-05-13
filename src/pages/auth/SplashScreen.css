@@ -22,7 +22,7 @@
 }
 .splash-orb--a {
   width: 340px; height: 340px;
-  background: radial-gradient(circle, rgba(255, 107, 26, 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
   top: -80px; left: -60px;
   animation-delay: 0s;
 }
@@ -100,14 +100,14 @@
   color: rgba(255, 255, 255, 0.92);
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 0 18px rgba(255, 107, 26, 0.35));
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.35));
 }
 
 .splash-glow {
   position: absolute;
   inset: -24px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 107, 26, 0.18) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18) 0%, transparent 65%);
   animation: splash-glow-pulse 2s ease-in-out infinite;
   pointer-events: none;
 }

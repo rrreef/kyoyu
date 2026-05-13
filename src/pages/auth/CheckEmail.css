@@ -81,7 +81,7 @@
   animation: waitPulse 2s ease-in-out infinite;
 }
 .check-email-dot.checking {
-  background: #ff6b1a;
+  background: rgba(255,255,255,0.88);
 }
 @keyframes waitPulse {
   0%, 100% { opacity: 0.4; transform: scale(0.8); }

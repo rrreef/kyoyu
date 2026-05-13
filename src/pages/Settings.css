@@ -53,9 +53,9 @@
   color: var(--text-secondary);
 }
 .settings-nav-item.active {
-  background: rgba(255, 107, 26, 0.10);
-  color: rgba(255, 107, 26, 0.95);
-  border: 1px solid rgba(255, 107, 26, 0.15);
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 .s-nav-chevron {
   margin-left: auto;
@@ -156,8 +156,8 @@
   flex-shrink: 0;
 }
 .s-toggle.on {
-  background: rgba(255, 107, 26, 0.85);
-  border-color: rgba(255, 107, 26, 0.5);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 .s-toggle.disabled { opacity: 0.35; cursor: not-allowed; }
 .s-toggle-thumb {
@@ -172,7 +172,7 @@
 }
 .s-toggle.on .s-toggle-thumb {
   transform: translateX(18px);
-  background: #fff;
+  background: #0f0f12;
 }
 
 /* ── Pill group ─────────────────────────────────────────── */
@@ -196,9 +196,9 @@
 }
 .s-pill:hover { background: rgba(255,255,255,0.09); color: var(--text-secondary); }
 .s-pill.active {
-  background: rgba(255, 107, 26, 0.12);
-  border-color: rgba(255, 107, 26, 0.3);
-  color: rgba(255, 107, 26, 0.95);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 /* ── Color swatches ─────────────────────────────────────── */
@@ -344,7 +344,7 @@
 }
 .s-plan-price {
   font-size: 0.82rem;
-  color: rgba(255, 107, 26, 0.8);
+  color: rgba(255, 255, 255, 0.8);
   margin-bottom: 8px;
 }
 .s-plan-desc {
