@@ -56,6 +56,8 @@ export function AuthProvider({ children }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const broadcastRef = useRef(null); // holds the live broadcast channel
+
   function setAvatarSrc(dataUrl, userId) {
     setAvatarSrcRaw(dataUrl);
     try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl ?? ''); } catch (_) {}
@@ -63,6 +65,14 @@ export function AuthProvider({ children }) {
     if (uid) {
       if (dataUrl) localStorage.setItem('kyoyu-avatar-' + uid, dataUrl);
       else         localStorage.removeItem('kyoyu-avatar-' + uid);
+    }
+    // Broadcast to all other open sessions immediately (no DB event needed)
+    if (broadcastRef.current) {
+      broadcastRef.current.send({
+        type: 'broadcast',
+        event: 'avatar',
+        payload: { url: dataUrl ?? '' },
+      }).catch(() => {});
     }
   }
 
@@ -100,58 +110,60 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ── Supabase Realtime: sync avatar across devices/browsers ── */
+  /* ── Supabase Broadcast: real-time avatar push to all open sessions ──────
+     Broadcast works via WebSocket — no dashboard config required.
+     When any client calls setAvatarSrc(), all other browsers/apps get the
+     new URL pushed within ~100ms, no refresh or polling needed. */
   useEffect(() => {
     const uid = userRef.current?.id;
     if (!uid) return;
 
+    function applyUrl(newUrl) {
+      const url = newUrl || null;
+      setAvatarSrcRaw(prev => {
+        if (prev === url) return prev;
+        if (url) {
+          try { localStorage.setItem('kyoyu-avatar-' + uid, url); } catch (_) {}
+          try { window.webkit?.messageHandlers?.avatar?.postMessage(url); } catch (_) {}
+        } else {
+          try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
+          try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+        }
+        return url;
+      });
+    }
+
     const channel = supabase
-      .channel('avatar-sync-' + uid)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'profiles',
-        filter: `id=eq.${uid}`,
-      }, (payload) => {
-        const newUrl = payload.new?.avatar_url ?? null;
-        // Only act if the URL actually changed (avoids self-echo)
-        setAvatarSrcRaw(prev => {
-          if (prev === newUrl) return prev;
-          // Sync localStorage + native bridge
-          if (newUrl) {
-            try { localStorage.setItem('kyoyu-avatar-' + uid, newUrl); } catch (_) {}
-            try { window.webkit?.messageHandlers?.avatar?.postMessage(newUrl); } catch (_) {}
-          } else {
-            try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
-            try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
-          }
-          return newUrl;
-        });
+      .channel('kyoyu-avatar-' + uid, {
+        config: { broadcast: { self: false } }, // don't echo back to sender
+      })
+      .on('broadcast', { event: 'avatar' }, ({ payload }) => {
+        applyUrl(payload?.url);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  // Re-subscribe when user changes (e.g. after login)
+    broadcastRef.current = channel;
+    return () => {
+      broadcastRef.current = null;
+      supabase.removeChannel(channel);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  /* ── Window focus / visibility: re-fetch avatar from DB (cross-browser fallback) ──
-     Works even without Supabase Realtime enabled on the profiles table.
-     Fires when user switches tabs/browsers, wakes device, or returns to the app. */
+  /* ── Fallback: re-fetch from DB on focus / visibility change ──────────────
+     Covers newly-opened tabs and apps that weren't connected when the
+     change was made (broadcast only reaches currently open sessions). */
   useEffect(() => {
     const uid = userRef.current?.id;
     if (!uid) return;
 
-    async function syncAvatar() {
+    async function syncFromDB() {
       try {
         const { data } = await supabase
-          .from('profiles')
-          .select('avatar_url')
-          .eq('id', uid)
-          .single();
+          .from('profiles').select('avatar_url').eq('id', uid).single();
         const newUrl = data?.avatar_url ?? null;
         setAvatarSrcRaw(prev => {
-          if (prev === newUrl) return prev; // nothing changed
+          if (prev === newUrl) return prev;
           if (newUrl) {
             try { localStorage.setItem('kyoyu-avatar-' + uid, newUrl); } catch (_) {}
             try { window.webkit?.messageHandlers?.avatar?.postMessage(newUrl); } catch (_) {}
@@ -164,18 +176,14 @@ export function AuthProvider({ children }) {
       } catch (_) {}
     }
 
-    // Sync immediately and on tab focus / page visibility change
-    syncAvatar();
-    window.addEventListener('focus', syncAvatar);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') syncAvatar();
-    });
-
-    // Poll every 60s as final fallback (covers background tabs that never get focus)
-    const poll = setInterval(syncAvatar, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') syncFromDB(); };
+    window.addEventListener('focus', syncFromDB);
+    document.addEventListener('visibilitychange', onVisible);
+    const poll = setInterval(syncFromDB, 30_000); // 30s safety net
 
     return () => {
-      window.removeEventListener('focus', syncAvatar);
+      window.removeEventListener('focus', syncFromDB);
+      document.removeEventListener('visibilitychange', onVisible);
       clearInterval(poll);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
