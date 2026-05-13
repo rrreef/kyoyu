@@ -344,6 +344,11 @@ input:focus, textarea:focus, select:focus {
 }
 input::placeholder { color: var(--text-muted); }
 
+/* Hide native number-input spinners globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
 img {
   display: block;
   max-width: 100%;
