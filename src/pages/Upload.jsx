@@ -23,7 +23,7 @@ function isAccepted(file) {
   return ACCEPTED_EXT.includes(ext) || ACCEPTED_MIME.includes(file.type);
 }
 function emptyMeta() {
-  return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), format: 'Digital', description: '', artwork: null, artworkUrl: null, visibility: 'private', credits: [] };
+  return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), format: 'Digital', description: '', artwork: null, artworkUrl: null, visibility: 'private', publishAt: '', credits: [] };
 }
 
 /* ─── Metadata extractor (ID3v2, FLAC, AIFF, WAV) ───────── */
@@ -636,15 +636,24 @@ export default function Upload() {
                     <span>{formatBytes(audioFiles[activeTrack]?.file.size ?? 0)}</span>
                   </div>
 
-                  {/* Inline audio player */}
-                  {audioUrls[audioFiles[activeTrack]?.id] && (
-                    <audio
-                      key={audioFiles[activeTrack]?.id}
-                      controls
-                      src={audioUrls[audioFiles[activeTrack].id]}
-                      className="track-inline-player"
-                    />
-                  )}
+                  {/* Inline audio player — AIFF not natively supported in browsers */}
+                  {(() => {
+                    const activeFile = audioFiles[activeTrack];
+                    const ext = getExt(activeFile?.file?.name ?? '').toLowerCase();
+                    const browserPlayable = ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'mp4'].includes(ext);
+                    const url = audioUrls[activeFile?.id];
+                    if (!url) return null;
+                    if (!browserPlayable) return (
+                      <div className="track-preview-unavailable">
+                        <span>{ext.toUpperCase()} preview not available in browser — file is ready to upload</span>
+                      </div>
+                    );
+                    return (
+                      <audio key={activeFile.id} controls preload="metadata" className="track-inline-player">
+                        <source src={url} type={activeFile.file.type || `audio/${ext}`} />
+                      </audio>
+                    );
+                  })()}
 
                   {/* Visibility toggle */}
                   <div className="visibility-row">
@@ -664,6 +673,31 @@ export default function Upload() {
                         Public
                       </button>
                     </div>
+
+                    {/* Scheduled publish — shown when Private is selected */}
+                    {meta.visibility === 'private' && (
+                      <div className="publish-schedule">
+                        <label className="publish-schedule-label">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                          </svg>
+                          Goes public on
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className="publish-schedule-input"
+                          value={meta.publishAt || ''}
+                          min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                          onChange={e => updateMeta(activeTrack, 'publishAt', e.target.value)}
+                        />
+                        {!meta.publishAt && (
+                          <span className="publish-schedule-hint">Leave blank to keep private indefinitely</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
