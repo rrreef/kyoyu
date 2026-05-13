@@ -401,16 +401,16 @@
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-6);
   border-radius: var(--radius-full);
-  background: var(--orange-500);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   font-family: var(--font-body);
   transition: var(--transition-fast);
-  box-shadow: 0 0 20px rgba(255,255,255,0.35);
 }
-.upload-next-btn:hover { background: var(--orange-400); }
+.upload-next-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.24); }
 
 .upload-page--success {
   padding-top: 80px; /* clear the sticky top navbar */
@@ -602,16 +602,16 @@
 .upload-success-btn {
   padding: var(--sp-3) var(--sp-6);
   border-radius: var(--radius-full);
-  background: var(--orange-500);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 600;
   cursor: pointer;
   font-family: var(--font-body);
   margin-top: var(--sp-2);
   transition: var(--transition-fast);
-  box-shadow: 0 0 20px rgba(255,255,255,0.35);
 }
-.upload-success-btn:hover { background: var(--orange-400); }
+.upload-success-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.24); }
 
 @media (max-width: 768px) {
   .form-grid { grid-template-columns: 1fr; }
@@ -1285,13 +1285,16 @@
 /* Next / Success buttons */
 .upload-next-btn,
 .upload-success-btn {
-  background: var(--btn-primary-bg) !important;
-  color: var(--btn-primary-text) !important;
-  box-shadow: 0 4px 16px var(--btn-primary-glow) !important;
+  border-radius: var(--radius-full) !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: none !important;
 }
 .upload-next-btn:hover,
 .upload-success-btn:hover {
-  background: var(--btn-primary-hover) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
 }
 /* Progress bar */
 .upload-progress-bar {
