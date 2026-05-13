@@ -944,7 +944,7 @@
 .custom-player {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
@@ -974,7 +974,7 @@
   font-family: var(--font-body);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
-  min-width: 34px;
+  min-width: 26px;
 }
 .cp-dur { text-align: right; }
 /* range-input scrubber */

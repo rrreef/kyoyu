@@ -237,7 +237,7 @@ function TrackPlayer({ url, ext, file }) {
         className="cp-seek"
         min={0}
         max={dur || 100}
-        step={0.1}
+        step="any"
         value={current}
         style={{ '--pct': `${pct}%` }}
         onChange={e => {
