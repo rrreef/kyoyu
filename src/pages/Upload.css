@@ -1056,8 +1056,8 @@
   padding: 0;
   min-width: 0;
 }
-.pdc-seg--2  { width: 26px; }
-.pdc-seg--4  { width: 44px; }
+.pdc-seg--2  { width: 2.4ch; min-width: 28px; }
+.pdc-seg--4  { width: 4.4ch; min-width: 46px; }
 .pdc-seg::placeholder { color: rgba(255,255,255,0.40); opacity: 1; }
 .pdc-sep {
   color: rgba(255,255,255,0.40);
