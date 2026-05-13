@@ -28,56 +28,51 @@ function emptyMeta() {
 
 /* ─── Custom masked date-time input ─────────────────────── */
 function ScheduleDateInput({ value, onChange }) {
-  // ISO → display string
-  const toDisplay = (iso) => {
-    if (!iso || iso.length < 16) return '';
-    const [date, time] = iso.split('T');
-    const [yyyy, mm, dd] = date.split('-');
-    const [hh, mi] = (time || '').split(':');
-    return `${dd}.${mm}.${yyyy}, ${hh}:${mi}`;
-  };
+  const parseDate = (iso) =>
+    iso ? `${iso.slice(8,10)}.${iso.slice(5,7)}.${iso.slice(0,4)}` : '';
+  const parseTime = (iso) =>
+    iso ? `${iso.slice(11,13)}:${iso.slice(14,16)}` : '';
 
-  // raw digits → ISO string
-  const toISO = (digits) => {
-    if (digits.length < 12) return '';
-    const dd   = digits.slice(0, 2);
-    const mm   = digits.slice(2, 4);
-    const yyyy = digits.slice(4, 8);
-    const hh   = digits.slice(8, 10);
-    const mi   = digits.slice(10, 12);
+  const toISO = (dd8, tt4) => {
+    if (dd8.length < 8 || tt4.length < 4) return '';
+    const dd = dd8.slice(0,2), mm = dd8.slice(2,4), yyyy = dd8.slice(4,8);
+    const hh = tt4.slice(0,2), mi = tt4.slice(2,4);
     return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
   };
 
-  // digits → formatted display
-  const format = (d) => {
-    let r = '';
-    if (d.length > 0)  r += d.slice(0, 2);
-    if (d.length > 2)  r += '.' + d.slice(2, 4);
-    if (d.length > 4)  r += '.' + d.slice(4, 8);
-    if (d.length > 8)  r += ',    ' + d.slice(8, 10);
-    if (d.length > 10) r += ':' + d.slice(10, 12);
+  const fmtDate = (d) => {
+    let r = d.slice(0,2);
+    if (d.length > 2) r += '.' + d.slice(2,4);
+    if (d.length > 4) r += '.' + d.slice(4,8);
+    return r;
+  };
+  const fmtTime = (d) => {
+    let r = d.slice(0,2);
+    if (d.length > 2) r += ':' + d.slice(2,4);
     return r;
   };
 
-  const [display, setDisplay] = useState(() => toDisplay(value));
+  const [datePart, setDatePart] = useState(() => parseDate(value));
+  const [timePart, setTimePart] = useState(() => parseTime(value));
 
-  const handleChange = (e) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
-    const formatted = format(digits);
-    setDisplay(formatted);
-    onChange(toISO(digits));
+  const handleDate = (e) => {
+    const d = e.target.value.replace(/\D/g,'').slice(0,8);
+    setDatePart(fmtDate(d));
+    onChange(toISO(d, timePart.replace(/\D/g,'')));
+  };
+  const handleTime = (e) => {
+    const d = e.target.value.replace(/\D/g,'').slice(0,4);
+    setTimePart(fmtTime(d));
+    onChange(toISO(datePart.replace(/\D/g,''), d));
   };
 
   return (
-    <input
-      className="publish-schedule-input"
-      type="text"
-      inputMode="numeric"
-      placeholder="DD.MM.YYYY,    HH:MM"
-      value={display}
-      onChange={handleChange}
-      maxLength={18}
-    />
+    <div className="psi-wrap">
+      <input className="psi-date" type="text" inputMode="numeric"
+        placeholder="DD.MM.YYYY" value={datePart} onChange={handleDate} maxLength={10} />
+      <input className="psi-time" type="text" inputMode="numeric"
+        placeholder="HH:MM" value={timePart} onChange={handleTime} maxLength={5} />
+    </div>
   );
 }
 

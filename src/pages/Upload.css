@@ -1028,25 +1028,34 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.publish-schedule-input {
-  width: 100%;
+.psi-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 7px 10px;
   border-radius: 8px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  font-family: var(--font-body);
   transition: border-color 0.15s, background 0.15s;
-  outline: none;
 }
-.publish-schedule-input:focus {
+.psi-wrap:focus-within {
   border-color: rgba(255,255,255,0.25);
   background: rgba(255,255,255,0.07);
 }
-.publish-schedule-input::placeholder {
-  color: rgba(255,255,255,0.35);
+.psi-date,
+.psi-time {
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  padding: 0;
 }
+.psi-date { text-align: left; }
+.psi-time { text-align: right; }
+.psi-date::placeholder,
+.psi-time::placeholder { color: rgba(255,255,255,0.35); }
 .publish-schedule-hint {
   font-size: 0.65rem;
   color: var(--text-dim);
