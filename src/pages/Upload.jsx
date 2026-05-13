@@ -64,15 +64,15 @@ function ScheduleDateInput({ value, onChange }) {
 
   return (
     <div className="pdc-wrap">
-      <input ref={ddRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="D"   value={parts.dd}   onChange={e => update('dd',   e.target.value, mmRef,   2)} />
+      <input ref={ddRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="DD"   value={parts.dd}   onChange={e => update('dd',   e.target.value, mmRef,   2)} />
       <span className="pdc-sep">.</span>
-      <input ref={mmRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="M"   value={parts.mm}   onChange={e => update('mm',   e.target.value, yyyyRef, 2)} />
+      <input ref={mmRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mm}   onChange={e => update('mm',   e.target.value, yyyyRef, 2)} />
       <span className="pdc-sep">.</span>
       <input ref={yyyyRef} className="pdc-seg pdc-seg--4"    type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" value={parts.yyyy} onChange={e => update('yyyy', e.target.value, hhRef,   4)} />
       <span className="pdc-sep pdc-sep--space">,</span>
-      <input ref={hhRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="H"   value={parts.hh}   onChange={e => update('hh',   e.target.value, miRef,   2)} />
+      <input ref={hhRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="HH"   value={parts.hh}   onChange={e => update('hh',   e.target.value, miRef,   2)} />
       <span className="pdc-sep">:</span>
-      <input ref={miRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="M"   value={parts.mi}   onChange={e => update('mi',   e.target.value, null,    2)} />
+      <input ref={miRef}   className="pdc-seg pdc-seg--2"    type="text" inputMode="numeric" maxLength={2} placeholder="MM"   value={parts.mi}   onChange={e => update('mi',   e.target.value, null,    2)} />
     </div>
   );
 }
