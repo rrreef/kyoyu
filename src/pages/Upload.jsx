@@ -1048,14 +1048,12 @@ export default function Upload() {
                     </div>
                   </div>
 
-                  <div className="form-field">
+                  <div className="form-field form-field--grow">
                     <label>Description</label>
                     <textarea
                       placeholder="Recording context, themes, story behind this track..."
                       value={meta.description}
                       onChange={e => updateMeta(activeTrack, 'description', e.target.value)}
-                      rows={3}
-                      style={{ resize: 'vertical' }}
                     />
                   </div>
                 </div>
