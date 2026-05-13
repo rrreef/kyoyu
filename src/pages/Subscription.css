@@ -32,7 +32,7 @@
   font-size: 0.875rem;
   font-family: var(--font-heading);
   border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  box-shadow: 0 0 20px rgba(255,107,26,0.35);
+  box-shadow: 0 0 20px rgba(255,255,255,0.35);
 }
 .sub-split-phase {
   background: var(--grey-700);
@@ -107,7 +107,7 @@
   font-size: 0.875rem;
   flex-shrink: 0;
   transition: var(--transition-fast);
-  box-shadow: 0 0 20px rgba(255,107,26,0.3);
+  box-shadow: 0 0 20px rgba(255,255,255,0.3);
 }
 .sub-manage-btn:hover { background: var(--orange-400); }
 

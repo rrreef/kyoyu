@@ -36,8 +36,8 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255,107,26,0.12) 40%,
-    rgba(255,107,26,0.12) 60%,
+    rgba(255,255,255,0.12) 40%,
+    rgba(255,255,255,0.12) 60%,
     transparent 100%
   );
 }

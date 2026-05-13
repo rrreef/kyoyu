@@ -24,11 +24,11 @@
   cursor: pointer;
   border: none;
   transition: background 0.15s, box-shadow 0.15s;
-  box-shadow: 0 0 20px rgba(255,107,26,0.3);
+  box-shadow: 0 0 20px rgba(255,255,255,0.3);
   white-space: nowrap;
   flex-shrink: 0;
 }
-.rel-upload-btn:hover { background: var(--orange-400); box-shadow: 0 0 28px rgba(255,107,26,0.45); }
+.rel-upload-btn:hover { background: var(--orange-400); box-shadow: 0 0 28px rgba(255,255,255,0.45); }
 
 /* ── Release Grid ─────────────────────────────────────────── */
 .rel-grid {
@@ -144,9 +144,9 @@
   min-height: 148px;
 }
 .rel-card-empty:hover {
-  border-color: rgba(255,107,26,0.3);
-  color: rgba(255,107,26,0.7);
-  background: rgba(255,107,26,0.04);
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.04);
 }
 
 /* ── Detail Overlay ───────────────────────────────────────── */

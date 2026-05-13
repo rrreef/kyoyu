@@ -14,7 +14,7 @@ const CHART_METRICS   = ['Streams', 'Downloads', 'Vinyl', 'Revenue', 'All'];
 
 /* ─── Accent colours ─────────────────────────────────────── */
 const ACCENTS = {
-  orange:  { main:'rgba(255,107,26,0.95)',  mid:'rgba(255,107,26,0.32)', zero:'rgba(255,107,26,0)' },
+  orange:  { main:'rgba(255,255,255,0.95)',  mid:'rgba(255,255,255,0.32)', zero:'rgba(255,255,255,0)' },
   violet:  { main:'rgba(155,109,255,0.95)', mid:'rgba(155,109,255,0.32)', zero:'rgba(155,109,255,0)' },
   blue:    { main:'rgba(41,182,246,0.95)',  mid:'rgba(41,182,246,0.32)', zero:'rgba(41,182,246,0)' },
   emerald: { main:'rgba(80,200,120,0.95)',  mid:'rgba(80,200,120,0.32)', zero:'rgba(80,200,120,0)' },
@@ -22,7 +22,7 @@ const ACCENTS = {
 };
 
 const METRIC_COLORS = {
-  Streams:   'rgba(255,107,26,0.9)',
+  Streams:   'rgba(255,255,255,0.9)',
   Downloads: 'rgba(41,182,246,0.9)',
   Vinyl:     'rgba(155,109,255,0.9)',
   Revenue:   'rgba(80,200,120,0.9)',

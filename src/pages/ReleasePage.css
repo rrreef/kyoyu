@@ -71,7 +71,7 @@ a.release-meta-item:hover { color: var(--text-secondary); }
   font-size: 0.875rem;
   transition: var(--transition-base);
   font-family: var(--font-body);
-  box-shadow: 0 0 24px rgba(255,107,26,0.4);
+  box-shadow: 0 0 24px rgba(255,255,255,0.4);
 }
 .release-play-btn:hover { background: var(--orange-400); }
 .release-icon-btn {
@@ -110,7 +110,7 @@ a.release-meta-item:hover { color: var(--text-secondary); }
   text-decoration: none;
   font-family: var(--font-body);
   white-space: nowrap;
-  box-shadow: 0 0 14px rgba(255,107,26,0.3);
+  box-shadow: 0 0 14px rgba(255,255,255,0.3);
 }
 .buy-btn:hover { background: var(--orange-400); }
 

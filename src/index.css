@@ -577,8 +577,8 @@ img {
   50%       { transform: scaleY(1); }
 }
 @keyframes orangeGlow {
-  0%, 100% { box-shadow: 0 0 20px rgba(255,107,26,0.3); }
-  50%       { box-shadow: 0 0 40px rgba(255,107,26,0.55); }
+  0%, 100% { box-shadow: 0 0 20px rgba(255,255,255,0.3); }
+  50%       { box-shadow: 0 0 40px rgba(255,255,255,0.55); }
 }
 
 /* Page entry — snappy at 0.18s feels instant, 0.32s feels sluggish */

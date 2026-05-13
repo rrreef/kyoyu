@@ -51,7 +51,7 @@
   font-size: 0.875rem;
   transition: var(--transition-fast);
   font-family: var(--font-body);
-  box-shadow: 0 0 20px rgba(255,107,26,0.35);
+  box-shadow: 0 0 20px rgba(255,255,255,0.35);
 }
 .artist-follow-btn:hover { background: var(--orange-400); }
 .artist-play-btn {
@@ -94,7 +94,7 @@
   transition: var(--transition-fast);
   font-family: var(--font-body);
 }
-.event-tickets-btn:hover { border-color: rgba(255,107,26,0.3); color: var(--orange-300); }
+.event-tickets-btn:hover { border-color: rgba(255,255,255,0.3); color: var(--orange-300); }
 
 .artist-label-link {
   display: inline-flex;

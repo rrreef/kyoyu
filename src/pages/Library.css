@@ -29,7 +29,7 @@
   font-family: var(--font-body);
 }
 .lib-tab:hover { color: var(--orange-300); }
-.lib-tab.active { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(255,107,26,0.3); }
+.lib-tab.active { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
 
 .lib-grid { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
 .lib-empty { text-align: center; padding: var(--sp-12); color: var(--text-muted); }
@@ -76,7 +76,7 @@
   justify-content: center;
   flex-shrink: 0;
   transition: var(--transition-fast);
-  box-shadow: 0 0 16px rgba(255,107,26,0.35);
+  box-shadow: 0 0 16px rgba(255,255,255,0.35);
 }
 .playlist-play-btn:hover { background: var(--orange-400); }
 
@@ -108,7 +108,7 @@
   font-family: var(--font-body);
   cursor: pointer;
   transition: var(--transition-fast);
-  box-shadow: 0 0 14px rgba(255,107,26,0.3);
+  box-shadow: 0 0 14px rgba(255,255,255,0.3);
 }
 .ai-builder-btn:hover { background: var(--orange-400); }
 
@@ -177,7 +177,7 @@
   font-family: var(--font-body);
   cursor: pointer;
   transition: var(--transition-fast);
-  box-shadow: 0 0 12px rgba(255,107,26,0.3);
+  box-shadow: 0 0 12px rgba(255,255,255,0.3);
 }
 .modal-confirm:hover { background: var(--orange-400); }
 

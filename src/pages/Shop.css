@@ -18,7 +18,7 @@
   cursor: pointer;
   font-family: var(--font-body);
 }
-.shop-tab.active { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(255,107,26,0.3); }
+.shop-tab.active { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 12px rgba(255,255,255,0.3); }
 
 .shop-info-banner {
   display: flex;
@@ -62,7 +62,7 @@
   transition: var(--transition-fast);
   font-family: var(--font-body);
 }
-.fmt-btn.selected { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 10px rgba(255,107,26,0.3); }
+.fmt-btn.selected { background: var(--orange-500); color: #fff; border-color: transparent; box-shadow: 0 0 10px rgba(255,255,255,0.3); }
 .fmt-btn:not(.selected):hover { border-color: var(--glass-border-hover); color: var(--text-secondary); }
 
 .shop-release-price { text-align: right; }
@@ -82,7 +82,7 @@
   transition: var(--transition-fast);
   font-family: var(--font-body);
   white-space: nowrap;
-  box-shadow: 0 0 16px rgba(255,107,26,0.3);
+  box-shadow: 0 0 16px rgba(255,255,255,0.3);
 }
 .shop-buy-btn:hover { background: var(--orange-400); }
 .shop-buy-btn.added { background: var(--grey-700); color: var(--text-muted); }
@@ -103,7 +103,7 @@
   cursor: pointer;
   transition: var(--transition-fast);
   font-family: var(--font-body);
-  box-shadow: 0 0 14px rgba(255,107,26,0.3);
+  box-shadow: 0 0 14px rgba(255,255,255,0.3);
 }
 .vinyl-direct-buy-btn:hover { background: var(--orange-400); }
 

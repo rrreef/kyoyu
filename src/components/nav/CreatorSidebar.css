@@ -160,11 +160,11 @@
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .creator-nav-dashboard.active {
-  background: rgba(255,107,26,0.08);
-  color: rgba(255,107,26,0.95);
-  border: 1px solid rgba(255,107,26,0.15);
-  border-bottom: 1px solid rgba(255,107,26,0.15);
-  box-shadow: 0 0 16px rgba(255,107,26,0.10) inset;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 16px rgba(255,255,255,0.10) inset;
 }
 .creator-nav-dashboard:hover:not(.active) {
   background: rgba(255,255,255,0.06);

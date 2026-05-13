@@ -92,6 +92,6 @@
   cursor: pointer;
   transition: var(--transition-fast);
   font-family: var(--font-body);
-  box-shadow: 0 0 12px rgba(255,107,26,0.3);
+  box-shadow: 0 0 12px rgba(255,255,255,0.3);
 }
 .mp-buy-btn:hover { background: var(--orange-400); }
