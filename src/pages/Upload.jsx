@@ -158,12 +158,13 @@ async function aiffToWavUrl(file) {
   return URL.createObjectURL(new Blob([wavBuf], { type: 'audio/wav' }));
 }
 
-/* ─── TrackPlayer: native + AIFF transcoding for all browsers ─ */
+/* ─── TrackPlayer: custom player + AIFF transcoding ─────── */
 function TrackPlayer({ url, ext, file }) {
   const isAiff = ext === 'aiff' || ext === 'aif';
   const [state,   setState]   = useState(isAiff ? 'converting' : 'ready');
   const [wavUrl,  setWavUrl]  = useState(null);
 
+  /* AIFF → WAV conversion */
   useEffect(() => {
     if (!isAiff || !file) return;
     let revoke;
@@ -174,24 +175,68 @@ function TrackPlayer({ url, ext, file }) {
     return () => { if (revoke) URL.revokeObjectURL(revoke); };
   }, [file, ext]);
 
+  /* Playback state */
+  const audioRef              = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [dur,     setDur]     = useState(0);
+
+  const fmt = (t) => {
+    if (!isFinite(t)) return '0:00';
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const togglePlay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing) { a.pause(); setPlaying(false); }
+    else         { a.play().catch(() => setState('failed')); setPlaying(true); }
+  };
+
+  const seek = (e) => {
+    const a = audioRef.current;
+    if (!a || !dur) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    a.currentTime = ((e.clientX - rect.left) / rect.width) * dur;
+  };
+
+  const pct = dur ? (current / dur) * 100 : 0;
   const playUrl = isAiff ? wavUrl : url;
-  const mime    = isAiff ? 'audio/wav' : `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
 
   if (state === 'converting') return (
-    <div className="track-preview-unavailable">
-      <span>Preparing AIFF preview…</span>
-    </div>
+    <div className="track-preview-unavailable"><span>Preparing AIFF preview…</span></div>
   );
   if (state === 'failed') return (
     <div className="track-preview-unavailable">
       <span>{ext.toUpperCase()} preview could not be decoded — file is ready to upload</span>
     </div>
   );
+
   return (
-    <audio key={playUrl} controls preload="metadata" className="track-inline-player"
-      onError={() => setState('failed')}>
-      <source src={playUrl} type={mime} onError={() => setState('failed')} />
-    </audio>
+    <div className="custom-player">
+      <audio
+        ref={audioRef}
+        src={playUrl}
+        preload="metadata"
+        onTimeUpdate={e => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={e => setDur(e.target.duration)}
+        onEnded={() => setPlaying(false)}
+        onError={() => setState('failed')}
+      />
+      <button className="cp-play" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
+        {playing
+          ? <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor"><rect x="0" y="0" width="4" height="14" rx="1"/><rect x="8" y="0" width="4" height="14" rx="1"/></svg>
+          : <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor"><path d="M0 0 L12 7 L0 14 Z"/></svg>
+        }
+      </button>
+      <span className="cp-time">{fmt(current)}</span>
+      <div className="cp-bar" onClick={seek}>
+        <div className="cp-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="cp-dur">{fmt(dur)}</span>
+    </div>
   );
 }
 
