@@ -950,6 +950,7 @@
   border-radius: 10px;
   padding: 5px 10px;
   margin-top: var(--sp-2);
+  overflow: visible;
 }
 .cp-play {
   flex-shrink: 0;
@@ -977,38 +978,30 @@
   min-width: 26px;
 }
 .cp-dur { text-align: right; }
-/* range-input scrubber */
-.cp-seek {
+.cp-bar {
   flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
+  height: 3px;
+  background: rgba(255,255,255,0.12);
   border-radius: 99px;
-  outline: none;
   cursor: pointer;
-  background: linear-gradient(
-    to right,
-    rgba(255,255,255,0.75) var(--pct, 0%),
-    rgba(255,255,255,0.14) var(--pct, 0%)
-  );
+  position: relative;
 }
-.cp-seek::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+.cp-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: rgba(255,255,255,0.70);
+  border-radius: 99px;
+}
+.cp-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
   background: #fff;
   border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 0 5px rgba(0,0,0,0.35);
-}
-.cp-seek::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  background: #fff;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 0 5px rgba(0,0,0,0.35);
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
 }
 
 /* ══ Visibility toggle ═══════════════════════════════════════ */

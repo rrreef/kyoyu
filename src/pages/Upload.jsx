@@ -232,20 +232,10 @@ function TrackPlayer({ url, ext, file }) {
         }
       </button>
       <span className="cp-time">{fmt(current)}</span>
-      <input
-        type="range"
-        className="cp-seek"
-        min={0}
-        max={dur || 100}
-        step="any"
-        value={current}
-        style={{ '--pct': `${pct}%` }}
-        onChange={e => {
-          const val = Number(e.target.value);
-          if (audioRef.current) audioRef.current.currentTime = val;
-          setCurrent(val);
-        }}
-      />
+      <div className="cp-bar" onClick={seek}>
+        <div className="cp-fill" style={{ width: `${pct}%` }} />
+        <div className="cp-thumb" style={{ left: `${pct}%` }} />
+      </div>
       <span className="cp-dur">{fmt(dur)}</span>
     </div>
   );
