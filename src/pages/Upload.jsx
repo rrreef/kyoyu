@@ -501,12 +501,24 @@ export default function Upload() {
 
       {/* Progress */}
       <div className="upload-steps">
-        {STEPS.map((s, i) => (
-          <div key={s} className={`upload-step ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
-            <div className="upload-step-num">{i < step ? '✓' : i + 1}</div>
-            <div className="upload-step-label">{s}</div>
-          </div>
-        ))}
+        {STEPS.map((s, i) => {
+          const isDone = i < step;
+          const isActive = i === step;
+          return (
+            <div
+              key={s}
+              role={isDone ? 'button' : undefined}
+              tabIndex={isDone ? 0 : undefined}
+              className={`upload-step ${isActive ? 'active' : ''} ${isDone ? 'done done--clickable' : ''}`}
+              onClick={isDone ? () => setStep(i) : undefined}
+              onKeyDown={isDone ? e => (e.key === 'Enter' || e.key === ' ') && setStep(i) : undefined}
+              title={isDone ? `Go back to ${s}` : undefined}
+            >
+              <div className="upload-step-num">{isDone ? '✓' : i + 1}</div>
+              <div className="upload-step-label">{s}</div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="upload-form glass">
