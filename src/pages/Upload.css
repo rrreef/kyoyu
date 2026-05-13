@@ -983,7 +983,7 @@
   height: 3px;
   background: rgba(255,255,255,0.12);
   border-radius: 99px;
-  cursor: grab;
+  cursor: default;
   position: relative;
   user-select: none;
   -webkit-user-select: none;
