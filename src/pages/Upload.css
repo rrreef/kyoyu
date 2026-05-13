@@ -1028,32 +1028,38 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Two separate cards: date left, time right */
 .psi-wrap {
   display: flex;
-  justify-content: space-between;
+  gap: 6px;
   align-items: center;
+}
+.psi-date,
+.psi-time {
   padding: 7px 10px;
   border-radius: 8px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
-  transition: border-color 0.15s, background 0.15s;
-}
-.psi-wrap:focus-within {
-  border-color: rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.07);
-}
-.psi-date,
-.psi-time {
-  border: none;
-  background: transparent;
   outline: none;
   color: var(--text-primary);
   font-size: 0.8rem;
   font-family: var(--font-body);
-  padding: 0;
+  transition: border-color 0.15s, background 0.15s;
 }
-.psi-date { text-align: left; }
-.psi-time { text-align: right; }
+.psi-date {
+  flex: 1;
+  text-align: left;
+}
+.psi-time {
+  flex-shrink: 0;
+  width: 66px;
+  text-align: center;
+}
+.psi-date:focus,
+.psi-time:focus {
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.07);
+}
 .psi-date::placeholder,
 .psi-time::placeholder { color: rgba(255,255,255,0.35); }
 .publish-schedule-hint {
