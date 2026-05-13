@@ -54,7 +54,7 @@ function ScheduleDateInput({ value, onChange }) {
     if (d.length > 0)  r += d.slice(0, 2);
     if (d.length > 2)  r += '.' + d.slice(2, 4);
     if (d.length > 4)  r += '.' + d.slice(4, 8);
-    if (d.length > 8)  r += ', ' + d.slice(8, 10);
+    if (d.length > 8)  r += ',    ' + d.slice(8, 10);
     if (d.length > 10) r += ':' + d.slice(10, 12);
     return r;
   };
@@ -73,7 +73,7 @@ function ScheduleDateInput({ value, onChange }) {
       className="publish-schedule-input"
       type="text"
       inputMode="numeric"
-      placeholder="DD.MM.YYYY, HH:MM"
+      placeholder="DD.MM.YYYY,    HH:MM"
       value={display}
       onChange={handleChange}
       maxLength={18}
