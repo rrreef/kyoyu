@@ -76,24 +76,121 @@ function ScheduleDateInput({ value, onChange }) {
   );
 }
 
-/* ─── TrackPlayer: native audio with graceful error fallback ─ */
-function TrackPlayer({ url, ext }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <div className="track-preview-unavailable">
-        <span>{ext.toUpperCase()} preview not available in this browser — file is ready to upload</span>
-      </div>
-    );
+/* ─── Pure-JS AIFF → WAV transcoder (works in all browsers) ─ */
+function writeWavStr(v, off, s) { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); }
+
+function read80BitFloat(v, off) {
+  // IEEE 754 80-bit extended precision (AIFF sample rate field)
+  const exp  = (v.getUint16(off, false) & 0x7FFF) - 16383;
+  const hi   = v.getUint32(off + 2, false);
+  const lo   = v.getUint32(off + 6, false);
+  return hi * Math.pow(2, exp - 31) + lo * Math.pow(2, exp - 63);
+}
+
+async function aiffToWavUrl(file) {
+  const ab  = await file.arrayBuffer();
+  const v   = new DataView(ab);
+  const u8  = new Uint8Array(ab);
+  const str = (o, n) => String.fromCharCode(...u8.slice(o, o + n));
+
+  if (str(0, 4) !== 'FORM') throw new Error('Not FORM');
+  const formType = str(8, 4);
+  if (formType !== 'AIFF' && formType !== 'AIFC') throw new Error('Not AIFF');
+
+  let numCh, numFrames, bitDepth, sampleRate;
+  let ssndStart = -1, ssndDataOff = 0;
+
+  let off = 12;
+  while (off < ab.byteLength - 8) {
+    const id   = str(off, 4);
+    const size = v.getUint32(off + 4, false);       // big-endian chunk size
+    const body = off + 8;
+
+    if (id === 'COMM') {
+      numCh      = v.getInt16(body,     false);
+      numFrames  = v.getUint32(body+2,  false);
+      bitDepth   = v.getInt16(body+6,   false);
+      sampleRate = Math.round(read80BitFloat(v, body + 8));
+    } else if (id === 'SSND') {
+      ssndDataOff = v.getUint32(body,   false);     // block offset
+      ssndStart   = body + 8 + ssndDataOff;         // actual PCM start
+    }
+    off += 8 + size + (size & 1);                   // word-align
   }
+
+  if (ssndStart < 0 || !numCh) throw new Error('Missing COMM or SSND');
+
+  const bps       = Math.ceil(bitDepth / 8);        // bytes per sample (source)
+  const outBps    = 2;                               // output: 16-bit
+  const dataLen   = numFrames * numCh * outBps;
+  const wavBuf    = new ArrayBuffer(44 + dataLen);
+  const wv        = new DataView(wavBuf);
+
+  // WAV header
+  writeWavStr(wv, 0,  'RIFF'); wv.setUint32(4, 36 + dataLen, true);
+  writeWavStr(wv, 8,  'WAVE'); writeWavStr(wv, 12, 'fmt ');
+  wv.setUint32(16, 16, true);  wv.setUint16(20, 1, true);   // PCM
+  wv.setUint16(22, numCh, true);
+  wv.setUint32(24, sampleRate, true);
+  wv.setUint32(28, sampleRate * numCh * outBps, true);
+  wv.setUint16(32, numCh * outBps, true);
+  wv.setUint16(34, 16, true);
+  writeWavStr(wv, 36, 'data'); wv.setUint32(40, dataLen, true);
+
+  // Transcode samples: big-endian PCM → little-endian 16-bit
+  let wOff = 44;
+  for (let i = 0; i < numFrames * numCh; i++) {
+    const sOff = ssndStart + i * bps;
+    let s;
+    if (bitDepth === 16) {
+      s = v.getInt16(sOff, false);                  // big-endian → int16
+    } else if (bitDepth === 24) {
+      const raw = (u8[sOff] << 16) | (u8[sOff+1] << 8) | u8[sOff+2];
+      s = raw > 0x7FFFFF ? raw - 0x1000000 : raw;
+      s = s >> 8;                                   // 24→16 bit
+    } else if (bitDepth === 32) {
+      s = v.getInt32(sOff, false) >> 16;            // 32→16 bit
+    } else { s = 0; }
+    wv.setInt16(wOff, s, true);
+    wOff += 2;
+  }
+
+  return URL.createObjectURL(new Blob([wavBuf], { type: 'audio/wav' }));
+}
+
+/* ─── TrackPlayer: native + AIFF transcoding for all browsers ─ */
+function TrackPlayer({ url, ext, file }) {
+  const isAiff = ext === 'aiff' || ext === 'aif';
+  const [state,   setState]   = useState(isAiff ? 'converting' : 'ready');
+  const [wavUrl,  setWavUrl]  = useState(null);
+
+  useEffect(() => {
+    if (!isAiff || !file) return;
+    let revoke;
+    setState('converting');
+    aiffToWavUrl(file)
+      .then(u => { revoke = u; setWavUrl(u); setState('ready'); })
+      .catch(() => setState('failed'));
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+  }, [file, ext]);
+
+  const playUrl = isAiff ? wavUrl : url;
+  const mime    = isAiff ? 'audio/wav' : `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
+
+  if (state === 'converting') return (
+    <div className="track-preview-unavailable">
+      <span>Preparing AIFF preview…</span>
+    </div>
+  );
+  if (state === 'failed') return (
+    <div className="track-preview-unavailable">
+      <span>{ext.toUpperCase()} preview could not be decoded — file is ready to upload</span>
+    </div>
+  );
   return (
-    <audio
-      controls
-      preload="metadata"
-      className="track-inline-player"
-      onError={() => setFailed(true)}
-    >
-      <source src={url} type={`audio/${ext === 'mp3' ? 'mpeg' : ext}`} onError={() => setFailed(true)} />
+    <audio key={playUrl} controls preload="metadata" className="track-inline-player"
+      onError={() => setState('failed')}>
+      <source src={playUrl} type={mime} onError={() => setState('failed')} />
     </audio>
   );
 }
@@ -726,7 +823,7 @@ export default function Upload() {
                     const url = audioUrls[activeFile?.id];
                     if (!url || !activeFile) return null;
                     const ext = getExt(activeFile.file.name).toLowerCase();
-                    return <TrackPlayer key={activeFile.id} url={url} ext={ext} />;
+                    return <TrackPlayer key={activeFile.id} url={url} ext={ext} file={activeFile.file} />;
                   })()}
 
                   {/* Visibility toggle */}
