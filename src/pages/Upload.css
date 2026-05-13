@@ -954,6 +954,12 @@
 }
 .track-inline-player:hover { opacity: 1; }
 
+/* Hide volume & overflow (3-dot) from native audio controls */
+.track-inline-player::-webkit-media-controls-mute-button        { display: none !important; }
+.track-inline-player::-webkit-media-controls-volume-slider      { display: none !important; }
+.track-inline-player::-webkit-media-controls-volume-slider-container { display: none !important; }
+.track-inline-player::-webkit-media-controls-overflow-button    { display: none !important; }
+
 /* ══ Visibility toggle ═══════════════════════════════════════ */
 .visibility-row {
   margin-top: var(--sp-4);
