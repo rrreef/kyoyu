@@ -33,7 +33,7 @@ const RELEASE_SUB = [
 ];
 
 export default function CreatorSidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, avatarSrc } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -160,8 +160,11 @@ export default function CreatorSidebar() {
         {/* Footer */}
         <div className="creator-sidebar__footer">
           <div className="creator-artist-badge">
-            <div className="creator-artist-avatar">
-              {(user?.artistName || user?.name || 'A')[0].toUpperCase()}
+            <div className="creator-artist-avatar" style={avatarSrc ? { padding: 0, overflow: 'hidden' } : {}}>
+              {avatarSrc
+                ? <img src={avatarSrc} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 'inherit' }} />
+                : (user?.artistName || user?.name || 'A')[0].toUpperCase()
+              }
             </div>
             <div className="creator-artist-info">
               <span className="creator-artist-name">{user?.artistName || user?.name || 'Artist'}</span>

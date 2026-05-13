@@ -469,7 +469,7 @@ export default function Dashboard() {
   const [period, setPeriod]             = useState(prefs.defaultPeriod || 'Week');
   const [chartMetric, setChartMetric]   = useState(prefs.chartMetric   || 'Streams');
   const [refreshKey, setRefreshKey]     = useState(0);
-  const { user } = useAuth();
+  const { user, avatarSrc } = useAuth();
 
   const d           = dashboardData;
   const displayName = user?.artistName || user?.name || 'Admin';
@@ -506,7 +506,15 @@ export default function Dashboard() {
     >
       {/* ── Header ── */}
       <div className="dash-artist-header">
-        <div className="dash-artist-avatar">{displayName[0].toUpperCase()}</div>
+        <div
+          className="dash-artist-avatar"
+          style={avatarSrc ? { padding: 0, overflow: 'hidden' } : {}}
+        >
+          {avatarSrc
+            ? <img src={avatarSrc} alt={displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 'inherit' }} />
+            : displayName[0].toUpperCase()
+          }
+        </div>
         <div className="dash-artist-info">
           <h1>{displayName}</h1>
           <p>{d.artist?.genre}{d.artist?.genre && d.artist?.location ? ' · ' : ''}{d.artist?.location}</p>
