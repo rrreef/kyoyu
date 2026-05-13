@@ -983,14 +983,17 @@
   height: 3px;
   background: rgba(255,255,255,0.12);
   border-radius: 99px;
-  cursor: pointer;
+  cursor: grab;
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .cp-fill {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   background: rgba(255,255,255,0.70);
   border-radius: 99px;
+  will-change: width;
 }
 .cp-thumb {
   position: absolute;
