@@ -1042,9 +1042,11 @@
   border: 1px solid rgba(255,255,255,0.10);
   outline: none;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 13px;
+  line-height: 1;
   font-family: var(--font-body);
   transition: border-color 0.15s, background 0.15s;
+  box-sizing: border-box;
 }
 .psi-date {
   flex: 1;
@@ -1052,7 +1054,7 @@
 }
 .psi-time {
   flex-shrink: 0;
-  width: 66px;
+  width: 82px;
   text-align: center;
 }
 .psi-date:focus,
@@ -1061,7 +1063,11 @@
   background: rgba(255,255,255,0.07);
 }
 .psi-date::placeholder,
-.psi-time::placeholder { color: rgba(255,255,255,0.35); }
+.psi-time::placeholder {
+  color: rgba(255,255,255,0.35);
+  font-size: 13px;
+  line-height: 1;
+}
 .publish-schedule-hint {
   font-size: 0.65rem;
   color: var(--text-dim);
