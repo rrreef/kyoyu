@@ -1037,7 +1037,7 @@
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
   transition: border-color 0.15s, background 0.15s;
-  font-size: 0.72rem;
+  font-size: 11px;
   font-family: var(--font-body);
   color: var(--text-primary);
 }
@@ -1050,7 +1050,7 @@
   background: transparent;
   outline: none;
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: 11px;
   font-family: var(--font-body);
   text-align: center;
   padding: 0;
@@ -1063,7 +1063,7 @@
 .pdc-seg::placeholder { color: rgba(255,255,255,0.40); opacity: 1; }
 .pdc-sep {
   color: rgba(255,255,255,0.40);
-  font-size: 0.72rem;
+  font-size: 11px;
   user-select: none;
   flex-shrink: 0;
   padding: 0 1px;
