@@ -31,41 +31,45 @@ async function uploadToR2(file, userId, onProgress) {
     }
 
     try {
-      // 1. Get a presigned PUT URL
-      const res = await fetch('/api/r2-presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename:    file.name,
-          contentType: file.type || guessMime(file.name),
-          fileSize:    file.size,
-          userId,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Presign request failed (${res.status})`);
+      // 1. Get a presigned PUT URL (10 s timeout to detect stall here)
+      const presignCtrl = new AbortController();
+      const presignTimeout = setTimeout(() => presignCtrl.abort(), 10_000);
+      let presignRes;
+      try {
+        presignRes = await fetch('/api/r2-presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename:    file.name,
+            contentType: file.type || guessMime(file.name),
+            fileSize:    file.size,
+            userId,
+          }),
+          signal: presignCtrl.signal,
+        });
+      } finally {
+        clearTimeout(presignTimeout);
       }
-      const { presignedUrl, key } = await res.json();
+      if (!presignRes.ok) {
+        const body = await presignRes.json().catch(() => ({}));
+        throw new Error(body.error || `Presign failed (${presignRes.status})`);
+      }
+      const { presignedUrl, key } = await presignRes.json();
 
-      // 2. Simulate progress while fetch uploads (fetch has no upload progress API)
+      // 2. Simulate progress (fetch has no upload progress API)
       let simPct = 0;
-      const SIM_INTERVAL = 800; // ms between ticks
-      // Estimate bytes/sec based on file size: assume 500 KB/s min
-      const estimatedMs = Math.max(5000, (file.size / (500 * 1024)) * 1000);
-      const ticksTotal  = estimatedMs / SIM_INTERVAL;
+      const estimatedMs = Math.max(8000, (file.size / (300 * 1024)) * 1000);
+      const ticksTotal  = estimatedMs / 800;
       let tick = 0;
-
       const simTimer = setInterval(() => {
         tick++;
-        // Ease-out curve: fast start, slows toward 90%
         simPct = Math.min(90, Math.round(90 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
         onProgress?.(simPct);
-      }, SIM_INTERVAL);
+      }, 800);
 
-      // 3. Upload via fetch with 15-minute timeout via AbortController
+      // 3. Upload — 20 s timeout so we surface errors quickly
       const controller = new AbortController();
-      const timeoutId  = setTimeout(() => controller.abort(), 15 * 60 * 1000);
+      const timeoutId  = setTimeout(() => controller.abort(), 20_000);
 
       try {
         const uploadRes = await fetch(presignedUrl, {
@@ -76,18 +80,13 @@ async function uploadToR2(file, userId, onProgress) {
         });
         clearTimeout(timeoutId);
         clearInterval(simTimer);
-
-        if (!uploadRes.ok) {
-          throw new Error(`R2 upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
-        }
-
+        if (!uploadRes.ok) throw new Error(`R2 upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
         onProgress?.(100);
-        return key; // success
-
+        return key;
       } catch (fetchErr) {
         clearTimeout(timeoutId);
         clearInterval(simTimer);
-        throw fetchErr;
+        throw new Error(`Upload fetch: ${fetchErr?.message || fetchErr}`);
       }
 
     } catch (err) {
