@@ -43,7 +43,7 @@ async function uploadToR2(file, userId, onProgress) {
           }),
         }),
         new Promise((_, rej) =>
-          setTimeout(() => rej(new Error('Presign timed out (12 s) — Vercel function unresponsive')), 12_000)
+          setTimeout(() => rej(new Error('Step 1 failed: Presign timed out after 3 s — check Vercel function logs')), 3_000)
         ),
       ]);
 
