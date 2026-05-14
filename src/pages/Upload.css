@@ -1192,19 +1192,18 @@
 }
 .fmt-dropdown {
   position: absolute;
-  bottom: 0;       /* bottom of dropdown = bottom of trigger card */
+  bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(20, 20, 25, 0.45);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255,255,255,0.18);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(28px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(28px) saturate(180%) brightness(1.1);
+  backdrop-filter: blur(40px) saturate(200%) brightness(1.15);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.15);
   list-style: none;
   padding: 4px 0;
   margin: 0;
   z-index: 200;
-  overflow: hidden;
 }
 .fmt-option {
   padding: var(--sp-2) var(--sp-4);
