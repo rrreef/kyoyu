@@ -123,10 +123,11 @@ export function r2Url(key) {
  * Uploads a full release (multiple tracks) to R2 (audio) + Supabase (artwork + DB).
  */
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
+  console.log('[KYOYU] uploadRelease called, files:', audioFiles.length);
   // ── Auth check ──────────────────────────────────────────────
-  // Use getSession() — reads locally cached token instantly, no network round-trip
   const { data: { session }, error: authErr } = await supabase.auth.getSession();
   const user = session?.user;
+  console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL', authErr || '');
   if (authErr || !user) {
     throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
   }
@@ -139,7 +140,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
     // ── 1. Upload audio to R2 ────────────────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'audio' });
-    console.log('[Reef] Uploading audio to R2:', file.name, Math.round(file.size / 1024 / 1024) + ' MB');
+    console.log('[KYOYU] Starting R2 upload for:', file?.name, file?.size, 'bytes');
 
     const audioKey = await uploadToR2(file, user.id, (pct) => {
       // Forward XHR progress as an extended progress object

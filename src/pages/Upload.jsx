@@ -692,19 +692,27 @@ export default function Upload() {
 
   /* ── Real upload handler ─────────────────────────────── */
   async function handleSubmitRelease() {
+    console.log('[KYOYU] Submit clicked');
     setUploadError(null);
     setUploading(true);
     try {
+      console.log('[KYOYU] Calling uploadRelease...');
       await uploadRelease({
         audioFiles,
         trackMetas,
         globalForm,
-        onProgress: (p) => setUploadProgress(p),
+        onProgress: (p) => {
+          console.log('[KYOYU] onProgress:', p);
+          setUploadProgress(p);
+        },
       });
+      console.log('[KYOYU] uploadRelease SUCCESS');
       setSubmitted(true);
     } catch (err) {
+      console.error('[KYOYU] Upload error:', err);
       setUploadError(err.message || 'Upload failed. Please try again.');
     } finally {
+      console.log('[KYOYU] Finally: resetting uploading state');
       setUploading(false);
       setUploadProgress(null);
     }
