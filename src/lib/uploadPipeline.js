@@ -17,45 +17,69 @@ function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
 
 /**
  * Upload a file directly to Cloudflare R2 via presigned URL.
- * Returns the R2 key (stored in DB) and the public streaming URL.
- * Uses XHR so we get real upload progress.
+ * Returns the R2 key. Uses XHR for real progress events.
+ * Retries up to 3 times with exponential back-off on timeout/network error.
  */
 async function uploadToR2(file, userId, onProgress) {
-  // 1. Get a presigned PUT URL from our Vercel API
-  const res = await fetch('/api/r2-presign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      filename:    file.name,
-      contentType: file.type || guessMime(file.name),
-      fileSize:    file.size,
-      userId,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Presign request failed (${res.status})`);
-  }
-  const { presignedUrl, key } = await res.json();
+  const MAX_RETRIES = 3;
+  let lastErr;
 
-  // 2. Upload directly to R2 (browser → Cloudflare, no Vercel body limit)
-  await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      // Back-off: 2 s, 4 s
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+      console.log(`[Reef] R2 upload retry ${attempt}/${MAX_RETRIES - 1}`);
+    }
+
+    try {
+      // 1. Get a presigned PUT URL
+      const res = await fetch('/api/r2-presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename:    file.name,
+          contentType: file.type || guessMime(file.name),
+          fileSize:    file.size,
+          userId,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Presign request failed (${res.status})`);
       }
-    };
-    xhr.onload  = () => xhr.status >= 200 && xhr.status < 300
-      ? resolve()
-      : reject(new Error(`R2 upload failed: ${xhr.status} ${xhr.statusText}`));
-    xhr.onerror = () => reject(new Error('Network error during upload — check your connection.'));
-    xhr.open('PUT', presignedUrl);
-    xhr.setRequestHeader('Content-Type', file.type || guessMime(file.name));
-    xhr.send(file);
-  });
+      const { presignedUrl, key } = await res.json();
 
-  return key;
+      // 2. Upload directly to R2 with a timeout
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.timeout = 10 * 60 * 1000; // 10 minutes
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        xhr.onload    = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? resolve()
+            : reject(new Error(`R2 upload failed: ${xhr.status} ${xhr.statusText}`));
+        xhr.onerror   = () => reject(new Error('Network error during upload.'));
+        xhr.ontimeout = () => reject(new Error('Upload timed out — connection too slow or stalled.'));
+
+        xhr.open('PUT', presignedUrl);
+        xhr.setRequestHeader('Content-Type', file.type || guessMime(file.name));
+        xhr.send(file);
+      });
+
+      return key; // success
+
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[Reef] R2 upload attempt ${attempt + 1} failed:`, err.message);
+    }
+  }
+
+  throw new Error(`Upload failed after ${MAX_RETRIES} attempts: ${lastErr?.message}`);
 }
 
 function guessMime(filename) {
