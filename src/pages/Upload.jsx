@@ -1032,8 +1032,8 @@ export default function Upload() {
                     <div className="form-field" style={{ gridColumn: '1 / -1' }}>
                       <label>Format</label>
                       <div className="format-pair">
-                        <div className="format-card">
-                          <span className="format-card-label">Digital</span>
+                        <div className="format-sub">
+                          <span className="format-sub-label">Digital</span>
                           <select
                             value={meta.digitalFormat || 'All'}
                             onChange={e => updateMeta(activeTrack, 'digitalFormat', e.target.value)}
@@ -1046,8 +1046,8 @@ export default function Upload() {
                             <option>All</option>
                           </select>
                         </div>
-                        <div className="format-card">
-                          <span className="format-card-label">Physical</span>
+                        <div className="format-sub">
+                          <span className="format-sub-label">Physical</span>
                           <select
                             value={meta.physicalFormat || 'All'}
                             onChange={e => updateMeta(activeTrack, 'physicalFormat', e.target.value)}

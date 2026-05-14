@@ -1145,49 +1145,23 @@
   line-height: 1.3;
 }
 
-/* ── Format pair (digital + physical cards) ───────────────── */
+/* ── Format pair (digital + physical) ────────────────────── */
 .format-pair {
   display: flex;
-  gap: 6px;
+  gap: var(--sp-4);
 }
-.format-card {
+.format-sub {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
-  transition: border-color 0.15s, background 0.15s;
+  gap: var(--sp-2);
 }
-.format-card:focus-within {
-  border-color: rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.07);
-}
-.format-card-label {
-  font-size: 0.62rem;
+.format-sub-label {
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-dim);
-}
-.format-card select {
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: var(--font-body);
-  cursor: pointer;
-  padding: 0;
-  width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-}
-.format-card select option {
-  background: #1a1a1a;
-  color: var(--text-primary);
+  color: var(--text-muted);
 }
 
 /* ── Preview unavailable (AIFF / unsupported format) ────── */
