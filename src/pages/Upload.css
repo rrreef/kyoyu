@@ -1198,8 +1198,8 @@
   background: rgba(12, 12, 12, 0.96);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(120px);
-  -webkit-backdrop-filter: blur(120px);
+  backdrop-filter: blur(400px);
+  -webkit-backdrop-filter: blur(400px);
   list-style: none;
   padding: 4px 0;
   margin: 0;
