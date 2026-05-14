@@ -977,9 +977,6 @@ export default function Upload() {
                           value={meta.publishAt || ''}
                           onChange={v => updateMeta(activeTrack, 'publishAt', v)}
                         />
-                        {!meta.publishAt && (
-                          <span className="publish-schedule-hint">Leave blank to keep private indefinitely</span>
-                        )}
                       </div>
                     )}
                   </div>
