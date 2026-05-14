@@ -55,6 +55,7 @@
 .upload-step.done--clickable:active { opacity: 0.5; }
 
 .upload-form { padding: var(--sp-6); border-radius: var(--radius-xl) !important; }
+.upload-page { max-width: 100%; width: 100%; box-sizing: border-box; }
 .upload-step-content h3 { font-size: 1.125rem; margin-bottom: var(--sp-5); }
 
 .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-4); margin-bottom: var(--sp-4); }
