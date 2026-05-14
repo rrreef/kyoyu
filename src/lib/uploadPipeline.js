@@ -179,6 +179,17 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
   const db = supabase; // session is now set — normal authenticated client
 
+  // ── Ensure profile row exists (FK: tracks.creator_id → profiles.id) ──
+  // The auto-create trigger may not have run for older accounts.
+  const { error: profileErr } = await db.from('profiles').upsert({
+    id:           user.id,
+    email:        user.email ?? '',
+    role:         'creator',
+    display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || '',
+    artist_name:  user.user_metadata?.artist_name  || '',
+  }, { onConflict: 'id' });
+  if (profileErr) console.warn('[KYOYU] Profile upsert (non-fatal):', profileErr.message);
+
   const results = [];
 
   for (let i = 0; i < audioFiles.length; i++) {
