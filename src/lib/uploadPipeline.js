@@ -17,26 +17,22 @@ function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
 
 /**
  * Upload a file directly to Cloudflare R2 via presigned URL.
- * Uses fetch() for broad WebView/Safari compatibility.
- * Retries up to 3 times with exponential back-off.
+ * Uses fetch() + Promise.race timeouts (AbortController is unreliable in WKWebView).
  */
 async function uploadToR2(file, userId, onProgress) {
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 2;
   let lastErr;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-      console.log(`[Reef] R2 upload retry ${attempt}/${MAX_RETRIES - 1}`);
+      await new Promise(r => setTimeout(r, 3000));
+      console.log(`[Reef] R2 upload retry ${attempt}`);
     }
 
     try {
-      // 1. Get a presigned PUT URL (10 s timeout to detect stall here)
-      const presignCtrl = new AbortController();
-      const presignTimeout = setTimeout(() => presignCtrl.abort(), 10_000);
-      let presignRes;
-      try {
-        presignRes = await fetch('/api/r2-presign', {
+      // 1. Presign — 12 s race timeout (setTimeout always fires in WebView)
+      const presignRace = Promise.race([
+        fetch('/api/r2-presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -45,57 +41,65 @@ async function uploadToR2(file, userId, onProgress) {
             fileSize:    file.size,
             userId,
           }),
-          signal: presignCtrl.signal,
-        });
-      } finally {
-        clearTimeout(presignTimeout);
-      }
+        }),
+        new Promise((_, rej) =>
+          setTimeout(() => rej(new Error('Presign timed out (12 s) — Vercel function unresponsive')), 12_000)
+        ),
+      ]);
+
+      const presignRes = await presignRace;
       if (!presignRes.ok) {
         const body = await presignRes.json().catch(() => ({}));
         throw new Error(body.error || `Presign failed (${presignRes.status})`);
       }
       const { presignedUrl, key } = await presignRes.json();
 
-      // 2. Simulate progress (fetch has no upload progress API)
+      // 2. Simulate progress animation while upload is in flight
       let simPct = 0;
-      const estimatedMs = Math.max(8000, (file.size / (300 * 1024)) * 1000);
+      const estimatedMs = Math.max(10_000, (file.size / (200 * 1024)) * 1000);
       const ticksTotal  = estimatedMs / 800;
       let tick = 0;
       const simTimer = setInterval(() => {
         tick++;
-        simPct = Math.min(90, Math.round(90 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
+        simPct = Math.min(88, Math.round(88 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
         onProgress?.(simPct);
       }, 800);
 
-      // 3. Upload — 20 s timeout so we surface errors quickly
-      const controller = new AbortController();
-      const timeoutId  = setTimeout(() => controller.abort(), 20_000);
-
-      try {
-        const uploadRes = await fetch(presignedUrl, {
+      // 3. Upload PUT — 3-minute race timeout
+      let simDone = false;
+      const uploadRace = Promise.race([
+        fetch(presignedUrl, {
           method:  'PUT',
           body:    file,
           headers: { 'Content-Type': file.type || guessMime(file.name) },
-          signal:  controller.signal,
-        });
-        clearTimeout(timeoutId);
+        }),
+        new Promise((_, rej) =>
+          setTimeout(() => rej(new Error('Upload timed out (3 min) — file too large or connection lost')), 3 * 60_000)
+        ),
+      ]);
+
+      let uploadRes;
+      try {
+        uploadRes = await uploadRace;
+        simDone = true;
+      } finally {
         clearInterval(simTimer);
-        if (!uploadRes.ok) throw new Error(`R2 upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
-        onProgress?.(100);
-        return key;
-      } catch (fetchErr) {
-        clearTimeout(timeoutId);
-        clearInterval(simTimer);
-        throw new Error(`Upload fetch: ${fetchErr?.message || fetchErr}`);
       }
+
+      if (!uploadRes.ok) {
+        throw new Error(`R2 rejected upload: ${uploadRes.status} ${uploadRes.statusText}`);
+      }
+
+      onProgress?.(100);
+      return key;
 
     } catch (err) {
       lastErr = err;
-      console.warn(`[Reef] R2 upload attempt ${attempt + 1} failed:`, err.message);
+      console.warn(`[Reef] attempt ${attempt + 1} failed:`, err.message);
     }
   }
 
-  throw new Error(`Upload failed after ${MAX_RETRIES} attempts: ${lastErr?.message}`);
+  throw new Error(`Upload failed: ${lastErr?.message}`);
 }
 
 function guessMime(filename) {
