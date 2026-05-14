@@ -17,8 +17,8 @@ function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
 
 /**
  * Upload a file directly to Cloudflare R2 via presigned URL.
- * Returns the R2 key. Uses XHR for real progress events.
- * Retries up to 3 times with exponential back-off on timeout/network error.
+ * Uses fetch() for broad WebView/Safari compatibility.
+ * Retries up to 3 times with exponential back-off.
  */
 async function uploadToR2(file, userId, onProgress) {
   const MAX_RETRIES = 3;
@@ -26,8 +26,7 @@ async function uploadToR2(file, userId, onProgress) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      // Back-off: 2 s, 4 s
-      await new Promise(r => setTimeout(r, 2000 * attempt));
+      await new Promise(r => setTimeout(r, 3000 * attempt));
       console.log(`[Reef] R2 upload retry ${attempt}/${MAX_RETRIES - 1}`);
     }
 
@@ -49,44 +48,47 @@ async function uploadToR2(file, userId, onProgress) {
       }
       const { presignedUrl, key } = await res.json();
 
-      // 2. Upload directly to R2 with stall detection + timeout
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.timeout = 10 * 60 * 1000; // 10-min hard cap
+      // 2. Simulate progress while fetch uploads (fetch has no upload progress API)
+      let simPct = 0;
+      const SIM_INTERVAL = 800; // ms between ticks
+      // Estimate bytes/sec based on file size: assume 500 KB/s min
+      const estimatedMs = Math.max(5000, (file.size / (500 * 1024)) * 1000);
+      const ticksTotal  = estimatedMs / SIM_INTERVAL;
+      let tick = 0;
 
-        // Stall detector — abort+reject if no progress for 30 s
-        let stallTimer = setTimeout(() => {
-          xhr.abort();
-          reject(new Error('Upload stalled (no progress for 30 s) — retrying…'));
-        }, 30_000);
+      const simTimer = setInterval(() => {
+        tick++;
+        // Ease-out curve: fast start, slows toward 90%
+        simPct = Math.min(90, Math.round(90 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
+        onProgress?.(simPct);
+      }, SIM_INTERVAL);
 
-        xhr.upload.onprogress = (e) => {
-          // Reset stall timer on every progress tick
-          clearTimeout(stallTimer);
-          stallTimer = setTimeout(() => {
-            xhr.abort();
-            reject(new Error('Upload stalled (no progress for 30 s) — retrying…'));
-          }, 30_000);
+      // 3. Upload via fetch with 15-minute timeout via AbortController
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), 15 * 60 * 1000);
 
-          if (e.lengthComputable && onProgress) {
-            onProgress(Math.round((e.loaded / e.total) * 100));
-          }
-        };
-        xhr.onload = () => {
-          clearTimeout(stallTimer);
-          xhr.status >= 200 && xhr.status < 300
-            ? resolve()
-            : reject(new Error(`R2 upload failed: ${xhr.status} ${xhr.statusText}`));
-        };
-        xhr.onerror   = () => { clearTimeout(stallTimer); reject(new Error('Network error during upload.')); };
-        xhr.ontimeout = () => { clearTimeout(stallTimer); reject(new Error('Upload timed out.')); };
+      try {
+        const uploadRes = await fetch(presignedUrl, {
+          method:  'PUT',
+          body:    file,
+          headers: { 'Content-Type': file.type || guessMime(file.name) },
+          signal:  controller.signal,
+        });
+        clearTimeout(timeoutId);
+        clearInterval(simTimer);
 
-        xhr.open('PUT', presignedUrl);
-        xhr.setRequestHeader('Content-Type', file.type || guessMime(file.name));
-        xhr.send(file);
-      });
+        if (!uploadRes.ok) {
+          throw new Error(`R2 upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+        }
 
-      return key; // success
+        onProgress?.(100);
+        return key; // success
+
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        clearInterval(simTimer);
+        throw fetchErr;
+      }
 
     } catch (err) {
       lastErr = err;
