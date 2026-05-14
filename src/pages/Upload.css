@@ -1163,6 +1163,10 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
+.format-sub select {
+  appearance: none;
+  -webkit-appearance: none;
+}
 
 /* ── Preview unavailable (AIFF / unsupported format) ────── */
 .track-preview-unavailable {
