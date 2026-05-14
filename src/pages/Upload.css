@@ -1168,6 +1168,55 @@
   -webkit-appearance: none;
 }
 
+/* ── Custom format dropdown ───────────────────────────────── */
+.fmt-select {
+  position: relative;
+  width: 100%;
+}
+.fmt-trigger {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition-base);
+  width: 100%;
+  box-sizing: border-box;
+}
+.fmt-trigger:hover {
+  border-color: rgba(255,255,255,0.25);
+}
+.fmt-dropdown {
+  position: absolute;
+  bottom: 0;       /* bottom of dropdown = bottom of trigger card */
+  left: 0;
+  right: 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+  z-index: 200;
+  overflow: hidden;
+}
+.fmt-option {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.fmt-option:hover   { background: rgba(255,255,255,0.07); }
+.fmt-option--active { font-weight: 600; color: #fff; }
+
 
 /* ── Preview unavailable (AIFF / unsupported format) ────── */
 .track-preview-unavailable {

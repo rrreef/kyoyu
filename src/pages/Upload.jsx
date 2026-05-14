@@ -158,6 +158,42 @@ async function aiffToWavUrl(file) {
   return URL.createObjectURL(new Blob([wavBuf], { type: 'audio/wav' }));
 }
 
+/* ─── FormatSelect: custom dropdown, bottom anchored to card ─ */
+function FormatSelect({ value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="fmt-select">
+      <div className="fmt-trigger" onClick={() => setOpen(o => !o)}>
+        {value}
+      </div>
+      {open && (
+        <ul className="fmt-dropdown">
+          {options.map(opt => (
+            <li
+              key={opt}
+              className={`fmt-option${opt === value ? ' fmt-option--active' : ''}`}
+              onMouseDown={() => { onChange(opt); setOpen(false); }}
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ─── TrackPlayer: custom player + AIFF transcoding ─────── */
 function TrackPlayer({ url, ext, file }) {
   const isAiff = ext === 'aiff' || ext === 'aif';
@@ -1033,31 +1069,19 @@ export default function Upload() {
                       <div className="format-pair">
                         <div className="format-sub">
                           <span className="format-sub-label">Digital Format</span>
-                          <select
+                          <FormatSelect
                             value={meta.digitalFormat || 'All'}
-                            onChange={e => updateMeta(activeTrack, 'digitalFormat', e.target.value)}
-                          >
-                            <option>MP3</option>
-                            <option>WAV</option>
-                            <option>AIFF</option>
-                            <option>FLAC</option>
-                            <option>Other</option>
-                            <option>All</option>
-                          </select>
+                            onChange={v => updateMeta(activeTrack, 'digitalFormat', v)}
+                            options={['MP3','WAV','AIFF','FLAC','Other','All']}
+                          />
                         </div>
                         <div className="format-sub">
                           <span className="format-sub-label">Physical Format</span>
-                          <select
+                          <FormatSelect
                             value={meta.physicalFormat || 'All'}
-                            onChange={e => updateMeta(activeTrack, 'physicalFormat', e.target.value)}
-                          >
-                            <option>Vinyl</option>
-                            <option>LP</option>
-                            <option>CD</option>
-                            <option>Cassette</option>
-                            <option>Other</option>
-                            <option>All</option>
-                          </select>
+                            onChange={v => updateMeta(activeTrack, 'physicalFormat', v)}
+                            options={['Vinyl','LP','CD','Cassette','Other','All']}
+                          />
                         </div>
                       </div>
                     </div>
