@@ -125,10 +125,28 @@ export function r2Url(key) {
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   console.log('[KYOYU] uploadRelease called, files:', audioFiles.length);
   // ── Auth check ──────────────────────────────────────────────
-  const { data: { session }, error: authErr } = await supabase.auth.getSession();
-  const user = session?.user;
-  console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL', authErr || '');
-  if (authErr || !user) {
+  // getSession() can hang if the JWT needs a network refresh.
+  // Race it against a 5s timeout, then fall back to raw localStorage.
+  let user = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('session_timeout')), 5_000)),
+    ]);
+    user = result?.data?.session?.user ?? null;
+  } catch {
+    // Timeout or error — try reading raw session from localStorage
+    try {
+      const raw = Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+        .map(k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } })
+        .find(v => v?.user);
+      user = raw?.user ?? null;
+      console.log('[KYOYU] Auth via localStorage fallback:', user ? 'OK' : 'FAIL');
+    } catch { /* ignore */ }
+  }
+  console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL');
+  if (!user) {
     throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
   }
 
