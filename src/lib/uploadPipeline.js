@@ -127,12 +127,12 @@ export function r2Url(key) {
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   console.log('[KYOYU] uploadRelease called, files:', audioFiles.length);
 
-  // ── Auth: get user + a DB client that won't hang on token refresh ──
-  // getSession() hangs when the JWT needs network refresh (common on slow connections).
-  // Strategy: race it with 5 s timeout → on timeout, read from localStorage and
-  // create a bypass Supabase client that skips auto-refresh entirely.
+  // ── Auth: get session without hanging ──────────────────────────────
+  // getSession() hangs when Supabase tries to refresh an expired JWT.
+  // Fix: race with 5s timeout → on timeout, decode the raw JWT from localStorage
+  // to check expiry. If token is still valid, setSession() is instant (no network).
+  // If expired, throw immediately so the user can log back in.
   let user = null;
-  let db   = supabase; // default — authenticated normally
 
   try {
     const result = await Promise.race([
@@ -148,24 +148,36 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
         .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
         .map(k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } })
         .find(v => v?.user);
-      user = raw?.user ?? null;
-      const token = raw?.access_token;
-      if (user && token) {
-        // Create a no-refresh client with the token baked in as Authorization header.
-        // This bypasses Supabase's internal refresh loop entirely.
-        db = createClient(supabaseUrl, supabaseAnon, {
-          global: { headers: { Authorization: `Bearer ${token}` } },
-          auth:   { persistSession: false, autoRefreshToken: false },
-        });
-        console.log('[KYOYU] Auth via localStorage fallback + bypass client: OK');
+
+      const token    = raw?.access_token;
+      const refreshT = raw?.refresh_token;
+
+      if (token) {
+        // Decode JWT locally (no network) to check expiry
+        const payload   = JSON.parse(atob(token.split('.')[1]));
+        const isExpired = payload.exp * 1000 < Date.now();
+
+        if (isExpired) {
+          throw new Error('Your session has expired — please sign out and sign back in, then try again.');
+        }
+
+        // Token is still valid → setSession() is synchronous, no refresh call
+        const { error: sessErr } = await supabase.auth.setSession({ access_token: token, refresh_token: refreshT || '' });
+        if (sessErr) throw new Error(`Session restore failed: ${sessErr.message}`);
+        user = raw.user;
+        console.log('[KYOYU] Auth via localStorage + setSession: OK');
       }
-    } catch { /* ignore */ }
+    } catch (innerErr) {
+      throw innerErr; // re-throw (includes the "session expired" message)
+    }
   }
 
   console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL');
   if (!user) {
     throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
   }
+
+  const db = supabase; // session is now set — normal authenticated client
 
   const results = [];
 
