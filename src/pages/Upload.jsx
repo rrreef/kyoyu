@@ -541,6 +541,7 @@ export default function Upload() {
   const [globalForm, setGlobalForm] = useState({
     producer: '', mastering: '', artworkCredit: '',
     albumPrice: '', downloadPrice: '', vinylPrice: '', streamingEnabled: true, downloadsEnabled: true,
+    currency: 'EUR',
     exclusivity: false,
   });
 
@@ -1253,16 +1254,24 @@ export default function Upload() {
             {globalForm.downloadsEnabled && (
               <div className="pricing-download-fields">
                 <div className="form-field">
+                  <span className="format-sub-label">Currency</span>
+                  <FormatSelect
+                    value={globalForm.currency || 'EUR'}
+                    onChange={v => updateGlobal('currency', v)}
+                    options={['EUR','USD','GBP','JPY','CHF','CAD','AUD']}
+                  />
+                </div>
+                <div className="form-field">
                   <label>Album Price (Download Bundle)</label>
                   <div className="price-input-wrap">
-                    <span className="price-currency">€</span>
+                    <span className="price-currency">{globalForm.currency === 'USD' ? '$' : globalForm.currency === 'GBP' ? '£' : globalForm.currency === 'JPY' ? '¥' : globalForm.currency === 'CHF' ? 'CHF' : globalForm.currency === 'CAD' ? 'CA$' : globalForm.currency === 'AUD' ? 'AU$' : '€'}</span>
                     <input type="number" step="0.10" min="0" max="50.00" placeholder="" value={globalForm.albumPrice} onChange={e => updateGlobal('albumPrice', e.target.value)} />
                   </div>
                 </div>
                 <div className="form-field">
                   <label>Price per Track (Download)</label>
                   <div className="price-input-wrap">
-                    <span className="price-currency">€</span>
+                    <span className="price-currency">{globalForm.currency === 'USD' ? '$' : globalForm.currency === 'GBP' ? '£' : globalForm.currency === 'JPY' ? '¥' : globalForm.currency === 'CHF' ? 'CHF' : globalForm.currency === 'CAD' ? 'CA$' : globalForm.currency === 'AUD' ? 'AU$' : '€'}</span>
                     <input type="number" step="0.10" min="0" max="5.00" placeholder="" value={globalForm.downloadPrice} onChange={e => updateGlobal('downloadPrice', e.target.value)} />
                   </div>
                 </div>
