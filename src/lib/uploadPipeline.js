@@ -80,9 +80,9 @@ export function r2Url(key) {
  */
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   // ── Auth check ──────────────────────────────────────────────
-  const { data: { user }, error: authErr } = await withTimeout(
-    supabase.auth.getUser(), 15_000, 'Auth check'
-  );
+  // Use getSession() — reads locally cached token instantly, no network round-trip
+  const { data: { session }, error: authErr } = await supabase.auth.getSession();
+  const user = session?.user;
   if (authErr || !user) {
     throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
   }
