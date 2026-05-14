@@ -49,22 +49,37 @@ async function uploadToR2(file, userId, onProgress) {
       }
       const { presignedUrl, key } = await res.json();
 
-      // 2. Upload directly to R2 with a timeout
+      // 2. Upload directly to R2 with stall detection + timeout
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.timeout = 10 * 60 * 1000; // 10 minutes
+        xhr.timeout = 10 * 60 * 1000; // 10-min hard cap
+
+        // Stall detector — abort+reject if no progress for 30 s
+        let stallTimer = setTimeout(() => {
+          xhr.abort();
+          reject(new Error('Upload stalled (no progress for 30 s) — retrying…'));
+        }, 30_000);
 
         xhr.upload.onprogress = (e) => {
+          // Reset stall timer on every progress tick
+          clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => {
+            xhr.abort();
+            reject(new Error('Upload stalled (no progress for 30 s) — retrying…'));
+          }, 30_000);
+
           if (e.lengthComputable && onProgress) {
             onProgress(Math.round((e.loaded / e.total) * 100));
           }
         };
-        xhr.onload    = () =>
+        xhr.onload = () => {
+          clearTimeout(stallTimer);
           xhr.status >= 200 && xhr.status < 300
             ? resolve()
             : reject(new Error(`R2 upload failed: ${xhr.status} ${xhr.statusText}`));
-        xhr.onerror   = () => reject(new Error('Network error during upload.'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out — connection too slow or stalled.'));
+        };
+        xhr.onerror   = () => { clearTimeout(stallTimer); reject(new Error('Network error during upload.')); };
+        xhr.ontimeout = () => { clearTimeout(stallTimer); reject(new Error('Upload timed out.')); };
 
         xhr.open('PUT', presignedUrl);
         xhr.setRequestHeader('Content-Type', file.type || guessMime(file.name));
