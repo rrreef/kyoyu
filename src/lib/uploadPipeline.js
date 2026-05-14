@@ -1,4 +1,6 @@
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+import { supabase, supabaseUrl, supabaseAnon } from './supabase';
+
 
 const R2_PUBLIC = import.meta.env.VITE_R2_PUBLIC_URL || 'https://audio.ree.fm';
 
@@ -43,7 +45,7 @@ async function uploadToR2(file, userId, onProgress) {
           }),
         }),
         new Promise((_, rej) =>
-          setTimeout(() => rej(new Error('Step 1 failed: Presign timed out after 3 s — check Vercel function logs')), 3_000)
+          setTimeout(() => rej(new Error('Presign timed out — Vercel function unresponsive')), 15_000)
         ),
       ]);
 
@@ -124,27 +126,42 @@ export function r2Url(key) {
  */
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   console.log('[KYOYU] uploadRelease called, files:', audioFiles.length);
-  // ── Auth check ──────────────────────────────────────────────
-  // getSession() can hang if the JWT needs a network refresh.
-  // Race it against a 5s timeout, then fall back to raw localStorage.
+
+  // ── Auth: get user + a DB client that won't hang on token refresh ──
+  // getSession() hangs when the JWT needs network refresh (common on slow connections).
+  // Strategy: race it with 5 s timeout → on timeout, read from localStorage and
+  // create a bypass Supabase client that skips auto-refresh entirely.
   let user = null;
+  let db   = supabase; // default — authenticated normally
+
   try {
     const result = await Promise.race([
       supabase.auth.getSession(),
       new Promise((_, rej) => setTimeout(() => rej(new Error('session_timeout')), 5_000)),
     ]);
     user = result?.data?.session?.user ?? null;
+    console.log('[KYOYU] Auth via getSession:', user ? `OK (${user.id})` : 'no user');
   } catch {
-    // Timeout or error — try reading raw session from localStorage
+    // getSession timed out — read raw token from localStorage
     try {
       const raw = Object.keys(localStorage)
         .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
         .map(k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } })
         .find(v => v?.user);
       user = raw?.user ?? null;
-      console.log('[KYOYU] Auth via localStorage fallback:', user ? 'OK' : 'FAIL');
+      const token = raw?.access_token;
+      if (user && token) {
+        // Create a no-refresh client with the token baked in as Authorization header.
+        // This bypasses Supabase's internal refresh loop entirely.
+        db = createClient(supabaseUrl, supabaseAnon, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+          auth:   { persistSession: false, autoRefreshToken: false },
+        });
+        console.log('[KYOYU] Auth via localStorage fallback + bypass client: OK');
+      }
     } catch { /* ignore */ }
   }
+
   console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL');
   if (!user) {
     throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
@@ -173,7 +190,8 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       artworkKey = `${user.id}/${Date.now()}-artwork.${ext}`;
 
       const { error: artErr } = await withTimeout(
-        supabase.storage.from('artwork').upload(artworkKey, meta.artwork, {
+        db.storage.from('artwork').upload(artworkKey, meta.artwork, {
+
           contentType: meta.artwork.type || 'image/jpeg',
           upsert: false,
         }),
@@ -186,7 +204,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     onProgress?.({ track: i, total: audioFiles.length, phase: 'saving' });
 
     const { data: track, error: dbErr } = await withTimeout(
-      supabase.from('tracks').insert({
+      db.from('tracks').insert({
         creator_id:  user.id,
         title:       meta.title?.trim()  || file.name,
         artist:      meta.artist?.trim() || null,
@@ -197,7 +215,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
         tags:        [meta.genre].filter(Boolean),
         visibility:  meta.visibility || 'private',
         status:      'pending',
-        storage_key: audioKey,     // R2 key — use r2Url(key) to get the full URL
+        storage_key: audioKey,
         artwork_key: artworkKey,
       }).select().single(),
       30_000, 'Metadata save'
@@ -210,7 +228,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
         .filter(c => c.name?.trim())
         .map(c => ({ track_id: track.id, role: c.role?.trim() || null, name: c.name.trim() }));
       if (rows.length) {
-        const { error: credErr } = await supabase.from('track_credits').insert(rows);
+        const { error: credErr } = await db.from('track_credits').insert(rows);
         if (credErr) console.warn('[Reef] Credits insert (non-fatal):', credErr);
       }
     }
