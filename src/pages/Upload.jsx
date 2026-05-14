@@ -730,7 +730,17 @@ export default function Upload() {
     const trackNum  = uploadProgress ? uploadProgress.track + 1 : 1;
     const total     = Math.max(1, uploadProgress?.total ?? audioFiles.length);
     const phaseIdx  = Math.max(0, phases.indexOf(currentPhase));
-    const overallPct = Math.min(99, Math.round(((trackNum - 1) / total + (phaseIdx + 0.5) / (phases.length * total)) * 100));
+    const xhrPct    = (uploadProgress?.pct ?? 0) / 100; // actual R2 upload progress 0-1
+
+    // Weighted phase contributions per track: audio 70%, artwork 20%, saving 10%
+    const phaseWeights = [0.70, 0.20, 0.10];
+    const phaseStart   = phaseWeights.slice(0, phaseIdx).reduce((a, b) => a + b, 0);
+    const phaseContrib = currentPhase === 'audio'
+      ? xhrPct * phaseWeights[0]        // real R2 progress within audio phase
+      : phaseWeights[phaseIdx] * 0.5;   // midpoint for fast artwork/saving phases
+
+    const trackPct  = phaseStart + phaseContrib;
+    const overallPct = Math.min(99, Math.round(((trackNum - 1 + trackPct) / total) * 100));
     const circumference = 2 * Math.PI * 36;
 
     return (
