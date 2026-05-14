@@ -1080,7 +1080,7 @@ export default function Upload() {
                           <FormatSelect
                             value={meta.physicalFormat || 'All'}
                             onChange={v => updateMeta(activeTrack, 'physicalFormat', v)}
-                            options={['Vinyl','LP','CD','Cassette','Other','All']}
+                            options={['None','Vinyl','LP','CD','Cassette','Other','All']}
                           />
                         </div>
                       </div>
