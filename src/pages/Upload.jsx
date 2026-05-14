@@ -1030,10 +1030,9 @@ export default function Upload() {
                       <input type="number" placeholder="2026" value={meta.year} onChange={e => updateMeta(activeTrack, 'year', e.target.value)} />
                     </div>
                     <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Format</label>
                       <div className="format-pair">
                         <div className="format-sub">
-                          <span className="format-sub-label">Digital</span>
+                          <span className="format-sub-label">Digital Format</span>
                           <select
                             value={meta.digitalFormat || 'All'}
                             onChange={e => updateMeta(activeTrack, 'digitalFormat', e.target.value)}
@@ -1047,7 +1046,7 @@ export default function Upload() {
                           </select>
                         </div>
                         <div className="format-sub">
-                          <span className="format-sub-label">Physical</span>
+                          <span className="format-sub-label">Physical Format</span>
                           <select
                             value={meta.physicalFormat || 'All'}
                             onChange={e => updateMeta(activeTrack, 'physicalFormat', e.target.value)}
