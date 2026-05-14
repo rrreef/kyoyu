@@ -730,17 +730,20 @@ export default function Upload() {
     const trackNum  = uploadProgress ? uploadProgress.track + 1 : 1;
     const total     = Math.max(1, uploadProgress?.total ?? audioFiles.length);
     const phaseIdx  = Math.max(0, phases.indexOf(currentPhase));
-    const xhrPct    = (uploadProgress?.pct ?? 0) / 100; // actual R2 upload progress 0-1
+    const hasPct    = uploadProgress?.pct != null;         // did XHR fire progress events?
+    const xhrPct    = hasPct ? uploadProgress.pct / 100 : null;
 
     // Weighted phase contributions per track: audio 70%, artwork 20%, saving 10%
     const phaseWeights = [0.70, 0.20, 0.10];
     const phaseStart   = phaseWeights.slice(0, phaseIdx).reduce((a, b) => a + b, 0);
     const phaseContrib = currentPhase === 'audio'
-      ? xhrPct * phaseWeights[0]        // real R2 progress within audio phase
-      : phaseWeights[phaseIdx] * 0.5;   // midpoint for fast artwork/saving phases
+      ? (xhrPct ?? 0) * phaseWeights[0]
+      : phaseWeights[phaseIdx] * 0.5;
 
-    const trackPct  = phaseStart + phaseContrib;
+    const trackPct   = phaseStart + phaseContrib;
     const overallPct = Math.min(99, Math.round(((trackNum - 1 + trackPct) / total) * 100));
+    // Show indeterminate state when audio is uploading but no progress events yet
+    const indeterminate = currentPhase === 'audio' && !hasPct;
     const circumference = 2 * Math.PI * 36;
 
     return (
@@ -783,7 +786,9 @@ export default function Upload() {
                 <p>{phaseLabels[currentPhase] || 'Preparing…'}</p>
               </div>
 
-              <div className="upload-loading-pct">{overallPct}%</div>
+              <div className="upload-loading-pct">
+                {indeterminate ? '…' : `${overallPct}%`}
+              </div>
               <p className="upload-progress-note">Do not close this tab.</p>
               <button className="upload-cancel-btn upload-cancel-btn--subtle" onClick={cancelUpload}>
                 Cancel
