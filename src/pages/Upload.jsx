@@ -23,7 +23,7 @@ function isAccepted(file) {
   return ACCEPTED_EXT.includes(ext) || ACCEPTED_MIME.includes(file.type);
 }
 function emptyMeta() {
-  return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), format: 'Digital', description: '', artwork: null, artworkUrl: null, visibility: 'private', publishAt: '', credits: [] };
+  return { title: '', artist: '', album: '', label: '', genre: '', year: String(new Date().getFullYear()), digitalFormat: 'All', physicalFormat: 'All', description: '', artwork: null, artworkUrl: null, visibility: 'private', publishAt: '', credits: [] };
 }
 
 /* ─── Custom masked date-time input ─────────────────────── */
@@ -1029,19 +1029,38 @@ export default function Upload() {
                       <label>Release Year</label>
                       <input type="number" placeholder="2026" value={meta.year} onChange={e => updateMeta(activeTrack, 'year', e.target.value)} />
                     </div>
-                    <div className="form-field">
-                      <label>
-                        Format
-                        {audioFiles.length > 1 && (
-                          <button className="copy-all-btn" onClick={() => copyFieldToAll('format', meta.format)}>Copy to all</button>
-                        )}
-                      </label>
-                      <select value={meta.format} onChange={e => updateMeta(activeTrack, 'format', e.target.value)}>
-                        <option>Digital</option>
-                        <option>Vinyl 12"</option>
-                        <option>Vinyl LP</option>
-                        <option>Digital + Vinyl</option>
-                      </select>
+                    <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Format</label>
+                      <div className="format-pair">
+                        <div className="format-card">
+                          <span className="format-card-label">Digital</span>
+                          <select
+                            value={meta.digitalFormat || 'All'}
+                            onChange={e => updateMeta(activeTrack, 'digitalFormat', e.target.value)}
+                          >
+                            <option>MP3</option>
+                            <option>WAV</option>
+                            <option>AIFF</option>
+                            <option>FLAC</option>
+                            <option>Other</option>
+                            <option>All</option>
+                          </select>
+                        </div>
+                        <div className="format-card">
+                          <span className="format-card-label">Physical</span>
+                          <select
+                            value={meta.physicalFormat || 'All'}
+                            onChange={e => updateMeta(activeTrack, 'physicalFormat', e.target.value)}
+                          >
+                            <option>Vinyl</option>
+                            <option>LP</option>
+                            <option>CD</option>
+                            <option>Cassette</option>
+                            <option>Other</option>
+                            <option>All</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
