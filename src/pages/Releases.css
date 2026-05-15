@@ -378,9 +378,7 @@
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: var(--radius-xl);
   margin-bottom: var(--sp-5);
-  /* Right gap = sidebar-width + page-right-padding
-     = left gap (sidebar-width + page-left-padding) → symmetric */
-  margin-right: var(--sidebar-width);
+  width: 100%;
   box-sizing: border-box;
 }
 .rel-filter-group {
