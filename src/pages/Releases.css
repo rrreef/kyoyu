@@ -1,4 +1,10 @@
 /* ══ Releases Page ═══════════════════════════════════════════ */
+/* 22px horizontal inset on both sides (sidebar border → content) */
+.releases-page {
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
 .rel-page-header {
   display: flex;
   align-items: flex-start;
