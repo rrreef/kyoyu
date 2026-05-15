@@ -437,6 +437,120 @@
   border-color: rgba(255,255,255,0.28);
   background: rgba(255,255,255,0.08);
 }
+.rdp-edit-textarea {
+  min-height: 68px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ── Edit form 2-col grid ─────────────────────────────── */
+.rdp-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+.rdp-edit-row--full { grid-column: 1 / -1; }
+
+/* ── Visibility toggle in edit form ──────────────────── */
+.rdp-edit-vis-toggle {
+  display: flex;
+  gap: 6px;
+}
+.rdp-vis-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.rdp-vis-btn.active {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.22);
+  color: #fff;
+}
+
+/* ── Audio preview player ─────────────────────────────── */
+.rdp-player {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 var(--sp-3);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-lg);
+}
+.rdp-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.rdp-play-btn:hover { background: rgba(255,255,255,0.15); }
+.rdp-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.10);
+  border-radius: 99px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.rdp-progress-fill {
+  height: 100%;
+  background: rgba(255,255,255,0.55);
+  border-radius: 99px;
+  transition: width 0.1s linear;
+}
+.rdp-time {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Icon-only action buttons ─────────────────────────── */
+.rdp-btn--icon {
+  padding: 5px 8px;
+  min-width: 32px;
+}
+
+/* ── Sub-panel (Credits / Pricing / Contract) ─────────── */
+.rdp-subpanel {
+  padding: var(--sp-4) 0 var(--sp-2);
+}
+.rdp-subpanel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-3);
+}
+.rdp-subpanel-soon {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: var(--sp-5) 0;
+  text-align: center;
+}
 
 /* ── Filter bar ──────────────────────────────────────────── */
 .rel-filter-bar {

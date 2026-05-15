@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Play, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
-         Loader, RefreshCw, Filter, Music } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Play, Pause, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
+         Loader, RefreshCw, Music, FileText, DollarSign, ScrollText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMyTracks } from '../lib/uploadPipeline';
+import { fetchMyTracks, r2Url } from '../lib/uploadPipeline';
 import { supabase } from '../lib/supabase';
 import EmptyReleases from '../components/EmptyReleases';
 import './Releases.css';
@@ -106,7 +106,16 @@ export default function Releases({ filter = 'all' }) {
   const [toggling,  setToggling]  = useState(false);
   const [editing,   setEditing]   = useState(false);
   const [deleting,  setDeleting]  = useState(false);
-  const [editFields, setEditFields] = useState({ albumName:'', artist:'', year:'', label:'' });
+  const [subPanel,  setSubPanel]  = useState(null); // 'credits' | 'pricing' | 'contract'
+  const [editFields, setEditFields] = useState(
+    { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private' }
+  );
+  // Audio preview
+  const audioRef   = useRef(null);
+  const [playing,  setPlaying]   = useState(false);
+  const [progress, setProgress]  = useState(0);
+  const [curTime,  setCurTime]   = useState(0);
+  const [duration, setDuration]  = useState(0);
   const navigate = useNavigate();
 
   /* ── Filter state ── */
@@ -183,38 +192,74 @@ export default function Releases({ filter = 'all' }) {
     img.src = '/empty-releases.png';
   }, []);
 
-  /* Select / deselect an album group */
+  /* Select / deselect an album group — reset all panel state */
   const selectAlbum = (album) => {
     setEditing(false);
+    setSubPanel(null);
+    setPlaying(false);
+    setProgress(0);
+    setCurTime(0);
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
     setSelected(prev => prev?.albumKey === album.albumKey ? null : album);
   };
 
-  /* ── Edit metadata ── */
+  /* Audio preview helpers */
+  function togglePlay() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) { el.pause(); setPlaying(false); }
+    else { el.play().catch(() => {}); setPlaying(true); }
+  }
+  function seekAudio(e) {
+    const el = audioRef.current;
+    if (!el || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    el.currentTime = pct * duration;
+  }
+  function fmtTime(s) {
+    if (!s || isNaN(s)) return '0:00';
+    return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+
+  /* ── Edit metadata (all upload fields) ── */
   function startEdit() {
+    const f = selected.tracks[0]; // use first track for per-track defaults
     setEditFields({
-      albumName: selected.albumName || '',
-      artist:    selected.artist    || '',
-      year:      selected.year      ? String(selected.year) : '',
-      label:     selected.label     || '',
+      albumName:   selected.albumName || '',
+      artist:      selected.artist    || '',
+      year:        selected.year      ? String(selected.year) : '',
+      label:       selected.label     || f?.label || '',
+      genre:       f?.genre           || '',
+      description: f?.description     || '',
+      visibility:  selected.visibility === 'public' ? 'public' : 'private',
     });
+    setSubPanel(null);
     setEditing(true);
   }
 
   async function saveEdit() {
     if (!selected) return;
     const updates = {
-      artist: editFields.artist.trim() || null,
-      year:   editFields.year ? parseInt(editFields.year) : null,
-      label:  editFields.label.trim() || null,
-      album:  editFields.albumName.trim() || null,
+      artist:      editFields.artist.trim()      || null,
+      year:        editFields.year ? parseInt(editFields.year) : null,
+      label:       editFields.label.trim()       || null,
+      album:       editFields.albumName.trim()   || null,
+      genre:       editFields.genre.trim()       || null,
+      description: editFields.description.trim() || null,
+      visibility:  editFields.visibility,
     };
     const trackIds = selected.tracks.map(t => t.id);
     const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
     if (!dbErr) {
-      const updatedTracks  = selected.tracks.map(t => ({ ...t, ...updates }));
-      const updatedAlbum   = { ...selected, albumName: editFields.albumName || selected.albumName,
-        artist: editFields.artist || selected.artist,
-        year: updates.year, label: updates.label, tracks: updatedTracks };
+      const updatedTracks = selected.tracks.map(t => ({ ...t, ...updates }));
+      const updatedAlbum  = { ...selected,
+        albumName:  editFields.albumName || selected.albumName,
+        artist:     editFields.artist    || selected.artist,
+        year:       updates.year,
+        label:      updates.label,
+        visibility: updates.visibility,
+        tracks:     updatedTracks };
       setSelected(updatedAlbum);
       setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
     }
@@ -417,98 +462,176 @@ export default function Releases({ filter = 'all' }) {
       )}
 
       {/* ── Detail panel — slides up ── */}
-      {selected && (
-        <div
-          className="rel-overlay"
-          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
-        >
-          <div className="rel-panel">
-            <button className="rel-panel-close" onClick={() => setSelected(null)}>
-              <X size={14} />
-            </button>
+      {selected && (() => {
+        const firstTrack = selected.tracks[0];
+        const audioSrc   = firstTrack?.storage_key ? r2Url(firstTrack.storage_key) : null;
+        return (
+          <div
+            className="rel-overlay"
+            onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
+          >
+            <div className="rel-panel">
+              <button className="rel-panel-close" onClick={() => setSelected(null)}>
+                <X size={14} />
+              </button>
 
-            {/* Header */}
-            <div className="rdp-header">
-              <div className="rdp-art" style={artBg(selected)}>
-                {!selected.artworkUrl && (
-                  <div className="rdp-art-fallback"><Music size={22} strokeWidth={1} /></div>
-                )}
-              </div>
-              <div className="rdp-meta">
-                <div className="rdp-title">{selected.albumName}</div>
-                <div className="rdp-album">{selected.artist}</div>
-                <div className="rdp-details">
-                  {selected.year && <><span>{selected.year}</span><span>·</span></>}
-                  <span>{selected.format}</span>
-                  <span>·</span>
-                  {selected.visibility === 'public'
-                    ? <span className="rdp-vis pub"><Eye size={10} /> Public</span>
-                    : selected.visibility === 'mixed'
-                      ? <span className="rdp-vis priv"><Eye size={10} /> Mixed</span>
-                      : <span className="rdp-vis priv"><EyeOff size={10} /> Private</span>
-                  }
+              {/* ── Header: artwork + info ── */}
+              <div className="rdp-header">
+                <div className="rdp-art" style={artBg(selected)}>
+                  {!selected.artworkUrl && (
+                    <div className="rdp-art-fallback"><Music size={22} strokeWidth={1} /></div>
+                  )}
+                </div>
+                <div className="rdp-meta">
+                  <div className="rdp-title">{selected.albumName}</div>
+                  <div className="rdp-album">{selected.artist}</div>
+                  <div className="rdp-details">
+                    {selected.year && <><span>{selected.year}</span><span>·</span></>}
+                    <span>{selected.format}</span>
+                    <span>·</span>
+                    {selected.visibility === 'public'
+                      ? <span className="rdp-vis pub"><Eye size={10} /> Public</span>
+                      : selected.visibility === 'mixed'
+                        ? <span className="rdp-vis priv"><Eye size={10} /> Mixed</span>
+                        : <span className="rdp-vis priv"><EyeOff size={10} /> Private</span>
+                    }
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Content: tracklist+actions OR edit form — swapped, never stacked */}
-            {editing ? (
-              /* ── Edit form ── */
-              <div className="rdp-edit-form">
-                <div className="rdp-edit-row">
-                  <label className="rdp-edit-label">Album / Title</label>
-                  <input className="rdp-edit-input" value={editFields.albumName}
-                    onChange={e => setEditFields(f => ({...f, albumName: e.target.value}))} />
+              {/* ── Audio preview player ── */}
+              {audioSrc && (
+                <div className="rdp-player">
+                  <audio
+                    ref={audioRef}
+                    src={audioSrc}
+                    onEnded={() => setPlaying(false)}
+                    onLoadedMetadata={e => setDuration(e.target.duration)}
+                    onTimeUpdate={e => {
+                      setCurTime(e.target.currentTime);
+                      setProgress(e.target.duration ? e.target.currentTime / e.target.duration * 100 : 0);
+                    }}
+                  />
+                  <button className="rdp-play-btn" onClick={togglePlay}>
+                    {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+                  </button>
+                  <div className="rdp-progress-bar" onClick={seekAudio}>
+                    <div className="rdp-progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+                  <span className="rdp-time">{fmtTime(curTime)} / {fmtTime(duration)}</span>
                 </div>
-                <div className="rdp-edit-row">
-                  <label className="rdp-edit-label">Artist</label>
-                  <input className="rdp-edit-input" value={editFields.artist}
-                    onChange={e => setEditFields(f => ({...f, artist: e.target.value}))} />
-                </div>
-                <div className="rdp-edit-row">
-                  <label className="rdp-edit-label">Year</label>
-                  <input className="rdp-edit-input" type="number" value={editFields.year}
-                    onChange={e => setEditFields(f => ({...f, year: e.target.value}))} />
-                </div>
-                <div className="rdp-edit-row">
-                  <label className="rdp-edit-label">Label</label>
-                  <input className="rdp-edit-input" value={editFields.label}
-                    onChange={e => setEditFields(f => ({...f, label: e.target.value}))} />
-                </div>
-                <div className="rdp-actions">
-                  <button className="rdp-btn rdp-btn--primary" onClick={saveEdit}>Save</button>
-                  <button className="rdp-btn" onClick={() => setEditing(false)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              /* ── View: tracklist + actions ── */
-              <>
-                <div className="rdp-tracklist">
-                  {selected.tracks.map((t, i) => (
-                    <div key={t.id} className="rdp-track-row">
-                      <span className="rdp-track-num">{i + 1}</span>
-                      <span className="rdp-track-title">{t.title}</span>
-                      <span className="rdp-track-fmt">{t.format}</span>
+              )}
+
+              {/* ── Content section: swapped per mode ── */}
+              {editing ? (
+                /* Edit form — all upload fields */
+                <div className="rdp-edit-form">
+                  <div className="rdp-edit-grid">
+                    <div className="rdp-edit-row rdp-edit-row--full">
+                      <label className="rdp-edit-label">Album / Release Title</label>
+                      <input className="rdp-edit-input" value={editFields.albumName}
+                        placeholder="Album or EP name"
+                        onChange={e => setEditFields(f => ({...f, albumName: e.target.value}))} />
                     </div>
-                  ))}
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Artist / Band Name</label>
+                      <input className="rdp-edit-input" value={editFields.artist}
+                        placeholder="Artist name"
+                        onChange={e => setEditFields(f => ({...f, artist: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Label</label>
+                      <input className="rdp-edit-input" value={editFields.label}
+                        placeholder="Label or Self-Released"
+                        onChange={e => setEditFields(f => ({...f, label: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Genre</label>
+                      <input className="rdp-edit-input" value={editFields.genre}
+                        placeholder="e.g. Techno, Jazz"
+                        onChange={e => setEditFields(f => ({...f, genre: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Release Year</label>
+                      <input className="rdp-edit-input" type="number" value={editFields.year}
+                        placeholder="2026"
+                        onChange={e => setEditFields(f => ({...f, year: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row rdp-edit-row--full">
+                      <label className="rdp-edit-label">Description</label>
+                      <textarea className="rdp-edit-input rdp-edit-textarea"
+                        value={editFields.description}
+                        placeholder="Release notes, liner notes…"
+                        onChange={e => setEditFields(f => ({...f, description: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row rdp-edit-row--full">
+                      <label className="rdp-edit-label">Visibility</label>
+                      <div className="rdp-edit-vis-toggle">
+                        <button
+                          className={`rdp-vis-btn ${editFields.visibility === 'private' ? 'active' : ''}`}
+                          onClick={() => setEditFields(f => ({...f, visibility: 'private'}))}
+                        ><EyeOff size={11} /> Private</button>
+                        <button
+                          className={`rdp-vis-btn ${editFields.visibility === 'public' ? 'active' : ''}`}
+                          onClick={() => setEditFields(f => ({...f, visibility: 'public'}))}
+                        ><Eye size={11} /> Public</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rdp-actions">
+                    <button className="rdp-btn rdp-btn--primary" onClick={saveEdit}>Save Changes</button>
+                    <button className="rdp-btn" onClick={() => setEditing(false)}>Cancel</button>
+                  </div>
                 </div>
-                <div className="rdp-actions">
-                  <button className="rdp-btn" onClick={startEdit}>Edit Metadata</button>
-                  <button className="rdp-btn" onClick={toggleVisibility}
-                    disabled={toggling || selected.visibility === 'mixed'}>
-                    {toggling ? <Loader size={12} className="spin-sm" />
-                      : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
-                  </button>
-                  <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
-                    onClick={deleteAlbum} disabled={deleting}>
-                    {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
-                  </button>
+              ) : subPanel ? (
+                /* Sub-panel: Credits / Pricing / Contract */
+                <div className="rdp-subpanel">
+                  <div className="rdp-subpanel-title">
+                    {subPanel === 'credits'  && <><FileText  size={13} /> Credits</>}
+                    {subPanel === 'pricing'  && <><DollarSign size={13}/> Pricing</>}
+                    {subPanel === 'contract' && <><ScrollText size={13}/> Contract</>}
+                  </div>
+                  <p className="rdp-subpanel-soon">This feature is coming soon.</p>
+                  <div className="rdp-actions">
+                    <button className="rdp-btn" onClick={() => setSubPanel(null)}>← Back</button>
+                  </div>
                 </div>
-              </>
-            )}
+              ) : (
+                /* Default view: tracklist + actions */
+                <>
+                  <div className="rdp-tracklist">
+                    {selected.tracks.map((t, i) => (
+                      <div key={t.id} className="rdp-track-row">
+                        <span className="rdp-track-num">{i + 1}</span>
+                        <span className="rdp-track-title">{t.title}</span>
+                        <span className="rdp-track-fmt">{t.format}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rdp-actions">
+                    <button className="rdp-btn" onClick={startEdit}>Edit Metadata</button>
+                    <button className="rdp-btn" onClick={toggleVisibility}
+                      disabled={toggling || selected.visibility === 'mixed'}>
+                      {toggling ? <Loader size={12} className="spin-sm" />
+                        : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
+                    </button>
+                    <button className="rdp-btn rdp-btn--icon" title="Credits"
+                      onClick={() => setSubPanel('credits')}><FileText size={13} /></button>
+                    <button className="rdp-btn rdp-btn--icon" title="Pricing"
+                      onClick={() => setSubPanel('pricing')}><DollarSign size={13} /></button>
+                    <button className="rdp-btn rdp-btn--icon" title="Contract"
+                      onClick={() => setSubPanel('contract')}><ScrollText size={13} /></button>
+                    <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
+                      onClick={deleteAlbum} disabled={deleting}>
+                      {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
