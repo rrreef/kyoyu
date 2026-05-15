@@ -152,6 +152,8 @@
   pointer-events: all;
   width: 100%;
   max-width: 640px;
+  max-height: 80vh;
+  overflow-y: auto;
   border-radius: var(--radius-2xl) !important;
   padding: var(--sp-6);
   position: relative;

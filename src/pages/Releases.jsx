@@ -15,12 +15,26 @@ function paletteFor(_genre) {
 /** Maps a raw Supabase track row → UI-ready shape */
 function adaptTrack(t) {
   const { gradient, accent } = paletteFor(t.genre);
+  const hasAlbum = t.album && t.album.trim();
+  const artist   = t.artist || '—';
+  const year     = t.year;
+  // Grouping key: explicit album > artist+year fallback > individual track
+  const groupKey = hasAlbum
+    ? `album:${t.album.trim()}__${artist}`
+    : (artist !== '—' && year)
+      ? `ay:${artist}__${year}`
+      : `single:${t.id}`;
+  // Display name for the album card
+  const albumName = hasAlbum ? t.album.trim()
+    : (artist !== '—' && year) ? artist   // show artist as album name
+    : t.title;
   return {
     id:           t.id,
     title:        t.title,
-    artist:       t.artist || '—',
-    albumName:    t.album  || t.title,
-    year:         t.year,
+    artist,
+    albumName,
+    groupKey,
+    year,
     format:       t.format || 'Digital',
     visibility:   t.visibility,
     status:       t.status,
@@ -58,29 +72,25 @@ function artBg(rel) {
 function groupIntoAlbums(tracks) {
   const map = new Map();
   tracks.forEach(rel => {
-    const key = `${rel.albumName}__${rel.artist}`;
+    const key = rel.groupKey;          // set in adaptTrack
     if (!map.has(key)) {
       map.set(key, {
-        albumKey:   key,
-        albumName:  rel.albumName,
-        artist:     rel.artist,
-        year:       rel.year,
-        artworkUrl: rel.artworkUrl || null,
-        label:      rel.label,
-        format:     rel.format,
+        albumKey:    key,
+        albumName:   rel.albumName,
+        artist:      rel.artist,
+        year:        rel.year,
+        artworkUrl:  rel.artworkUrl || null,
+        label:       rel.label,
+        format:      rel.format,
         accentColor: rel.accentColor,
-        tracks:     [],
-        // computed below
-        visibility: rel.visibility,
-        status:     rel.status,
+        tracks:      [],
+        visibility:  rel.visibility,
+        status:      rel.status,
       });
     }
     const grp = map.get(key);
-    // prefer a track that has artwork
     if (!grp.artworkUrl && rel.artworkUrl) grp.artworkUrl = rel.artworkUrl;
-    // album is pending if any track is pending
     if (rel.status === 'pending') grp.status = 'pending';
-    // mixed visibility → 'mixed'
     if (grp.visibility !== rel.visibility) grp.visibility = 'mixed';
     grp.tracks.push(rel);
   });
