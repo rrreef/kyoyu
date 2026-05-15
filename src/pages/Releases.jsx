@@ -451,19 +451,9 @@ export default function Releases({ filter = 'all' }) {
               </div>
             </div>
 
-            {/* Tracklist */}
-            <div className="rdp-tracklist">
-              {selected.tracks.map((t, i) => (
-                <div key={t.id} className="rdp-track-row">
-                  <span className="rdp-track-num">{i + 1}</span>
-                  <span className="rdp-track-title">{t.title}</span>
-                  <span className="rdp-track-fmt">{t.format}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Inline Edit Form */}
+            {/* Content: tracklist+actions OR edit form — swapped, never stacked */}
             {editing ? (
+              /* ── Edit form ── */
               <div className="rdp-edit-form">
                 <div className="rdp-edit-row">
                   <label className="rdp-edit-label">Album / Title</label>
@@ -491,20 +481,29 @@ export default function Releases({ filter = 'all' }) {
                 </div>
               </div>
             ) : (
+              /* ── View: tracklist + actions ── */
               <>
-            {/* Actions */}
-            <div className="rdp-actions">
-              <button className="rdp-btn" onClick={startEdit}>Edit Metadata</button>
-              <button className="rdp-btn" onClick={toggleVisibility}
-                disabled={toggling || selected.visibility === 'mixed'}>
-                {toggling ? <Loader size={12} className="spin-sm" />
-                  : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
-              </button>
-              <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
-                onClick={deleteAlbum} disabled={deleting}>
-                {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
-              </button>
-            </div>
+                <div className="rdp-tracklist">
+                  {selected.tracks.map((t, i) => (
+                    <div key={t.id} className="rdp-track-row">
+                      <span className="rdp-track-num">{i + 1}</span>
+                      <span className="rdp-track-title">{t.title}</span>
+                      <span className="rdp-track-fmt">{t.format}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="rdp-actions">
+                  <button className="rdp-btn" onClick={startEdit}>Edit Metadata</button>
+                  <button className="rdp-btn" onClick={toggleVisibility}
+                    disabled={toggling || selected.visibility === 'mixed'}>
+                    {toggling ? <Loader size={12} className="spin-sm" />
+                      : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
+                  </button>
+                  <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
+                    onClick={deleteAlbum} disabled={deleting}>
+                    {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
+                  </button>
+                </div>
               </>
             )}
           </div>

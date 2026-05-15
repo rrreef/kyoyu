@@ -158,8 +158,8 @@
   padding: var(--sp-6);
   position: relative;
   animation: slideUpPanel 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  /* Solid dark — same as format dropdown, no transparency */
-  background: rgb(14, 14, 22);
+  /* Matte black — matches platform card/surface color */
+  background: var(--bg-secondary);
   border: 1px solid rgba(255,255,255,0.10) !important;
   box-shadow: 0 -8px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04),
               inset 0 1px 0 rgba(255,255,255,0.06);
