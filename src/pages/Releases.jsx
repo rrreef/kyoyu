@@ -102,8 +102,11 @@ export default function Releases({ filter = 'all' }) {
   const [releases,  setReleases]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
-  const [selected,  setSelected]  = useState(null);   // album group object
+  const [selected,  setSelected]  = useState(null);
   const [toggling,  setToggling]  = useState(false);
+  const [editing,   setEditing]   = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
+  const [editFields, setEditFields] = useState({ albumName:'', artist:'', year:'', label:'' });
   const navigate = useNavigate();
 
   /* ── Filter state ── */
@@ -181,10 +184,58 @@ export default function Releases({ filter = 'all' }) {
   }, []);
 
   /* Select / deselect an album group */
-  const selectAlbum = (album) =>
+  const selectAlbum = (album) => {
+    setEditing(false);
     setSelected(prev => prev?.albumKey === album.albumKey ? null : album);
+  };
 
-  /* Toggle visibility for ALL tracks in the selected album */
+  /* ── Edit metadata ── */
+  function startEdit() {
+    setEditFields({
+      albumName: selected.albumName || '',
+      artist:    selected.artist    || '',
+      year:      selected.year      ? String(selected.year) : '',
+      label:     selected.label     || '',
+    });
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!selected) return;
+    const updates = {
+      artist: editFields.artist.trim() || null,
+      year:   editFields.year ? parseInt(editFields.year) : null,
+      label:  editFields.label.trim() || null,
+      album:  editFields.albumName.trim() || null,
+    };
+    const trackIds = selected.tracks.map(t => t.id);
+    const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
+    if (!dbErr) {
+      const updatedTracks  = selected.tracks.map(t => ({ ...t, ...updates }));
+      const updatedAlbum   = { ...selected, albumName: editFields.albumName || selected.albumName,
+        artist: editFields.artist || selected.artist,
+        year: updates.year, label: updates.label, tracks: updatedTracks };
+      setSelected(updatedAlbum);
+      setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
+    }
+    setEditing(false);
+  }
+
+  /* ── Delete album (all tracks) ── */
+  async function deleteAlbum() {
+    if (!selected || deleting) return;
+    const label = selected.tracks.length === 1 ? `"${selected.tracks[0].title}"` : `"${selected.albumName}" (${selected.tracks.length} tracks)`;
+    if (!window.confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
+    setDeleting(true);
+    const trackIds = selected.tracks.map(t => t.id);
+    const { error: dbErr } = await supabase.from('tracks').delete().in('id', trackIds);
+    if (!dbErr) {
+      setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
+      setSelected(null);
+    }
+    setDeleting(false);
+  }
+
   async function toggleVisibility() {
     if (!selected || toggling) return;
     const next = (selected.visibility === 'public') ? 'private' : 'public';
@@ -371,7 +422,7 @@ export default function Releases({ filter = 'all' }) {
           className="rel-overlay"
           onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
         >
-          <div className="rel-panel glass">
+          <div className="rel-panel">
             <button className="rel-panel-close" onClick={() => setSelected(null)}>
               <X size={14} />
             </button>
@@ -411,20 +462,51 @@ export default function Releases({ filter = 'all' }) {
               ))}
             </div>
 
+            {/* Inline Edit Form */}
+            {editing ? (
+              <div className="rdp-edit-form">
+                <div className="rdp-edit-row">
+                  <label className="rdp-edit-label">Album / Title</label>
+                  <input className="rdp-edit-input" value={editFields.albumName}
+                    onChange={e => setEditFields(f => ({...f, albumName: e.target.value}))} />
+                </div>
+                <div className="rdp-edit-row">
+                  <label className="rdp-edit-label">Artist</label>
+                  <input className="rdp-edit-input" value={editFields.artist}
+                    onChange={e => setEditFields(f => ({...f, artist: e.target.value}))} />
+                </div>
+                <div className="rdp-edit-row">
+                  <label className="rdp-edit-label">Year</label>
+                  <input className="rdp-edit-input" type="number" value={editFields.year}
+                    onChange={e => setEditFields(f => ({...f, year: e.target.value}))} />
+                </div>
+                <div className="rdp-edit-row">
+                  <label className="rdp-edit-label">Label</label>
+                  <input className="rdp-edit-input" value={editFields.label}
+                    onChange={e => setEditFields(f => ({...f, label: e.target.value}))} />
+                </div>
+                <div className="rdp-actions">
+                  <button className="rdp-btn rdp-btn--primary" onClick={saveEdit}>Save</button>
+                  <button className="rdp-btn" onClick={() => setEditing(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Actions */}
             <div className="rdp-actions">
-              <button className="rdp-btn">Edit Metadata</button>
-              <button className="rdp-btn">Manage Credits</button>
-              <button
-                className={`rdp-btn rdp-btn--danger ${toggling ? 'loading' : ''}`}
-                onClick={toggleVisibility}
-                disabled={toggling || selected.visibility === 'mixed'}
-              >
-                {toggling
-                  ? <Loader size={12} className="spin-sm" />
+              <button className="rdp-btn" onClick={startEdit}>Edit Metadata</button>
+              <button className="rdp-btn" onClick={toggleVisibility}
+                disabled={toggling || selected.visibility === 'mixed'}>
+                {toggling ? <Loader size={12} className="spin-sm" />
                   : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
               </button>
+              <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
+                onClick={deleteAlbum} disabled={deleting}>
+                {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
+              </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

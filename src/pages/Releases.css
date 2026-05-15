@@ -158,8 +158,11 @@
   padding: var(--sp-6);
   position: relative;
   animation: slideUpPanel 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  border: 1px solid rgba(255,255,255,0.1) !important;
-  box-shadow: 0 -8px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  /* Solid dark — same as format dropdown, no transparency */
+  background: rgb(14, 14, 22);
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: 0 -8px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04),
+              inset 0 1px 0 rgba(255,255,255,0.06);
 }
 @keyframes slideUpPanel {
   from { opacity: 0; transform: translateY(28px); }
@@ -374,6 +377,66 @@
 .spin-sm { animation: spinAnim 0.9s linear infinite; }
 @keyframes spinAnim { to { transform: rotate(360deg); } }
 .rdp-btn.loading { opacity: 0.6; cursor: default; }
+
+/* ── Delete button ────────────────────────────────────────── */
+.rdp-btn--delete {
+  margin-left: auto;
+  background: rgba(220, 38, 38, 0.10);
+  border-color: rgba(220, 38, 38, 0.22);
+  color: rgba(220, 80, 80, 0.90);
+}
+.rdp-btn--delete:hover {
+  background: rgba(220, 38, 38, 0.20);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #ff6060;
+}
+
+/* ── Primary save button ──────────────────────────────────── */
+.rdp-btn--primary {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.22);
+  color: #fff;
+}
+.rdp-btn--primary:hover {
+  background: rgba(255,255,255,0.16);
+}
+
+/* ── Inline metadata edit form ────────────────────────────── */
+.rdp-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0 var(--sp-2);
+}
+.rdp-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rdp-edit-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.rdp-edit-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-family: var(--font-body);
+  padding: 7px var(--sp-3);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.rdp-edit-input:focus {
+  border-color: rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.08);
+}
 
 /* ── Filter bar ──────────────────────────────────────────── */
 .rel-filter-bar {
