@@ -1,26 +1,114 @@
-import { createClient } from '@supabase/supabase-js';
-import { supabase, supabaseUrl, supabaseAnon } from './supabase';
-
+import { supabaseUrl, supabaseAnon } from './supabase';
 
 const R2_PUBLIC = import.meta.env.VITE_R2_PUBLIC_URL || 'https://audio.ree.fm';
 
-/* ─── Helpers ────────────────────────────────────────────── */
+/* ─── Auth helper (NO Supabase JS client — reads JWT from localStorage) ── */
 
-function withTimeout(promise, ms = 4 * 60 * 1000, label = 'Request') {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${label} timed out — check your internet connection.`)), ms
-    );
-    promise
-      .then(v => { clearTimeout(timer); resolve(v); })
-      .catch(e => { clearTimeout(timer); reject(e); });
-  });
+/**
+ * Reads the raw Supabase session from localStorage.
+ * Decodes the JWT locally — zero network calls, zero hanging.
+ * Returns { user, token } or throws a user-friendly error.
+ */
+function getLocalSession() {
+  // Find the sb-*-auth-token key
+  const key = Object.keys(localStorage)
+    .find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+  if (!key) throw new Error('No session found — please sign in before uploading.');
+
+  let raw;
+  try { raw = JSON.parse(localStorage.getItem(key)); } catch {
+    throw new Error('Session data is corrupted — please sign out and sign back in.');
+  }
+
+  const token = raw?.access_token;
+  if (!token) throw new Error('No access token found — please sign in before uploading.');
+
+  // Decode JWT payload (base64url, no network)
+  let payload;
+  try {
+    payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    throw new Error('Session token is malformed — please sign out and sign back in.');
+  }
+
+  const isExpired = (payload.exp ?? 0) * 1000 < Date.now();
+  if (isExpired) {
+    throw new Error('Your session has expired — please sign out and sign back in, then try again.');
+  }
+
+  const user = raw.user ?? { id: payload.sub, email: payload.email };
+  console.log('[KYOYU] Auth from localStorage:', user?.id);
+  return { user, token };
+}
+
+/* ─── Supabase REST helpers (direct fetch, no JS client middleware) ────── */
+
+/**
+ * Direct POST/PATCH to Supabase REST API — no auth middleware, no hanging.
+ */
+async function sbPost(path, body, token, { prefer = 'return=representation', method = 'POST' } = {}) {
+  const res = await Promise.race([
+    fetch(`${supabaseUrl}/rest/v1/${path}`, {
+      method,
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey':        supabaseAnon,
+        'Prefer':        prefer,
+      },
+      body: JSON.stringify(body),
+    }),
+    new Promise((_, rej) =>
+      setTimeout(() => rej(new Error(`Supabase REST ${path} timed out`)), 30_000)
+    ),
+  ]);
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+
+  if (!res.ok) {
+    const msg = (typeof data === 'object' ? (data.message || data.error || data.msg) : data) || res.statusText;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 /**
- * Upload a file directly to Cloudflare R2 via presigned URL.
- * Uses fetch() + Promise.race timeouts (AbortController is unreliable in WKWebView).
+ * Direct file upload to Supabase Storage — no JS client, no hanging.
  */
+async function sbStorageUpload(bucket, path, file, token) {
+  const res = await Promise.race([
+    fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${path}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey':        supabaseAnon,
+        'Content-Type':  file.type || 'application/octet-stream',
+        'x-upsert':      'false',
+      },
+      body: file,
+    }),
+    new Promise((_, rej) =>
+      setTimeout(() => rej(new Error('Artwork upload timed out')), 60_000)
+    ),
+  ]);
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`Artwork upload failed: ${body.message || res.status}`);
+  }
+}
+
+/* ─── R2 upload ──────────────────────────────────────────────────────── */
+
+function guessMime(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const map = { wav: 'audio/wav', aif: 'audio/aiff', aiff: 'audio/aiff',
+                mp3: 'audio/mpeg', flac: 'audio/flac', m4a: 'audio/mp4' };
+  return map[ext] || 'application/octet-stream';
+}
+
 async function uploadToR2(file, userId, onProgress) {
   const MAX_RETRIES = 2;
   let lastErr;
@@ -28,16 +116,16 @@ async function uploadToR2(file, userId, onProgress) {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       await new Promise(r => setTimeout(r, 3000));
-      console.log(`[Reef] R2 upload retry ${attempt}`);
+      console.log(`[KYOYU] R2 retry ${attempt}`);
     }
 
     try {
-      // 1. Presign — 12 s race timeout (setTimeout always fires in WebView)
-      const presignRace = Promise.race([
+      // 1. Presign
+      const presignRes = await Promise.race([
         fetch('/api/r2-presign', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body:    JSON.stringify({
             filename:    file.name,
             contentType: file.type || guessMime(file.name),
             fileSize:    file.size,
@@ -49,146 +137,86 @@ async function uploadToR2(file, userId, onProgress) {
         ),
       ]);
 
-      const presignRes = await presignRace;
       if (!presignRes.ok) {
-        const body = await presignRes.json().catch(() => ({}));
-        throw new Error(body.error || `Presign failed (${presignRes.status})`);
+        const b = await presignRes.json().catch(() => ({}));
+        throw new Error(b.error || `Presign failed (${presignRes.status})`);
       }
       const { presignedUrl, key } = await presignRes.json();
 
-      // 2. Simulate progress animation while upload is in flight
-      let simPct = 0;
+      // 2. Simulated progress
       const estimatedMs = Math.max(10_000, (file.size / (200 * 1024)) * 1000);
       const ticksTotal  = estimatedMs / 800;
       let tick = 0;
       const simTimer = setInterval(() => {
         tick++;
-        simPct = Math.min(88, Math.round(88 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
-        onProgress?.(simPct);
+        const pct = Math.min(88, Math.round(88 * (1 - Math.pow(1 - tick / ticksTotal, 2))));
+        onProgress?.(pct);
       }, 800);
 
-      // 3. Upload PUT — 3-minute race timeout
-      let simDone = false;
-      const uploadRace = Promise.race([
-        fetch(presignedUrl, {
-          method:  'PUT',
-          body:    file,
-          headers: { 'Content-Type': file.type || guessMime(file.name) },
-        }),
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error('Upload timed out (3 min) — file too large or connection lost')), 3 * 60_000)
-        ),
-      ]);
-
+      // 3. PUT to R2
       let uploadRes;
       try {
-        uploadRes = await uploadRace;
-        simDone = true;
+        uploadRes = await Promise.race([
+          fetch(presignedUrl, {
+            method:  'PUT',
+            body:    file,
+            headers: { 'Content-Type': file.type || guessMime(file.name) },
+          }),
+          new Promise((_, rej) =>
+            setTimeout(() => rej(new Error('Upload timed out (3 min)')), 3 * 60_000)
+          ),
+        ]);
       } finally {
         clearInterval(simTimer);
       }
 
-      if (!uploadRes.ok) {
-        throw new Error(`R2 rejected upload: ${uploadRes.status} ${uploadRes.statusText}`);
-      }
-
+      if (!uploadRes.ok) throw new Error(`R2 rejected: ${uploadRes.status}`);
       onProgress?.(100);
       return key;
 
     } catch (err) {
       lastErr = err;
-      console.warn(`[Reef] attempt ${attempt + 1} failed:`, err.message);
+      console.warn(`[KYOYU] R2 attempt ${attempt + 1} failed:`, err.message);
     }
   }
-
-  throw new Error(`Upload failed: ${lastErr?.message}`);
+  throw new Error(`Audio upload failed: ${lastErr?.message}`);
 }
 
-function guessMime(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
-  const map = { wav: 'audio/wav', aif: 'audio/aiff', aiff: 'audio/aiff',
-                mp3: 'audio/mpeg', flac: 'audio/flac', m4a: 'audio/mp4' };
-  return map[ext] || 'application/octet-stream';
-}
+/* ─── Public helpers ─────────────────────────────────────────────────── */
 
-/** Returns the public streaming URL for a track stored in R2 */
 export function r2Url(key) {
   if (!key) return null;
-  // Already a full URL (legacy Supabase tracks)
   if (key.startsWith('http')) return key;
   return `${R2_PUBLIC}/${key}`;
 }
 
-/* ─── Main upload pipeline ───────────────────────────────── */
+/* ─── Main pipeline ──────────────────────────────────────────────────── */
 
 /**
- * Uploads a full release (multiple tracks) to R2 (audio) + Supabase (artwork + DB).
+ * Uploads a full release. All Supabase operations use direct REST fetch —
+ * no JS client auth middleware, no dependency on the Supabase auth server.
  */
 export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProgress }) {
   console.log('[KYOYU] uploadRelease called, files:', audioFiles.length);
 
-  // ── Auth: get session without hanging ──────────────────────────────
-  // getSession() hangs when Supabase tries to refresh an expired JWT.
-  // Fix: race with 5s timeout → on timeout, decode the raw JWT from localStorage
-  // to check expiry. If token is still valid, setSession() is instant (no network).
-  // If expired, throw immediately so the user can log back in.
-  let user = null;
+  // ── Auth: read JWT from localStorage — zero network calls ──────────
+  const { user, token } = getLocalSession();
+  console.log('[KYOYU] Auth OK:', user.id);
 
+  // ── Ensure profile exists (FK: tracks.creator_id → profiles.id) ────
+  // Upsert so even accounts created before the trigger work.
   try {
-    const result = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('session_timeout')), 5_000)),
-    ]);
-    user = result?.data?.session?.user ?? null;
-    console.log('[KYOYU] Auth via getSession:', user ? `OK (${user.id})` : 'no user');
-  } catch {
-    // getSession timed out — read raw token from localStorage
-    try {
-      const raw = Object.keys(localStorage)
-        .filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-        .map(k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } })
-        .find(v => v?.user);
-
-      const token    = raw?.access_token;
-      const refreshT = raw?.refresh_token;
-
-      if (token) {
-        // Decode JWT locally (no network) to check expiry
-        const payload   = JSON.parse(atob(token.split('.')[1]));
-        const isExpired = payload.exp * 1000 < Date.now();
-
-        if (isExpired) {
-          throw new Error('Your session has expired — please sign out and sign back in, then try again.');
-        }
-
-        // Token is still valid → setSession() is synchronous, no refresh call
-        const { error: sessErr } = await supabase.auth.setSession({ access_token: token, refresh_token: refreshT || '' });
-        if (sessErr) throw new Error(`Session restore failed: ${sessErr.message}`);
-        user = raw.user;
-        console.log('[KYOYU] Auth via localStorage + setSession: OK');
-      }
-    } catch (innerErr) {
-      throw innerErr; // re-throw (includes the "session expired" message)
-    }
+    await sbPost('profiles?on_conflict=id', {
+      id:           user.id,
+      email:        user.email ?? '',
+      role:         'creator',
+      display_name: user.user_metadata?.display_name || (user.email ?? '').split('@')[0] || '',
+      artist_name:  user.user_metadata?.artist_name  || '',
+    }, token, { prefer: 'resolution=merge-duplicates,return=minimal' });
+    console.log('[KYOYU] Profile upsert OK');
+  } catch (e) {
+    console.warn('[KYOYU] Profile upsert (non-fatal):', e.message);
   }
-
-  console.log('[KYOYU] Auth:', user ? `OK (${user.id})` : 'FAIL');
-  if (!user) {
-    throw new Error('You are not logged in. Please sign in to your creator account before uploading.');
-  }
-
-  const db = supabase; // session is now set — normal authenticated client
-
-  // ── Ensure profile row exists (FK: tracks.creator_id → profiles.id) ──
-  // The auto-create trigger may not have run for older accounts.
-  const { error: profileErr } = await db.from('profiles').upsert({
-    id:           user.id,
-    email:        user.email ?? '',
-    role:         'creator',
-    display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || '',
-    artist_name:  user.user_metadata?.artist_name  || '',
-  }, { onConflict: 'id' });
-  if (profileErr) console.warn('[KYOYU] Profile upsert (non-fatal):', profileErr.message);
 
   const results = [];
 
@@ -196,63 +224,55 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const { file } = audioFiles[i];
     const meta = trackMetas[i] || {};
 
-    // ── 1. Upload audio to R2 ────────────────────────────────
+    // ── 1. Upload audio to R2 ──────────────────────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'audio' });
-    console.log('[KYOYU] Starting R2 upload for:', file?.name, file?.size, 'bytes');
+    console.log('[KYOYU] Uploading audio:', file?.name, file?.size, 'bytes');
 
-    const audioKey = await uploadToR2(file, user.id, (pct) => {
-      // Forward XHR progress as an extended progress object
-      onProgress?.({ track: i, total: audioFiles.length, phase: 'audio', pct });
-    });
+    const audioKey = await uploadToR2(file, user.id, (pct) =>
+      onProgress?.({ track: i, total: audioFiles.length, phase: 'audio', pct })
+    );
 
-    // ── 2. Upload artwork to Supabase Storage ────────────────
+    // ── 2. Upload artwork to Supabase Storage ──────────────────────
     let artworkKey = null;
     if (meta.artwork) {
       onProgress?.({ track: i, total: audioFiles.length, phase: 'artwork' });
-      const ext = (meta.artwork.name?.split('.').pop() || 'jpg').toLowerCase();
+      const ext  = (meta.artwork.name?.split('.').pop() || 'jpg').toLowerCase();
       artworkKey = `${user.id}/${Date.now()}-artwork.${ext}`;
-
-      const { error: artErr } = await withTimeout(
-        db.storage.from('artwork').upload(artworkKey, meta.artwork, {
-
-          contentType: meta.artwork.type || 'image/jpeg',
-          upsert: false,
-        }),
-        60_000, 'Artwork upload'
-      );
-      if (artErr) throw new Error(`Artwork upload failed: ${artErr.message}`);
+      await sbStorageUpload('artwork', artworkKey, meta.artwork, token);
     }
 
-    // ── 3. Save metadata to tracks table ────────────────────
+    // ── 3. Save track metadata ─────────────────────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'saving' });
+    console.log('[KYOYU] Saving track metadata...');
 
-    const { data: track, error: dbErr } = await withTimeout(
-      db.from('tracks').insert({
-        creator_id:  user.id,
-        title:       meta.title?.trim()  || file.name,
-        artist:      meta.artist?.trim() || null,
-        album:       meta.album?.trim()  || null,
-        genre:       meta.genre?.trim()  || null,
-        year:        meta.year ? parseInt(meta.year) : null,
-        format:      file.name.split('.').pop().toUpperCase(),
-        tags:        [meta.genre].filter(Boolean),
-        visibility:  meta.visibility || 'private',
-        status:      'pending',
-        storage_key: audioKey,
-        artwork_key: artworkKey,
-      }).select().single(),
-      30_000, 'Metadata save'
-    );
-    if (dbErr) throw new Error(`Metadata save failed: ${dbErr.message}`);
+    const [track] = await sbPost('tracks', {
+      creator_id:  user.id,
+      title:       meta.title?.trim()  || file.name,
+      artist:      meta.artist?.trim() || null,
+      album:       meta.album?.trim()  || null,
+      genre:       meta.genre?.trim()  || null,
+      year:        meta.year ? parseInt(meta.year) : null,
+      format:      file.name.split('.').pop().toUpperCase(),
+      tags:        [meta.genre].filter(Boolean),
+      visibility:  meta.visibility || 'private',
+      status:      'pending',
+      storage_key: audioKey,
+      artwork_key: artworkKey,
+    }, token);
 
-    // ── 4. Save per-track credits ────────────────────────────
+    console.log('[KYOYU] Track saved:', track?.id);
+
+    // ── 4. Save credits ────────────────────────────────────────────
     if (meta.credits?.length && track?.id) {
       const rows = meta.credits
         .filter(c => c.name?.trim())
         .map(c => ({ track_id: track.id, role: c.role?.trim() || null, name: c.name.trim() }));
       if (rows.length) {
-        const { error: credErr } = await db.from('track_credits').insert(rows);
-        if (credErr) console.warn('[Reef] Credits insert (non-fatal):', credErr);
+        try {
+          await sbPost('track_credits', rows, token, { prefer: 'return=minimal' });
+        } catch (e) {
+          console.warn('[KYOYU] Credits insert (non-fatal):', e.message);
+        }
       }
     }
 
@@ -261,42 +281,3 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
   return results;
 }
-
-/* ─── Streaming helpers ──────────────────────────────────── */
-
-/**
- * Returns the artwork URL for a track.
- * Artwork stays on Supabase Storage (small files, not streamed).
- */
-export async function getArtworkUrl(artworkKey, expiresIn = 43200) {
-  if (!artworkKey) return null;
-  const { data, error } = await supabase.storage
-    .from('artwork')
-    .createSignedUrl(artworkKey, expiresIn);
-  if (error) return null;
-  return data.signedUrl;
-}
-
-/**
- * Fetches the authenticated creator's tracks from the DB,
- * enriched with artwork URLs.
- */
-export async function fetchMyTracks() {
-  const { data, error } = await supabase
-    .from('tracks')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-
-  const enriched = await Promise.all(
-    (data || []).map(async t => ({
-      ...t,
-      audioUrl:   r2Url(t.storage_key),
-      artworkUrl: t.artwork_key ? await getArtworkUrl(t.artwork_key) : null,
-    }))
-  );
-  return enriched;
-}
-
-// Legacy alias — kept for any existing imports
-export { getArtworkUrl as getSignedUrl };
