@@ -235,11 +235,25 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     // ── 2. Upload artwork to Supabase Storage ──────────────────────
     let artworkKey = null;
     let artworkUrl = null;
-    if (meta.artwork) {
+
+    // Resolve artwork: explicit file upload OR blob: URL from embedded audio tags
+    let artworkFile = meta.artwork ?? null;
+    if (!artworkFile && meta.artworkUrl?.startsWith('blob:')) {
+      try {
+        const blobRes  = await fetch(meta.artworkUrl);
+        const blob     = await blobRes.blob();
+        artworkFile    = new File([blob], 'artwork.jpg', { type: blob.type || 'image/jpeg' });
+        console.log('[KYOYU] Artwork resolved from embedded tag blob');
+      } catch (e) {
+        console.warn('[KYOYU] Could not resolve blob artwork:', e.message);
+      }
+    }
+
+    if (artworkFile) {
       onProgress?.({ track: i, total: audioFiles.length, phase: 'artwork' });
-      const ext  = (meta.artwork.name?.split('.').pop() || 'jpg').toLowerCase();
+      const ext  = (artworkFile.name?.split('.').pop() || 'jpg').toLowerCase();
       artworkKey = `${user.id}/${Date.now()}-artwork.${ext}`;
-      await sbStorageUpload('artwork', artworkKey, meta.artwork, token);
+      await sbStorageUpload('artwork', artworkKey, artworkFile, token);
 
       // Generate a signed URL (1-year TTL) for display
       try {
