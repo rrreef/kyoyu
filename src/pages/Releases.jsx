@@ -32,7 +32,6 @@ function adaptTrack(t) {
     artworkUrl:   t.artworkUrl || null,
     gradient,
     accentColor:  accent,
-    // stats (0 until track_stats wired)
     streams:      0,
     downloads:    0,
     comments:     0,
@@ -55,12 +54,45 @@ function artBg(rel) {
   return { background: '#111' };
 }
 
+/** Group an array of tracks into album objects */
+function groupIntoAlbums(tracks) {
+  const map = new Map();
+  tracks.forEach(rel => {
+    const key = `${rel.albumName}__${rel.artist}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        albumKey:   key,
+        albumName:  rel.albumName,
+        artist:     rel.artist,
+        year:       rel.year,
+        artworkUrl: rel.artworkUrl || null,
+        label:      rel.label,
+        format:     rel.format,
+        accentColor: rel.accentColor,
+        tracks:     [],
+        // computed below
+        visibility: rel.visibility,
+        status:     rel.status,
+      });
+    }
+    const grp = map.get(key);
+    // prefer a track that has artwork
+    if (!grp.artworkUrl && rel.artworkUrl) grp.artworkUrl = rel.artworkUrl;
+    // album is pending if any track is pending
+    if (rel.status === 'pending') grp.status = 'pending';
+    // mixed visibility → 'mixed'
+    if (grp.visibility !== rel.visibility) grp.visibility = 'mixed';
+    grp.tracks.push(rel);
+  });
+  return [...map.values()];
+}
+
 /* ─── Component ──────────────────────────────────────────── */
 export default function Releases({ filter = 'all' }) {
   const [releases,  setReleases]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
-  const [selected,  setSelected]  = useState(null);
+  const [selected,  setSelected]  = useState(null);   // album group object
   const [toggling,  setToggling]  = useState(false);
   const navigate = useNavigate();
 
@@ -77,21 +109,21 @@ export default function Releases({ filter = 'all' }) {
     return ['All', ...names];
   }, [releases]);
 
-  /* Unique label names */
+  /* Unique label names — always include 'All' so filter shows even when empty */
   const labelOptions = useMemo(() => {
     const names = [...new Set(releases.map(r => r.label).filter(Boolean))];
-    return names.length ? ['All', ...names] : [];
+    return ['All', ...names];
   }, [releases]);
 
-  /* Derived filtered + sorted releases */
-  const filteredReleases = useMemo(() => {
+  /* Derived filtered + sorted tracks (pre-grouping) */
+  const filteredTracks = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
-    // Route-level visibility filter (from sidebar submenu)
+    // Route-level visibility filter
     let list = filter === 'public'  ? releases.filter(r => r.visibility === 'public')
              : filter === 'private' ? releases.filter(r => r.visibility !== 'public')
              : [...releases];
-    // User pill filters on top
+    // User pill filters
     if (fArtist !== 'All') list = list.filter(r => r.artist === fArtist);
     if (fLabel  !== 'All') list = list.filter(r => r.label  === fLabel);
     if (fCollab === 'Solo')   list = list.filter(r => !/[&,]|feat\.|vs\./i.test(r.artist));
@@ -101,7 +133,7 @@ export default function Releases({ filter = 'all' }) {
       if (fStatus === 'Private')  list = list.filter(r => r.visibility === 'private');
       if (fStatus === 'Pending')  list = list.filter(r => r.status === 'pending');
     }
-    // Date filters use album year (r.year), falling back to upload date year
+    // Date filters use album year
     if (fDate === 'This Year')  list = list.filter(r => (r.year ?? new Date(r.uploadDate).getFullYear()) === curYear);
     if (fDate === 'This Month') {
       const ym = `${curYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -111,6 +143,9 @@ export default function Releases({ filter = 'all' }) {
     if (fDate === 'Oldest') list = [...list].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999));
     return list;
   }, [releases, filter, fArtist, fLabel, fDate, fCollab, fStatus]);
+
+  /* Group filtered tracks into album objects */
+  const albumGroups = useMemo(() => groupIntoAlbums(filteredTracks), [filteredTracks]);
 
   const anyFilterActive = fArtist!=='All' || fLabel!=='All' || fDate!=='All' || fCollab!=='All' || fStatus!=='All';
 
@@ -135,21 +170,25 @@ export default function Releases({ filter = 'all' }) {
     img.src = '/empty-releases.png';
   }, []);
 
-  const select = (rel) => setSelected(prev => prev?.id === rel.id ? null : rel);
+  /* Select / deselect an album group */
+  const selectAlbum = (album) =>
+    setSelected(prev => prev?.albumKey === album.albumKey ? null : album);
 
-  /* Toggle visibility in DB and update local state */
+  /* Toggle visibility for ALL tracks in the selected album */
   async function toggleVisibility() {
     if (!selected || toggling) return;
-    const next = selected.visibility === 'public' ? 'private' : 'public';
+    const next = (selected.visibility === 'public') ? 'private' : 'public';
     setToggling(true);
+    const trackIds = selected.tracks.map(t => t.id);
     const { error: dbErr } = await supabase
       .from('tracks')
       .update({ visibility: next })
-      .eq('id', selected.id);
+      .in('id', trackIds);
     if (!dbErr) {
-      const updated = { ...selected, visibility: next };
-      setSelected(updated);
-      setReleases(prev => prev.map(r => r.id === selected.id ? updated : r));
+      const updatedTracks = selected.tracks.map(t => ({ ...t, visibility: next }));
+      const updatedAlbum  = { ...selected, visibility: next, tracks: updatedTracks };
+      setSelected(updatedAlbum);
+      setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: next } : r));
     }
     setToggling(false);
   }
@@ -157,9 +196,10 @@ export default function Releases({ filter = 'all' }) {
   const PAGE_TITLE = filter === 'public' ? 'Public Releases'
                    : filter === 'private' ? 'Private Releases'
                    : 'Releases';
-  const PAGE_SUB = filter === 'public'  ? 'Published & live on the platform'
-                 : filter === 'private' ? 'Drafts, scheduled & shared-only'
-                 : `${releases.length} release${releases.length !== 1 ? 's' : ''} in your catalog`;
+  const albumCount = albumGroups.length;
+  const PAGE_SUB   = filter === 'public'  ? 'Published & live on the platform'
+                   : filter === 'private' ? 'Drafts, scheduled & shared-only'
+                   : `${albumCount} album${albumCount !== 1 ? 's' : ''} in your catalog`;
 
   /* ── Loading state ─────────────────────────────────────── */
   if (loading) {
@@ -201,13 +241,14 @@ export default function Releases({ filter = 'all' }) {
           <h1>{PAGE_TITLE}</h1>
           <p className="rel-page-sub">
             {PAGE_SUB}
-            {releases.length > 0 && filter === 'all' && <>&nbsp;·&nbsp; click a release to see insights</>}
+            {releases.length > 0 && filter === 'all' && <>&nbsp;·&nbsp; click an album to see details</>}
           </p>
         </div>
         <button className="rel-upload-btn" onClick={() => navigate('/upload')}>
           <Upload size={13} /> Upload New
         </button>
       </div>
+
       {/* ── Filter bar ── */}
       {releases.length > 0 && (
         <div className="rel-filter-bar">
@@ -221,17 +262,15 @@ export default function Releases({ filter = 'all' }) {
             </div>
           </div>
 
-          {/* Label — only shown when at least one track has a label */}
-          {labelOptions.length > 0 && (
-            <div className="rel-filter-group">
-              <span className="rel-filter-label">Label</span>
-              <div className="rel-filter-pills">
-                {labelOptions.map(l => (
-                  <button key={l} className={`rel-filter-pill ${fLabel===l?'active':''}`} onClick={()=>setFLabel(l)}>{l}</button>
-                ))}
-              </div>
+          {/* Label — always visible */}
+          <div className="rel-filter-group">
+            <span className="rel-filter-label">Label</span>
+            <div className="rel-filter-pills">
+              {labelOptions.map(l => (
+                <button key={l} className={`rel-filter-pill ${fLabel===l?'active':''}`} onClick={()=>setFLabel(l)}>{l}</button>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Date */}
           <div className="rel-filter-group">
@@ -242,6 +281,7 @@ export default function Releases({ filter = 'all' }) {
               ))}
             </div>
           </div>
+
           <div className="rel-filter-group">
             <span className="rel-filter-label">Collaborations</span>
             <div className="rel-filter-pills">
@@ -250,7 +290,8 @@ export default function Releases({ filter = 'all' }) {
               ))}
             </div>
           </div>
-          {/* Status filter — only shown in 'all' view since public/private routes pre-filter */}
+
+          {/* Status filter — only shown in 'all' view */}
           {filter === 'all' && (
             <div className="rel-filter-group">
               <span className="rel-filter-label">Status</span>
@@ -261,6 +302,7 @@ export default function Releases({ filter = 'all' }) {
               </div>
             </div>
           )}
+
           {anyFilterActive && (
             <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
           )}
@@ -272,35 +314,40 @@ export default function Releases({ filter = 'all' }) {
         <EmptyReleases variant="creator" />
       )}
 
-      {filteredReleases.length > 0 && (
+      {/* ── Album grid ── */}
+      {albumGroups.length > 0 && (
         <div className={`rel-grid ${selected ? 'has-selection' : ''}`}>
-          {filteredReleases.map(rel => {
-            const isSelected = selected?.id === rel.id;
+          {albumGroups.map(album => {
+            const isSelected = selected?.albumKey === album.albumKey;
             const isDimmed   = selected && !isSelected;
+            const multiTrack = album.tracks.length > 1;
             return (
               <div
-                key={rel.id}
+                key={album.albumKey}
                 className={`rel-card ${isSelected ? 'selected' : ''} ${isDimmed ? 'dimmed' : ''}`}
-                onClick={() => select(rel)}
+                onClick={() => selectAlbum(album)}
               >
-                <div className="rel-card-art" style={artBg(rel)}>
-                  {!rel.artworkUrl && (
+                <div className="rel-card-art" style={artBg(album)}>
+                  {!album.artworkUrl && (
                     <div className="rel-card-art-fallback">
                       <Music size={28} strokeWidth={1} />
                     </div>
                   )}
                   <div className="rel-card-play"><Play size={18} fill="currentColor" /></div>
-                  {rel.visibility === 'private' && (
+                  {album.visibility === 'private' && (
                     <div className="rel-card-private"><EyeOff size={9} /> Private</div>
                   )}
-                  {rel.status === 'pending' && (
+                  {album.status === 'pending' && (
                     <div className="rel-card-pending">Pending</div>
+                  )}
+                  {multiTrack && (
+                    <div className="rel-card-count">{album.tracks.length}</div>
                   )}
                 </div>
                 <div className="rel-card-info">
-                  <div className="rel-card-title">{rel.title}</div>
-                  <div className="rel-card-artist">{rel.artist}</div>
-                  <div className="rel-card-meta">{rel.year || '—'} · {rel.format}</div>
+                  <div className="rel-card-title">{album.albumName}</div>
+                  <div className="rel-card-artist">{album.artist}</div>
+                  <div className="rel-card-meta">{album.year || '—'} · {album.format}</div>
                 </div>
               </div>
             );
@@ -308,7 +355,7 @@ export default function Releases({ filter = 'all' }) {
         </div>
       )}
 
-      {/* Detail overlay — slides up */}
+      {/* ── Detail panel — slides up ── */}
       {selected && (
         <div
           className="rel-overlay"
@@ -325,53 +372,34 @@ export default function Releases({ filter = 'all' }) {
                 {!selected.artworkUrl && (
                   <div className="rdp-art-fallback"><Music size={22} strokeWidth={1} /></div>
                 )}
-                <div className="rdp-art-accent" style={{ background: selected.accentColor }} />
               </div>
               <div className="rdp-meta">
-                <div className="rdp-title">{selected.title}</div>
-                <div className="rdp-album">{selected.artist} — {selected.albumName}</div>
-                <div className="rdp-tags">
-                  {selected.tags.map(t => <span key={t} className="rdp-tag">{t}</span>)}
-                  <span className="rdp-tag rdp-tag--status">{selected.status}</span>
-                </div>
+                <div className="rdp-title">{selected.albumName}</div>
+                <div className="rdp-album">{selected.artist}</div>
                 <div className="rdp-details">
                   {selected.year && <><span>{selected.year}</span><span>·</span></>}
                   <span>{selected.format}</span>
-                  {selected.duration !== '—' && <><span>·</span><span>{selected.duration}</span></>}
                   <span>·</span>
                   {selected.visibility === 'public'
                     ? <span className="rdp-vis pub"><Eye size={10} /> Public</span>
-                    : <span className="rdp-vis priv"><EyeOff size={10} /> Private</span>
+                    : selected.visibility === 'mixed'
+                      ? <span className="rdp-vis priv"><Eye size={10} /> Mixed</span>
+                      : <span className="rdp-vis priv"><EyeOff size={10} /> Private</span>
                   }
                 </div>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="rdp-stats">
-              {[
-                { icon: <Play size={15} fill="currentColor" />, val: selected.streams,   label: 'Streams' },
-                { icon: <Download size={15} />,                  val: selected.downloads, label: 'Downloads' },
-                { icon: <MessageSquare size={15} />,             val: selected.comments,  label: 'Comments' },
-                { icon: <Star size={15} />,                      val: selected.feedback > 0 ? selected.feedback.toFixed(1) : 0, label: 'Rating' },
-              ].map(({ icon, val, label }) => (
-                <div key={label} className="rdp-stat">
-                  <div className="rdp-stat-icon" style={{ color: selected.accentColor }}>{icon}</div>
-                  <div className="rdp-stat-val">{val || '—'}</div>
-                  <div className="rdp-stat-label">{label}</div>
+            {/* Tracklist */}
+            <div className="rdp-tracklist">
+              {selected.tracks.map((t, i) => (
+                <div key={t.id} className="rdp-track-row">
+                  <span className="rdp-track-num">{i + 1}</span>
+                  <span className="rdp-track-title">{t.title}</span>
+                  <span className="rdp-track-fmt">{t.format}</span>
                 </div>
               ))}
             </div>
-
-            {/* Revenue */}
-            {selected.revenue > 0 && (
-              <div className="rdp-revenue">
-                <span className="rdp-revenue-label">Revenue generated</span>
-                <span className="rdp-revenue-val" style={{ color: selected.accentColor }}>
-                  €{selected.revenue.toLocaleString()}
-                </span>
-              </div>
-            )}
 
             {/* Actions */}
             <div className="rdp-actions">
@@ -380,7 +408,7 @@ export default function Releases({ filter = 'all' }) {
               <button
                 className={`rdp-btn rdp-btn--danger ${toggling ? 'loading' : ''}`}
                 onClick={toggleVisibility}
-                disabled={toggling}
+                disabled={toggling || selected.visibility === 'mixed'}
               >
                 {toggling
                   ? <Loader size={12} className="spin-sm" />

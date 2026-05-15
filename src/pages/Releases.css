@@ -454,3 +454,62 @@
 
 /* ═══ Upload button — hidden per design spec ═══════════════════ */
 .rel-upload-btn { display: none !important; }
+
+/* ── Track count badge (multi-track albums) ─────────────── */
+.rel-card-count {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0,0,0,0.72);
+  color: rgba(255,255,255,0.82);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 99px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.10);
+  pointer-events: none;
+}
+
+/* ── Album tracklist inside the slide-up panel ──────────── */
+.rdp-tracklist {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: var(--sp-3) 0 var(--sp-4);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: var(--sp-2) 0;
+}
+.rdp-track-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px var(--sp-2);
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+  cursor: default;
+}
+.rdp-track-row:hover { background: rgba(255,255,255,0.04); }
+.rdp-track-num {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.rdp-track-title {
+  flex: 1;
+  font-size: 0.83rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rdp-track-fmt {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
