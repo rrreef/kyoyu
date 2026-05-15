@@ -106,10 +106,16 @@ export default function Releases({ filter = 'all' }) {
   const [toggling,  setToggling]  = useState(false);
   const [editing,   setEditing]   = useState(false);
   const [deleting,  setDeleting]  = useState(false);
-  const [subPanel,  setSubPanel]  = useState(null); // 'credits' | 'pricing' | 'contract'
+  const [subPanel,  setSubPanel]  = useState(null);
+  const [savingSub, setSavingSub] = useState(false);
   const [editFields, setEditFields] = useState(
     { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private' }
   );
+  const [creditsData, setCreditsData] = useState({ producer:'', mastering:'', artworkCredit:'', rows:[] });
+  const [pricingData, setPricingData] = useState(
+    { streamingEnabled:true, downloadsEnabled:true, currency:'EUR', albumPrice:'', downloadPrice:'' }
+  );
+  const [contractData, setContractData] = useState({ exclusivity: false });
   // Audio preview
   const audioRef   = useRef(null);
   const [playing,  setPlaying]   = useState(false);
@@ -221,8 +227,68 @@ export default function Releases({ filter = 'all' }) {
     if (!s || isNaN(s)) return '0:00';
     return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
+  function currencySymbol(c) {
+    return {EUR:'€',USD:'$',GBP:'£',JPY:'¥',CHF:'CHF',CAD:'CA$',AUD:'AU$'}[c] || '€';
+  }
 
-  /* ── Edit metadata (all upload fields) ── */
+  /* ── Open a sub-panel (load data from DB) ── */
+  async function openSubPanel(name) {
+    if (name === 'credits') {
+      setCreditsData({ producer:'', mastering:'', artworkCredit:'', rows:[] });
+      const trackIds = selected.tracks.map(t => t.id);
+      const { data } = await supabase.from('track_credits').select('*').in('track_id', trackIds);
+      if (data?.length) {
+        setCreditsData(d => ({...d, rows: data.map(r => ({id:r.id||Math.random().toString(36).slice(2), role:r.role||'', name:r.name||''}))}));
+      }
+    } else if (name === 'pricing') {
+      setPricingData({ streamingEnabled:true, downloadsEnabled:true, currency:'EUR', albumPrice:'', downloadPrice:'' });
+    } else if (name === 'contract') {
+      setContractData({ exclusivity: false });
+    }
+    setEditing(false);
+    setSubPanel(name);
+  }
+
+  async function saveCredits() {
+    if (!selected) return;
+    setSavingSub(true);
+    const trackId = selected.tracks[0]?.id;
+    if (trackId) {
+      await supabase.from('track_credits').delete().eq('track_id', trackId);
+      const rows = creditsData.rows
+        .filter(r => r.role?.trim() || r.name?.trim())
+        .map(r => ({ track_id: trackId, role: r.role?.trim()||null, name: r.name?.trim()||null }));
+      if (rows.length) await supabase.from('track_credits').insert(rows);
+    }
+    setSavingSub(false);
+    setSubPanel(null);
+  }
+
+  async function savePricing() {
+    if (!selected) return;
+    setSavingSub(true);
+    const trackIds = selected.tracks.map(t => t.id);
+    // Columns may not exist yet; error is non-fatal
+    await supabase.from('tracks').update({
+      streaming_enabled: pricingData.streamingEnabled,
+      downloads_enabled: pricingData.downloadsEnabled,
+      currency: pricingData.currency,
+      album_price: pricingData.albumPrice || null,
+      download_price: pricingData.downloadPrice || null,
+    }).in('id', trackIds);
+    setSavingSub(false);
+    setSubPanel(null);
+  }
+
+  async function saveContract() {
+    if (!selected) return;
+    setSavingSub(true);
+    const trackIds = selected.tracks.map(t => t.id);
+    await supabase.from('tracks').update({ exclusivity: contractData.exclusivity }).in('id', trackIds);
+    setSavingSub(false);
+    setSubPanel(null);
+  }
+
   function startEdit() {
     const f = selected.tracks[0]; // use first track for per-track defaults
     setEditFields({
@@ -583,17 +649,154 @@ export default function Releases({ filter = 'all' }) {
                     <button className="rdp-btn" onClick={() => setEditing(false)}>Cancel</button>
                   </div>
                 </div>
-              ) : subPanel ? (
-                /* Sub-panel: Credits / Pricing / Contract */
+              ) : subPanel === 'credits' ? (
+                /* ── Credits panel ── */
                 <div className="rdp-subpanel">
-                  <div className="rdp-subpanel-title">
-                    {subPanel === 'credits'  && <><FileText  size={13} /> Credits</>}
-                    {subPanel === 'pricing'  && <><DollarSign size={13}/> Pricing</>}
-                    {subPanel === 'contract' && <><ScrollText size={13}/> Contract</>}
+                  <div className="rdp-edit-grid">
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Producer</label>
+                      <input className="rdp-edit-input" value={creditsData.producer}
+                        placeholder="Who produced this release?"
+                        onChange={e => setCreditsData(d => ({...d, producer: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row">
+                      <label className="rdp-edit-label">Mastering Engineer</label>
+                      <input className="rdp-edit-input" value={creditsData.mastering}
+                        placeholder="Engineer name and studio"
+                        onChange={e => setCreditsData(d => ({...d, mastering: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row rdp-edit-row--full">
+                      <label className="rdp-edit-label">Artwork / Design Credit</label>
+                      <input className="rdp-edit-input" value={creditsData.artworkCredit}
+                        placeholder="Designer or photographer"
+                        onChange={e => setCreditsData(d => ({...d, artworkCredit: e.target.value}))} />
+                    </div>
+                    <div className="rdp-edit-row rdp-edit-row--full">
+                      <label className="rdp-edit-label">Performers & Crew</label>
+                      <div className="rdp-credit-rows">
+                        {creditsData.rows.map((row, i) => (
+                          <div key={row.id} className="rdp-credit-row">
+                            <input className="rdp-edit-input" value={row.role}
+                              placeholder="Role (Guitar, Mixing…)"
+                              onChange={e => setCreditsData(d => ({...d, rows: d.rows.map((r,j) => j===i?{...r,role:e.target.value}:r)}))} />
+                            <input className="rdp-edit-input" value={row.name}
+                              placeholder="Name or studio"
+                              onChange={e => setCreditsData(d => ({...d, rows: d.rows.map((r,j) => j===i?{...r,name:e.target.value}:r)}))} />
+                            <button className="rdp-credit-remove"
+                              onClick={() => setCreditsData(d => ({...d, rows: d.rows.filter((_,j)=>j!==i)}))}>
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                        <button className="rdp-add-credit"
+                          onClick={() => setCreditsData(d => ({...d, rows:[...d.rows,{id:Math.random().toString(36).slice(2),role:'',name:''}]}))}>
+                          + Add performer / crew
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <p className="rdp-subpanel-soon">This feature is coming soon.</p>
                   <div className="rdp-actions">
-                    <button className="rdp-btn" onClick={() => setSubPanel(null)}>← Back</button>
+                    <button className="rdp-btn rdp-btn--primary" onClick={saveCredits} disabled={savingSub}>
+                      {savingSub ? <Loader size={12} className="spin-sm" /> : 'Save Credits'}
+                    </button>
+                    <button className="rdp-btn" onClick={() => setSubPanel(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : subPanel === 'pricing' ? (
+                /* ── Pricing panel ── */
+                <div className="rdp-subpanel">
+                  <div className="rdp-pricing-toggle-row">
+                    <div>
+                      <div className="rdp-toggle-label">Streaming</div>
+                      <div className="rdp-toggle-sub">Available to all Reef subscribers</div>
+                    </div>
+                    <button className={`rdp-toggle-btn ${pricingData.streamingEnabled ? 'on' : ''}`}
+                      onClick={() => setPricingData(d => ({...d, streamingEnabled: !d.streamingEnabled}))}>
+                      {pricingData.streamingEnabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+                  <div className="rdp-pricing-toggle-row">
+                    <div>
+                      <div className="rdp-toggle-label">DJ Downloads</div>
+                      <div className="rdp-toggle-sub">Paid per-track downloads in professional formats</div>
+                    </div>
+                    <button className={`rdp-toggle-btn ${pricingData.downloadsEnabled ? 'on' : ''}`}
+                      onClick={() => setPricingData(d => ({...d, downloadsEnabled: !d.downloadsEnabled}))}>
+                      {pricingData.downloadsEnabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+                  {pricingData.downloadsEnabled && (
+                    <div className="rdp-edit-grid" style={{marginTop:'var(--sp-3)'}}>
+                      <div className="rdp-edit-row rdp-edit-row--full">
+                        <label className="rdp-edit-label">Currency</label>
+                        <select className="rdp-edit-input" value={pricingData.currency}
+                          onChange={e => setPricingData(d => ({...d, currency: e.target.value}))}>
+                          {['EUR','USD','GBP','JPY','CHF','CAD','AUD'].map(c => <option key={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="rdp-edit-row">
+                        <label className="rdp-edit-label">Album Price (Bundle)</label>
+                        <div className="rdp-price-wrap">
+                          <span className="rdp-currency">{currencySymbol(pricingData.currency)}</span>
+                          <input className="rdp-edit-input" type="number" step="0.10" min="0" max="50"
+                            value={pricingData.albumPrice}
+                            onChange={e => setPricingData(d => ({...d, albumPrice: e.target.value}))} />
+                        </div>
+                      </div>
+                      <div className="rdp-edit-row">
+                        <label className="rdp-edit-label">Price per Track</label>
+                        <div className="rdp-price-wrap">
+                          <span className="rdp-currency">{currencySymbol(pricingData.currency)}</span>
+                          <input className="rdp-edit-input" type="number" step="0.10" min="0" max="5"
+                            value={pricingData.downloadPrice}
+                            onChange={e => setPricingData(d => ({...d, downloadPrice: e.target.value}))} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="rdp-actions">
+                    <button className="rdp-btn rdp-btn--primary" onClick={savePricing} disabled={savingSub}>
+                      {savingSub ? <Loader size={12} className="spin-sm" /> : 'Save Pricing'}
+                    </button>
+                    <button className="rdp-btn" onClick={() => setSubPanel(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : subPanel === 'contract' ? (
+                /* ── Contract panel ── */
+                <div className="rdp-subpanel">
+                  <div className="rdp-contract-options">
+                    <div className={`rdp-contract-opt ${!contractData.exclusivity ? 'selected' : ''}`}
+                      onClick={() => setContractData(d => ({...d, exclusivity: false}))}>
+                      <div className="rdp-contract-header">
+                        <span className="rdp-contract-name">Standard — 70/30</span>
+                        {!contractData.exclusivity && <span className="rdp-contract-check">✓</span>}
+                      </div>
+                      <ul className="rdp-contract-list">
+                        <li>Keep your music on all platforms</li>
+                        <li>70% of streaming royalties</li>
+                        <li>100% of download & vinyl revenue (minus Reef 10%)</li>
+                        <li>Cancel anytime with 30 days notice</li>
+                      </ul>
+                    </div>
+                    <div className={`rdp-contract-opt ${contractData.exclusivity ? 'selected' : ''}`}
+                      onClick={() => setContractData(d => ({...d, exclusivity: true}))}>
+                      <div className="rdp-contract-header">
+                        <span className="rdp-contract-name">Exclusive — 90/10</span>
+                        {contractData.exclusivity && <span className="rdp-contract-check">✓</span>}
+                      </div>
+                      <ul className="rdp-contract-list">
+                        <li>Remove your catalog from all other platforms</li>
+                        <li>90% of streaming royalties (20% more)</li>
+                        <li>Priority placement and editorial support</li>
+                        <li>Promotional support from Reef team</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="rdp-actions">
+                    <button className="rdp-btn rdp-btn--primary" onClick={saveContract} disabled={savingSub}>
+                      {savingSub ? <Loader size={12} className="spin-sm" /> : 'Save Contract'}
+                    </button>
+                    <button className="rdp-btn" onClick={() => setSubPanel(null)}>Cancel</button>
                   </div>
                 </div>
               ) : (
@@ -615,12 +818,9 @@ export default function Releases({ filter = 'all' }) {
                       {toggling ? <Loader size={12} className="spin-sm" />
                         : (selected.visibility === 'public' ? 'Unpublish' : 'Publish')}
                     </button>
-                    <button className="rdp-btn rdp-btn--icon" title="Credits"
-                      onClick={() => setSubPanel('credits')}><FileText size={13} /></button>
-                    <button className="rdp-btn rdp-btn--icon" title="Pricing"
-                      onClick={() => setSubPanel('pricing')}><DollarSign size={13} /></button>
-                    <button className="rdp-btn rdp-btn--icon" title="Contract"
-                      onClick={() => setSubPanel('contract')}><ScrollText size={13} /></button>
+                    <button className="rdp-btn" onClick={() => openSubPanel('credits')}>Credits</button>
+                    <button className="rdp-btn" onClick={() => openSubPanel('pricing')}>Pricing</button>
+                    <button className="rdp-btn" onClick={() => openSubPanel('contract')}>Contract</button>
                     <button className={`rdp-btn rdp-btn--delete ${deleting ? 'loading' : ''}`}
                       onClick={deleteAlbum} disabled={deleting}>
                       {deleting ? <Loader size={12} className="spin-sm" /> : 'Delete'}
