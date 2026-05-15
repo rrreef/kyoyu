@@ -72,7 +72,7 @@ function artBg(rel) {
 function groupIntoAlbums(tracks) {
   const map = new Map();
   tracks.forEach(rel => {
-    const key = rel.groupKey;          // set in adaptTrack
+    const key = rel.groupKey;
     if (!map.has(key)) {
       map.set(key, {
         albumKey:    key,
@@ -85,13 +85,15 @@ function groupIntoAlbums(tracks) {
         accentColor: rel.accentColor,
         tracks:      [],
         visibility:  rel.visibility,
-        status:      rel.status,
+        publishAt:   rel.publish_at || null,
       });
     }
     const grp = map.get(key);
     if (!grp.artworkUrl && rel.artworkUrl) grp.artworkUrl = rel.artworkUrl;
-    if (rel.status === 'pending') grp.status = 'pending';
+    // If any track has a different visibility, mark as mixed
     if (grp.visibility !== rel.visibility) grp.visibility = 'mixed';
+    // Inherit earliest publishAt
+    if (rel.publish_at && !grp.publishAt) grp.publishAt = rel.publish_at;
     grp.tracks.push(rel);
   });
   return [...map.values()];
@@ -509,14 +511,15 @@ export default function Releases({ filter = 'all' }) {
                     </div>
                   )}
                   <div className="rel-card-play"><Play size={18} fill="currentColor" /></div>
-                  {album.visibility === 'private' && (
-                    <div className="rel-card-private"><EyeOff size={9} /> Private</div>
-                  )}
-                  {album.status === 'pending' && (
-                    <div className="rel-card-pending">Pending</div>
-                  )}
                   {multiTrack && (
                     <div className="rel-card-count">{album.tracks.length}</div>
+                  )}
+                  {/* Status badge: top-right, white — Public or Scheduled only */}
+                  {album.visibility === 'public' && (
+                    <div className="rel-card-badge">Public</div>
+                  )}
+                  {album.visibility !== 'public' && album.publishAt && (
+                    <div className="rel-card-badge">Scheduled</div>
                   )}
                 </div>
                 <div className="rel-card-info">
