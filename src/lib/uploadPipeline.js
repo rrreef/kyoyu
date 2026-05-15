@@ -281,3 +281,40 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
   return results;
 }
+
+/* ─── fetchMyTracks — used by Releases.jsx ───────────────────────────── */
+
+/**
+ * Fetches the current user's tracks directly from Supabase REST API.
+ * Zero Supabase JS client auth middleware — same approach as uploadRelease.
+ */
+export async function fetchMyTracks() {
+  const { user, token } = getLocalSession();
+
+  const res = await Promise.race([
+    fetch(
+      `${supabaseUrl}/rest/v1/tracks?creator_id=eq.${user.id}&order=created_at.desc`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'apikey':        supabaseAnon,
+          'Accept':        'application/json',
+        },
+      }
+    ),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Fetch tracks timed out')), 15_000)),
+  ]);
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || `Failed to load tracks (${res.status})`);
+  }
+
+  return res.json();
+}
+
+/** Stub — imported by UserUploads.jsx but not actively used */
+export async function getSignedUrl(key) {
+  if (!key) return null;
+  return r2Url(key);
+}
