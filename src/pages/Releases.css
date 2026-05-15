@@ -373,12 +373,15 @@
   flex-wrap: wrap;
   gap: var(--sp-4);
   align-items: flex-start;
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) var(--sp-5);
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
-  border-radius: var(--radius-xl);
+  border-right: none;
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
   margin-bottom: var(--sp-5);
-  width: 100%;
+  /* Break out of page right padding so the bar
+     stretches flush to the main-content right wall */
+  margin-right: calc(-1 * var(--sp-8));
   box-sizing: border-box;
 }
 .rel-filter-group {
