@@ -7,20 +7,9 @@ import { supabase } from '../lib/supabase';
 import EmptyReleases from '../components/EmptyReleases';
 import './Releases.css';
 
-/* ─── Genre → gradient palette ─────────────────────────── */
-const GENRE_PALETTES = [
-  { keys: ['techno','electronic','electro'],  gradient: 'linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%)', accent: '#7c6fcd' },
-  { keys: ['ambient','drone','experimental'], gradient: 'linear-gradient(135deg,#000428 0%,#004e92 100%)',              accent: '#29b6f6' },
-  { keys: ['industrial','ebm','dark'],        gradient: 'linear-gradient(135deg,#0d0d0d 0%,#2d1515 100%)',              accent: '#ef5350' },
-  { keys: ['house','deep','disco'],           gradient: 'linear-gradient(135deg,#1a001e 0%,#4a0080 100%)',              accent: '#ce93d8' },
-  { keys: ['jazz','soul','r&b'],              gradient: 'linear-gradient(135deg,#1a0a00 0%,#5c3c00 100%)',              accent: '#ffb300' },
-  { keys: ['classical','orchestral'],         gradient: 'linear-gradient(135deg,#0a0a0f 0%,#1c1c2e 100%)',              accent: '#b0bec5' },
-];
-const DEFAULT_PALETTE  = { gradient: 'linear-gradient(135deg,#0a0a12 0%,#1c0a2e 55%,#0d0519 100%)', accent: '#9b6dff' };
-
-function paletteFor(genre) {
-  const g = (genre || '').toLowerCase();
-  return GENRE_PALETTES.find(p => p.keys.some(k => g.includes(k))) || DEFAULT_PALETTE;
+/* ─── No genre palettes — plain dark throughout ─────────── */
+function paletteFor(_genre) {
+  return { gradient: 'linear-gradient(160deg,#141414 0%,#0d0d0d 100%)', accent: 'transparent' };
 }
 
 /** Maps a raw Supabase track row → UI-ready shape */
@@ -53,7 +42,7 @@ function adaptTrack(t) {
   };
 }
 
-/** Returns a CSS background style — image if artwork exists, gradient fallback */
+/** Returns a CSS background — artwork image or plain dark fallback */
 function artBg(rel) {
   if (rel?.artworkUrl) {
     return {
@@ -62,7 +51,7 @@ function artBg(rel) {
       backgroundPosition: 'center',
     };
   }
-  return { background: rel.gradient };
+  return { background: '#111' };
 }
 
 /* ─── Component ──────────────────────────────────────────── */
@@ -89,6 +78,7 @@ export default function Releases({ filter = 'all' }) {
   /* Derived filtered + sorted releases */
   const filteredReleases = useMemo(() => {
     const now = new Date();
+    const curYear = now.getFullYear();
     // Route-level visibility filter (from sidebar submenu)
     let list = filter === 'public'  ? releases.filter(r => r.visibility === 'public')
              : filter === 'private' ? releases.filter(r => r.visibility !== 'public')
@@ -98,17 +88,18 @@ export default function Releases({ filter = 'all' }) {
     if (fCollab === 'Solo')   list = list.filter(r => !/[&,]|feat\.|vs\./i.test(r.artist));
     if (fCollab === 'Collab') list = list.filter(r => /[&,]|feat\.|vs\./i.test(r.artist));
     if (filter === 'all') {
-      if (fStatus === 'Published') list = list.filter(r => r.visibility === 'public');
-      if (fStatus === 'Private')   list = list.filter(r => r.visibility === 'private');
-      if (fStatus === 'Pending')   list = list.filter(r => r.status === 'pending');
+      if (fStatus === 'Public')   list = list.filter(r => r.visibility === 'public');
+      if (fStatus === 'Private')  list = list.filter(r => r.visibility === 'private');
+      if (fStatus === 'Pending')  list = list.filter(r => r.status === 'pending');
     }
-    if (fDate === 'This Year')  list = list.filter(r => r.uploadDate?.startsWith(String(now.getFullYear())));
+    // Date filters use album year (r.year), falling back to upload date year
+    if (fDate === 'This Year')  list = list.filter(r => (r.year ?? new Date(r.uploadDate).getFullYear()) === curYear);
     if (fDate === 'This Month') {
-      const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const ym = `${curYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
       list = list.filter(r => r.uploadDate?.startsWith(ym));
     }
-    if (fDate === 'Newest') list.sort((a,b) => (b.uploadDate||'') > (a.uploadDate||'') ? 1 : -1);
-    if (fDate === 'Oldest') list.sort((a,b) => (a.uploadDate||'') > (b.uploadDate||'') ? 1 : -1);
+    if (fDate === 'Newest') list = [...list].sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+    if (fDate === 'Oldest') list = [...list].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999));
     return list;
   }, [releases, filter, fArtist, fDate, fCollab, fStatus]);
 
@@ -240,7 +231,7 @@ export default function Releases({ filter = 'all' }) {
             <div className="rel-filter-group">
               <span className="rel-filter-label">Status</span>
               <div className="rel-filter-pills">
-                {['All','Published','Private','Pending'].map(s => (
+                {['All','Public','Private','Pending'].map(s => (
                   <button key={s} className={`rel-filter-pill ${fStatus===s?'active':''}`} onClick={()=>setFStatus(s)}>{s}</button>
                 ))}
               </div>
@@ -257,7 +248,6 @@ export default function Releases({ filter = 'all' }) {
         <EmptyReleases variant="creator" />
       )}
 
-      {/* Release grid */}
       {filteredReleases.length > 0 && (
         <div className={`rel-grid ${selected ? 'has-selection' : ''}`}>
           {filteredReleases.map(rel => {
@@ -270,7 +260,6 @@ export default function Releases({ filter = 'all' }) {
                 onClick={() => select(rel)}
               >
                 <div className="rel-card-art" style={artBg(rel)}>
-                  {/* Music note placeholder when no artwork */}
                   {!rel.artworkUrl && (
                     <div className="rel-card-art-fallback">
                       <Music size={28} strokeWidth={1} />
@@ -283,7 +272,6 @@ export default function Releases({ filter = 'all' }) {
                   {rel.status === 'pending' && (
                     <div className="rel-card-pending">Pending</div>
                   )}
-                  <div className="rel-card-accent" style={{ background: rel.accentColor }} />
                 </div>
                 <div className="rel-card-info">
                   <div className="rel-card-title">{rel.title}</div>
@@ -293,12 +281,6 @@ export default function Releases({ filter = 'all' }) {
               </div>
             );
           })}
-
-          {/* Upload new tile */}
-          <div className="rel-card-empty" onClick={() => navigate('/upload')}>
-            <Upload size={20} strokeWidth={1.5} />
-            <span>Upload</span>
-          </div>
         </div>
       )}
 

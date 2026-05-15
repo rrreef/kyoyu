@@ -10,27 +10,8 @@
 .rel-page-header h1 { font-size: 1.75rem; margin-bottom: 4px; }
 .rel-page-sub { font-size: 0.82rem; color: var(--text-muted); margin: 0; }
 
-.rel-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: var(--sp-2) var(--sp-5);
-  border-radius: var(--radius-full);
-  background: var(--orange-500);
-  color: #fff;
-  font-weight: 600;
-  font-family: var(--font-body);
-  font-size: 0.82rem;
-  cursor: pointer;
-  border: none;
-  transition: background 0.15s, box-shadow 0.15s;
-  box-shadow: 0 0 20px rgba(255,255,255,0.3);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.rel-upload-btn:hover { background: var(--orange-400); box-shadow: 0 0 28px rgba(255,255,255,0.45); }
-
 /* ── Release Grid ─────────────────────────────────────────── */
+
 .rel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -430,9 +411,9 @@
 }
 .rel-filter-pill:hover { background: rgba(255,255,255,0.09); color: var(--text-secondary); }
 .rel-filter-pill.active {
-  background: rgba(155,109,255,0.18);
-  border-color: rgba(155,109,255,0.35);
-  color: rgba(185,150,255,0.95);
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.92);
 }
 .rel-filter-clear {
   align-self: flex-end;
@@ -465,14 +446,5 @@
   to { transform: rotate(360deg); }
 }
 
-/* ═══ Theme — neutralise orange in Releases ════════════════════ */
-.rel-upload-btn {
-  background: var(--btn-primary-bg) !important;
-  color: var(--btn-primary-text) !important;
-  border: 1px solid var(--btn-primary-border) !important;
-  box-shadow: 0 4px 16px var(--btn-primary-glow) !important;
-}
-.rel-upload-btn:hover {
-  background: var(--btn-primary-hover) !important;
-  box-shadow: 0 6px 22px var(--btn-primary-glow) !important;
-}
+/* ═══ Upload button — hidden per design spec ═══════════════════ */
+.rel-upload-btn { display: none !important; }
