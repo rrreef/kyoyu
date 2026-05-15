@@ -234,11 +234,38 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
     // ── 2. Upload artwork to Supabase Storage ──────────────────────
     let artworkKey = null;
+    let artworkUrl = null;
     if (meta.artwork) {
       onProgress?.({ track: i, total: audioFiles.length, phase: 'artwork' });
       const ext  = (meta.artwork.name?.split('.').pop() || 'jpg').toLowerCase();
       artworkKey = `${user.id}/${Date.now()}-artwork.${ext}`;
       await sbStorageUpload('artwork', artworkKey, meta.artwork, token);
+
+      // Generate a signed URL (1-year TTL) for display
+      try {
+        const signRes = await fetch(
+          `${supabaseUrl}/storage/v1/object/sign/artwork/${artworkKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':  'application/json',
+              'Authorization': `Bearer ${token}`,
+              'apikey':        supabaseAnon,
+            },
+            body: JSON.stringify({ expiresIn: 365 * 24 * 3600 }),
+          }
+        );
+        if (signRes.ok) {
+          const { signedURL } = await signRes.json();
+          artworkUrl = signedURL
+            ? `${supabaseUrl}/storage/v1${signedURL}`
+            : `${supabaseUrl}/storage/v1/object/public/artwork/${artworkKey}`;
+        }
+      } catch (e) {
+        // Fallback to public URL (works if bucket is set to public)
+        artworkUrl = `${supabaseUrl}/storage/v1/object/public/artwork/${artworkKey}`;
+        console.warn('[KYOYU] Signed URL failed, using public URL fallback');
+      }
     }
 
     // ── 3. Save track metadata ─────────────────────────────────────
@@ -258,6 +285,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       status:      'pending',
       storage_key: audioKey,
       artwork_key: artworkKey,
+      artwork_url: artworkUrl,   // persisted signed/public URL for display
     }, token);
 
     console.log('[KYOYU] Track saved:', track?.id);
@@ -310,7 +338,16 @@ export async function fetchMyTracks() {
     throw new Error(body.message || `Failed to load tracks (${res.status})`);
   }
 
-  return res.json();
+  const tracks = await res.json();
+
+  // Map DB columns → UI-expected shape
+  return tracks.map(t => ({
+    ...t,
+    // artwork_url is saved at upload time (signed URL or public URL)
+    // Fallback: construct public URL from artwork_key if artwork_url missing
+    artworkUrl: t.artwork_url
+      || (t.artwork_key ? `${supabaseUrl}/storage/v1/object/public/artwork/${t.artwork_key}` : null),
+  }));
 }
 
 /** Stub — imported by UserUploads.jsx but not actively used */
