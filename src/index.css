@@ -495,7 +495,6 @@ img {
 /* ─── Page ─── */
 .page {
   padding: var(--sp-8);
-  max-width: 1400px;
 }
 
 /* ─── Badge ─── */

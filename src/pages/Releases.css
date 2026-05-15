@@ -1,6 +1,6 @@
 /* ══ Releases Page ═══════════════════════════════════════════ */
-/* 22px horizontal inset on both sides (sidebar border → content) */
-.releases-page {
+/* Higher specificity (0,2,0) wins over .page (0,1,0) regardless of bundle order */
+.page.releases-page {
   padding-left: 33px;
   padding-right: 33px;
 }
