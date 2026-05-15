@@ -300,6 +300,8 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       storage_key: audioKey,
       artwork_key: artworkKey,
       artwork_url: artworkUrl,   // persisted signed/public URL for display
+      label:       meta.label?.trim() || null,
+
     }, token);
 
     console.log('[KYOYU] Track saved:', track?.id);

@@ -25,10 +25,11 @@ function adaptTrack(t) {
     visibility:   t.visibility,
     status:       t.status,
     genre:        t.genre,
+    label:        t.label || null,
     tags:         Array.isArray(t.tags) ? t.tags : (t.genre ? [t.genre] : []),
     duration:     t.duration || '—',
     uploadDate:   t.created_at?.slice(0, 10),
-    artworkUrl:   t.artworkUrl || null,   // signed URL from fetchMyTracks()
+    artworkUrl:   t.artworkUrl || null,
     gradient,
     accentColor:  accent,
     // stats (0 until track_stats wired)
@@ -65,14 +66,21 @@ export default function Releases({ filter = 'all' }) {
 
   /* ── Filter state ── */
   const [fArtist, setFArtist] = useState('All');
+  const [fLabel,  setFLabel]  = useState('All');
   const [fDate,   setFDate]   = useState('All');
   const [fCollab, setFCollab] = useState('All');
   const [fStatus, setFStatus] = useState('All');
 
-  /* Unique artist names for filter pill dropdown */
+  /* Unique artist names */
   const artistOptions = useMemo(() => {
     const names = [...new Set(releases.map(r => r.artist).filter(Boolean))];
     return ['All', ...names];
+  }, [releases]);
+
+  /* Unique label names */
+  const labelOptions = useMemo(() => {
+    const names = [...new Set(releases.map(r => r.label).filter(Boolean))];
+    return names.length ? ['All', ...names] : [];
   }, [releases]);
 
   /* Derived filtered + sorted releases */
@@ -85,6 +93,7 @@ export default function Releases({ filter = 'all' }) {
              : [...releases];
     // User pill filters on top
     if (fArtist !== 'All') list = list.filter(r => r.artist === fArtist);
+    if (fLabel  !== 'All') list = list.filter(r => r.label  === fLabel);
     if (fCollab === 'Solo')   list = list.filter(r => !/[&,]|feat\.|vs\./i.test(r.artist));
     if (fCollab === 'Collab') list = list.filter(r => /[&,]|feat\.|vs\./i.test(r.artist));
     if (filter === 'all') {
@@ -101,9 +110,9 @@ export default function Releases({ filter = 'all' }) {
     if (fDate === 'Newest') list = [...list].sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
     if (fDate === 'Oldest') list = [...list].sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999));
     return list;
-  }, [releases, filter, fArtist, fDate, fCollab, fStatus]);
+  }, [releases, filter, fArtist, fLabel, fDate, fCollab, fStatus]);
 
-  const anyFilterActive = fArtist!=='All' || fDate!=='All' || fCollab!=='All' || fStatus!=='All';
+  const anyFilterActive = fArtist!=='All' || fLabel!=='All' || fDate!=='All' || fCollab!=='All' || fStatus!=='All';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -202,6 +211,7 @@ export default function Releases({ filter = 'all' }) {
       {/* ── Filter bar ── */}
       {releases.length > 0 && (
         <div className="rel-filter-bar">
+          {/* Artist */}
           <div className="rel-filter-group">
             <span className="rel-filter-label">Artist</span>
             <div className="rel-filter-pills">
@@ -210,6 +220,20 @@ export default function Releases({ filter = 'all' }) {
               ))}
             </div>
           </div>
+
+          {/* Label — only shown when at least one track has a label */}
+          {labelOptions.length > 0 && (
+            <div className="rel-filter-group">
+              <span className="rel-filter-label">Label</span>
+              <div className="rel-filter-pills">
+                {labelOptions.map(l => (
+                  <button key={l} className={`rel-filter-pill ${fLabel===l?'active':''}`} onClick={()=>setFLabel(l)}>{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Date */}
           <div className="rel-filter-group">
             <span className="rel-filter-label">Date</span>
             <div className="rel-filter-pills">
@@ -238,7 +262,7 @@ export default function Releases({ filter = 'all' }) {
             </div>
           )}
           {anyFilterActive && (
-            <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
+            <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
           )}
         </div>
       )}
