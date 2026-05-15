@@ -233,20 +233,23 @@ export default function Releases({ filter = 'all' }) {
 
   /* ── Open a sub-panel (load data from DB) ── */
   async function openSubPanel(name) {
+    // Reset all sub-panel data first
+    setEditing(false);
+    setSubPanel(name); // open immediately so UI doesn't freeze
     if (name === 'credits') {
       setCreditsData({ producer:'', mastering:'', artworkCredit:'', rows:[] });
-      const trackIds = selected.tracks.map(t => t.id);
-      const { data } = await supabase.from('track_credits').select('*').in('track_id', trackIds);
-      if (data?.length) {
-        setCreditsData(d => ({...d, rows: data.map(r => ({id:r.id||Math.random().toString(36).slice(2), role:r.role||'', name:r.name||''}))}));
-      }
+      try {
+        const trackIds = selected.tracks.map(t => t.id);
+        const { data } = await supabase.from('track_credits').select('*').in('track_id', trackIds);
+        if (data?.length) {
+          setCreditsData(d => ({...d, rows: data.map(r => ({id: r.id||Math.random().toString(36).slice(2), role: r.role||'', name: r.name||''}))}));
+        }
+      } catch (_) { /* table may not exist yet — open with empty rows */ }
     } else if (name === 'pricing') {
       setPricingData({ streamingEnabled:true, downloadsEnabled:true, currency:'EUR', albumPrice:'', downloadPrice:'' });
     } else if (name === 'contract') {
       setContractData({ exclusivity: false });
     }
-    setEditing(false);
-    setSubPanel(name);
   }
 
   async function saveCredits() {
@@ -710,20 +713,24 @@ export default function Releases({ filter = 'all' }) {
                       <div className="rdp-toggle-label">Streaming</div>
                       <div className="rdp-toggle-sub">Available to all Reef subscribers</div>
                     </div>
-                    <button className={`rdp-toggle-btn ${pricingData.streamingEnabled ? 'on' : ''}`}
-                      onClick={() => setPricingData(d => ({...d, streamingEnabled: !d.streamingEnabled}))}>
-                      {pricingData.streamingEnabled ? 'Enabled' : 'Disabled'}
-                    </button>
+                    <button
+                      className={`rdp-toggle-switch ${pricingData.streamingEnabled ? 'on' : ''}`}
+                      onClick={() => setPricingData(d => ({...d, streamingEnabled: !d.streamingEnabled}))}
+                      aria-checked={pricingData.streamingEnabled}
+                      role="switch"
+                    />
                   </div>
                   <div className="rdp-pricing-toggle-row">
                     <div>
                       <div className="rdp-toggle-label">DJ Downloads</div>
                       <div className="rdp-toggle-sub">Paid per-track downloads in professional formats</div>
                     </div>
-                    <button className={`rdp-toggle-btn ${pricingData.downloadsEnabled ? 'on' : ''}`}
-                      onClick={() => setPricingData(d => ({...d, downloadsEnabled: !d.downloadsEnabled}))}>
-                      {pricingData.downloadsEnabled ? 'Enabled' : 'Disabled'}
-                    </button>
+                    <button
+                      className={`rdp-toggle-switch ${pricingData.downloadsEnabled ? 'on' : ''}`}
+                      onClick={() => setPricingData(d => ({...d, downloadsEnabled: !d.downloadsEnabled}))}
+                      aria-checked={pricingData.downloadsEnabled}
+                      role="switch"
+                    />
                   </div>
                   {pricingData.downloadsEnabled && (
                     <div className="rdp-edit-grid" style={{marginTop:'var(--sp-3)'}}>
