@@ -520,7 +520,7 @@ export default function Releases({ filter = 'all' }) {
                   )}
                   {album.visibility === 'private' && (
                     <div className="rel-card-badge">
-                      {album.publishAt ? 'Scheduled' : 'Private'}
+                      {album.publishAt ? 'Pending' : 'Private'}
                     </div>
                   )}
                 </div>
