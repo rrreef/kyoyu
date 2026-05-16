@@ -515,13 +515,10 @@ export default function Releases({ filter = 'all' }) {
                     <div className="rel-card-count">{album.tracks.length}</div>
                   )}
                   {/* Status badge — top-right white pill, always visible */}
-                  {(album.visibility === 'public' || album.visibility === 'mixed') && (
+                  {(album.visibility === 'public' || album.visibility === 'mixed') ? (
                     <div className="rel-card-badge">Public</div>
-                  )}
-                  {album.visibility === 'private' && (
-                    <div className="rel-card-badge">
-                      {album.publishAt ? 'Pending' : 'Private'}
-                    </div>
+                  ) : (
+                    <div className="rel-card-badge">Pending</div>
                   )}
                 </div>
                 <div className="rel-card-info">
