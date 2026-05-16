@@ -516,9 +516,7 @@ export default function Releases({ filter = 'all' }) {
                   )}
                   {/* Status badge — top-right white pill */}
                   {(album.visibility === 'public' || album.visibility === 'mixed') && (
-                    <div className="rel-card-badge">
-                      {album.visibility === 'mixed' ? 'Mixed' : 'Public'}
-                    </div>
+                    <div className="rel-card-badge">Public</div>
                   )}
                   {album.visibility === 'private' && album.publishAt && (
                     <div className="rel-card-badge">Scheduled</div>
