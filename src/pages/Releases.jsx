@@ -111,7 +111,7 @@ export default function Releases({ filter = 'all' }) {
   const [subPanel,  setSubPanel]  = useState(null);
   const [savingSub, setSavingSub] = useState(false);
   const [editFields, setEditFields] = useState(
-    { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private' }
+    { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private', publishAt:'' }
   );
   const [creditsData, setCreditsData] = useState({ producer:'', mastering:'', artworkCredit:'', rows:[] });
   const [pricingData, setPricingData] = useState(
@@ -295,7 +295,7 @@ export default function Releases({ filter = 'all' }) {
   }
 
   function startEdit() {
-    const f = selected.tracks[0]; // use first track for per-track defaults
+    const f = selected.tracks[0];
     setEditFields({
       albumName:   selected.albumName || '',
       artist:      selected.artist    || '',
@@ -304,6 +304,7 @@ export default function Releases({ filter = 'all' }) {
       genre:       f?.genre           || '',
       description: f?.description     || '',
       visibility:  selected.visibility === 'public' ? 'public' : 'private',
+      publishAt:   f?.publish_at      ? f.publish_at.slice(0, 16) : '',
     });
     setSubPanel(null);
     setEditing(true);
@@ -319,6 +320,7 @@ export default function Releases({ filter = 'all' }) {
       genre:       editFields.genre.trim()       || null,
       description: editFields.description.trim() || null,
       visibility:  editFields.visibility,
+      publish_at:  editFields.publishAt          || null,
     };
     const trackIds = selected.tracks.map(t => t.id);
     const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
@@ -330,6 +332,7 @@ export default function Releases({ filter = 'all' }) {
         year:       updates.year,
         label:      updates.label,
         visibility: updates.visibility,
+        publishAt:  updates.publish_at,
         tracks:     updatedTracks };
       setSelected(updatedAlbum);
       setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
@@ -517,8 +520,10 @@ export default function Releases({ filter = 'all' }) {
                   {/* Status badge — top-right white pill, always visible */}
                   {(album.visibility === 'public' || album.visibility === 'mixed') ? (
                     <div className="rel-card-badge">Public</div>
-                  ) : (
+                  ) : album.publishAt || album.tracks?.[0]?.publish_at ? (
                     <div className="rel-card-badge">Pending</div>
+                  ) : (
+                    <div className="rel-card-badge">Private</div>
                   )}
                 </div>
                 <div className="rel-card-info">
@@ -648,6 +653,14 @@ export default function Releases({ filter = 'all' }) {
                         ><Eye size={11} /> Public</button>
                       </div>
                     </div>
+                    {editFields.visibility === 'private' && (
+                      <div className="rdp-edit-row rdp-edit-row--full">
+                        <label className="rdp-edit-label">Publish Date <span style={{opacity:0.5,fontWeight:400}}>(optional — sets status to Pending)</span></label>
+                        <input className="rdp-edit-input" type="datetime-local"
+                          value={editFields.publishAt}
+                          onChange={e => setEditFields(f => ({...f, publishAt: e.target.value}))} />
+                      </div>
+                    )}
                   </div>
                   <div className="rdp-actions">
                     <button className="rdp-btn rdp-btn--primary" onClick={saveEdit}>Save Changes</button>
