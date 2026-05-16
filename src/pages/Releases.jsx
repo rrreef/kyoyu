@@ -514,12 +514,14 @@ export default function Releases({ filter = 'all' }) {
                   {multiTrack && (
                     <div className="rel-card-count">{album.tracks.length}</div>
                   )}
-                  {/* Status badge — top-right white pill */}
+                  {/* Status badge — top-right white pill, always visible */}
                   {(album.visibility === 'public' || album.visibility === 'mixed') && (
                     <div className="rel-card-badge">Public</div>
                   )}
-                  {album.visibility === 'private' && album.publishAt && (
-                    <div className="rel-card-badge">Scheduled</div>
+                  {album.visibility === 'private' && (
+                    <div className="rel-card-badge">
+                      {album.publishAt ? 'Scheduled' : 'Private'}
+                    </div>
                   )}
                 </div>
                 <div className="rel-card-info">
