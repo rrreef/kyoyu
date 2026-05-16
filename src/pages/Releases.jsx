@@ -517,14 +517,14 @@ export default function Releases({ filter = 'all' }) {
                   {multiTrack && (
                     <div className="rel-card-count">{album.tracks.length}</div>
                   )}
-                  {/* Status badge — top-right white pill, always visible */}
-                  {(album.visibility === 'public' || album.visibility === 'mixed') ? (
-                    <div className="rel-card-badge">Public</div>
-                  ) : album.publishAt || album.tracks?.[0]?.publish_at ? (
-                    <div className="rel-card-badge">Pending</div>
-                  ) : (
-                    <div className="rel-card-badge">Private</div>
-                  )}
+                  {/* Status badge — top-right white pill */}
+                  {(() => {
+                    const isPublic  = album.tracks.some(t => t.visibility === 'public');
+                    const hasPubAt  = album.tracks.some(t => t.publish_at);
+                    if (isPublic)  return <div className="rel-card-badge">Public</div>;
+                    if (hasPubAt)  return <div className="rel-card-badge">Pending</div>;
+                    return               <div className="rel-card-badge">Private</div>;
+                  })()}
                 </div>
                 <div className="rel-card-info">
                   <div className="rel-card-title">{album.albumName}</div>
