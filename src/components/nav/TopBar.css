@@ -32,43 +32,36 @@
   border-radius: 50%;
   flex-shrink: 0;
 
-  /* Glass tint — very transparent so content shows through */
-  background: rgba(255, 255, 255, 0.07);
+  /* Fully transparent — same tone as background behind it */
+  background: transparent;
 
-  /* THE MAGNIFYING EFFECT:
-     blur(1px) keeps content near-sharp (lens keeps focus)
-     saturate(220%) amplifies colour like light through glass
-     brightness(1.18) brightens the "focal point"
-     contrast(1.06) sharpens edges as light refracts        */
-  backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
-  -webkit-backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
+  /* Lens effect: amplify colour/contrast WITHOUT brightening */
+  backdrop-filter: saturate(180%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(180%) contrast(1.04);
 
-  /* Glass edges */
-  border: 0.5px solid rgba(255, 255, 255, 0.28);
+  /* Hairline border for glass edge definition */
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
 
-  /* 3D glass depth — top specular + bottom refraction + outer glow */
+  /* Subtle 3D rim — just a thin top highlight, no glow */
   box-shadow:
-    inset 0 1.5px 0   rgba(255, 255, 255, 0.50),   /* curved top edge highlight  */
-    inset 0 -1px  2px rgba(0, 0, 0, 0.22),          /* refraction shadow at base  */
-    inset 1px 0   0   rgba(255, 255, 255, 0.10),    /* left rim light             */
-    inset -1px 0  0   rgba(0, 0, 0, 0.08),          /* right rim shadow           */
-    0 6px 24px rgba(0, 0, 0, 0.36),                  /* outer drop shadow          */
-    0 1px 4px  rgba(0, 0, 0, 0.20);                  /* close contact shadow       */
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 16px rgba(0, 0, 0, 0.28),
+    0 1px 3px  rgba(0, 0, 0, 0.16);
 
-  color: rgba(255, 255, 255, 0.70);
+  color: rgba(255, 255, 255, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition:
     box-shadow 0.18s ease,
-    background 0.18s ease,
+    border-color 0.18s ease,
     transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
 }
 
-/* Radial lens curvature overlay — simulates glass surface curvature */
+/* Radial lens surface — very subtle, just top-left shimmer */
 .topbar-glass-btn::before {
   content: '';
   position: absolute;
@@ -76,9 +69,8 @@
   border-radius: 50%;
   background: radial-gradient(
     ellipse at 38% 28%,
-    rgba(255, 255, 255, 0.28) 0%,
-    rgba(255, 255, 255, 0.08) 38%,
-    transparent 68%
+    rgba(255, 255, 255, 0.10) 0%,
+    transparent 55%
   );
   pointer-events: none;
   z-index: 1;
@@ -88,20 +80,17 @@
 .topbar-glass-btn > * { position: relative; z-index: 2; }
 
 .topbar-glass-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
   color: rgba(255, 255, 255, 0.95);
   box-shadow:
-    inset 0 1.5px 0   rgba(255, 255, 255, 0.55),
-    inset 0 -1px  2px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(0, 0, 0, 0.42),
-    0 2px 6px  rgba(0, 0, 0, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 24px rgba(0, 0, 0, 0.36),
+    0 2px 6px  rgba(0, 0, 0, 0.20);
   transform: translateY(-1px);
 }
 .topbar-glass-btn:active {
-  transform: scale(0.94) translateY(0);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    0 3px 12px rgba(0, 0, 0, 0.30);
+  transform: scale(0.93) translateY(0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 8px rgba(0, 0, 0, 0.24);
 }
 
 /* ── Avatar variant ── */
@@ -141,43 +130,41 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex-direction: row-reverse; /* icon on right, input grows left */
+  flex-direction: row-reverse;
 
   width: 40px;
   height: 40px;
   border-radius: 999px;
   overflow: hidden;
 
-  /* Same glass treatment */
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
-  -webkit-backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
-  border: 0.5px solid rgba(255, 255, 255, 0.28);
+  /* Transparent — matches background */
+  background: transparent;
+  backdrop-filter: saturate(180%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(180%) contrast(1.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
   box-shadow:
-    inset 0 1.5px 0   rgba(255, 255, 255, 0.50),
-    inset 0 -1px  2px rgba(0, 0, 0, 0.22),
-    0 6px 24px rgba(0, 0, 0, 0.36),
-    0 1px 4px  rgba(0, 0, 0, 0.20);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 16px rgba(0, 0, 0, 0.28),
+    0 1px 3px  rgba(0, 0, 0, 0.16);
 
   transition:
     width 0.30s cubic-bezier(0.34, 1.08, 0.64, 1),
     box-shadow 0.18s ease,
-    background 0.18s ease;
+    border-color 0.18s ease;
 }
 
 /* Pill open state */
 .topbar-glass-search.open {
   width: 220px;
-  overflow: visible; /* allow dropdown to escape */
-  background: rgba(255, 255, 255, 0.10);
+  overflow: visible;
+  border-color: rgba(255, 255, 255, 0.24);
   box-shadow:
-    inset 0 1.5px 0   rgba(255, 255, 255, 0.55),
-    inset 0 -1px  2px rgba(0, 0, 0, 0.18),
-    0 10px 36px rgba(0, 0, 0, 0.44),
-    0 2px 8px   rgba(0, 0, 0, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 6px 28px rgba(0, 0, 0, 0.36),
+    0 2px 8px  rgba(0, 0, 0, 0.22);
 }
 
-/* Lens curvature on search wrap */
+/* Lens shimmer on search wrap */
 .topbar-glass-search::before {
   content: '';
   position: absolute;
@@ -185,9 +172,8 @@
   border-radius: 999px;
   background: radial-gradient(
     ellipse at 38% 28%,
-    rgba(255, 255, 255, 0.22) 0%,
-    rgba(255, 255, 255, 0.06) 38%,
-    transparent 68%
+    rgba(255, 255, 255, 0.10) 0%,
+    transparent 55%
   );
   pointer-events: none;
   z-index: 1;
