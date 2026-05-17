@@ -338,18 +338,23 @@ export default function Releases({ filter = 'all' }) {
   }
 
   /* ── Delete album (all tracks) ── */
-  async function deleteAlbum() {
+  function deleteAlbum() {
     if (!selected || deleting) return;
-    const label = selected.tracks.length === 1 ? `"${selected.tracks[0].title}"` : `"${selected.albumName}" (${selected.tracks.length} tracks)`;
+    const label = selected.tracks.length === 1
+      ? `"${selected.tracks[0].title}"`
+      : `"${selected.albumName}" (${selected.tracks.length} tracks)`;
     if (!window.confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
-    setDeleting(true);
+
     const trackIds = selected.tracks.map(t => t.id);
-    const { error: dbErr } = await supabase.from('tracks').delete().in('id', trackIds);
-    if (!dbErr) {
-      setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
-      setSelected(null);
-    }
-    setDeleting(false);
+
+    // Optimistic: remove from UI immediately and close panel
+    setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
+    setSelected(null);
+
+    // Delete from DB in background
+    supabase.from('tracks').delete().in('id', trackIds)
+      .then(({ error }) => { if (error) console.warn('[deleteAlbum]', error.message); })
+      .catch(e => console.warn('[deleteAlbum]', e));
   }
 
   async function toggleVisibility() {

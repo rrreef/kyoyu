@@ -220,6 +220,12 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 
   const results = [];
 
+  // ── Shared album/artist: propagate the first non-empty value to all tracks ──
+  // This ensures multi-file uploads always group into one album on the Releases page
+  // even if the user only filled the album/artist field for one track.
+  const sharedAlbum  = trackMetas.find(m => m.album?.trim())?.album?.trim()  || null;
+  const sharedArtist = trackMetas.find(m => m.artist?.trim())?.artist?.trim() || null;
+
   for (let i = 0; i < audioFiles.length; i++) {
     const { file } = audioFiles[i];
     const meta = trackMetas[i] || {};
@@ -289,8 +295,8 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const [track] = await sbPost('tracks', {
       creator_id:  user.id,
       title:       meta.title?.trim()  || file.name,
-      artist:      meta.artist?.trim() || null,
-      album:       meta.album?.trim()  || null,
+      artist:      meta.artist?.trim() || sharedArtist || null,
+      album:       meta.album?.trim()  || sharedAlbum  || null,
       genre:       meta.genre?.trim()  || null,
       year:        meta.year ? parseInt(meta.year) : null,
       format:      file.name.split('.').pop().toUpperCase(),
