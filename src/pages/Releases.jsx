@@ -20,7 +20,7 @@ function adaptTrack(t) {
   const year     = t.year;
   // Grouping key: explicit album > artist+year fallback > individual track
   const groupKey = hasAlbum
-    ? `album:${t.album.trim()}__${artist}`
+    ? `album:${t.album.trim()}`                      // album name ONLY — artist irrelevant
     : (artist !== '—' && year)
       ? `ay:${artist}__${year}`
       : `single:${t.id}`;
@@ -97,6 +97,12 @@ function groupIntoAlbums(tracks) {
     if (rel.publish_at && !grp.publishAt) grp.publishAt = rel.publish_at;
     grp.tracks.push(rel);
   });
+  // Resolve 'Various Artists' for albums where tracks have different artists
+  for (const grp of map.values()) {
+    const uniqueArtists = [...new Set(grp.tracks.map(t => t.artist).filter(Boolean))];
+    if (uniqueArtists.length > 1) grp.artist = 'Various Artists';
+    else if (uniqueArtists.length === 1) grp.artist = uniqueArtists[0];
+  }
   return [...map.values()];
 }
 
