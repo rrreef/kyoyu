@@ -62,7 +62,7 @@ export default function TopBar({ showSearch = true }) {
   if (isNativeApp) return null;
 
   return (
-    <div className="topbar-cluster" style={{outline: '3px solid red', background: 'rgba(255,0,0,0.6)', padding: '8px', borderRadius: '999px'}}>
+    <div className={`topbar-cluster ${open ? 'search-open' : ''}`}>
 
       {/* ── Search — circle → pill morph ── */}
       {showSearch && (
