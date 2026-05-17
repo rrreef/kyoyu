@@ -38,6 +38,7 @@ function adaptTrack(t) {
     format:       t.format || 'Digital',
     visibility:   t.visibility,
     status:       t.status,
+    publish_at:   t.publish_at  || null,
     genre:        t.genre,
     label:        t.label || null,
     tags:         Array.isArray(t.tags) ? t.tags : (t.genre ? [t.genre] : []),
