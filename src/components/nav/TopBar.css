@@ -35,9 +35,9 @@
   /* Fully transparent — same tone as background behind it */
   background: transparent;
 
-  /* Lens effect: amplify colour/contrast WITHOUT brightening */
-  backdrop-filter: saturate(180%) contrast(1.04);
-  -webkit-backdrop-filter: saturate(180%) contrast(1.04);
+  /* Lens effect: blur distorts content, saturate amplifies colour */
+  backdrop-filter: blur(12px) saturate(200%) brightness(1.04);
+  -webkit-backdrop-filter: blur(12px) saturate(200%) brightness(1.04);
 
   /* Hairline border for glass edge definition */
   border: 0.5px solid rgba(255, 255, 255, 0.18);
@@ -61,16 +61,18 @@
   overflow: hidden;
 }
 
-/* Radial lens surface — very subtle, just top-left shimmer */
+/* Convex lens curvature — dark ring at edge, lighter centre */
 .topbar-glass-btn::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: radial-gradient(
-    ellipse at 38% 28%,
-    rgba(255, 255, 255, 0.10) 0%,
-    transparent 55%
+    ellipse at 50% 40%,
+    rgba(255,255,255,0.13) 0%,
+    rgba(255,255,255,0.04) 45%,
+    rgba(0,0,0,0.10) 75%,
+    rgba(0,0,0,0.18) 100%
   );
   pointer-events: none;
   z-index: 1;
@@ -130,17 +132,16 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex-direction: row-reverse;
+  flex-direction: row;   /* icon on RIGHT, input grows LEFT */
 
   width: 40px;
   height: 40px;
   border-radius: 999px;
   overflow: hidden;
 
-  /* Transparent — matches background */
   background: transparent;
-  backdrop-filter: saturate(180%) contrast(1.04);
-  -webkit-backdrop-filter: saturate(180%) contrast(1.04);
+  backdrop-filter: blur(12px) saturate(200%) brightness(1.04);
+  -webkit-backdrop-filter: blur(12px) saturate(200%) brightness(1.04);
   border: 0.5px solid rgba(255, 255, 255, 0.18);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -171,9 +172,11 @@
   inset: 0;
   border-radius: 999px;
   background: radial-gradient(
-    ellipse at 38% 28%,
-    rgba(255, 255, 255, 0.10) 0%,
-    transparent 55%
+    ellipse at 50% 40%,
+    rgba(255,255,255,0.12) 0%,
+    rgba(255,255,255,0.03) 45%,
+    rgba(0,0,0,0.08) 75%,
+    rgba(0,0,0,0.14) 100%
   );
   pointer-events: none;
   z-index: 1;
@@ -199,7 +202,7 @@
 }
 .topbar-search-icon-btn:hover { color: rgba(255, 255, 255, 0.95); }
 
-/* Text input — hidden when closed, slides open */
+/* Input hidden when closed, slides open to LEFT */
 .topbar-search-input {
   flex: 1;
   min-width: 0;

@@ -70,6 +70,7 @@ export default function TopBar({ showSearch = true }) {
           className={`topbar-glass-search ${open ? 'open' : ''}`}
           ref={wrapRef}
         >
+          {/* Input grows LEFT, icon stays RIGHT — no row-reverse needed */}
           <input
             ref={inputRef}
             className="topbar-search-input"
