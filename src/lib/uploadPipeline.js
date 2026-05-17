@@ -301,7 +301,8 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       artwork_key: artworkKey,
       artwork_url: artworkUrl,
       label:       meta.label?.trim() || null,
-      // publish_at: added after running migration — see track_schema_migration.sql
+      publish_at:  meta.publishAt     || null,
+      // NOTE: publish_at requires running src/lib/track_publish_at_migration.sql in Supabase SQL Editor
     }, token);
 
     console.log('[KYOYU] Track saved:', track?.id);

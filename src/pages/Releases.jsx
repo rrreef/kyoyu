@@ -304,9 +304,8 @@ export default function Releases({ filter = 'all' }) {
       label:       selected.label     || f?.label || '',
       genre:       f?.genre           || '',
       description: f?.description     || '',
-      visibility:  (f?.visibility === 'public' || f?.visibility === 'pending')
-                     ? f.visibility : 'private',
-      publishAt:   '',
+      visibility:  f?.visibility === 'public' ? 'public' : 'private',
+      publishAt:   f?.publish_at ? f.publish_at.slice(0, 16) : '',
     });
     setSubPanel(null);
     setEditing(true);
@@ -321,7 +320,8 @@ export default function Releases({ filter = 'all' }) {
       album:       editFields.albumName.trim()   || null,
       genre:       editFields.genre.trim()       || null,
       description: editFields.description.trim() || null,
-      visibility:  editFields.visibility,          // 'public' | 'pending' | 'private'
+      visibility:  editFields.visibility,
+      publish_at:  editFields.publishAt || null,
     };
     const trackIds = selected.tracks.map(t => t.id);
     const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
@@ -517,10 +517,19 @@ export default function Releases({ filter = 'all' }) {
                   {multiTrack && (
                     <div className="rel-card-count">{album.tracks.length}</div>
                   )}
-                  {/* Status badge — top-right white pill */}
+                  {/* Status badge — top-right white pill
+                      Public   = visibility 'public' OR publish_at is in the past
+                      Pending  = visibility 'private' AND publish_at is in the future
+                      Private  = visibility 'private' and no publish_at               */}
                   {(() => {
-                    const isPublic  = album.tracks.some(t => t.visibility === 'public');
-                    const isPending = !isPublic && album.tracks.some(t => t.visibility === 'pending');
+                    const now = Date.now();
+                    const isPublic  = album.tracks.some(t =>
+                      t.visibility === 'public' ||
+                      (t.publish_at && new Date(t.publish_at).getTime() <= now)
+                    );
+                    const isPending = !isPublic && album.tracks.some(t =>
+                      t.publish_at && new Date(t.publish_at).getTime() > now
+                    );
                     if (isPublic)  return <div className="rel-card-badge">Public</div>;
                     if (isPending) return <div className="rel-card-badge">Pending</div>;
                     return               <div className="rel-card-badge">Private</div>;
@@ -648,15 +657,22 @@ export default function Releases({ filter = 'all' }) {
                           onClick={() => setEditFields(f => ({...f, visibility: 'private'}))}
                         ><EyeOff size={11} /> Private</button>
                         <button
-                          className={`rdp-vis-btn ${editFields.visibility === 'pending' ? 'active' : ''}`}
-                          onClick={() => setEditFields(f => ({...f, visibility: 'pending'}))}
-                        ><Clock size={11} /> Pending</button>
-                        <button
                           className={`rdp-vis-btn ${editFields.visibility === 'public' ? 'active' : ''}`}
                           onClick={() => setEditFields(f => ({...f, visibility: 'public'}))}
                         ><Eye size={11} /> Public</button>
                       </div>
                     </div>
+                    {editFields.visibility === 'private' && (
+                      <div className="rdp-edit-row rdp-edit-row--full">
+                        <label className="rdp-edit-label">
+                          Goes Public On
+                          <span style={{opacity:0.45, fontWeight:400, marginLeft:6}}>optional — shows Pending badge until this date</span>
+                        </label>
+                        <input className="rdp-edit-input" type="datetime-local"
+                          value={editFields.publishAt}
+                          onChange={e => setEditFields(f => ({...f, publishAt: e.target.value}))} />
+                      </div>
+                    )}
                   </div>
                   <div className="rdp-actions">
                     <button className="rdp-btn rdp-btn--primary" onClick={saveEdit}>Save Changes</button>
