@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Play, Pause, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
-         Loader, RefreshCw, Music, FileText, DollarSign, ScrollText, Clock } from 'lucide-react';
+         Loader, RefreshCw, Music, FileText, DollarSign, ScrollText, Clock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchMyTracks, r2Url } from '../lib/uploadPipeline';
 import { supabase } from '../lib/supabase';
@@ -111,6 +111,8 @@ export default function Releases({ filter = 'all' }) {
   const [deleting,  setDeleting]  = useState(false);
   const [subPanel,  setSubPanel]  = useState(null);
   const [savingSub, setSavingSub] = useState(false);
+  // Multi-select
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [editFields, setEditFields] = useState(
     { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private', publishAt:'' }
   );
@@ -211,6 +213,43 @@ export default function Releases({ filter = 'all' }) {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
     setSelected(prev => prev?.albumKey === album.albumKey ? null : album);
   };
+
+  /* ── Multi-select helpers ── */
+  function toggleCardSelect(albumKey, e) {
+    e.stopPropagation();
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(albumKey)) next.delete(albumKey); else next.add(albumKey);
+      return next;
+    });
+  }
+  function selectAll() {
+    if (selectedKeys.size === albumGroups.length) setSelectedKeys(new Set());
+    else setSelectedKeys(new Set(albumGroups.map(a => a.albumKey)));
+  }
+  function clearSelection() { setSelectedKeys(new Set()); }
+
+  function bulkSetVisibility(vis) {
+    const albums  = albumGroups.filter(a => selectedKeys.has(a.albumKey));
+    const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
+    setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: vis } : r));
+    setSelectedKeys(new Set());
+    supabase.from('tracks').update({ visibility: vis }).in('id', trackIds)
+      .then(({ error }) => { if (error) console.warn('[bulkVis]', error.message); })
+      .catch(e => console.warn('[bulkVis]', e));
+  }
+
+  function bulkDelete() {
+    const n = selectedKeys.size;
+    if (!window.confirm(`Permanently delete ${n} release${n > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const albums   = albumGroups.filter(a => selectedKeys.has(a.albumKey));
+    const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
+    setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
+    setSelectedKeys(new Set());
+    supabase.from('tracks').delete().in('id', trackIds)
+      .then(({ error }) => { if (error) console.warn('[bulkDel]', error.message); })
+      .catch(e => console.warn('[bulkDel]', e));
+  }
 
   /* Audio preview helpers */
   function togglePlay() {
@@ -488,6 +527,14 @@ export default function Releases({ filter = 'all' }) {
           {anyFilterActive && (
             <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
           )}
+          {/* Select All — bottom-right of filter card */}
+          <button
+            className="rel-select-all-btn"
+            onClick={selectAll}
+          >
+            {selectedKeys.size > 0 && selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
+            {selectedKeys.size > 0 && selectedKeys.size < albumGroups.length && ` (${selectedKeys.size})`}
+          </button>
         </div>
       )}
 
@@ -506,9 +553,17 @@ export default function Releases({ filter = 'all' }) {
             return (
               <div
                 key={album.albumKey}
-                className={`rel-card ${isSelected ? 'selected' : ''} ${isDimmed ? 'dimmed' : ''}`}
+                className={`rel-card ${isSelected ? 'selected' : ''} ${isDimmed ? 'dimmed' : ''} ${selectedKeys.has(album.albumKey) ? 'bulk-selected' : ''}`}
                 onClick={() => selectAlbum(album)}
               >
+                {/* Multi-select checkbox — top-left, visible on hover or when selected */}
+                <div
+                  className={`rel-card-check ${selectedKeys.has(album.albumKey) ? 'checked' : ''}`}
+                  onClick={e => toggleCardSelect(album.albumKey, e)}
+                  title="Select release"
+                >
+                  {selectedKeys.has(album.albumKey) && <Check size={11} strokeWidth={3} />}
+                </div>
                 <div className="rel-card-art" style={artBg(album)}>
                   {!album.artworkUrl && (
                     <div className="rel-card-art-fallback">
@@ -545,6 +600,21 @@ export default function Releases({ filter = 'all' }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Bulk action bar — floats at bottom when ≥1 card selected ── */}
+      {selectedKeys.size > 0 && (
+        <div className="rel-bulk-bar">
+          <span className="rel-bulk-count">
+            {selectedKeys.size} release{selectedKeys.size > 1 ? 's' : ''} selected
+          </span>
+          <div className="rel-bulk-actions">
+            <button className="rel-bulk-btn" onClick={() => bulkSetVisibility('public')}>Make Public</button>
+            <button className="rel-bulk-btn" onClick={() => bulkSetVisibility('private')}>Make Private</button>
+            <button className="rel-bulk-btn rel-bulk-btn--danger" onClick={bulkDelete}>Delete</button>
+          </div>
+          <button className="rel-bulk-clear" onClick={clearSelection}><X size={14} /></button>
         </div>
       )}
 

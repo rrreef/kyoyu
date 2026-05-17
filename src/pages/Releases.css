@@ -36,9 +36,11 @@
 }
 .rel-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.12); }
 .rel-card.selected {
-  transform: translateY(-4px);
-  border-color: rgba(255,255,255,0.2);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 12px 40px rgba(0,0,0,0.55);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.55), 0 8px 32px rgba(0,0,0,0.45);
+  transform: scale(1.025);
+}
+.rel-card.bulk-selected {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 6px 20px rgba(0,0,0,0.4);
 }
 .rel-card.dimmed {
   opacity: 0.22;
@@ -88,6 +90,36 @@
   color: #0a0a0d;
   pointer-events: none;
   backdrop-filter: blur(4px);
+}
+
+/* Multi-select checkbox — top-left of card art */
+.rel-card-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 12;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.55);
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  pointer-events: auto;
+}
+.rel-card:hover .rel-card-check,
+.rel-card-check.checked {
+  opacity: 1;
+}
+.rel-card-check.checked {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(255,255,255,1);
+  color: #0a0a0d;
 }
 
 /* Text under card */
@@ -784,6 +816,94 @@
   transition: all 0.12s;
 }
 .rel-filter-clear:hover { background: rgba(244,63,94,0.15); color: rgba(244,63,94,1); }
+
+/* Select All button — bottom-right of filter card */
+.rel-select-all-btn {
+  margin-left: auto;
+  align-self: flex-end;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.12s;
+}
+.rel-select-all-btn:hover { background: rgba(255,255,255,0.11); color: rgba(255,255,255,0.9); }
+
+/* Bulk action bar — fixed bottom, frosted glass */
+.rel-bulk-bar {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 10px 18px;
+  border-radius: 40px;
+  background: rgba(20,20,24,0.92);
+  border: 1px solid rgba(255,255,255,0.13);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  animation: bulk-bar-in 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes bulk-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1);    }
+}
+.rel-bulk-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  white-space: nowrap;
+  padding-right: var(--sp-2);
+  border-right: 1px solid rgba(255,255,255,0.1);
+}
+.rel-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.rel-bulk-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.rel-bulk-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.rel-bulk-btn--danger {
+  border-color: rgba(244,63,94,0.3);
+  background: rgba(244,63,94,0.12);
+  color: rgba(244,63,94,0.9);
+}
+.rel-bulk-btn--danger:hover { background: rgba(244,63,94,0.22); color: rgba(244,63,94,1); }
+.rel-bulk-clear {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: var(--sp-1);
+  transition: all 0.12s;
+}
+.rel-bulk-clear:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
 /* ── Loading spinner (replaces skeleton cards) ─────────── */
 .rel-loading-spinner {
