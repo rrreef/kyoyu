@@ -32,9 +32,10 @@
   border-radius: 50%;
   flex-shrink: 0;
 
+  /* Foggy glass base — blurs what's behind, makes button stand out */
   background: rgba(20, 28, 40, 0.32);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.35);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.35);
+  backdrop-filter: blur(5px) brightness(0.90);
+  -webkit-backdrop-filter: blur(5px) brightness(0.90);
 
   border: 0.33px solid rgba(255, 255, 255, 0.33);
   box-shadow:
@@ -55,8 +56,23 @@
   overflow: hidden;
 }
 
-/* No radial lens overlay */
-.topbar-glass-btn::before { display: none; }
+/* Lens layer — flips backdrop vertically and zooms it (convex magnifier effect)
+   The transform applies AFTER backdrop-filter captures the scene,
+   so the captured image is flipped + zoomed inside the circle.          */
+.topbar-glass-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  /* Sample the scene and amplify colour */
+  backdrop-filter: saturate(210%) brightness(1.10);
+  -webkit-backdrop-filter: saturate(210%) brightness(1.10);
+  /* Flip vertically + zoom — physical convex lens behaviour */
+  transform: scaleY(-1) scale(1.22);
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* Icon sits above the overlay */
 .topbar-glass-btn > * { position: relative; z-index: 2; }
@@ -120,9 +136,10 @@
   border-radius: 999px;
   overflow: hidden;
 
+  /* Foggy glass base */
   background: rgba(20, 28, 40, 0.32);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.35);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.35);
+  backdrop-filter: blur(5px) brightness(0.90);
+  -webkit-backdrop-filter: blur(5px) brightness(0.90);
   border: 0.33px solid rgba(255, 255, 255, 0.33);
   box-shadow:
     inset 0 -2px 6px rgba(0, 0, 0, 0.22),
@@ -146,8 +163,19 @@
     0 2px 8px  rgba(0, 0, 0, 0.22);
 }
 
-/* No radial lens on search */
-.topbar-glass-search::before { display: none; }
+/* Same lens effect on search pill */
+.topbar-glass-search::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  backdrop-filter: saturate(210%) brightness(1.10);
+  -webkit-backdrop-filter: saturate(210%) brightness(1.10);
+  transform: scaleY(-1) scale(1.22);
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* Icon — absolutely centered in the 40px circle, always */
 .topbar-search-icon-btn {
