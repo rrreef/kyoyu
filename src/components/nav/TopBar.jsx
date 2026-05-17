@@ -113,13 +113,15 @@ export default function TopBar({ showSearch = true }) {
       )}
 
       {/* ── Bell — standalone glass circle ── */}
-      <button className="topbar-glass-btn" title="Notifications">
+      <div className="topbar-glass-btn" role="button" tabIndex={0} title="Notifications">
         <Bell size={15} strokeWidth={2} />
-      </button>
+      </div>
 
       {/* ── Avatar — standalone glass circle ── */}
-      <button
+      <div
         className="topbar-glass-btn topbar-glass-btn--avatar"
+        role="button"
+        tabIndex={0}
         onClick={() => navigate('/profile')}
         title="Profile"
       >
@@ -127,7 +129,7 @@ export default function TopBar({ showSearch = true }) {
           ? <img src={avatarSrc} alt="Avatar" className="topbar-avatar-img" />
           : <div className="topbar-avatar-placeholder">A</div>
         }
-      </button>
+      </div>
 
     </div>
   );
