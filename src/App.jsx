@@ -99,12 +99,12 @@ function ListenerApp() {
   return (
     <div className="app-layout">
       {!hideSidebar && <Sidebar />}
+      <TopBar />
       <div
         className="main-content"
         style={{ paddingTop:'var(--page-top)', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 62px)' : 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
       >
         <RouteReporter />
-        <TopBar />
         <Routes>
           <Route path="/"               element={<Home />} />
           <Route path="/search"         element={<Search />} />
@@ -141,8 +141,8 @@ function CreatorApp() {
   return (
     <div className="app-layout">
       <CreatorSidebar />
+      <TopBar showSearch={true} />
       <div className="main-content" style={{ paddingBottom: '32px' }}>
-        <TopBar showSearch={true} />
         <Routes>
           <Route path="/dashboard"       element={<Dashboard />} />
           <Route path="/upload"          element={<Upload />} />
