@@ -27,6 +27,7 @@
 
 /* Card */
 .rel-card {
+  position: relative;
   border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
