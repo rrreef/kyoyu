@@ -301,7 +301,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       artwork_key: artworkKey,
       artwork_url: artworkUrl,
       label:       meta.label?.trim() || null,
-      // publish_at:  meta.publishAt || null,  // uncomment after: ALTER TABLE tracks ADD COLUMN publish_at TIMESTAMPTZ;
+      publish_at:  meta.publishAt     || null,
     }, token);
 
     console.log('[KYOYU] Track saved:', track?.id);

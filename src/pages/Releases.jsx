@@ -322,7 +322,7 @@ export default function Releases({ filter = 'all' }) {
         genre:       editFields.genre.trim()       || null,
         description: editFields.description.trim() || null,
         visibility:  editFields.visibility,
-        // publish_at saved separately once DB migration is run
+        publish_at:  editFields.publishAt || null,
       };
       const trackIds = selected.tracks.map(t => t.id);
       const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
