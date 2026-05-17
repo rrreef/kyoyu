@@ -313,31 +313,39 @@ export default function Releases({ filter = 'all' }) {
 
   async function saveEdit() {
     if (!selected) return;
-    const updates = {
-      artist:      editFields.artist.trim()      || null,
-      year:        editFields.year ? parseInt(editFields.year) : null,
-      label:       editFields.label.trim()       || null,
-      album:       editFields.albumName.trim()   || null,
-      genre:       editFields.genre.trim()       || null,
-      description: editFields.description.trim() || null,
-      visibility:  editFields.visibility,
-      publish_at:  editFields.publishAt || null,
-    };
-    const trackIds = selected.tracks.map(t => t.id);
-    const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
-    if (!dbErr) {
-      const updatedTracks = selected.tracks.map(t => ({ ...t, ...updates }));
-      const updatedAlbum  = { ...selected,
-        albumName:  editFields.albumName || selected.albumName,
-        artist:     editFields.artist    || selected.artist,
-        year:       updates.year,
-        label:      updates.label,
-        visibility: updates.visibility,
-        tracks:     updatedTracks };
-      setSelected(updatedAlbum);
-      setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
+    try {
+      const updates = {
+        artist:      editFields.artist.trim()      || null,
+        year:        editFields.year ? parseInt(editFields.year) : null,
+        label:       editFields.label.trim()       || null,
+        album:       editFields.albumName.trim()   || null,
+        genre:       editFields.genre.trim()       || null,
+        description: editFields.description.trim() || null,
+        visibility:  editFields.visibility,
+        // publish_at saved separately once DB migration is run
+      };
+      const trackIds = selected.tracks.map(t => t.id);
+      const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
+      if (!dbErr) {
+        const updatedTracks = selected.tracks.map(t => ({ ...t, ...updates }));
+        const updatedAlbum  = { ...selected,
+          albumName:  editFields.albumName || selected.albumName,
+          artist:     editFields.artist    || selected.artist,
+          year:       updates.year,
+          label:      updates.label,
+          visibility: updates.visibility,
+          tracks:     updatedTracks };
+        setSelected(updatedAlbum);
+        setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
+      } else {
+        console.warn('[saveEdit] DB error:', dbErr.message);
+      }
+    } catch (e) {
+      console.warn('[saveEdit] Exception:', e);
+    } finally {
+      setEditing(false);
+      setSelected(null); // close the popup card
     }
-    setEditing(false);
   }
 
   /* ── Delete album (all tracks) ── */
