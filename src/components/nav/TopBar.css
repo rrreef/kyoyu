@@ -1,307 +1,117 @@
-.topbar-float-cluster { display: none; }
+/* ─────────────────────────────────────────────────────────────
+   TopBar — iOS 26 Liquid Glass Float Cluster
+   No header bar. Just a pill floating in the top-right corner.
+───────────────────────────────────────────────────────────── */
 
-/* ─── TopBar — iOS 26 Liquid Glass Header ─── */
-.topbar {
+/* ── Floating pill cluster — always visible, all screen sizes ── */
+.topbar-cluster {
   position: fixed;
-  top: 0;
-  left: var(--sidebar-width);
-  right: 0;
-  height: var(--topbar-height);
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  right: 24px;
+  z-index: 9100;
+
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--sp-6);
-  z-index: 90;
-  gap: var(--sp-4);
+  gap: 2px;
+  pointer-events: all;
 
-  /* iOS 26 Liquid Glass — BeReal style */
-  background: rgba(10, 10, 18, 0.18) !important;
-  backdrop-filter: blur(40px) saturate(220%) brightness(1.15) contrast(1.04);
-  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.15) contrast(1.04);
-
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-    0 1px 0 rgba(0, 0, 0, 0.08),
-    0 4px 24px rgba(0, 0, 0, 0.10);
-}
-/* Bottom-edge vignette separator */
-.topbar::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255,255,255,0.12) 40%,
-    rgba(255,255,255,0.12) 60%,
-    transparent 100%
-  );
-}
-
-.topbar-nav { display: flex; align-items: center; gap: var(--sp-1); }
-
-/* Glass pill buttons */
-.topbar-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition-fast);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-}
-.topbar-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.10),
-    0 0 12px rgba(255, 255, 255, 0.06);
-}
-
-.topbar-title {
-  font-family: var(--font-heading);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.90);
-  letter-spacing: 0.01em;
-  flex: 1;
-  text-align: center;
-}
-
-.topbar-actions { display: flex; align-items: center; gap: var(--sp-1); }
-
-/* Avatar — micro glass circle */
-.topbar-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0.10) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
-  font-family: var(--font-heading);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.06);
-}
-
-@media (max-width: 768px) {
-  /* ── Hide the entire bar on mobile ── */
-  .topbar {
-    background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
-    height: 0 !important;
-    padding: 0 !important;
-    overflow: visible;
-    pointer-events: none;
-  }
-  .topbar::after { display: none; }
-  .topbar-nav,
-  .topbar-actions--desktop { display: none !important; }
-
-  /* ── Floating pill cluster — top-right corner ── */
-  .topbar-float-cluster {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    position: fixed;
-    top: calc(env(safe-area-inset-top) + 10px);
-    right: 16px;
-    z-index: 9100;
-    pointer-events: all;
-
-    /* Same glass pill as MobileNav */
-    background: rgba(20, 28, 40, 0.32);
-    backdrop-filter: blur(10px) saturate(180%) brightness(1.12);
-    -webkit-backdrop-filter: blur(10px) saturate(180%) brightness(1.12);
-    border-radius: 999px;
-    border: 0.5px solid rgba(255, 255, 255, 0.20);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      inset 0 -2px 6px rgba(0, 0, 0, 0.18),
-      0 8px 32px rgba(0, 0, 0, 0.35),
-      0 2px 8px rgba(0, 0, 0, 0.20);
-    padding: 6px 10px;
-  }
-
-  .topbar-float-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.75);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background 0.2s, color 0.2s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .topbar-float-btn:active {
-    background: rgba(255, 255, 255, 0.10);
-    color: rgba(255, 255, 255, 0.95);
-  }
-
-  /* Avatar button — slightly larger */
-  .topbar-float-btn--avatar .topbar-avatar,
-  .topbar-float-btn--avatar .topbar-avatar-img {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-  .topbar-float-btn--avatar .topbar-avatar {
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: rgba(255,255,255,0.75);
-  }
-}
-
-/* ── White theme TopBar overrides ──────────────────────────── */
-[data-theme="white"] .topbar {
-  background: rgba(255, 255, 255, 0.28) !important;
-  backdrop-filter: blur(40px) saturate(180%) brightness(1.08) contrast(1.02) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(180%) brightness(1.08) contrast(1.02) !important;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.55);
-  box-shadow:
-    inset 0 -0.5px 0 rgba(255, 255, 255, 0.5),
-    0 4px 24px rgba(0, 0, 0, 0.04);
-}
-[data-theme="white"] .topbar::after {
-  display: none; /* remove orange vignette */
-}
-[data-theme="white"] .topbar-btn {
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.09);
-  color: rgba(15, 15, 26, 0.65);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
-}
-[data-theme="white"] .topbar-btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-  color: hsl(24, 100%, 30%);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
-}
-[data-theme="white"] .topbar-title {
-  color: rgba(15, 15, 26, 0.80);
-}
-
-/* ── Grey theme TopBar overrides ───────────────────────────── */
-[data-theme="grey"] .topbar {
-  background: rgba(40, 40, 58, 0.22) !important;
-  backdrop-filter: blur(40px) saturate(220%) brightness(1.12) contrast(1.04) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.12) contrast(1.04) !important;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.15);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 4px 24px rgba(0, 0, 0, 0.15);
-}
-
-/* Avatar photo (when image is set) */
-.topbar-avatar-img {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-full);
-  object-fit: cover;
-  display: block;
-  border: 1.5px solid var(--glass-border-light);
-  background: none;
-}
-
-/* ─── Search — unified pill (icon + input inside one border) ── */
-.topbar-search-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  /* Pill outline — invisible when closed, appears when open */
-  border: 1px solid transparent;
+  /* iOS 26 Liquid Glass */
+  background: rgba(18, 22, 34, 0.28);
+  backdrop-filter: blur(28px) saturate(200%) brightness(1.18) contrast(1.04);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.18) contrast(1.04);
   border-radius: 999px;
-  transition:
-    border-color 0.2s ease,
-    padding 0.2s ease;
-  padding: 0;
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.22),
+    0 10px 40px rgba(0, 0, 0, 0.40),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+  padding: 5px 8px;
+  transition: padding 0.22s cubic-bezier(0.34, 1.1, 0.64, 1);
 }
 
-/* Open state — show the thin white border */
-.topbar-search-wrap.open {
-  border-color: rgba(255, 255, 255, 0.18);
-  padding: 0 6px 0 2px;
+/* When search is open, expand pill slightly */
+.topbar-cluster.search-open {
+  padding: 5px 8px 5px 12px;
 }
 
-/* Icon button — always inside the pill, no separate styling */
-.topbar-search-btn {
+/* Divider between search and right icons */
+.topbar-cluster-divider {
+  width: 0.5px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  margin: 0 2px;
   flex-shrink: 0;
+}
+
+/* ── Cluster icon buttons ── */
+.topbar-cluster-btn {
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: none;
+  border-radius: 999px;
+  background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
 }
-.topbar-search-btn:hover { color: var(--orange-300); }
-/* When pill is closed, it looks identical to other topbar-btn */
-.topbar-search-wrap:not(.open) .topbar-search-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+.topbar-cluster-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.95);
 }
-.topbar-search-wrap:not(.open) .topbar-search-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--orange-300);
-  border-color: rgba(255, 255, 255, 0.28);
+.topbar-cluster-btn:active {
+  background: rgba(255, 255, 255, 0.16);
 }
 
-/* When pill is open — icon button is transparent (pill border is the container) */
-.topbar-search-wrap.open .topbar-search-btn {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+/* ── Avatar button ── */
+.topbar-cluster-btn--avatar {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.topbar-avatar-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+.topbar-avatar-placeholder {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.80);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-heading);
 }
 
-/* Input slides in to the RIGHT of the icon — no overflow clipping */
+/* ── Search wrap inside pill ── */
+.topbar-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .topbar-search-input {
   width: 0;
   opacity: 0;
   background: none;
   border: none;
   outline: none;
-  color: rgba(255,255,255,0.88);
+  color: rgba(255, 255, 255, 0.88);
   font-size: 0.8rem;
   font-family: var(--font-body);
   padding: 0;
@@ -310,37 +120,32 @@
     width 0.24s cubic-bezier(0.34, 1.1, 0.64, 1),
     opacity 0.18s ease;
 }
-
-/* Open — input expands */
-.topbar-search-wrap.open .topbar-search-input {
-  width: 150px;
+.topbar-cluster.search-open .topbar-search-input {
+  width: 140px;
   opacity: 1;
   pointer-events: all;
-  padding: 0 4px 0 14px;
-  height: 16px;       /* exact match to the 16×16 icon SVG */
-  align-self: center;
+  padding: 0 8px 0 0;
 }
 
-/* Results dropdown */
+/* ── Search results dropdown ── */
 .topbar-search-results {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 14px);
   right: 0;
   min-width: 260px;
-  background: rgba(14, 14, 22, 0.94) !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(12, 14, 22, 0.95);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 5px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.06);
   animation: search-drop-in 0.14s ease both;
   z-index: 200;
 }
-
 @keyframes search-drop-in {
-  from { opacity: 0; transform: translateY(-5px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .topbar-search-item {
@@ -349,17 +154,16 @@
   gap: 10px;
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s;
 }
-.topbar-search-item:hover { background: rgba(255,255,255,0.07); }
-
+.topbar-search-item:hover { background: rgba(255, 255, 255, 0.07); }
 .topbar-search-item-icon {
-  color: rgba(255,255,255,0.3);
+  color: rgba(255, 255, 255, 0.30);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -368,21 +172,33 @@
 .topbar-search-item-label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255,255,255,0.82);
+  color: rgba(255, 255, 255, 0.82);
   font-family: var(--font-body);
 }
 .topbar-search-item-hint {
   font-size: 0.68rem;
-  color: rgba(255,255,255,0.26);
+  color: rgba(255, 255, 255, 0.26);
   font-family: var(--font-body);
 }
 .topbar-search-empty {
   padding: 12px 10px;
   font-size: 0.78rem;
-  color: rgba(255,255,255,0.28);
+  color: rgba(255, 255, 255, 0.28);
   font-family: var(--font-body);
   text-align: center;
 }
-.topbar-search-empty em { font-style: normal; color: rgba(255,255,255,0.48); }
+.topbar-search-empty em { font-style: normal; color: rgba(255, 255, 255, 0.48); }
 
-
+/* ── Theme overrides ── */
+[data-theme="white"] .topbar-cluster {
+  background: rgba(255, 255, 255, 0.38);
+  border-color: rgba(255, 255, 255, 0.60);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.80),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.12);
+}
+[data-theme="white"] .topbar-cluster-btn { color: rgba(15, 15, 26, 0.60); }
+[data-theme="white"] .topbar-cluster-btn:hover { background: rgba(0,0,0,0.06); color: rgba(15,15,26,0.9); }
+[data-theme="white"] .topbar-cluster-divider { background: rgba(0, 0, 0, 0.12); }
+[data-theme="white"] .topbar-search-input { color: rgba(15, 15, 26, 0.85); }

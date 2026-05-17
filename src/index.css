@@ -115,7 +115,7 @@ input, textarea, select {
 
   --sidebar-width: 240px;
   --player-height: 80px;
-  --topbar-height: 60px;
+  --topbar-height: 0px;   /* bar removed — float cluster is used instead */
   --mobile-nav-height: 60px;
 
   /* ── Primary action button tokens (no orange) ── */
@@ -453,10 +453,9 @@ img {
   overflow-x: hidden;
   padding-bottom: calc(var(--player-height) + 16px);
   margin-left: var(--sidebar-width);
-  padding-top: var(--topbar-height);
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;   /* bounce only inside scroll area, not whole page */
-  scroll-behavior: auto;            /* instant for programmatic scrolls */
+  overscroll-behavior-y: contain;
+  scroll-behavior: auto;
 }
 
 /* ─── Scroll rows ─── */
