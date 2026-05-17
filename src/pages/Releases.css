@@ -869,6 +869,22 @@
 }
 .rel-cancel-select-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
+.rel-delete-selected-btn {
+  align-self: flex-end;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(244,63,94,0.3);
+  background: rgba(244,63,94,0.1);
+  color: rgba(244,63,94,0.9);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.rel-delete-selected-btn:hover { background: rgba(244,63,94,0.22); color: rgba(244,63,94,1); }
+
 /* Bulk action bar — fixed bottom, frosted glass */
 .rel-bulk-bar {
   position: fixed;

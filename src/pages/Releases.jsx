@@ -543,6 +543,11 @@ export default function Releases({ filter = 'all' }) {
               <button className="rel-select-all-btn" onClick={selectAll}>
                 {selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
               </button>
+              {selectedKeys.size > 0 && (
+                <button className="rel-delete-selected-btn" onClick={bulkDelete}>
+                  Delete ({selectedKeys.size})
+                </button>
+              )}
               <button className="rel-cancel-select-btn" onClick={exitSelectMode}><X size={12} /></button>
             </>
           )}
