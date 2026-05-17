@@ -311,41 +311,30 @@ export default function Releases({ filter = 'all' }) {
     setEditing(true);
   }
 
-  async function saveEdit() {
+  function saveEdit() {
     if (!selected) return;
-    try {
-      const updates = {
-        artist:      editFields.artist.trim()      || null,
-        year:        editFields.year ? parseInt(editFields.year) : null,
-        label:       editFields.label.trim()       || null,
-        album:       editFields.albumName.trim()   || null,
-        genre:       editFields.genre.trim()       || null,
-        description: editFields.description.trim() || null,
-        visibility:  editFields.visibility,
-        publish_at:  editFields.publishAt || null,
-      };
-      const trackIds = selected.tracks.map(t => t.id);
-      const { error: dbErr } = await supabase.from('tracks').update(updates).in('id', trackIds);
-      if (!dbErr) {
-        const updatedTracks = selected.tracks.map(t => ({ ...t, ...updates }));
-        const updatedAlbum  = { ...selected,
-          albumName:  editFields.albumName || selected.albumName,
-          artist:     editFields.artist    || selected.artist,
-          year:       updates.year,
-          label:      updates.label,
-          visibility: updates.visibility,
-          tracks:     updatedTracks };
-        setSelected(updatedAlbum);
-        setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
-      } else {
-        console.warn('[saveEdit] DB error:', dbErr.message);
-      }
-    } catch (e) {
-      console.warn('[saveEdit] Exception:', e);
-    } finally {
-      setEditing(false);
-      setSelected(null); // close the popup card
-    }
+
+    const updates = {
+      artist:      editFields.artist.trim()      || null,
+      year:        editFields.year ? parseInt(editFields.year) : null,
+      label:       editFields.label.trim()       || null,
+      album:       editFields.albumName.trim()   || null,
+      genre:       editFields.genre.trim()       || null,
+      description: editFields.description.trim() || null,
+      visibility:  editFields.visibility,
+      publish_at:  editFields.publishAt          || null,
+    };
+    const trackIds = selected.tracks.map(t => t.id);
+
+    // Optimistic: update local state and close panel immediately
+    setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
+    setEditing(false);
+    setSelected(null);
+
+    // Persist to DB in background (non-blocking)
+    supabase.from('tracks').update(updates).in('id', trackIds)
+      .then(({ error }) => { if (error) console.warn('[saveEdit]', error.message); })
+      .catch(e => console.warn('[saveEdit]', e));
   }
 
   /* ── Delete album (all tracks) ── */
