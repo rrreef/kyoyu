@@ -1,151 +1,266 @@
-/* ─────────────────────────────────────────────────────────────
-   TopBar — iOS 26 Liquid Glass Float Cluster
-   No header bar. Just a pill floating in the top-right corner.
-───────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   TopBar — Three Separate iOS 26 Liquid Glass Lenses
+   Each button is its own glass circle with magnifying effect.
+   Search morphs from circle → pill when active.
+═══════════════════════════════════════════════════════════════ */
 
-/* ── Floating pill cluster — always visible, all screen sizes ── */
+/* Cluster wrapper — no background, just positions the 3 buttons */
 .topbar-cluster {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 14px);
   right: 24px;
   z-index: 9100;
-
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
   pointer-events: all;
-
-  /* iOS 26 Liquid Glass */
-  background: rgba(18, 22, 34, 0.28);
-  backdrop-filter: blur(28px) saturate(200%) brightness(1.18) contrast(1.04);
-  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.18) contrast(1.04);
-  border-radius: 999px;
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.26),
-    inset 0 -2px 8px rgba(0, 0, 0, 0.22),
-    0 10px 40px rgba(0, 0, 0, 0.40),
-    0 2px 8px rgba(0, 0, 0, 0.22);
-  padding: 5px 8px;
-  transition: padding 0.22s cubic-bezier(0.34, 1.1, 0.64, 1);
 }
 
-/* When search is open, expand pill slightly */
-.topbar-cluster.search-open {
-  padding: 5px 8px 5px 12px;
-}
-
-/* Divider between search and right icons */
-.topbar-cluster-divider {
-  width: 0.5px;
-  height: 16px;
-  background: rgba(255, 255, 255, 0.14);
-  margin: 0 2px;
+/* ─────────────────────────────────────────────────────────────
+   iOS 26 Liquid Glass Button
+   The magnifying effect comes from:
+   • Low blur + high saturate — content behind is visible but
+     colour-amplified, as if focused through a convex lens
+   • Strong inset top highlight — curved glass surface
+   • Radial gradient overlay — simulates light bending at edges
+───────────────────────────────────────────────────────────── */
+.topbar-glass-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   flex-shrink: 0;
-}
 
-/* ── Cluster icon buttons ── */
-.topbar-cluster-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.65);
+  /* Glass tint — very transparent so content shows through */
+  background: rgba(255, 255, 255, 0.07);
+
+  /* THE MAGNIFYING EFFECT:
+     blur(1px) keeps content near-sharp (lens keeps focus)
+     saturate(220%) amplifies colour like light through glass
+     brightness(1.18) brightens the "focal point"
+     contrast(1.06) sharpens edges as light refracts        */
+  backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
+  -webkit-backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
+
+  /* Glass edges */
+  border: 0.5px solid rgba(255, 255, 255, 0.28);
+
+  /* 3D glass depth — top specular + bottom refraction + outer glow */
+  box-shadow:
+    inset 0 1.5px 0   rgba(255, 255, 255, 0.50),   /* curved top edge highlight  */
+    inset 0 -1px  2px rgba(0, 0, 0, 0.22),          /* refraction shadow at base  */
+    inset 1px 0   0   rgba(255, 255, 255, 0.10),    /* left rim light             */
+    inset -1px 0  0   rgba(0, 0, 0, 0.08),          /* right rim shadow           */
+    0 6px 24px rgba(0, 0, 0, 0.36),                  /* outer drop shadow          */
+    0 1px 4px  rgba(0, 0, 0, 0.20);                  /* close contact shadow       */
+
+  color: rgba(255, 255, 255, 0.70);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
-}
-.topbar-cluster-btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.95);
-}
-.topbar-cluster-btn:active {
-  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
 }
 
-/* ── Avatar button ── */
-.topbar-cluster-btn--avatar {
-  width: 32px;
-  height: 32px;
-  padding: 0;
+/* Radial lens curvature overlay — simulates glass surface curvature */
+.topbar-glass-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 38% 28%,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.08) 38%,
+    transparent 68%
+  );
+  pointer-events: none;
+  z-index: 1;
 }
+
+/* Icon sits above the overlay */
+.topbar-glass-btn > * { position: relative; z-index: 2; }
+
+.topbar-glass-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1.5px 0   rgba(255, 255, 255, 0.55),
+    inset 0 -1px  2px rgba(0, 0, 0, 0.18),
+    0 8px 32px rgba(0, 0, 0, 0.42),
+    0 2px 6px  rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+}
+.topbar-glass-btn:active {
+  transform: scale(0.94) translateY(0);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 3px 12px rgba(0, 0, 0, 0.30);
+}
+
+/* ── Avatar variant ── */
+.topbar-glass-btn--avatar { padding: 0; }
+
 .topbar-avatar-img {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  position: relative;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 .topbar-avatar-placeholder {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
-  border: 1.5px solid rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.80);
+  background: linear-gradient(135deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08));
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  color: rgba(255, 255, 255, 0.82);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 700;
   font-family: var(--font-heading);
+  position: relative;
+  z-index: 2;
 }
 
-/* ── Search wrap inside pill ── */
-.topbar-search-wrap {
+/* ─────────────────────────────────────────────────────────────
+   Search — glass circle that morphs into glass pill
+───────────────────────────────────────────────────────────── */
+.topbar-glass-search {
   position: relative;
   display: flex;
   align-items: center;
+  flex-direction: row-reverse; /* icon on right, input grows left */
+
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  overflow: hidden;
+
+  /* Same glass treatment */
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
+  -webkit-backdrop-filter: blur(1px) saturate(220%) brightness(1.18) contrast(1.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1.5px 0   rgba(255, 255, 255, 0.50),
+    inset 0 -1px  2px rgba(0, 0, 0, 0.22),
+    0 6px 24px rgba(0, 0, 0, 0.36),
+    0 1px 4px  rgba(0, 0, 0, 0.20);
+
+  transition:
+    width 0.30s cubic-bezier(0.34, 1.08, 0.64, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
+/* Pill open state */
+.topbar-glass-search.open {
+  width: 220px;
+  overflow: visible; /* allow dropdown to escape */
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1.5px 0   rgba(255, 255, 255, 0.55),
+    inset 0 -1px  2px rgba(0, 0, 0, 0.18),
+    0 10px 36px rgba(0, 0, 0, 0.44),
+    0 2px 8px   rgba(0, 0, 0, 0.24);
+}
+
+/* Lens curvature on search wrap */
+.topbar-glass-search::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at 38% 28%,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 38%,
+    transparent 68%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Search icon button — always right side of the pill */
+.topbar-search-icon-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.topbar-search-icon-btn:hover { color: rgba(255, 255, 255, 0.95); }
+
+/* Text input — hidden when closed, slides open */
 .topbar-search-input {
+  flex: 1;
+  min-width: 0;
   width: 0;
   opacity: 0;
   background: none;
   border: none;
   outline: none;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.90);
+  font-size: 0.82rem;
   font-family: var(--font-body);
-  padding: 0;
+  padding: 0 0 0 14px;
   pointer-events: none;
   transition:
-    width 0.24s cubic-bezier(0.34, 1.1, 0.64, 1),
-    opacity 0.18s ease;
+    opacity 0.20s ease,
+    width   0.30s cubic-bezier(0.34, 1.08, 0.64, 1);
+  position: relative;
+  z-index: 2;
 }
-.topbar-cluster.search-open .topbar-search-input {
+.topbar-glass-search.open .topbar-search-input {
   width: 140px;
   opacity: 1;
   pointer-events: all;
-  padding: 0 8px 0 0;
 }
+.topbar-search-input::placeholder { color: rgba(255, 255, 255, 0.35); }
 
-/* ── Search results dropdown ── */
+/* ── Results dropdown ── */
 .topbar-search-results {
   position: absolute;
-  top: calc(100% + 14px);
+  top: calc(100% + 12px);
   right: 0;
   min-width: 260px;
-  background: rgba(12, 14, 22, 0.95);
+  background: rgba(10, 12, 20, 0.94);
   border: 0.5px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border-radius: 14px;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: 16px;
   padding: 5px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.06);
-  animation: search-drop-in 0.14s ease both;
-  z-index: 200;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: search-drop-in 0.16s cubic-bezier(0.34, 1.1, 0.64, 1) both;
+  z-index: 9200;
 }
 @keyframes search-drop-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
 }
 
 .topbar-search-item {
@@ -153,15 +268,17 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 9px 10px;
+  border-radius: 11px;
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s;
+  -webkit-tap-highlight-color: transparent;
 }
 .topbar-search-item:hover { background: rgba(255, 255, 255, 0.07); }
+
 .topbar-search-item-icon {
   color: rgba(255, 255, 255, 0.30);
   flex-shrink: 0;
@@ -172,7 +289,7 @@
 .topbar-search-item-label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.84);
   font-family: var(--font-body);
 }
 .topbar-search-item-hint {
@@ -181,24 +298,26 @@
   font-family: var(--font-body);
 }
 .topbar-search-empty {
-  padding: 12px 10px;
+  padding: 14px 10px;
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.28);
   font-family: var(--font-body);
   text-align: center;
 }
-.topbar-search-empty em { font-style: normal; color: rgba(255, 255, 255, 0.48); }
+.topbar-search-empty em { font-style: normal; color: rgba(255, 255, 255, 0.50); }
 
-/* ── Theme overrides ── */
-[data-theme="white"] .topbar-cluster {
-  background: rgba(255, 255, 255, 0.38);
-  border-color: rgba(255, 255, 255, 0.60);
+/* ── White theme ── */
+[data-theme="white"] .topbar-glass-btn,
+[data-theme="white"] .topbar-glass-search {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.70);
   box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.80),
-    inset 0 -2px 8px rgba(0, 0, 0, 0.06),
-    0 8px 32px rgba(0, 0, 0, 0.12);
+    inset 0 1.5px 0   rgba(255, 255, 255, 0.90),
+    inset 0 -1px  2px rgba(0, 0, 0, 0.06),
+    0 6px 20px rgba(0, 0, 0, 0.12);
 }
-[data-theme="white"] .topbar-cluster-btn { color: rgba(15, 15, 26, 0.60); }
-[data-theme="white"] .topbar-cluster-btn:hover { background: rgba(0,0,0,0.06); color: rgba(15,15,26,0.9); }
-[data-theme="white"] .topbar-cluster-divider { background: rgba(0, 0, 0, 0.12); }
+[data-theme="white"] .topbar-glass-btn { color: rgba(15, 15, 26, 0.60); }
+[data-theme="white"] .topbar-glass-btn:hover { color: rgba(15, 15, 26, 0.90); }
+[data-theme="white"] .topbar-search-icon-btn { color: rgba(15, 15, 26, 0.55); }
 [data-theme="white"] .topbar-search-input { color: rgba(15, 15, 26, 0.85); }
+[data-theme="white"] .topbar-search-input::placeholder { color: rgba(15, 15, 26, 0.30); }
