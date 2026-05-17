@@ -108,13 +108,14 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0;                          /* hidden until selection mode */
   transition: opacity 0.15s, background 0.15s, border-color 0.15s;
-  pointer-events: auto;
+  pointer-events: none;                /* inactive outside selection mode */
 }
-.rel-card:hover .rel-card-check,
-.rel-card-check.checked {
+/* Show all checkboxes when grid is in selecting mode */
+.rel-grid.selecting .rel-card-check {
   opacity: 1;
+  pointer-events: auto;
 }
 .rel-card-check.checked {
   background: rgba(255,255,255,0.95);
@@ -817,22 +818,55 @@
 }
 .rel-filter-clear:hover { background: rgba(244,63,94,0.15); color: rgba(244,63,94,1); }
 
-/* Select All button — bottom-right of filter card */
-.rel-select-all-btn {
+/* Select / Select All / Cancel buttons — filter card bottom-right */
+.rel-select-btn {
   margin-left: auto;
   align-self: flex-end;
-  padding: 4px 12px;
+  padding: 4px 14px;
   border-radius: var(--radius-full);
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.65);
   font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   font-family: var(--font-body);
   transition: all 0.12s;
 }
-.rel-select-all-btn:hover { background: rgba(255,255,255,0.11); color: rgba(255,255,255,0.9); }
+.rel-select-btn:hover { background: rgba(255,255,255,0.11); color: rgba(255,255,255,0.9); }
+
+.rel-select-all-btn {
+  margin-left: auto;
+  align-self: flex-end;
+  padding: 4px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.12s;
+}
+.rel-select-all-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+.rel-cancel-select-btn {
+  align-self: flex-end;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+  margin-left: 4px;
+}
+.rel-cancel-select-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
 /* Bulk action bar — fixed bottom, frosted glass */
 .rel-bulk-bar {

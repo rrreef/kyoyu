@@ -112,7 +112,8 @@ export default function Releases({ filter = 'all' }) {
   const [subPanel,  setSubPanel]  = useState(null);
   const [savingSub, setSavingSub] = useState(false);
   // Multi-select
-  const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [selectedKeys,  setSelectedKeys]  = useState(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [editFields, setEditFields] = useState(
     { albumName:'', artist:'', year:'', label:'', genre:'', description:'', visibility:'private', publishAt:'' }
   );
@@ -215,25 +216,32 @@ export default function Releases({ filter = 'all' }) {
   };
 
   /* ── Multi-select helpers ── */
-  function toggleCardSelect(albumKey, e) {
-    e.stopPropagation();
+  function toggleCardSelect(albumKey) {
     setSelectedKeys(prev => {
       const next = new Set(prev);
       if (next.has(albumKey)) next.delete(albumKey); else next.add(albumKey);
       return next;
     });
   }
+  function enterSelectMode() {
+    setSelectionMode(true);
+    setSelectedKeys(new Set());
+    setSelected(null); // close any open panel
+  }
+  function exitSelectMode() {
+    setSelectionMode(false);
+    setSelectedKeys(new Set());
+  }
   function selectAll() {
     if (selectedKeys.size === albumGroups.length) setSelectedKeys(new Set());
     else setSelectedKeys(new Set(albumGroups.map(a => a.albumKey)));
   }
-  function clearSelection() { setSelectedKeys(new Set()); }
 
   function bulkSetVisibility(vis) {
-    const albums  = albumGroups.filter(a => selectedKeys.has(a.albumKey));
+    const albums   = albumGroups.filter(a => selectedKeys.has(a.albumKey));
     const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
     setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: vis } : r));
-    setSelectedKeys(new Set());
+    exitSelectMode();
     supabase.from('tracks').update({ visibility: vis }).in('id', trackIds)
       .then(({ error }) => { if (error) console.warn('[bulkVis]', error.message); })
       .catch(e => console.warn('[bulkVis]', e));
@@ -245,7 +253,7 @@ export default function Releases({ filter = 'all' }) {
     const albums   = albumGroups.filter(a => selectedKeys.has(a.albumKey));
     const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
     setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
-    setSelectedKeys(new Set());
+    exitSelectMode();
     supabase.from('tracks').delete().in('id', trackIds)
       .then(({ error }) => { if (error) console.warn('[bulkDel]', error.message); })
       .catch(e => console.warn('[bulkDel]', e));
@@ -527,14 +535,17 @@ export default function Releases({ filter = 'all' }) {
           {anyFilterActive && (
             <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
           )}
-          {/* Select All — bottom-right of filter card */}
-          <button
-            className="rel-select-all-btn"
-            onClick={selectAll}
-          >
-            {selectedKeys.size > 0 && selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
-            {selectedKeys.size > 0 && selectedKeys.size < albumGroups.length && ` (${selectedKeys.size})`}
-          </button>
+          {/* Selection mode controls — bottom-right of filter card */}
+          {!selectionMode ? (
+            <button className="rel-select-btn" onClick={enterSelectMode}>Select</button>
+          ) : (
+            <>
+              <button className="rel-select-all-btn" onClick={selectAll}>
+                {selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button className="rel-cancel-select-btn" onClick={exitSelectMode}><X size={12} /></button>
+            </>
+          )}
         </div>
       )}
 
@@ -545,22 +556,21 @@ export default function Releases({ filter = 'all' }) {
 
       {/* ── Album grid ── */}
       {albumGroups.length > 0 && (
-        <div className={`rel-grid ${selected ? 'has-selection' : ''}`}>
+        <div className={`rel-grid ${selected ? 'has-selection' : ''} ${selectionMode ? 'selecting' : ''}`}>
           {albumGroups.map(album => {
-            const isSelected = selected?.albumKey === album.albumKey;
-            const isDimmed   = selected && !isSelected;
-            const multiTrack = album.tracks.length > 1;
+            const isSelected    = selected?.albumKey === album.albumKey;
+            const isDimmed      = selected && !isSelected && !selectionMode;
+            const isBulkPicked  = selectedKeys.has(album.albumKey);
+            const multiTrack    = album.tracks.length > 1;
             return (
               <div
                 key={album.albumKey}
-                className={`rel-card ${isSelected ? 'selected' : ''} ${isDimmed ? 'dimmed' : ''} ${selectedKeys.has(album.albumKey) ? 'bulk-selected' : ''}`}
-                onClick={() => selectAlbum(album)}
+                className={`rel-card ${isSelected ? 'selected' : ''} ${isDimmed ? 'dimmed' : ''} ${isBulkPicked ? 'bulk-selected' : ''}`}
+                onClick={() => selectionMode ? toggleCardSelect(album.albumKey) : selectAlbum(album)}
               >
-                {/* Multi-select checkbox — top-left, visible on hover or when selected */}
+                {/* Multi-select checkbox — top-left, visible in selection mode */}
                 <div
-                  className={`rel-card-check ${selectedKeys.has(album.albumKey) ? 'checked' : ''}`}
-                  onClick={e => toggleCardSelect(album.albumKey, e)}
-                  title="Select release"
+                  className={`rel-card-check ${isBulkPicked ? 'checked' : ''}`}
                 >
                   {selectedKeys.has(album.albumKey) && <Check size={11} strokeWidth={3} />}
                 </div>
@@ -604,7 +614,7 @@ export default function Releases({ filter = 'all' }) {
       )}
 
       {/* ── Bulk action bar — floats at bottom when ≥1 card selected ── */}
-      {selectedKeys.size > 0 && (
+      {selectionMode && selectedKeys.size > 0 && (
         <div className="rel-bulk-bar">
           <span className="rel-bulk-count">
             {selectedKeys.size} release{selectedKeys.size > 1 ? 's' : ''} selected
@@ -614,7 +624,7 @@ export default function Releases({ filter = 'all' }) {
             <button className="rel-bulk-btn" onClick={() => bulkSetVisibility('private')}>Make Private</button>
             <button className="rel-bulk-btn rel-bulk-btn--danger" onClick={bulkDelete}>Delete</button>
           </div>
-          <button className="rel-bulk-clear" onClick={clearSelection}><X size={14} /></button>
+          <button className="rel-bulk-clear" onClick={exitSelectMode}><X size={14} /></button>
         </div>
       )}
 
