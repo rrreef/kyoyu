@@ -32,54 +32,44 @@
   border-radius: 50%;
   flex-shrink: 0;
 
-  /* Visible frosted glass on dark background */
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(16px) saturate(220%) brightness(1.18);
-  -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(1.18);
+  /* Apple-style frosted glass on dark surface — clearly visible */
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px) saturate(200%) brightness(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(200%) brightness(1.2);
 
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.30),  /* top rim */
-    0 0 0 1px      rgba(255, 255, 255, 0.04),    /* outer glow ring */
-    0 8px 32px     rgba(0, 0, 0, 0.45),
-    0 2px 8px      rgba(0, 0, 0, 0.28);
+    inset 0 1px 0   rgba(255, 255, 255, 0.40),
+    0 0 0 0.5px     rgba(255, 255, 255, 0.08),
+    0 8px 32px      rgba(0, 0, 0, 0.50),
+    0 2px 8px       rgba(0, 0, 0, 0.30);
 
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.90);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    box-shadow 0.18s ease,
-    background 0.18s ease,
-    transform 0.15s ease;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.15s;
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
 }
-
-/* No pseudo-element tricks — they don’t affect backdrop rendering */
 .topbar-glass-btn::before { display: none; }
-
-/* Icon above everything */
 .topbar-glass-btn > * { position: relative; z-index: 2; }
 
 .topbar-glass-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 1);
-  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.20);
+  border-color: rgba(255, 255, 255, 0.50);
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
-    0 0 0 1px      rgba(255, 255, 255, 0.07),
-    0 12px 40px    rgba(0, 0, 0, 0.50),
-    0 3px 10px     rgba(0, 0, 0, 0.32);
+    inset 0 1px 0   rgba(255, 255, 255, 0.50),
+    0 0 0 0.5px     rgba(255, 255, 255, 0.12),
+    0 12px 40px     rgba(0, 0, 0, 0.55),
+    0 3px 10px      rgba(0, 0, 0, 0.32);
   transform: translateY(-1px);
+  color: #fff;
 }
 .topbar-glass-btn:active {
-  transform: scale(0.93);
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow:
-    inset 0 0.5px 0 rgba(255,255,255,0.18),
-    0 4px 16px rgba(0,0,0,0.35);
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 /* ── Avatar variant ── */
@@ -125,36 +115,28 @@
   border-radius: 999px;
   overflow: hidden;
 
-  /* Same visible frosted glass */
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(16px) saturate(220%) brightness(1.18);
-  -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(1.18);
-  border: 0.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px) saturate(200%) brightness(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(200%) brightness(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.30),
-    0 0 0 1px      rgba(255, 255, 255, 0.04),
-    0 8px 32px     rgba(0, 0, 0, 0.45),
-    0 2px 8px      rgba(0, 0, 0, 0.28);
+    inset 0 1px 0  rgba(255, 255, 255, 0.40),
+    0 0 0 0.5px    rgba(255, 255, 255, 0.08),
+    0 8px 32px     rgba(0, 0, 0, 0.50),
+    0 2px 8px      rgba(0, 0, 0, 0.30);
 
-  transition:
-    width 0.30s cubic-bezier(0.34, 1.08, 0.64, 1),
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
+  transition: width 0.30s cubic-bezier(0.34, 1.08, 0.64, 1), box-shadow 0.18s, border-color 0.18s;
 }
-
-/* Pill open state */
 .topbar-glass-search.open {
   width: 220px;
   overflow: visible;
-  border-color: rgba(255, 255, 255, 0.30);
+  border-color: rgba(255, 255, 255, 0.45);
   box-shadow:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.30),
-    0 0 0 1px      rgba(255, 255, 255, 0.06),
-    0 10px 40px    rgba(0, 0, 0, 0.50),
-    0 2px 8px      rgba(0, 0, 0, 0.30);
+    inset 0 1px 0  rgba(255, 255, 255, 0.45),
+    0 0 0 0.5px    rgba(255, 255, 255, 0.10),
+    0 10px 40px    rgba(0, 0, 0, 0.55),
+    0 2px 8px      rgba(0, 0, 0, 0.32);
 }
-
-/* No pseudo-element */
 .topbar-glass-search::before { display: none; }
 
 /* Icon — absolutely centered in the 40px circle, always */
