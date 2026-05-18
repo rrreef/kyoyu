@@ -354,16 +354,16 @@
   width: 50px;
   height: 28px;
   border-radius: 99px;
-  background: rgba(255,255,255,0.12);
-  border: 1.5px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.10);
+  border: 1.5px solid rgba(255,255,255,0.14);
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.22s, border-color 0.22s;
   padding: 0;
 }
 .ios-toggle.on {
-  background: #4A90E2;
-  border-color: #4A90E2;
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(255,255,255,0.92);
 }
 .ios-toggle-knob {
   position: absolute;
@@ -372,13 +372,15 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: rgba(255,255,255,0.6);
   box-shadow: 0 1px 4px rgba(0,0,0,0.35);
-  transition: transform 0.22s cubic-bezier(0.34,1.4,0.64,1);
+  transition: transform 0.22s cubic-bezier(0.34,1.4,0.64,1), background 0.22s;
   display: block;
 }
 .ios-toggle.on .ios-toggle-knob {
   transform: translateX(22px);
+  background: #111;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
 .contract-options { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); margin-bottom: var(--sp-4); }
