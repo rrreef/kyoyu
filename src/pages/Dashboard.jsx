@@ -539,6 +539,18 @@ export default function Dashboard() {
             {tab}
           </button>
         ))}
+        <button
+          className="dash-tab-csv"
+          style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:5, opacity:0.6, fontSize:'0.72rem', padding:'4px 10px', background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'var(--text-primary)', cursor:'pointer', whiteSpace:'nowrap' }}
+          onClick={() => {
+            const rows = [['Metric','Value'],['Streams',d.stats.streams.total],['Downloads',d.stats.downloads.total],['Vinyl',d.stats.vinyl.total],['Revenue','€'+d.stats.revenue.total.toFixed(2)]];
+            const csv = rows.map(r=>r.join(',')).join('\n');
+            const a = Object.assign(document.createElement('a'),{ href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})), download:`kyoyu-stats-${Date.now()}.csv` });
+            a.click();
+          }}
+        >
+          <Download size={11}/> Export CSV
+        </button>
       </div>
 
       {/* ══ Overview ══════════════════════════════════════════ */}

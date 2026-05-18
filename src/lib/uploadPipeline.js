@@ -349,6 +349,8 @@ export async function fetchMyTracks() {
           'Authorization': `Bearer ${token}`,
           'apikey':        supabaseAnon,
           'Accept':        'application/json',
+          'Range':         '0-9999',        // override default PostgREST row limit
+          'Prefer':        'count=planned', // allow large result sets
         },
       }
     ),

@@ -167,7 +167,9 @@ function AccountPanel({ user }) {
       if (publicUrl) {
         // Storage succeeded — save public CDN URL to profile
         await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl });
-        setAvatarSrc(publicUrl, user?.id);
+        // Cache-bust so browser doesn't show old avatar.jpg from CDN cache
+        const freshUrl = `${publicUrl}?v=${Date.now()}`;
+        setAvatarSrc(freshUrl, user?.id);
       } else {
         // Storage failed — save compressed data URL directly to DB as fallback
         // Smaller size so it fits in DB and Realtime payload

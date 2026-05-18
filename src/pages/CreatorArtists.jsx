@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MOCK_ARTISTS } from '../data/artistsData';
+import { fetchMyTracks } from '../lib/uploadPipeline';
 import './CreatorArtists.css';
 
 /* ─── TagList ─────────────────────────────────────────────── */
@@ -139,7 +140,11 @@ function Section({ icon, title, children }) {
   );
 }
 
-/* ─── Main page ─────────────────────────────────────────── */
+/* ─── Deterministic colour from artist name ─── */
+const PALETTE = ['#9b6dff','#29b6f6','#f43f5e','#50c878','#FF6B1A','#a78bfa','#38bdf8','#fb923c'];
+function colourFor(name) { let h=0; for(const c of name) h=(h*31+c.charCodeAt(0))&0xffffffff; return PALETTE[Math.abs(h)%PALETTE.length]; }
+
+/* ─── Main page ─────────────────────────────────────────────── */
 export default function CreatorArtists() {
   const location  = useLocation();
   const navigate  = useNavigate();
@@ -148,6 +153,33 @@ export default function CreatorArtists() {
   const [artists,  setArtists]  = useState(MOCK_ARTISTS);
   const [adding,   setAdding]   = useState(false);
   const [newName,  setNewName]  = useState('');
+
+  /* ── Merge track-derived artists with MOCK_ARTISTS on mount ── */
+  useEffect(() => {
+    fetchMyTracks().then(tracks => {
+      const names = [...new Set(
+        tracks.map(t => t.artist).filter(n => n && n !== '—')
+      )];
+      if (!names.length) return;
+      setArtists(prev => {
+        const existingNames = new Set(prev.map(a => a.name.toLowerCase()));
+        const newArtists = names
+          .filter(n => !existingNames.has(n.toLowerCase()))
+          .map(n => ({
+            id:          'track-' + n,
+            name:        n,
+            initials:    n.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(),
+            genre:       tracks.find(t => t.artist === n)?.genre || 'Artist',
+            location:    '',
+            color:       colourFor(n),
+            disciplines: [],
+            bio:         '',
+            performances:[],
+          }));
+        return newArtists.length ? [...newArtists, ...prev] : prev;
+      });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const id = new URLSearchParams(location.search).get('id');
