@@ -223,8 +223,9 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
   // ── Shared album: propagate the first non-empty album name to all tracks ──
   // This ensures multi-file uploads always group into one album on the Releases page
   // even if the user only filled the album field for one track.
-  // Artist is NOT shared — each track keeps its own artist (supports Various Artists albums).
-  const sharedAlbum = trackMetas.find(m => m.album?.trim())?.album?.trim() || null;
+  // Share the first filled artist across all tracks (can still be overridden per-track).
+  const sharedArtist = trackMetas.find(m => m.artist?.trim())?.artist?.trim() || null;
+  const sharedAlbum  = trackMetas.find(m => m.album?.trim())?.album?.trim()  || null;
 
   for (let i = 0; i < audioFiles.length; i++) {
     const { file } = audioFiles[i];
@@ -295,7 +296,7 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const [track] = await sbPost('tracks', {
       creator_id:  user.id,
       title:       meta.title?.trim()  || file.name,
-      artist:      meta.artist?.trim() || null,
+      artist:      meta.artist?.trim() || sharedArtist || null,
       album:       meta.album?.trim()  || sharedAlbum || null,
       genre:       meta.genre?.trim()  || null,
       year:        meta.year ? parseInt(meta.year) : null,
@@ -363,6 +364,19 @@ export async function fetchMyTracks() {
   }
 
   const tracks = await res.json();
+
+  // ── Inherit artist within same album (fixes existing null-artist tracks in memory) ──
+  const albumArtist = {};
+  for (const t of tracks) {
+    if (t.album?.trim() && t.artist) {
+      albumArtist[t.album.trim()] = albumArtist[t.album.trim()] || t.artist;
+    }
+  }
+  for (const t of tracks) {
+    if (!t.artist && t.album?.trim() && albumArtist[t.album.trim()]) {
+      t.artist = albumArtist[t.album.trim()];
+    }
+  }
 
   // Map DB columns → UI-expected shape
   return tracks.map(t => ({
