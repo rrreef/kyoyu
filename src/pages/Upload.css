@@ -428,8 +428,25 @@
   opacity: 0.28;
   cursor: not-allowed;
 }
-.upload-pill-btn--submit:not(:disabled) {
-  color: rgba(255, 255, 255, 0.9);
+/* Label variant — wider pill for text buttons (Back / Submit on last step) */
+.upload-pill-btn--label {
+  width: auto;
+  padding: 0 16px;
+  gap: 5px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.upload-pill-btn--submit.upload-pill-btn--label {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: rgba(255, 255, 255, 0.92);
+}
+.upload-pill-btn--submit.upload-pill-btn--label:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
 

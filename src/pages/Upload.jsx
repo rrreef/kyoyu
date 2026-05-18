@@ -1381,11 +1381,14 @@ export default function Upload() {
           {/* Back — only shown when going back is possible */}
           {step > 0 && (
             <button
-              className="upload-pill-btn upload-pill-btn--back"
+              className={step === STEPS.length - 1 ? 'upload-pill-btn upload-pill-btn--back upload-pill-btn--label' : 'upload-pill-btn upload-pill-btn--back'}
               onClick={goBack}
               aria-label="Previous step"
             >
-              <ChevronLeft size={17} strokeWidth={2} />
+              {step === STEPS.length - 1
+                ? <><ChevronLeft size={14} strokeWidth={2} /> Back</>
+                : <ChevronLeft size={17} strokeWidth={2} />
+              }
             </button>
           )}
 
@@ -1401,12 +1404,12 @@ export default function Upload() {
             </button>
           ) : (
             <button
-              className="upload-pill-btn upload-pill-btn--next upload-pill-btn--submit"
+              className="upload-pill-btn upload-pill-btn--next upload-pill-btn--submit upload-pill-btn--label"
               onClick={handleSubmitRelease}
               disabled={audioFiles.length === 0}
               aria-label="Submit release"
             >
-              <ChevronRight size={17} strokeWidth={2} />
+              Submit
             </button>
           )}
         </div>
