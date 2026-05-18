@@ -1378,40 +1378,37 @@ export default function Upload() {
 
         {/* ── Navigation ───────────────────────────────── */}
         <div className="upload-nav">
-          <div className="upload-nav-pill">
-            {/* Back half */}
+          {/* Back — only shown when going back is possible */}
+          {step > 0 && (
             <button
               className="upload-pill-btn upload-pill-btn--back"
               onClick={goBack}
-              disabled={step === 0}
               aria-label="Previous step"
             >
               <ChevronLeft size={17} strokeWidth={2} />
             </button>
+          )}
 
-            <span className="upload-pill-divider" />
-
-            {/* Next / Submit half */}
-            {step < STEPS.length - 1 ? (
-              <button
-                className="upload-pill-btn upload-pill-btn--next"
-                onClick={goNext}
-                disabled={step === 0 && audioFiles.length === 0}
-                aria-label="Next step"
-              >
-                <ChevronRight size={17} strokeWidth={2} />
-              </button>
-            ) : (
-              <button
-                className="upload-pill-btn upload-pill-btn--next upload-pill-btn--submit"
-                onClick={handleSubmitRelease}
-                disabled={audioFiles.length === 0}
-                aria-label="Submit release"
-              >
-                <ChevronRight size={17} strokeWidth={2} />
-              </button>
-            )}
-          </div>
+          {/* Next / Submit */}
+          {step < STEPS.length - 1 ? (
+            <button
+              className="upload-pill-btn upload-pill-btn--next"
+              onClick={goNext}
+              disabled={step === 0 && audioFiles.length === 0}
+              aria-label="Next step"
+            >
+              <ChevronRight size={17} strokeWidth={2} />
+            </button>
+          ) : (
+            <button
+              className="upload-pill-btn upload-pill-btn--next upload-pill-btn--submit"
+              onClick={handleSubmitRelease}
+              disabled={audioFiles.length === 0}
+              aria-label="Submit release"
+            >
+              <ChevronRight size={17} strokeWidth={2} />
+            </button>
+          )}
         </div>
         {uploadError && (
           <div className="upload-error-banner">
