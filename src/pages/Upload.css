@@ -309,8 +309,7 @@
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  max-height: 160px;
-  overflow-y: auto;
+  /* No fixed max-height — card itself controls overflow */
 }
 .upload-success-file {
   display: flex;
@@ -472,12 +471,16 @@
 
 
 .upload-page--success {
-  padding-top: 80px; /* clear the sticky top navbar */
+  position: fixed;
+  inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  min-height: 80vh;
+  justify-content: center;
+  padding: 33px var(--sp-4);
+  z-index: 10;
+  /* Subtle backdrop so page content behind is dimmed */
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
 }
 
 .upload-success {
@@ -492,6 +495,9 @@
   width: 100%;
   margin: 0 auto;
   color: var(--text-secondary);
+  /* Grows to fit content; scrolls internally only when taller than viewport - 66px */
+  max-height: calc(100vh - 66px);
+  overflow-y: auto;
 }
 .upload-success svg { color: var(--text-primary); }
 .upload-success h2 { font-size: 1.625rem; color: var(--text-primary); }
