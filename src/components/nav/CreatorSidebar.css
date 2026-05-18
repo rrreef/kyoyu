@@ -49,8 +49,27 @@
   flex-direction: column;
   gap: 2px;
   flex: 1;
+  min-height: 0;          /* critical: allows flex child to shrink below content height */
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
   z-index: 1;
+  padding-right: 2px;     /* room for scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.10) transparent;
+}
+.creator-sidebar__nav::-webkit-scrollbar {
+  width: 3px;
+}
+.creator-sidebar__nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.creator-sidebar__nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 99px;
+}
+.creator-sidebar__nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.22);
 }
 .creator-nav-item {
   display: flex;
