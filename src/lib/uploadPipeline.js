@@ -342,47 +342,62 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
 export async function fetchMyTracks() {
   const { user, token } = getLocalSession();
 
-  const res = await Promise.race([
-    fetch(
-      `${supabaseUrl}/rest/v1/tracks?creator_id=eq.${user.id}&order=created_at.desc`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'apikey':        supabaseAnon,
-          'Accept':        'application/json',
-          'Range':         '0-9999',        // override default PostgREST row limit
-          'Prefer':        'count=planned', // allow large result sets
-        },
-      }
-    ),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('Fetch tracks timed out')), 15_000)),
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'apikey':        supabaseAnon,
+    'Accept':        'application/json',
+    'Range':         '0-9999',
+    'Prefer':        'count=planned',
+  };
+
+  // Fetch tracks AND creator profile in parallel
+  const [tracksRes, profileRes] = await Promise.all([
+    Promise.race([
+      fetch(`${supabaseUrl}/rest/v1/tracks?creator_id=eq.${user.id}&order=created_at.desc`, { headers }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Fetch tracks timed out')), 15_000)),
+    ]),
+    fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${user.id}&select=artist_name,display_name`, { headers })
+      .catch(() => null),
   ]);
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `Failed to load tracks (${res.status})`);
+  if (!tracksRes.ok) {
+    const body = await tracksRes.json().catch(() => ({}));
+    throw new Error(body.message || `Failed to load tracks (${tracksRes.status})`);
   }
 
-  const tracks = await res.json();
+  const tracks = await tracksRes.json();
 
-  // ── Inherit artist within same album (fixes existing null-artist tracks in memory) ──
+  // Resolve the creator's default artist name from profile
+  let creatorArtist = user.user_metadata?.artist_name || user.user_metadata?.display_name || null;
+  if (profileRes?.ok) {
+    const [profile] = await profileRes.json().catch(() => []);
+    creatorArtist = profile?.artist_name || profile?.display_name || creatorArtist;
+  }
+
+  // ── Step 1: album-peer inheritance ──────────────────────────────────────────
+  // If at least one track in an album has an artist, share it across all tracks
   const albumArtist = {};
   for (const t of tracks) {
     if (t.album?.trim() && t.artist) {
       albumArtist[t.album.trim()] = albumArtist[t.album.trim()] || t.artist;
     }
   }
+
+  // ── Step 2: apply fallbacks ──────────────────────────────────────────────────
   for (const t of tracks) {
-    if (!t.artist && t.album?.trim() && albumArtist[t.album.trim()]) {
-      t.artist = albumArtist[t.album.trim()];
+    if (!t.artist) {
+      // First try: peer from same album
+      if (t.album?.trim() && albumArtist[t.album.trim()]) {
+        t.artist = albumArtist[t.album.trim()];
+      // Second try: creator's own artist name (solo artist / self-releasing label)
+      } else if (creatorArtist) {
+        t.artist = creatorArtist;
+      }
     }
   }
 
-  // Map DB columns → UI-expected shape
   return tracks.map(t => ({
     ...t,
-    // artwork_url is saved at upload time (signed URL or public URL)
-    // Fallback: construct public URL from artwork_key if artwork_url missing
     artworkUrl: t.artwork_url
       || (t.artwork_key ? `${supabaseUrl}/storage/v1/object/public/artwork/${t.artwork_key}` : null),
   }));
