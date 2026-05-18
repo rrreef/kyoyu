@@ -603,10 +603,7 @@ export default function Releases({ filter = 'all' }) {
                   {multiTrack && (
                     <div className="rel-card-count">{album.tracks.length}</div>
                   )}
-                  {/* Status badge — top-right white pill
-                      Public   = visibility 'public' OR publish_at is in the past
-                      Pending  = visibility 'private' AND publish_at is in the future
-                      Private  = visibility 'private' and no publish_at               */}
+                  {/* Status badge — Public/Private = icon only, Pending = text */}
                   {(() => {
                     const now = Date.now();
                     const isPublic  = album.tracks.some(t =>
@@ -616,9 +613,19 @@ export default function Releases({ filter = 'all' }) {
                     const isPending = !isPublic && album.tracks.some(t =>
                       t.publish_at && new Date(t.publish_at).getTime() > now
                     );
-                    if (isPublic)  return <div className="rel-card-badge">Public</div>;
+                    if (isPublic) return (
+                      <div className="rel-card-badge rel-card-badge--icon" title="Public">
+                        {/* Globe icon */}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                      </div>
+                    );
                     if (isPending) return <div className="rel-card-badge">Pending</div>;
-                    return               <div className="rel-card-badge">Private</div>;
+                    return (
+                      <div className="rel-card-badge rel-card-badge--icon" title="Private">
+                        {/* Lock icon */}
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                      </div>
+                    );
                   })()}
                 </div>
                 <div className="rel-card-info">

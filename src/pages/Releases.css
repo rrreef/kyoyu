@@ -92,6 +92,16 @@
   pointer-events: none;
   backdrop-filter: blur(4px);
 }
+/* Icon-only variant — no text, square pill with centered SVG */
+.rel-card-badge--icon {
+  padding: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
 
 /* Multi-select checkbox — top-left of card art */
 .rel-card-check {
