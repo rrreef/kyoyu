@@ -498,8 +498,8 @@ export default function Releases({ filter = 'all' }) {
           {/* Artist */}
           <div className="rel-filter-group">
             <span className="rel-filter-label">Artist</span>
-            <div className="rel-filter-pills">
-              {artistOptions.slice(0, 6).map(a => (
+            <div className="rel-filter-pills rel-filter-pills--scroll">
+              {artistOptions.map(a => (
                 <button key={a} className={`rel-filter-pill ${fArtist===a?'active':''}`} onClick={()=>setFArtist(a)}>{a}</button>
               ))}
             </div>
