@@ -1260,8 +1260,12 @@ export default function Upload() {
                   <div className="toggle-label">Streaming</div>
                   <div className="toggle-sub">Available to all Reef subscribers</div>
                 </div>
-                <button className={`toggle-btn ${globalForm.streamingEnabled ? 'on' : ''}`} onClick={() => updateGlobal('streamingEnabled', !globalForm.streamingEnabled)}>
-                  {globalForm.streamingEnabled ? 'Enabled' : 'Disabled'}
+                <button
+                  className={`ios-toggle ${globalForm.streamingEnabled ? 'on' : ''}`}
+                  onClick={() => updateGlobal('streamingEnabled', !globalForm.streamingEnabled)}
+                  aria-label={globalForm.streamingEnabled ? 'Disable streaming' : 'Enable streaming'}
+                >
+                  <span className="ios-toggle-knob" />
                 </button>
               </div>
               <div className="pricing-toggle-row glass-sm">
@@ -1269,8 +1273,12 @@ export default function Upload() {
                   <div className="toggle-label">DJ Downloads</div>
                   <div className="toggle-sub">Paid per-track downloads in professional formats</div>
                 </div>
-                <button className={`toggle-btn ${globalForm.downloadsEnabled ? 'on' : ''}`} onClick={() => updateGlobal('downloadsEnabled', !globalForm.downloadsEnabled)}>
-                  {globalForm.downloadsEnabled ? 'Enabled' : 'Disabled'}
+                <button
+                  className={`ios-toggle ${globalForm.downloadsEnabled ? 'on' : ''}`}
+                  onClick={() => updateGlobal('downloadsEnabled', !globalForm.downloadsEnabled)}
+                  aria-label={globalForm.downloadsEnabled ? 'Disable downloads' : 'Enable downloads'}
+                >
+                  <span className="ios-toggle-knob" />
                 </button>
               </div>
             </div>
