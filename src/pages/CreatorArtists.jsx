@@ -149,36 +149,32 @@ export default function CreatorArtists() {
   const location  = useLocation();
   const navigate  = useNavigate();
   const [selected, setSelected] = useState(null);
-  const [view,     setView]     = useState('grid'); // 'grid' | 'list'
-  const [artists,  setArtists]  = useState(MOCK_ARTISTS);
+  const [view,     setView]     = useState('grid');
+  const [artists,  setArtists]  = useState([]);   // populated from real uploads
   const [adding,   setAdding]   = useState(false);
   const [newName,  setNewName]  = useState('');
 
-  /* ── Merge track-derived artists with MOCK_ARTISTS on mount ── */
+  /* ── Build artist roster from creator's uploaded tracks ── */
   useEffect(() => {
     fetchMyTracks().then(tracks => {
-      const names = [...new Set(
-        tracks.map(t => t.artist).filter(n => n && n !== '—')
-      )];
-      if (!names.length) return;
-      setArtists(prev => {
-        const existingNames = new Set(prev.map(a => a.name.toLowerCase()));
-        const newArtists = names
-          .filter(n => !existingNames.has(n.toLowerCase()))
-          .map(n => ({
-            id:          'track-' + n,
-            name:        n,
-            initials:    n.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(),
-            genre:       tracks.find(t => t.artist === n)?.genre || 'Artist',
-            location:    '',
-            color:       colourFor(n),
-            disciplines: [],
-            bio:         '',
-            performances:[],
-          }));
-        return newArtists.length ? [...newArtists, ...prev] : prev;
-      });
-    }).catch(() => {});
+      const seen = new Set();
+      const fromTracks = tracks
+        .map(t => t.artist)
+        .filter(n => n && n.trim() && n !== '—')
+        .filter(n => { if (seen.has(n.toLowerCase())) return false; seen.add(n.toLowerCase()); return true; })
+        .map(n => ({
+          id:           'track-' + n,
+          name:         n,
+          initials:     n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+          genre:        tracks.filter(t => t.artist === n).map(t => t.genre).filter(Boolean)[0] || '',
+          location:     '',
+          color:        colourFor(n),
+          disciplines:  [],
+          bio:          '',
+          performances: [],
+        }));
+      setArtists(fromTracks.length ? fromTracks : MOCK_ARTISTS);
+    }).catch(() => setArtists(MOCK_ARTISTS));
   }, []);
 
   useEffect(() => {

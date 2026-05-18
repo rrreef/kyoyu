@@ -525,10 +525,6 @@ export default function Dashboard() {
               <RefreshCw size={11}/> Auto {prefs.autoRefresh}
             </div>
           )}
-          <div className="dash-contract-status glass-sm">
-            <FileText size={14}/>
-            <span>{d.contractStatus}</span>
-          </div>
         </div>
       </div>
 
@@ -541,15 +537,28 @@ export default function Dashboard() {
         ))}
         <button
           className="dash-tab-csv"
-          style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:5, opacity:0.6, fontSize:'0.72rem', padding:'4px 10px', background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'var(--text-primary)', cursor:'pointer', whiteSpace:'nowrap' }}
+          title="Export CSV"
+          style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, opacity:0.55, padding:'4px 10px', background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'var(--text-primary)', cursor:'pointer' }}
           onClick={() => {
-            const rows = [['Metric','Value'],['Streams',d.stats.streams.total],['Downloads',d.stats.downloads.total],['Vinyl',d.stats.vinyl.total],['Revenue','€'+d.stats.revenue.total.toFixed(2)]];
+            const rows = [
+              ['Metric','Value'],
+              ['Total Streams',   d.totalStreams],
+              ['Monthly Streams', d.monthlyStreams],
+              ['Total Downloads', d.totalDownloads],
+              ['Vinyl Sold',      d.vinylSold],
+              ['Total Revenue',   d.totalRevenue],
+              ['Monthly Revenue', d.monthlyRevenue],
+              ['Payout Pending',  d.payoutPending],
+            ];
             const csv = rows.map(r=>r.join(',')).join('\n');
-            const a = Object.assign(document.createElement('a'),{ href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})), download:`kyoyu-stats-${Date.now()}.csv` });
+            const a = Object.assign(document.createElement('a'),{
+              href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+              download: `kyoyu-stats-${Date.now()}.csv`,
+            });
             a.click();
           }}
         >
-          <Download size={11}/> Export CSV
+          <FileText size={11}/><Download size={11}/>
         </button>
       </div>
 
