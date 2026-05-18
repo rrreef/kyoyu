@@ -347,7 +347,6 @@ export async function fetchMyTracks() {
     'apikey':        supabaseAnon,
     'Accept':        'application/json',
     'Range':         '0-9999',
-    'Prefer':        'count=planned',
   };
 
   // Fetch tracks AND creator profile in parallel
@@ -415,8 +414,10 @@ export async function getSignedUrl(key) {
  */
 export async function fetchAllArtists() {
   const { user, token } = getLocalSession();
+  // No server-side artist filter — fetch all artist values and dedupe in JS
+  // (avoids PostgREST 400 errors from "not.is.null" syntax differences)
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/tracks?select=artist&creator_id=eq.${user.id}&artist=not.is.null&order=artist.asc`,
+    `${supabaseUrl}/rest/v1/tracks?select=artist&creator_id=eq.${user.id}&order=created_at.desc`,
     {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -426,9 +427,17 @@ export async function fetchAllArtists() {
       },
     }
   );
-  if (!res.ok) return [];
+  console.log('[KYOYU] fetchAllArtists status:', res.status);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.warn('[KYOYU] fetchAllArtists failed:', err);
+    return [];
+  }
   const rows = await res.json();
-  return [...new Set(
+  console.log('[KYOYU] fetchAllArtists rows returned:', rows.length);
+  const names = [...new Set(
     rows.map(r => r.artist).filter(n => n && n.trim() && n !== '—')
   )].sort((a, b) => a.localeCompare(b));
+  console.log('[KYOYU] fetchAllArtists unique artists:', names);
+  return names;
 }
