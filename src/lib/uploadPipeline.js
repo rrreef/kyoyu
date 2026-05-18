@@ -143,8 +143,8 @@ async function uploadToR2(file, userId, onProgress) {
       }
       const { presignedUrl, key } = await presignRes.json();
 
-      // 2. Simulated progress
-      const estimatedMs = Math.max(10_000, (file.size / (200 * 1024)) * 1000);
+      // 2. Simulated progress — scales with file size (assume ~5 MB/s realistic upload)
+      const estimatedMs = Math.max(15_000, (file.size / (5 * 1024 * 1024)) * 1000);
       const ticksTotal  = estimatedMs / 800;
       let tick = 0;
       const simTimer = setInterval(() => {
@@ -163,7 +163,7 @@ async function uploadToR2(file, userId, onProgress) {
             headers: { 'Content-Type': file.type || guessMime(file.name) },
           }),
           new Promise((_, rej) =>
-            setTimeout(() => rej(new Error('Upload timed out (3 min)')), 3 * 60_000)
+            setTimeout(() => rej(new Error('Upload timed out (30 min)')), 30 * 60_000)
           ),
         ]);
       } finally {

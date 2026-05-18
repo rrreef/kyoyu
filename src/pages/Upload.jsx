@@ -8,7 +8,7 @@ import './Upload.css';
 const STEPS        = ['Audio Files', 'Track Info', 'Credits', 'Pricing', 'Contract', 'Review'];
 const ACCEPTED_EXT = ['.wav', '.aiff', '.aif', '.mp3', '.flac'];
 const ACCEPTED_MIME = ['audio/wav', 'audio/x-wav', 'audio/aiff', 'audio/x-aiff', 'audio/mpeg', 'audio/flac', 'audio/x-flac'];
-const MAX_SIZE_MB   = 500;
+const MAX_SIZE_MB   = 1024;
 const IMG_ACCEPT    = 'image/jpeg,image/png,image/webp,image/tiff';
 
 function formatBytes(b) {
