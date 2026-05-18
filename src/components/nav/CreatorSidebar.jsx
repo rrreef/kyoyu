@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
          ChevronDown, Globe, Lock, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { MOCK_ARTISTS } from '../../data/artistsData';
+import { fetchMyTracks } from '../../lib/uploadPipeline';
 import './CreatorSidebar.css';
 
 const LogoMark = () => (
@@ -44,10 +44,24 @@ export default function CreatorSidebar() {
 
   const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
   const [artistsOpen,  setArtistsOpen]  = useState(isArtistsPath);
+  const [sidebarArtists, setSidebarArtists] = useState([]);
 
   // Auto-open when landing on route from outside (e.g. deep link)
   useEffect(() => { if (isReleasesPath) setReleasesOpen(true); }, [isReleasesPath]);
   useEffect(() => { if (isArtistsPath)  setArtistsOpen(true);  }, [isArtistsPath]);
+
+  // Fetch real artists from uploaded tracks
+  useEffect(() => {
+    fetchMyTracks().then(tracks => {
+      const seen = new Set();
+      const artists = tracks
+        .map(t => t.artist)
+        .filter(n => n && n.trim() && n !== '—')
+        .filter(n => { if (seen.has(n.toLowerCase())) return false; seen.add(n.toLowerCase()); return true; })
+        .map(n => ({ id: 'track-' + n, name: n }));
+      setSidebarArtists(artists);
+    }).catch(() => {});
+  }, []);
 
   // Active artist id from URL
   const activeArtistId = isArtistsPath
@@ -129,9 +143,14 @@ export default function CreatorSidebar() {
             </button>
 
             <div className={`creator-submenu ${artistsOpen ? 'open' : ''}`}
-              style={{ maxHeight: artistsOpen ? `${MOCK_ARTISTS.length * 38}px` : '0' }}
+              style={{ maxHeight: artistsOpen ? `${Math.max(sidebarArtists.length, 1) * 38}px` : '0' }}
             >
-              {MOCK_ARTISTS.map(a => (
+              {sidebarArtists.length === 0 && (
+                <span className="creator-submenu-item" style={{ opacity: 0.4, cursor: 'default', pointerEvents: 'none' }}>
+                  <User size={12} strokeWidth={1.8} /><span>No artists yet</span>
+                </span>
+              )}
+              {sidebarArtists.map(a => (
                 <button
                   key={a.id}
                   className={`creator-submenu-item ${activeArtistId === String(a.id) ? 'active' : ''}`}

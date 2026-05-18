@@ -540,6 +540,10 @@ export default function Dashboard() {
           title="Export CSV"
           style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4, opacity:0.55, padding:'4px 10px', background:'none', border:'1px solid rgba(255,255,255,0.12)', borderRadius:6, color:'var(--text-primary)', cursor:'pointer' }}
           onClick={() => {
+            const now    = new Date();
+            const date   = now.toISOString().slice(0, 10);                          // YYYY-MM-DD
+            const time   = now.toTimeString().slice(0, 8).replace(/:/g, '-');       // HH-MM-SS
+            const label  = (user?.artistName || user?.name || 'Creator').replace(/[^a-z0-9]/gi, '_');
             const rows = [
               ['Metric','Value'],
               ['Total Streams',   d.totalStreams],
@@ -553,7 +557,7 @@ export default function Dashboard() {
             const csv = rows.map(r=>r.join(',')).join('\n');
             const a = Object.assign(document.createElement('a'),{
               href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
-              download: `kyoyu-stats-${Date.now()}.csv`,
+              download: `Reef_${label}_${date}_${time}.csv`,
             });
             a.click();
           }}
