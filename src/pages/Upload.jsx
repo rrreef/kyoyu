@@ -1381,14 +1381,11 @@ export default function Upload() {
           {/* Back — only shown when going back is possible */}
           {step > 0 && (
             <button
-              className={step === STEPS.length - 1 ? 'upload-pill-btn upload-pill-btn--back upload-pill-btn--label' : 'upload-pill-btn upload-pill-btn--back'}
+              className="upload-pill-btn upload-pill-btn--back"
               onClick={goBack}
               aria-label="Previous step"
             >
-              {step === STEPS.length - 1
-                ? <><ChevronLeft size={14} strokeWidth={2} /> Back</>
-                : <ChevronLeft size={17} strokeWidth={2} />
-              }
+              <ChevronLeft size={17} strokeWidth={2} />
             </button>
           )}
 
