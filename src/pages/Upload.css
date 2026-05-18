@@ -391,36 +391,61 @@
 .review-row span:first-child { color: var(--text-muted); }
 .review-row span:last-child { color: var(--text-primary); font-weight: 500; }
 
-.upload-nav { display: flex; justify-content: flex-end; gap: var(--sp-3); margin-top: var(--sp-6); padding-top: var(--sp-5); border-top: 1px solid var(--glass-border); }
-.upload-back-btn {
-  padding: var(--sp-3) var(--sp-6);
-  border-radius: var(--radius-full);
-  background: transparent;
-  border: 1px solid var(--glass-border);
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: var(--font-body);
-  transition: var(--transition-fast);
+.upload-nav {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--glass-border);
 }
-.upload-back-btn:hover { border-color: var(--glass-border-hover); color: var(--text-secondary); }
-.upload-next-btn {
+
+/* ── Combined pill ── */
+.upload-nav-pill {
+  display: flex;
+  align-items: stretch;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.upload-pill-btn {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-6);
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 0.875rem;
-  font-weight: 600;
+  justify-content: center;
+  width: 48px;
+  height: 40px;
+  background: none;
+  border: none;
   cursor: pointer;
+  color: rgba(255, 255, 255, 0.65);
+  transition: background 0.15s, color 0.15s;
   font-family: var(--font-body);
-  transition: var(--transition-fast);
 }
-.upload-next-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.24); }
+.upload-pill-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+.upload-pill-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+/* Submit state — subtle highlight on the > side */
+.upload-pill-btn--submit:not(:disabled) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Vertical divider */
+.upload-pill-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.13);
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
 
 .upload-page--success {
   padding-top: 80px; /* clear the sticky top navbar */
@@ -1421,20 +1446,6 @@
   box-shadow: none !important;
 }
 .upload-drop-btn:hover {
-  background: rgba(255, 255, 255, 0.16) !important;
-  border-color: rgba(255, 255, 255, 0.24) !important;
-}
-/* Next / Submit buttons */
-.upload-next-btn,
-.upload-success-btn {
-  border-radius: var(--radius-full) !important;
-  background: rgba(255, 255, 255, 0.10) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: none !important;
-}
-.upload-next-btn:hover,
-.upload-success-btn:hover {
   background: rgba(255, 255, 255, 0.16) !important;
   border-color: rgba(255, 255, 255, 0.24) !important;
 }
