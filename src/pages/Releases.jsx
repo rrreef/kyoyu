@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Play, Pause, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
          Loader, RefreshCw, Music, FileText, DollarSign, ScrollText, Clock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMyTracks, r2Url } from '../lib/uploadPipeline';
+import { fetchMyTracks, fetchAllArtists, r2Url } from '../lib/uploadPipeline';
 import { supabase } from '../lib/supabase';
 import EmptyReleases from '../components/EmptyReleases';
 import './Releases.css';
@@ -146,19 +146,7 @@ export default function Releases({ filter = 'all' }) {
   /* All distinct artist names — fetched directly from DB so no pagination gap */
   const [dbArtists, setDbArtists] = useState([]);
   useEffect(() => {
-    supabase
-      .from('tracks')
-      .select('artist')
-      .not('artist', 'is', null)
-      .limit(5000)
-      .then(({ data }) => {
-        if (data) {
-          const names = [...new Set(
-            data.map(r => r.artist).filter(n => n && n.trim() && n !== '\u2014')
-          )].sort((a, b) => a.localeCompare(b));
-          setDbArtists(names);
-        }
-      });
+    fetchAllArtists().then(names => setDbArtists(names)).catch(() => {});
   }, []);
 
   /* Unique artist names — merge DB fetch with in-memory releases */

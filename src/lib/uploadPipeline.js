@@ -379,3 +379,27 @@ export async function getSignedUrl(key) {
   if (!key) return null;
   return r2Url(key);
 }
+
+/**
+ * Fetches all distinct artist names for the current creator.
+ * Uses the same manual-auth pattern as fetchMyTracks so RLS works correctly.
+ */
+export async function fetchAllArtists() {
+  const { user, token } = getLocalSession();
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/tracks?select=artist&creator_id=eq.${user.id}&artist=not.is.null&order=artist.asc`,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey':        supabaseAnon,
+        'Accept':        'application/json',
+        'Range':         '0-9999',
+      },
+    }
+  );
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return [...new Set(
+    rows.map(r => r.artist).filter(n => n && n.trim() && n !== '—')
+  )].sort((a, b) => a.localeCompare(b));
+}
