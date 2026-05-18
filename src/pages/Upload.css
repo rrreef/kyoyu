@@ -1147,12 +1147,16 @@
   gap: 6px;
   animation: fadeIn 0.18s ease both;
 }
-/* row that holds the calendar label + Copy to all */
-.publish-schedule-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
+/* No separator — used when grouped with the visibility toggle */
+.publish-schedule--no-sep {
+  border-top: none;
+  padding-top: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+/* Copy to all positioned above the Private/Public toggle */
+.visibility-copy-all {
+  display: block;
+  margin-bottom: var(--sp-2);
 }
 .publish-schedule-label {
   display: flex;

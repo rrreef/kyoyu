@@ -1002,59 +1002,52 @@ export default function Upload() {
                     return <TrackPlayer key={activeFile.id} url={url} ext={ext} file={activeFile.file} />;
                   })()}
 
-                  {/* Visibility toggle */}
+                  {/* Visibility + publish — one grouped section */}
                   <div className="visibility-row">
-                    <div className="visibility-section-header">
-                      <div className="visibility-toggle visibility-toggle--full">
-                        <button
-                          className={`vis-btn ${meta.visibility === 'private' ? 'active' : ''}`}
-                          onClick={() => updateMeta(activeTrack, 'visibility', 'private')}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                          Private
-                        </button>
-                        <button
-                          className={`vis-btn ${meta.visibility === 'public' ? 'active active--pub' : ''}`}
-                          onClick={() => updateMeta(activeTrack, 'visibility', 'public')}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                          Public
-                        </button>
-                      </div>
-                      {trackMetas.length > 1 && (
-                        <button
-                          className="copy-all-btn"
-                          onClick={() => copyFieldToAll('visibility', meta.visibility)}
-                          title="Copy visibility to all tracks"
-                        >
-                          Copy to all
-                        </button>
-                      )}
+
+                    {/* Single "Copy to all" above the toggle — only with multiple tracks */}
+                    {trackMetas.length > 1 && (
+                      <button
+                        className="copy-all-btn visibility-copy-all"
+                        onClick={() => {
+                          copyFieldToAll('visibility', meta.visibility);
+                          copyFieldToAll('publishAt', meta.publishAt);
+                        }}
+                        title="Copy visibility and publish date to all tracks"
+                      >
+                        Copy to all
+                      </button>
+                    )}
+
+                    <div className="visibility-toggle visibility-toggle--full">
+                      <button
+                        className={`vis-btn ${meta.visibility === 'private' ? 'active' : ''}`}
+                        onClick={() => updateMeta(activeTrack, 'visibility', 'private')}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Private
+                      </button>
+                      <button
+                        className={`vis-btn ${meta.visibility === 'public' ? 'active active--pub' : ''}`}
+                        onClick={() => updateMeta(activeTrack, 'visibility', 'public')}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        Public
+                      </button>
                     </div>
 
-                    {/* Scheduled publish — shown when Private is selected */}
+                    {/* Scheduled publish date — no separator, same visual group */}
                     {meta.visibility === 'private' && (
-                      <div className="publish-schedule">
-                        <div className="publish-schedule-header">
-                          <label className="publish-schedule-label">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <rect x="3" y="4" width="18" height="18" rx="2"/>
-                              <line x1="16" y1="2" x2="16" y2="6"/>
-                              <line x1="8" y1="2" x2="8" y2="6"/>
-                              <line x1="3" y1="10" x2="21" y2="10"/>
-                            </svg>
-                            Goes public on
-                          </label>
-                          {trackMetas.length > 1 && (
-                            <button
-                              className="copy-all-btn"
-                              onClick={() => copyFieldToAll('publishAt', meta.publishAt)}
-                              title="Copy publish date to all tracks"
-                            >
-                              Copy to all
-                            </button>
-                          )}
-                        </div>
+                      <div className="publish-schedule publish-schedule--no-sep">
+                        <label className="publish-schedule-label">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                          </svg>
+                          Goes public on
+                        </label>
                         <ScheduleDateInput
                           value={meta.publishAt || ''}
                           onChange={v => updateMeta(activeTrack, 'publishAt', v)}
