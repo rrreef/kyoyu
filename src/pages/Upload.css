@@ -1080,8 +1080,16 @@
   margin-top: var(--sp-4);
   padding-top: var(--sp-3);
   border-top: 1px solid rgba(255,255,255,0.05);
-  width: 200px;
+  width: 100%;
   max-width: 100%;
+}
+/* row that holds the Private/Public toggle + Copy to all */
+.visibility-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
 }
 .visibility-toggle--full {
   width: 100%;
@@ -1138,6 +1146,13 @@
   flex-direction: column;
   gap: 6px;
   animation: fadeIn 0.18s ease both;
+}
+/* row that holds the calendar label + Copy to all */
+.publish-schedule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
 }
 .publish-schedule-label {
   display: flex;
