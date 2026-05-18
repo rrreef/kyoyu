@@ -143,11 +143,31 @@ export default function Releases({ filter = 'all' }) {
   const [fCollab, setFCollab] = useState('All');
   const [fStatus, setFStatus] = useState('All');
 
-  /* Unique artist names */
+  /* All distinct artist names — fetched directly from DB so no pagination gap */
+  const [dbArtists, setDbArtists] = useState([]);
+  useEffect(() => {
+    supabase
+      .from('tracks')
+      .select('artist')
+      .not('artist', 'is', null)
+      .limit(5000)
+      .then(({ data }) => {
+        if (data) {
+          const names = [...new Set(
+            data.map(r => r.artist).filter(n => n && n.trim() && n !== '\u2014')
+          )].sort((a, b) => a.localeCompare(b));
+          setDbArtists(names);
+        }
+      });
+  }, []);
+
+  /* Unique artist names — merge DB fetch with in-memory releases */
   const artistOptions = useMemo(() => {
-    const names = [...new Set(releases.map(r => r.artist).filter(Boolean))];
-    return ['All', ...names];
-  }, [releases]);
+    const fromReleases = releases.map(r => r.artist).filter(n => n && n !== '\u2014');
+    const merged = [...new Set([...fromReleases, ...dbArtists])]
+      .sort((a, b) => a.localeCompare(b));
+    return ['All', ...merged];
+  }, [releases, dbArtists]);
 
   /* Unique label names — always include 'All' so filter shows even when empty */
   const labelOptions = useMemo(() => {
