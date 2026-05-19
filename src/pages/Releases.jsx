@@ -321,14 +321,22 @@ export default function Releases({ filter = 'all' }) {
   async function saveCredits() {
     if (!selected) return;
     setSavingSub(true);
-    const trackId = selected.tracks[0]?.id;
-    if (trackId) {
-      await supabase.from('track_credits').delete().eq('track_id', trackId);
-      const rows = creditsData.rows
-        .filter(r => r.role?.trim() || r.name?.trim())
-        .map(r => ({ track_id: trackId, role: r.role?.trim()||null, name: r.name?.trim()||null }));
-      if (rows.length) await supabase.from('track_credits').insert(rows);
-    }
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) throw new Error('Not authenticated');
+      const headers = { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      const trackId = selected.tracks[0]?.id;
+      if (trackId) {
+        // Delete existing credits then insert new ones
+        await fetch(`${supabaseUrl}/rest/v1/track_credits?track_id=eq.${trackId}`, { method: 'DELETE', headers });
+        const rows = creditsData.rows.filter(r => r.role?.trim() || r.name?.trim())
+          .map(r => ({ track_id: trackId, role: r.role?.trim()||null, name: r.name?.trim()||null }));
+        if (rows.length) {
+          await fetch(`${supabaseUrl}/rest/v1/track_credits`, { method: 'POST', headers, body: JSON.stringify(rows) });
+        }
+      }
+    } catch (e) { console.error('[saveCredits]', e.message); }
     setSavingSub(false);
     setSubPanel(null);
   }
@@ -336,15 +344,23 @@ export default function Releases({ filter = 'all' }) {
   async function savePricing() {
     if (!selected) return;
     setSavingSub(true);
-    const trackIds = selected.tracks.map(t => t.id);
-    // Columns may not exist yet; error is non-fatal
-    await supabase.from('tracks').update({
-      streaming_enabled: pricingData.streamingEnabled,
-      downloads_enabled: pricingData.downloadsEnabled,
-      currency: pricingData.currency,
-      album_price: pricingData.albumPrice || null,
-      download_price: pricingData.downloadPrice || null,
-    }).in('id', trackIds);
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) throw new Error('Not authenticated');
+      const headers = { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      const trackIds = selected.tracks.map(t => t.id);
+      await fetch(`${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({
+          streaming_enabled: pricingData.streamingEnabled,
+          downloads_enabled: pricingData.downloadsEnabled,
+          currency: pricingData.currency,
+          album_price: pricingData.albumPrice || null,
+          download_price: pricingData.downloadPrice || null,
+        }),
+      });
+    } catch (e) { console.error('[savePricing]', e.message); }
     setSavingSub(false);
     setSubPanel(null);
   }
@@ -352,8 +368,17 @@ export default function Releases({ filter = 'all' }) {
   async function saveContract() {
     if (!selected) return;
     setSavingSub(true);
-    const trackIds = selected.tracks.map(t => t.id);
-    await supabase.from('tracks').update({ exclusivity: contractData.exclusivity }).in('id', trackIds);
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) throw new Error('Not authenticated');
+      const headers = { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      const trackIds = selected.tracks.map(t => t.id);
+      await fetch(`${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ exclusivity: contractData.exclusivity }),
+      });
+    } catch (e) { console.error('[saveContract]', e.message); }
     setSavingSub(false);
     setSubPanel(null);
   }
@@ -374,7 +399,7 @@ export default function Releases({ filter = 'all' }) {
     setEditing(true);
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!selected) return;
 
     const updates = {
@@ -389,15 +414,55 @@ export default function Releases({ filter = 'all' }) {
     };
     const trackIds = selected.tracks.map(t => t.id);
 
-    // Optimistic: update local state and close panel immediately
+    // Optimistic: reflect changes immediately in UI
+    const snapshot = releases;
+    const updatedTracks = selected.tracks.map(t => ({ ...t, ...updates }));
+    const updatedAlbum  = {
+      ...selected,
+      albumName:   updates.album || selected.albumName,
+      artist:      updates.artist,
+      label:       updates.label,
+      year:        updates.year,
+      visibility:  updates.visibility,
+      tracks:      updatedTracks,
+    };
     setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, ...updates } : r));
+    setSelected(updatedAlbum);
     setEditing(false);
-    setSelected(null);
 
-    // Persist to DB in background (non-blocking)
-    supabase.from('tracks').update(updates).in('id', trackIds)
-      .then(({ error }) => { if (error) console.warn('[saveEdit]', error.message); })
-      .catch(e => console.warn('[saveEdit]', e));
+    try {
+      // Auth token — same pattern as deleteAlbum / fetchMyTracks
+      const sessionKey = Object.keys(localStorage).find(
+        k => k.startsWith('sb-') && k.endsWith('-auth-token')
+      );
+      const session = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
+      const token   = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'apikey':        supabaseAnon,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+      };
+
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`,
+        { method: 'PATCH', headers, body: JSON.stringify(updates) }
+      );
+
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.message || `Save failed (${res.status})`);
+      }
+    } catch (e) {
+      console.error('[saveEdit]', e.message);
+      // Roll back to pre-edit state
+      setReleases(snapshot);
+      setSelected(selected);
+      setEditing(true);
+      alert(`Save failed: ${e.message}`);
+    }
   }
 
   /* ── Delete album (all tracks) ── */
