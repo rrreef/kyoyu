@@ -672,25 +672,26 @@ export default function Releases({ filter = 'all' }) {
             </div>
           )}
 
-          {anyFilterActive && (
-            <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
-          )}
-          {/* Selection mode controls — bottom-right of filter card */}
-          {!selectionMode ? (
-            <button className="rel-select-btn" onClick={enterSelectMode}>Select</button>
-          ) : (
-            <>
-              <button className="rel-select-all-btn" onClick={selectAll}>
-                {selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
-              </button>
-              {selectedKeys.size > 0 && (
-                <button className="rel-delete-selected-btn" onClick={bulkDelete}>
-                  Delete ({selectedKeys.size})
+          <div className="rel-filter-actions">
+            {anyFilterActive && (
+              <button className="rel-filter-clear" onClick={()=>{setFArtist('All');setFLabel('All');setFDate('All');setFCollab('All');setFStatus('All');}}>Clear filters</button>
+            )}
+            {!selectionMode ? (
+              <button className="rel-select-btn" onClick={enterSelectMode}>Select</button>
+            ) : (
+              <>
+                <button className="rel-select-all-btn" onClick={selectAll}>
+                  {selectedKeys.size === albumGroups.length ? 'Deselect All' : 'Select All'}
                 </button>
-              )}
-              <button className="rel-cancel-select-btn" onClick={exitSelectMode}><X size={12} /></button>
-            </>
-          )}
+                {selectedKeys.size > 0 && (
+                  <button className="rel-delete-selected-btn" onClick={bulkDelete}>
+                    Delete ({selectedKeys.size})
+                  </button>
+                )}
+                <button className="rel-cancel-select-btn" onClick={exitSelectMode}><X size={12} /></button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

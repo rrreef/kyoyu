@@ -813,9 +813,15 @@
   border-color: rgba(255,255,255,0.22);
   color: rgba(255,255,255,0.92);
 }
-.rel-filter-clear {
-  align-self: flex-end;
+.rel-filter-actions {
   margin-left: auto;
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.rel-filter-clear {
   padding: 4px 12px;
   border-radius: var(--radius-full);
   border: 1px solid rgba(244,63,94,0.2);
@@ -829,10 +835,8 @@
 }
 .rel-filter-clear:hover { background: rgba(244,63,94,0.15); color: rgba(244,63,94,1); }
 
-/* Select / Select All / Cancel buttons — filter card bottom-right */
+/* Select / Select All / Cancel buttons — always bottom-right via parent container */
 .rel-select-btn {
-  margin-left: auto;
-  align-self: flex-end;
   padding: 4px 14px;
   border-radius: var(--radius-full);
   border: 1px solid rgba(255,255,255,0.12);
