@@ -253,26 +253,38 @@ export default function Releases({ filter = 'all' }) {
     else setSelectedKeys(new Set(albumGroups.map(a => a.albumKey)));
   }
 
-  function bulkSetVisibility(vis) {
+  async function bulkSetVisibility(vis) {
     const albums   = albumGroups.filter(a => selectedKeys.has(a.albumKey));
     const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
     setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: vis } : r));
     exitSelectMode();
-    supabase.from('tracks').update({ visibility: vis }).in('id', trackIds)
-      .then(({ error }) => { if (error) console.warn('[bulkVis]', error.message); })
-      .catch(e => console.warn('[bulkVis]', e));
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) return;
+      await fetch(`${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ visibility: vis }),
+      });
+    } catch (e) { console.warn('[bulkVis]', e.message); }
   }
 
-  function bulkDelete() {
+  async function bulkDelete() {
     const n = selectedKeys.size;
     if (!window.confirm(`Permanently delete ${n} release${n > 1 ? 's' : ''}? This cannot be undone.`)) return;
     const albums   = albumGroups.filter(a => selectedKeys.has(a.albumKey));
     const trackIds = albums.flatMap(a => a.tracks.map(t => t.id));
     setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
     exitSelectMode();
-    supabase.from('tracks').delete().in('id', trackIds)
-      .then(({ error }) => { if (error) console.warn('[bulkDel]', error.message); })
-      .catch(e => console.warn('[bulkDel]', e));
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) return;
+      const headers = { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+      await fetch(`${supabaseUrl}/rest/v1/track_credits?track_id=in.(${trackIds.join(',')})`, { method: 'DELETE', headers });
+      await fetch(`${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`, { method: 'DELETE', headers });
+    } catch (e) { console.warn('[bulkDel]', e.message); }
   }
 
   /* Audio preview helpers */
@@ -408,7 +420,6 @@ export default function Releases({ filter = 'all' }) {
       label:       editFields.label.trim()       || null,
       album:       editFields.albumName.trim()   || null,
       genre:       editFields.genre.trim()       || null,
-      description: editFields.description.trim() || null,
       visibility:  editFields.visibility,
       publish_at:  editFields.publishAt          || null,
     };
@@ -533,16 +544,21 @@ export default function Releases({ filter = 'all' }) {
     const next = (selected.visibility === 'public') ? 'private' : 'public';
     setToggling(true);
     const trackIds = selected.tracks.map(t => t.id);
-    const { error: dbErr } = await supabase
-      .from('tracks')
-      .update({ visibility: next })
-      .in('id', trackIds);
-    if (!dbErr) {
-      const updatedTracks = selected.tracks.map(t => ({ ...t, visibility: next }));
-      const updatedAlbum  = { ...selected, visibility: next, tracks: updatedTracks };
-      setSelected(updatedAlbum);
-      setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: next } : r));
-    }
+    try {
+      const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const token = sessionKey ? JSON.parse(localStorage.getItem(sessionKey))?.access_token : null;
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${supabaseUrl}/rest/v1/tracks?id=in.(${trackIds.join(',')})`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'apikey': supabaseAnon, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ visibility: next }),
+      });
+      if (res.ok) {
+        const updatedTracks = selected.tracks.map(t => ({ ...t, visibility: next }));
+        setSelected({ ...selected, visibility: next, tracks: updatedTracks });
+        setReleases(prev => prev.map(r => trackIds.includes(r.id) ? { ...r, visibility: next } : r));
+      }
+    } catch (e) { console.warn('[toggleVis]', e.message); }
     setToggling(false);
   }
 
