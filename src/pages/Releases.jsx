@@ -160,7 +160,8 @@ export default function Releases({ filter = 'all' }) {
 
   /* Unique label names — always include 'All' so filter shows even when empty */
   const labelOptions = useMemo(() => {
-    const names = [...new Set(releases.map(r => r.label).filter(Boolean))];
+    const names = [...new Set(releases.map(r => r.label).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
     return ['All', ...names];
   }, [releases]);
 
