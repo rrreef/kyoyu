@@ -67,10 +67,9 @@ async function uploadAvatarToR2(blob, userId) {
   }
 }
 
-/* Save avatar_url to profiles table via direct REST (bypasses JS client RLS issues) */
+/* Save avatar_url to profiles table via direct REST — uses UPSERT so the row is created if it doesn't exist */
 async function saveAvatarUrlToProfile(userId, url) {
   try {
-    // Pull token from Supabase session cache
     const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
     const session    = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
     const token      = session?.access_token;
@@ -78,15 +77,16 @@ async function saveAvatarUrlToProfile(userId, url) {
 
     const supaUrl  = import.meta.env.VITE_SUPABASE_URL;
     const anonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    await fetch(`${supaUrl}/rest/v1/profiles?id=eq.${userId}`, {
-      method:  'PATCH',
+    // Use UPSERT (POST + resolution=merge-duplicates) so missing rows are created
+    await fetch(`${supaUrl}/rest/v1/profiles`, {
+      method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${token}`,
         'apikey':        anonKey,
-        'Prefer':        'return=minimal',
+        'Prefer':        'resolution=merge-duplicates,return=minimal',
       },
-      body: JSON.stringify({ avatar_url: url }),
+      body: JSON.stringify({ id: userId, avatar_url: url }),
     });
   } catch (e) {
     console.warn('[avatar] profile save error:', e);
@@ -213,12 +213,11 @@ function AccountPanel({ user }) {
       const publicUrl = await uploadAvatarToR2(jpegBlob, user?.id);
 
       if (publicUrl) {
-        // Cache-bust so browser doesn't serve stale CDN copy
+        // Store CLEAN URL in DB (no cache-buster — stable, deduplicatable)
+        await saveAvatarUrlToProfile(user?.id, publicUrl);
+        // Show cache-busted URL in UI to bypass any stale CDN
         const freshUrl = `${publicUrl}?v=${Date.now()}`;
-        // Update context + localStorage immediately
         setAvatarSrc(freshUrl, user?.id);
-        // Persist to DB so it survives sign-out / cache clear
-        await saveAvatarUrlToProfile(user?.id, freshUrl);
       } else {
         // R2 upload failed — save compressed data URL directly in DB as fallback
         const fallbackUrl = resizeViaCanvas(img, 400, 'image/jpeg', 0.72);

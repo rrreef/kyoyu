@@ -236,14 +236,24 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
-    // No network call — wipe storage NOW, redirect instantly
-    try { localStorage.clear(); } catch (_) {}
+    // Clear ONLY auth-related keys — preserve theme, dashboard prefs, etc.
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k.startsWith('sb-') ||
+          k.startsWith('kyoyu-cached') ||
+          k.startsWith('kyoyu-avatar') ||
+          k === 'kyoyu-vi-state'
+        ) keysToRemove.push(k);
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (_) {}
     try { sessionStorage.clear(); } catch (_) {}
     notifyNative('loggedOut');
     try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
-    // Kick off server-side session invalidation in the background (non-blocking)
     supabase.auth.signOut().catch(() => {});
-    // Hard redirect — replace so back-button doesn't return to the protected page
     window.location.replace('/');
   }
 
@@ -262,13 +272,34 @@ export function AuthProvider({ children }) {
   async function updateProfile(updates) {
     const updated = { ...user, ...updates };
     setUser(updated);
+    userRef.current = updated;
     writeCache(role, updated);
     if (user && !user.demo) {
-      await supabase.from('profiles').upsert({
-        id:           user.id,
-        artist_name:  updates.artistName  ?? user.artistName,
-        display_name: updates.name        ?? user.name,
-      });
+      try {
+        const sessionKey = Object.keys(localStorage).find(
+          k => k.startsWith('sb-') && k.endsWith('-auth-token')
+        );
+        const session = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
+        const token   = session?.access_token;
+        const supaUrl = import.meta.env.VITE_SUPABASE_URL;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (token) {
+          await fetch(`${supaUrl}/rest/v1/profiles`, {
+            method: 'POST',
+            headers: {
+              'Content-Type':  'application/json',
+              'Authorization': `Bearer ${token}`,
+              'apikey':        anonKey,
+              'Prefer':        'resolution=merge-duplicates,return=minimal',
+            },
+            body: JSON.stringify({
+              id:           user.id,
+              artist_name:  updates.artistName  ?? user.artistName,
+              display_name: updates.name        ?? user.name,
+            }),
+          });
+        }
+      } catch (e) { console.warn('[updateProfile]', e.message); }
     }
   }
 
