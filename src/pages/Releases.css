@@ -184,7 +184,11 @@
 /* ── Detail Overlay ───────────────────────────────────────── */
 .rel-overlay {
   position: fixed;
-  inset: 0;
+  /* Offset by sidebar so the panel centers within the content area, not full viewport */
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-width, 0px);
+  right: 0;
   z-index: 300;
   display: flex;
   align-items: center;
@@ -329,6 +333,8 @@
   .rel-grid { grid-template-columns: repeat(3, 1fr); }
   .rdp-stats { grid-template-columns: repeat(2, 1fr); }
   .rel-panel { padding: var(--sp-5); }
+  /* No sidebar on mobile — overlay covers full width */
+  .rel-overlay { left: 0; }
 }
 
 /* ── Skeleton loading cards ───────────────────────────────── */
