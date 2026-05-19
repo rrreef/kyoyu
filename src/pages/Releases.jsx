@@ -112,7 +112,6 @@ export default function Releases({ filter = 'all' }) {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
   const [selected,  setSelected]  = useState(null);
-  const [panelTop,  setPanelTop]  = useState(0); // viewport Y of the Settings link
   const [toggling,  setToggling]  = useState(false);
   const [editing,   setEditing]   = useState(false);
   const [deleting,  setDeleting]  = useState(false);
@@ -227,12 +226,6 @@ export default function Releases({ filter = 'all' }) {
     setProgress(0);
     setCurTime(0);
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
-    // Measure the Settings nav link's viewport top so the panel aligns with it
-    const settingsEl = document.querySelector('a[href="/settings"], [data-nav="settings"]');
-    if (settingsEl) {
-      const rect = settingsEl.getBoundingClientRect();
-      setPanelTop(Math.round(rect.top));
-    }
     setSelected(prev => prev?.albumKey === album.albumKey ? null : album);
   };
 
@@ -668,7 +661,6 @@ export default function Releases({ filter = 'all' }) {
         return (
           <div
             className="rel-overlay"
-            style={{ top: panelTop }}
             onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
           >
             <div className="rel-panel">
