@@ -33,18 +33,64 @@ function loadImage(file) {
   });
 }
 
-async function uploadAvatarToSupabase(dataUrl, userId) {
-  if (!userId || !dataUrl) return null;
+/* ─── Upload avatar via R2 presigned PUT ─────────────────────────────── */
+async function uploadAvatarToR2(blob, userId) {
+  if (!userId || !blob) return null;
   try {
-    // Convert canvas data URL → real JPEG blob (guaranteed format, correct MIME)
-    const blob = await fetch(dataUrl).then(r => r.blob());
-    const { error } = await supabase.storage
-      .from('avatars')
-      .upload(`${userId}/avatar.jpg`, blob, { contentType: 'image/jpeg', upsert: true });
-    if (error) { console.warn('[avatar upload]', error.message); return null; }
-    const { data } = supabase.storage.from('avatars').getPublicUrl(`${userId}/avatar.jpg`);
-    return data?.publicUrl || null;
-  } catch (e) { console.warn('[avatar upload]', e); return null; }
+    // 1. Get stable presigned URL for avatars/{userId}/avatar.jpg
+    const presignRes = await fetch('/api/r2-avatar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ userId, fileSize: blob.size }),
+    });
+    if (!presignRes.ok) {
+      const b = await presignRes.json().catch(() => ({}));
+      console.warn('[avatar] presign failed:', b.error);
+      return null;
+    }
+    const { presignedUrl, publicUrl } = await presignRes.json();
+
+    // 2. PUT the JPEG blob directly to R2
+    const uploadRes = await fetch(presignedUrl, {
+      method:  'PUT',
+      body:    blob,
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
+    if (!uploadRes.ok) {
+      console.warn('[avatar] R2 PUT failed:', uploadRes.status);
+      return null;
+    }
+    return publicUrl; // e.g. https://audio.ree.fm/avatars/{userId}/avatar.jpg
+  } catch (e) {
+    console.warn('[avatar] upload error:', e);
+    return null;
+  }
+}
+
+/* Save avatar_url to profiles table via direct REST (bypasses JS client RLS issues) */
+async function saveAvatarUrlToProfile(userId, url) {
+  try {
+    // Pull token from Supabase session cache
+    const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+    const session    = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
+    const token      = session?.access_token;
+    if (!token) return;
+
+    const supaUrl  = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    await fetch(`${supaUrl}/rest/v1/profiles?id=eq.${userId}`, {
+      method:  'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey':        anonKey,
+        'Prefer':        'return=minimal',
+      },
+      body: JSON.stringify({ avatar_url: url }),
+    });
+  } catch (e) {
+    console.warn('[avatar] profile save error:', e);
+  }
 }
 
 /* ─── Settings sections ──────────────────────────────────── */
@@ -162,20 +208,21 @@ function AccountPanel({ user }) {
       const thumbDataUrl = resizeViaCanvas(img, 80, 'image/jpeg', 0.8);
       try { window.webkit?.messageHandlers?.avatar?.postMessage(thumbDataUrl); } catch (_) {}
 
-      // 3️⃣ Upload JPEG blob to Supabase Storage for stable cross-device URL
-      const publicUrl = await uploadAvatarToSupabase(displayDataUrl, user?.id);
+      // 3️⃣ Convert to JPEG blob and upload to R2 (stable CDN URL)
+      const jpegBlob = await fetch(displayDataUrl).then(r => r.blob());
+      const publicUrl = await uploadAvatarToR2(jpegBlob, user?.id);
+
       if (publicUrl) {
-        // Storage succeeded — save public CDN URL to profile
-        await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl });
-        // Cache-bust so browser doesn't show old avatar.jpg from CDN cache
+        // Cache-bust so browser doesn't serve stale CDN copy
         const freshUrl = `${publicUrl}?v=${Date.now()}`;
+        // Update context + localStorage immediately
         setAvatarSrc(freshUrl, user?.id);
+        // Persist to DB so it survives sign-out / cache clear
+        await saveAvatarUrlToProfile(user?.id, freshUrl);
       } else {
-        // Storage failed — save compressed data URL directly to DB as fallback
-        // Smaller size so it fits in DB and Realtime payload
+        // R2 upload failed — save compressed data URL directly in DB as fallback
         const fallbackUrl = resizeViaCanvas(img, 400, 'image/jpeg', 0.72);
-        await supabase.from('profiles').upsert({ id: user.id, avatar_url: fallbackUrl }).catch(console.warn);
-        // avatarSrc already set to displayDataUrl above — no extra call needed
+        await saveAvatarUrlToProfile(user?.id, fallbackUrl);
       }
     } catch (e) {
       console.warn('[processAvatarFile]', e);
@@ -235,7 +282,7 @@ function AccountPanel({ user }) {
                     onClick={() => {
                       setVIState({ avatarImage: null });
                       setAvatarSrc(null, user?.id);
-                      if (user?.id) supabase.from('profiles').upsert({ id: user.id, avatar_url: null }).catch(console.warn);
+                      if (user?.id) saveAvatarUrlToProfile(user.id, null);
                       setAvatarMenu(false);
                     }}>
                     Remove photo
