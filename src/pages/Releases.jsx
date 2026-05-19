@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Pause, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
          Loader, RefreshCw, Music, FileText, DollarSign, ScrollText, Clock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -658,7 +659,7 @@ export default function Releases({ filter = 'all' }) {
       {selected && (() => {
         const firstTrack = selected.tracks[0];
         const audioSrc   = firstTrack?.storage_key ? r2Url(firstTrack.storage_key) : null;
-        return (
+        return createPortal(
           <div
             className="rel-overlay"
             onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
@@ -972,7 +973,7 @@ export default function Releases({ filter = 'all' }) {
               )}
             </div>
           </div>
-        );
+        , document.body);
       })()}
     </div>
   );
