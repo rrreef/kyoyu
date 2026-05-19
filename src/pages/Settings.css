@@ -4,8 +4,9 @@
   flex-direction: column;
   gap: 0;
   min-height: calc(100vh - var(--topbar-height));
-  max-width: 780px;
-  padding: var(--sp-8);
+  padding: 33px 33px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 
