@@ -184,16 +184,15 @@
 /* ── Detail Overlay ───────────────────────────────────────── */
 .rel-overlay {
   position: fixed;
-  /* Offset by sidebar so the panel centers within the content area, not full viewport */
-  top: 0;
-  bottom: 0;
+  /* top is set dynamically via JS to align with Settings link in sidebar */
+  bottom: 24px;
   left: var(--sidebar-width, 0px);
   right: 0;
   z-index: 300;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: var(--sp-6) var(--sp-4);
+  padding: 0 var(--sp-4);
   pointer-events: none;
 }
 
@@ -201,7 +200,8 @@
   pointer-events: all;
   width: 100%;
   max-width: 820px;
-  max-height: 82vh;
+  /* fills from Settings-link level to 24px above viewport bottom */
+  max-height: 100%;
   overflow-y: auto;
   border-radius: var(--radius-2xl) !important;
   padding: var(--sp-6);
