@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
-         ChevronDown, Globe, Lock, User } from 'lucide-react';
+         ChevronDown, Globe, Lock, User, Paintbrush2, Bell, ShieldCheck,
+         CreditCard } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchMyTracks } from '../../lib/uploadPipeline';
 import './CreatorSidebar.css';
@@ -12,12 +13,6 @@ const LogoMark = () => (
     <line x1="6" y1="26" x2="26" y2="6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
   </svg>
 );
-
-const creatorNav = [
-  { to: '/upload',          label: 'Upload',           icon: Upload   },
-  { to: '/visual-identity', label: 'Visual Identity',  icon: Palette  },
-  { to: '/settings',        label: 'Settings',         icon: Settings },
-];
 
 const creatorMobileNav = [
   { to: '/dashboard',       label: 'Dashboard', icon: BarChart3 },
@@ -32,25 +27,37 @@ const RELEASE_SUB = [
   { to: '/releases/private', label: 'Private', icon: Lock,  hint: 'Drafts & scheduled' },
 ];
 
+const SETTINGS_SUB = [
+  { s: 'account',       label: 'Account',       icon: User        },
+  { s: 'appearance',    label: 'Appearance',    icon: Paintbrush2 },
+  { s: 'dashboard',     label: 'Dashboard',     icon: BarChart3   },
+  { s: 'notifications', label: 'Notifications', icon: Bell        },
+  { s: 'distribution',  label: 'Distribution',  icon: Globe       },
+  { s: 'privacy',       label: 'Privacy',       icon: ShieldCheck },
+  { s: 'billing',       label: 'Billing',       icon: CreditCard  },
+];
+
 export default function CreatorSidebar() {
   const { user, logout, avatarSrc } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
   const isDashboard    = location.pathname === '/dashboard';
   const isReleasesPath = location.pathname.startsWith('/releases');
+  const isArtistsPath  = location.pathname === '/artists';
+  const isSettingsPath = location.pathname === '/settings' || location.pathname.startsWith('/settings');
 
-  const isArtistsPath = location.pathname === '/artists';
+  const activeSection = new URLSearchParams(location.search).get('s') || '';
 
   const [releasesOpen, setReleasesOpen] = useState(isReleasesPath);
   const [artistsOpen,  setArtistsOpen]  = useState(isArtistsPath);
+  const [settingsOpen, setSettingsOpen] = useState(isSettingsPath);
   const [sidebarArtists, setSidebarArtists] = useState([]);
 
-  // Auto-open when landing on route from outside (e.g. deep link)
   useEffect(() => { if (isReleasesPath) setReleasesOpen(true); }, [isReleasesPath]);
   useEffect(() => { if (isArtistsPath)  setArtistsOpen(true);  }, [isArtistsPath]);
+  useEffect(() => { if (isSettingsPath) setSettingsOpen(true);  }, [isSettingsPath]);
 
-  // Fetch real artists from uploaded tracks
   useEffect(() => {
     fetchMyTracks().then(tracks => {
       const seen = new Set();
@@ -63,12 +70,9 @@ export default function CreatorSidebar() {
     }).catch(() => {});
   }, []);
 
-  // Active artist id from URL
   const activeArtistId = isArtistsPath
     ? new URLSearchParams(location.search).get('id')
     : null;
-
-  const toggleReleases = () => setReleasesOpen(o => !o);
 
   return (
     <>
@@ -105,14 +109,9 @@ export default function CreatorSidebar() {
             >
               <Music size={18} strokeWidth={1.8} />
               <span>Releases</span>
-              <ChevronDown
-                size={13}
-                strokeWidth={2}
-                className={`creator-nav-chevron ${releasesOpen ? 'open' : ''}`}
-              />
+              <ChevronDown size={13} strokeWidth={2} className={`creator-nav-chevron ${releasesOpen ? 'open' : ''}`} />
             </button>
 
-            {/* Submenu */}
             <div className={`creator-submenu ${releasesOpen ? 'open' : ''}`}>
               {RELEASE_SUB.map(({ to, label, icon: Icon }) => (
                 <NavLink
@@ -135,14 +134,11 @@ export default function CreatorSidebar() {
             >
               <Users size={18} strokeWidth={1.8} />
               <span>Artists</span>
-              <ChevronDown
-                size={13}
-                strokeWidth={2}
-                className={`creator-nav-chevron ${artistsOpen ? 'open' : ''}`}
-              />
+              <ChevronDown size={13} strokeWidth={2} className={`creator-nav-chevron ${artistsOpen ? 'open' : ''}`} />
             </button>
 
-            <div className={`creator-submenu ${artistsOpen ? 'open' : ''}`}
+            <div
+              className={`creator-submenu ${artistsOpen ? 'open' : ''}`}
               style={{ maxHeight: artistsOpen ? `${Math.max(sidebarArtists.length, 1) * 38}px` : '0' }}
             >
               {sidebarArtists.length === 0 && (
@@ -163,17 +159,41 @@ export default function CreatorSidebar() {
             </div>
           </div>
 
-          {/* Other nav items */}
-          {creatorNav.slice(1).map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) => `creator-nav-item ${isActive ? 'active' : ''}`}
+          {/* Visual Identity */}
+          <NavLink to="/visual-identity" className={({ isActive }) => `creator-nav-item ${isActive ? 'active' : ''}`}>
+            <Palette size={18} strokeWidth={1.8} /><span>Visual Identity</span>
+          </NavLink>
+
+          {/* Settings — with submenu */}
+          <div className={`creator-nav-group ${isSettingsPath ? 'active' : ''}`}>
+            <button
+              className={`creator-nav-item creator-nav-group__header ${isSettingsPath ? 'active' : ''}`}
+              onClick={() => {
+                setSettingsOpen(o => !o);
+                if (!isSettingsPath) navigate('/settings?s=account');
+              }}
             >
-              <Icon size={18} strokeWidth={1.8} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+              <Settings size={18} strokeWidth={1.8} />
+              <span>Settings</span>
+              <ChevronDown size={13} strokeWidth={2} className={`creator-nav-chevron ${settingsOpen ? 'open' : ''}`} />
+            </button>
+
+            <div
+              className={`creator-submenu ${settingsOpen ? 'open' : ''}`}
+              style={{ maxHeight: settingsOpen ? `${SETTINGS_SUB.length * 38}px` : '0' }}
+            >
+              {SETTINGS_SUB.map(({ s, label, icon: Icon }) => (
+                <button
+                  key={s}
+                  className={`creator-submenu-item ${activeSection === s ? 'active' : ''}`}
+                  onClick={() => navigate(`/settings?s=${s}`)}
+                >
+                  <Icon size={13} strokeWidth={1.8} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </nav>
 
         {/* Footer */}

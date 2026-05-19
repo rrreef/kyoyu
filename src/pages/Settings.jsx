@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+
 import {
   User, BarChart3, Bell, Globe, ShieldCheck, CreditCard,
   ChevronRight, RotateCcw, Check, Wifi, WifiOff, CheckCircle2,
@@ -748,8 +750,9 @@ function BillingPanel() {
 
 /* ─── Main Settings page ─────────────────────────────────── */
 export default function Settings() {
-  const [active, setActive] = useState('dashboard');
-  const { user, logout } = useAuth();
+  const [searchParams] = useSearchParams();
+  const active = searchParams.get('s') || 'account';
+  const { user } = useAuth();
 
   const panels = {
     account:       <AccountPanel user={user} />,
@@ -763,32 +766,7 @@ export default function Settings() {
 
   return (
     <div className="settings-page animate-in">
-      {/* Left nav */}
-      <aside className="settings-nav glass">
-        <div className="settings-nav-title">Settings</div>
-        {SECTIONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={`settings-nav-item ${active === id ? 'active' : ''}`}
-            onClick={() => setActive(id)}
-          >
-            <Icon size={16} strokeWidth={1.8} />
-            <span>{label}</span>
-            <ChevronRight size={12} className="s-nav-chevron" />
-          </button>
-        ))}
-
-        {/* Sign out — same design as listener sidebar */}
-        <button className="sidebar-logout" onClick={logout} title="Sign out">
-          <LogOut size={14} strokeWidth={1.8} />
-          <span>Sign out</span>
-        </button>
-      </aside>
-
-      {/* Right content */}
-      <div className="settings-content">
-        {panels[active]}
-      </div>
+      {panels[active] || panels.account}
     </div>
   );
 }
