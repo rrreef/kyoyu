@@ -4,7 +4,7 @@ import { Play, Pause, Download, MessageSquare, Star, X, Eye, EyeOff, Upload,
          Loader, RefreshCw, Music, FileText, DollarSign, ScrollText, Clock, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchMyTracks, fetchAllArtists, r2Url } from '../lib/uploadPipeline';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnon } from '../lib/supabase';
 import EmptyReleases from '../components/EmptyReleases';
 import './Releases.css';
 
@@ -401,7 +401,7 @@ export default function Releases({ filter = 'all' }) {
   }
 
   /* ── Delete album (all tracks) ── */
-  function deleteAlbum() {
+  async function deleteAlbum() {
     if (!selected || deleting) return;
     const label = selected.tracks.length === 1
       ? `"${selected.tracks[0].title}"`
@@ -411,13 +411,56 @@ export default function Releases({ filter = 'all' }) {
     const trackIds = selected.tracks.map(t => t.id);
 
     // Optimistic: remove from UI immediately and close panel
+    const snapshot = releases; // keep for rollback
     setReleases(prev => prev.filter(r => !trackIds.includes(r.id)));
     setSelected(null);
+    setDeleting(true);
 
-    // Delete from DB in background
-    supabase.from('tracks').delete().in('id', trackIds)
-      .then(({ error }) => { if (error) console.warn('[deleteAlbum]', error.message); })
-      .catch(e => console.warn('[deleteAlbum]', e));
+    try {
+      // Pull auth token the same way fetchMyTracks does
+      const sessionKey = Object.keys(localStorage).find(
+        k => k.startsWith('sb-') && k.endsWith('-auth-token')
+      );
+      const session = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
+      const token   = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'apikey':        supabaseAnon,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+      };
+      const idFilter = `track_id=in.(${trackIds.join(',')})`;
+      const idFilterTracks = `id=in.(${trackIds.join(',')})`;
+
+      // 1️⃣ Delete child rows first (FK constraints)
+      const creditsRes = await fetch(
+        `${supabaseUrl}/rest/v1/track_credits?${idFilter}`,
+        { method: 'DELETE', headers }
+      );
+      if (!creditsRes.ok) {
+        const b = await creditsRes.json().catch(() => ({}));
+        throw new Error(b.message || `Credits delete failed (${creditsRes.status})`);
+      }
+
+      // 2️⃣ Delete tracks
+      const tracksRes = await fetch(
+        `${supabaseUrl}/rest/v1/tracks?${idFilterTracks}`,
+        { method: 'DELETE', headers }
+      );
+      if (!tracksRes.ok) {
+        const b = await tracksRes.json().catch(() => ({}));
+        throw new Error(b.message || `Tracks delete failed (${tracksRes.status})`);
+      }
+    } catch (e) {
+      console.error('[deleteAlbum]', e.message);
+      // Roll back optimistic update
+      setReleases(snapshot);
+      alert(`Delete failed: ${e.message}`);
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function toggleVisibility() {
