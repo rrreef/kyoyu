@@ -1,15 +1,14 @@
 // api/public-tracks.js
-// Returns all public releases from Supabase, bypassing RLS.
-// No auth required — this data is intentionally public.
+// Returns all public releases from Supabase.
+// Requires a Supabase RLS policy: "visibility = 'public'" rows are SELECT-able by anon role.
+// No secret keys needed — uses the public anon key only.
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL  = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY;
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
