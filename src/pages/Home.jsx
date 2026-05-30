@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
-import { releases, artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, savedPlaylists, artistRadios, merchItems, upcomingEvents } from '../data/mockData';
+import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useDisplay, useHomeLayoutLive } from '../contexts/DisplayContext';
 import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
+import { fetchPublicTracks } from '../lib/uploadPipeline';
 import './Home.css';
 
 /* ── Compact shelf card for playlists / radios ── */
@@ -36,8 +37,16 @@ export default function Home() {
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
   const homeLayout = useHomeLayoutLive();
-  const featured = releases[0];
   const [myUploads, setMyUploads] = useState([]);
+  const [publicReleases, setPublicReleases] = useState([]);
+
+  // The featured hero is just the newest public release
+  const featured = publicReleases[0] || null;
+
+  // Load real public releases from backend (visible to all listeners)
+  useEffect(() => {
+    fetchPublicTracks().then(setPublicReleases).catch(() => {});
+  }, []);
 
   useEffect(() => {
     function loadUploads() {
@@ -225,15 +234,17 @@ export default function Home() {
       )}
 
 
-      {/* New Releases */}
+      {/* New Releases — real data from creators */}
       <section className="home-section">
         <div className="section-title">
           <span>New Releases</span>
           <Link to="/search">See All <ArrowRight size={12} /></Link>
         </div>
-        {homeLayout.mode === 'list' ? (
+        {publicReleases.length === 0 ? (
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
+        ) : homeLayout.mode === 'list' ? (
           <div className="upl-exp-list">
-            {releases.map(r => (
+            {publicReleases.map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-exp-item" style={{textDecoration:'none'}}>
                 <div className="upl-exp-art">{r.cover && <img src={r.cover} alt={r.title} loading="lazy"/>}</div>
                 <div className="upl-exp-meta" style={{flex:1,minWidth:0}}>
@@ -245,7 +256,7 @@ export default function Home() {
           </div>
         ) : (
           <div className={`upl-grid upl-grid-${Math.min(5,Math.max(1,homeLayout.cols))}`}>
-            {releases.map(r => (
+            {publicReleases.map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
                 <div className="upl-grid-art">
                   {r.cover ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/> : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}

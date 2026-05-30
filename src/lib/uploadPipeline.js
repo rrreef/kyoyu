@@ -441,3 +441,24 @@ export async function fetchAllArtists() {
   console.log('[KYOYU] fetchAllArtists unique artists:', names);
   return names;
 }
+
+/**
+ * Fetches all public releases — no auth required.
+ * Calls /api/public-tracks which uses the service role key to bypass RLS.
+ * @param {string} [query] - optional search filter
+ * @returns {Promise<Array>} normalized release objects
+ */
+export async function fetchPublicTracks(query = '') {
+  try {
+    const url = query
+      ? `/api/public-tracks?q=${encodeURIComponent(query)}`
+      : '/api/public-tracks';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { tracks } = await res.json();
+    return tracks || [];
+  } catch (e) {
+    console.warn('[fetchPublicTracks]', e.message);
+    return [];
+  }
+}

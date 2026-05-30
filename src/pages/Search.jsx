@@ -1,67 +1,95 @@
-import { useState, useMemo } from 'react';
-import { Search as SearchIcon } from 'lucide-react';
-import { releases, artists, labels, vinylMarketplace, djSets } from '../data/mockData';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search as SearchIcon, Loader2 } from 'lucide-react';
+import { artists, labels, vinylMarketplace, djSets } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
+import { fetchPublicTracks } from '../lib/uploadPipeline';
 import './Search.css';
 
 const TABS = ['All', 'Music', 'Artists', 'Labels', 'Vinyl', 'DJ Sets'];
 const GENRES = ['Techno', 'Jazz', 'Hip-Hop', 'Ambient', 'Experimental', 'Drone', 'Electronic', 'Podcast'];
 
 export default function Search() {
-  const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('All');
+  const [query,         setQuery]         = useState('');
+  const [activeTab,     setActiveTab]     = useState('All');
   const [selectedGenre, setSelectedGenre] = useState(null);
+
+  // Real public tracks from backend
+  const [publicTracks,  setPublicTracks]  = useState([]);
+  const [loading,       setLoading]       = useState(true);
+
+  // Debounced fetch so we don't hammer the API on every keystroke
+  const loadTracks = useCallback(async (q) => {
+    setLoading(true);
+    const tracks = await fetchPublicTracks(q);
+    setPublicTracks(tracks);
+    setLoading(false);
+  }, []);
+
+  // Load all on mount
+  useEffect(() => { loadTracks(''); }, [loadTracks]);
+
+  // Debounce search query → reload from server
+  useEffect(() => {
+    const t = setTimeout(() => loadTracks(query), 400);
+    return () => clearTimeout(t);
+  }, [query, loadTracks]);
 
   // Toggle genre — clicking the same one deselects
   const handleGenre = (g) => {
     setSelectedGenre(prev => prev === g ? null : g);
   };
 
-  const results = useMemo(() => {
+  // Client-side genre filter on server results
+  const filteredPublicTracks = useMemo(() => {
+    if (!selectedGenre) return publicTracks;
+    return publicTracks.filter(t =>
+      t.genre?.toLowerCase().includes(selectedGenre.toLowerCase())
+    );
+  }, [publicTracks, selectedGenre]);
+
+  // Mock data — still used for Artists / Labels / Vinyl / DJ Sets
+  const mockResults = useMemo(() => {
     const q = query.toLowerCase();
-    const genreMatch = (val) => !selectedGenre || val.toLowerCase().includes(selectedGenre.toLowerCase());
-
-    const filterByQuery = (val) => !q || val.toLowerCase().includes(q);
-
+    const genreMatch = (val) => !selectedGenre || val?.toLowerCase().includes(selectedGenre.toLowerCase());
     return {
-      releases: releases.filter(r =>
-        genreMatch(r.genre) &&
-        (!q || r.title.toLowerCase().includes(q) || r.artist.toLowerCase().includes(q) || r.genre.toLowerCase().includes(q) || r.year.toString().includes(q))
-      ),
       artists: artists.filter(a =>
         genreMatch(a.genre) &&
-        (!q || a.name.toLowerCase().includes(q) || a.genre.toLowerCase().includes(q))
+        (!q || a.name.toLowerCase().includes(q) || a.genre?.toLowerCase().includes(q))
       ),
       labels: labels.filter(l =>
         genreMatch(l.genre) &&
-        (!q || l.name.toLowerCase().includes(q) || l.genre.toLowerCase().includes(q))
+        (!q || l.name.toLowerCase().includes(q) || l.genre?.toLowerCase().includes(q))
       ),
       vinyl: vinylMarketplace.filter(v =>
-        (!q || v.release.toLowerCase().includes(q) || v.artist.toLowerCase().includes(q))
+        (!q || v.release?.toLowerCase().includes(q) || v.artist?.toLowerCase().includes(q))
       ),
       djSets: djSets.filter(d =>
-        (!q || d.title.toLowerCase().includes(q) || d.artist.toLowerCase().includes(q))
+        (!q || d.title?.toLowerCase().includes(q) || d.artist?.toLowerCase().includes(q))
       ),
     };
   }, [query, selectedGenre]);
 
-  const showReleases = (activeTab === 'All' || activeTab === 'Music') && results.releases.length > 0;
-  const showArtists  = (activeTab === 'All' || activeTab === 'Artists') && results.artists.length > 0;
-  const showLabels   = (activeTab === 'All' || activeTab === 'Labels') && results.labels.length > 0;
-  const showVinyl    = (activeTab === 'All' || activeTab === 'Vinyl') && results.vinyl.length > 0;
-  const showDJ       = (activeTab === 'All' || activeTab === 'DJ Sets') && results.djSets.length > 0;
-  const hasResults   = showReleases || showArtists || showLabels || showVinyl || showDJ;
+  const showReleases = (activeTab === 'All' || activeTab === 'Music');
+  const showArtists  = (activeTab === 'All' || activeTab === 'Artists') && mockResults.artists.length > 0;
+  const showLabels   = (activeTab === 'All' || activeTab === 'Labels')  && mockResults.labels.length  > 0;
+  const showVinyl    = (activeTab === 'All' || activeTab === 'Vinyl')   && mockResults.vinyl.length   > 0;
+  const showDJ       = (activeTab === 'All' || activeTab === 'DJ Sets') && mockResults.djSets.length  > 0;
+  const hasResults   = (showReleases && (filteredPublicTracks.length > 0 || loading)) ||
+                       showArtists || showLabels || showVinyl || showDJ;
 
   return (
     <div className="page search-page animate-in">
       {/* Search bar */}
       <div className="search-bar-wrap">
         <div className="search-bar">
-          <SearchIcon size={18} className="search-icon" />
+          {loading
+            ? <Loader2 size={18} className="search-icon" style={{ animation: 'spin 1s linear infinite' }} />
+            : <SearchIcon size={18} className="search-icon" />
+          }
           <input
             id="search-input"
             type="text"
-            placeholder="Search"
+            placeholder="Search releases, artists, labels…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="search-input"
@@ -95,13 +123,26 @@ export default function Search() {
         </div>
       </div>
 
-      {/* Results */}
+      {/* Real releases from DB */}
       {showReleases && (
         <section className="search-section">
           <div className="section-title"><span>Releases</span></div>
-          <div className="search-grid">
-            {results.releases.map(r => <ReleaseCard key={r.id} release={r} />)}
-          </div>
+          {loading ? (
+            <div className="search-loading">
+              <Loader2 size={22} style={{ animation: 'spin 1s linear infinite', opacity: 0.4 }} />
+              <span>Loading releases…</span>
+            </div>
+          ) : filteredPublicTracks.length > 0 ? (
+            <div className="search-grid">
+              {filteredPublicTracks.map(t => (
+                <ReleaseCard key={t.id} release={t} />
+              ))}
+            </div>
+          ) : (
+            <p className="search-empty-inline">
+              {query || selectedGenre ? 'No releases match your search.' : 'No public releases yet.'}
+            </p>
+          )}
         </section>
       )}
 
@@ -109,7 +150,7 @@ export default function Search() {
         <section className="search-section">
           <div className="section-title"><span>Artists</span></div>
           <div className="search-grid">
-            {results.artists.map(a => <ArtistCard key={a.id} artist={a} />)}
+            {mockResults.artists.map(a => <ArtistCard key={a.id} artist={a} />)}
           </div>
         </section>
       )}
@@ -118,7 +159,7 @@ export default function Search() {
         <section className="search-section">
           <div className="section-title"><span>Labels</span></div>
           <div className="label-list">
-            {results.labels.map(l => (
+            {mockResults.labels.map(l => (
               <div key={l.id} className="label-row glass">
                 <div className="label-row-logo"><img src={l.logo} alt={l.name} /></div>
                 <div className="label-row-info">
@@ -136,7 +177,7 @@ export default function Search() {
         <section className="search-section">
           <div className="section-title"><span>Vinyl Marketplace</span></div>
           <div className="search-grid">
-            {results.vinyl.map(v => <VinylCard key={v.id} listing={v} />)}
+            {mockResults.vinyl.map(v => <VinylCard key={v.id} listing={v} />)}
           </div>
         </section>
       )}
@@ -145,12 +186,12 @@ export default function Search() {
         <section className="search-section">
           <div className="section-title"><span>DJ Sets &amp; Podcasts</span></div>
           <div className="search-grid">
-            {results.djSets.map(d => <LongFormCard key={d.id} item={d} />)}
+            {mockResults.djSets.map(d => <LongFormCard key={d.id} item={d} />)}
           </div>
         </section>
       )}
 
-      {!hasResults && (query || selectedGenre) && (
+      {!hasResults && !loading && (query || selectedGenre) && (
         <div className="search-empty">
           <SearchIcon size={40} strokeWidth={1} />
           <p>No results{selectedGenre ? ` in ${selectedGenre}` : ''}{query ? ` for "${query}"` : ''}</p>
