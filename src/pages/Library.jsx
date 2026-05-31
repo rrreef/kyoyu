@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ChevronDown, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
+import { Play, Plus, Wand2, ChevronDown, ChevronUp, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -176,9 +176,17 @@ export default function Library() {
             {hasReleases && (
               <>
                 <div className="shelf-row-label" style={{marginTop: hasTracks ? 16 : 0}}>Liked Releases</div>
-                <div className="scroll-row">
+                <div className="upl-grid upl-grid-3">
                   {sortByDate(savedReleaseObjects).map(r => (
-                    <ShelfCard key={r.id} cover={r.cover} title={r.title} sub={r.artist}/>
+                    <div key={r.id} className="upl-grid-cell">
+                      <div className="upl-grid-art">
+                        {r.cover
+                          ? <img src={r.cover} alt={r.title} loading="lazy"/>
+                          : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                      </div>
+                      <div className="upl-grid-title">{r.title}</div>
+                      <div className="upl-grid-artist">{r.artist}</div>
+                    </div>
                   ))}
                 </div>
               </>

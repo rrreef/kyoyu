@@ -242,64 +242,44 @@ export default function Home() {
         </div>
         {publicReleases.length === 0 ? (
           <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
-        ) : homeLayout.mode === 'list' ? (
-          <div className="upl-exp-list">
-            {publicReleases.map(r => (
-              <Link key={r.id} to={`/release/${r.id}`} className="upl-exp-item" style={{textDecoration:'none'}}>
-                <div className="upl-exp-art">{r.cover && <img src={r.cover} alt={r.title} loading="lazy"/>}</div>
-                <div className="upl-exp-meta" style={{flex:1,minWidth:0}}>
-                  <div className="upl-exp-title">{r.title}</div>
-                  <div className="upl-exp-sub">{r.artist}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
         ) : (
-          <div className={`upl-grid upl-grid-${Math.min(5,Math.max(1,homeLayout.cols))}`}>
+          <div className="upl-grid upl-grid-3">
             {publicReleases.map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
                 <div className="upl-grid-art">
-                  {r.cover ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/> : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                  {r.cover
+                    ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/>
+                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                 </div>
                 <div className="upl-grid-title">{r.title}</div>
-                {homeLayout.cols <= 3 && <div className="upl-grid-artist">{r.artist}</div>}
+                <div className="upl-grid-artist">{r.artist}</div>
               </Link>
             ))}
           </div>
         )}
       </section>
 
-      {/* AI Row */}
-      <section className="home-section">
-        <div className="section-title">
-          <span>Because You Listened to Aura System</span>
-        </div>
-        {homeLayout.mode === 'list' ? (
-          <div className="upl-exp-list">
-            {publicReleases.slice(0,4).map(r => (
-              <Link key={r.id} to={`/release/${r.id}`} className="upl-exp-item" style={{textDecoration:'none'}}>
-                <div className="upl-exp-art">{r.cover && <img src={r.cover} alt={r.title} loading="lazy"/>}</div>
-                <div className="upl-exp-meta" style={{flex:1,minWidth:0}}>
-                  <div className="upl-exp-title">{r.title}</div>
-                  <div className="upl-exp-sub">{r.artist}</div>
-                </div>
-              </Link>
-            ))}
+      {/* Because You Listened */}
+      {publicReleases.length >= 3 && (
+        <section className="home-section">
+          <div className="section-title">
+            <span>Because You Listened</span>
           </div>
-        ) : (
-          <div className={`upl-grid upl-grid-${Math.min(5,Math.max(1,homeLayout.cols))}`}>
-            {publicReleases.slice(0,4).map(r => (
+          <div className="upl-grid upl-grid-3">
+            {publicReleases.slice(0, 6).map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
                 <div className="upl-grid-art">
-                  {r.cover ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/> : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                  {r.cover
+                    ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/>
+                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                 </div>
                 <div className="upl-grid-title">{r.title}</div>
-                {homeLayout.cols <= 3 && <div className="upl-grid-artist">{r.artist}</div>}
+                <div className="upl-grid-artist">{r.artist}</div>
               </Link>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
       {/* Artists */}
       <section className="home-section">
         <div className="section-title">
