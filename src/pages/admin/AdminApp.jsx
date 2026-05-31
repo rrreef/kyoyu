@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
 import { useAuth } from '../../contexts/AuthContext';
 import AdminOverview from './AdminOverview';
 import AdminUsers    from './AdminUsers';
@@ -15,6 +16,31 @@ const NAV = [
 export default function AdminApp() {
   const { user, logout } = useAuth();
   const [page, setPage]  = useState('overview');
+
+  // iOS native tab bar bridge — register window.__kyoyuGo so the tab bar
+  // can drive navigation even though AdminApp doesn't use React Router.
+  useEffect(() => {
+    // Map any incoming path to the closest admin section
+    window.__kyoyuGo = (path) => {
+      if (path.includes('users'))   setPage('users');
+      else if (path.includes('tracks')) setPage('tracks');
+      else                          setPage('overview');
+    };
+    // Also listen for the custom event (race-condition safety)
+    const handler = (e) => { if (e.detail) window.__kyoyuGo(e.detail); };
+    window.addEventListener('kyoyu-navigate', handler);
+    // Report initial route to Swift
+    try { window.webkit?.messageHandlers?.route?.postMessage('/admin'); } catch (_) {}
+    return () => {
+      delete window.__kyoyuGo;
+      window.removeEventListener('kyoyu-navigate', handler);
+    };
+  }, []);
+
+  // Report page changes to native bridge
+  useEffect(() => {
+    try { window.webkit?.messageHandlers?.route?.postMessage(`/admin/${page}`); } catch (_) {}
+  }, [page]);
 
   return (
     <div className="adm-shell">

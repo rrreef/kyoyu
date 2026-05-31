@@ -52,27 +52,24 @@ import AdminApp from './pages/admin/AdminApp';
 
 import './index.css';
 
-// ─── Listener shell ───────────────────────────────────────
-
-// ─── Route reporter: tells native Swift bridge the current path ───────────────
-// Also exposes window.__kyoyuGo so the Swift WKUserScript can drive React Router directly
+// ─── Route reporter ────────────────────────────────────────
+// Registers window.__kyoyuGo so the native iOS tab bar can
+// drive React Router navigation from Swift. Must live INSIDE
+// each app shell so it uses the correct <Routes> navigate context.
 function RouteReporter() {
   const location = useLocation();
   const navigate  = useNavigate();
 
-  // Expose React Router's navigate globally — Swift's injected script calls this
   useEffect(() => {
     window.__kyoyuGo = (path) => navigate(path);
     return () => { delete window.__kyoyuGo; };
   }, [navigate]);
 
-  // Tell Swift which route we're on (shows/hides the native back button)
   useEffect(() => {
     try { window.webkit?.messageHandlers?.route?.postMessage(location.pathname); } catch (_) {}
   }, [location.pathname]);
 
-  // Also listen for kyoyu-navigate in case the WKUserScript fires before
-  // window.__kyoyuGo is ready (race condition on first mount)
+  // Fallback: listen for kyoyu-navigate CustomEvent (race-condition safety)
   useEffect(() => {
     const handler = (e) => {
       const path = e.detail;
@@ -87,6 +84,7 @@ function RouteReporter() {
 
 const PROFILE_ROUTES = new Set(['/profile','/account','/uploads','/app-settings','/downloads','/orders','/subscription','/settings']);
 
+// ─── Listener shell ────────────────────────────────────────
 function ListenerApp() {
   const { state } = usePlayer();
   const hasTrack = !!state.currentTrack;
@@ -104,6 +102,8 @@ function ListenerApp() {
         className="main-content"
         style={{ paddingTop:'var(--page-top)', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 62px)' : 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
       >
+        {/* RouteReporter inside ListenerApp so navigate() uses this Routes context */}
+        <RouteReporter />
         <Routes>
           <Route path="/"               element={<Home />} />
           <Route path="/search"         element={<Search />} />
@@ -134,14 +134,15 @@ function ListenerApp() {
   );
 }
 
-// ─── Creator shell ────────────────────────────────────────
-// The creator sidebar is always visible — no route hides it.
+// ─── Creator shell ─────────────────────────────────────────
 function CreatorApp() {
   return (
     <div className="app-layout">
       <CreatorSidebar />
       <TopBar showSearch={true} />
       <div className="main-content" style={{ paddingBottom: '32px' }}>
+        {/* RouteReporter inside CreatorApp so iOS tab bar works for creators too */}
+        <RouteReporter />
         <Routes>
           <Route path="/dashboard"       element={<Dashboard />} />
           <Route path="/upload"          element={<Upload />} />
@@ -160,18 +161,22 @@ function CreatorApp() {
   );
 }
 
-// ─── Role gate ────────────────────────────────────────────
+// ─── Role gate ─────────────────────────────────────────────
 function RoleGate() {
   const { role, loading } = useAuth();
   useTheme();
-  // Only show blank screen if we have no session data at all (first-ever launch or logged out)
-  if (loading && !role)   return <div className="auth-loading" />;
-  if (!role)              return <EntryScreen />;
+
+  // Report role to native iOS bridge so Swift can configure the correct tab bar
+  useEffect(() => {
+    if (role) {
+      try { window.webkit?.messageHandlers?.userRole?.postMessage(role); } catch (_) {}
+    }
+  }, [role]);
+
+  if (loading && !role) return <div className="auth-loading" />;
+  if (!role)            return <EntryScreen />;
   return (
     <>
-      {/* RouteReporter at top level — registers window.__kyoyuGo for ALL roles so
-          the native iOS tab bar can always drive React Router navigation */}
-      <RouteReporter />
       <SuccessToast />
       {role === 'admin'    && <AdminApp />}
       {role === 'listener' && <ListenerApp />}
@@ -181,17 +186,13 @@ function RoleGate() {
   );
 }
 
-// ─── Hash Redirector ──────────────────────────────────────
-// Supabase sends error/recovery tokens as URL hash on the Site URL (root).
-// This component detects them and bounces to /auth/reset so the page handles it.
+// ─── Hash Redirector ───────────────────────────────────────
 function HashRedirector() {
   const navigate = useNavigate();
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash) return;
-    // Supabase error: #error=access_denied&error_code=otp_expired...
-    // Supabase recovery: #access_token=...&type=recovery
-    const isAuthHash = hash.includes('error=') || 
+    const isAuthHash = hash.includes('error=') ||
                        (hash.includes('access_token=') && hash.includes('type=recovery'));
     if (isAuthHash && window.location.pathname !== '/auth/reset') {
       navigate('/auth/reset' + hash, { replace: true });
@@ -200,9 +201,8 @@ function HashRedirector() {
   return null;
 }
 
-// ─── Root ─────────────────────────────────────────────────
+// ─── Root ──────────────────────────────────────────────────
 export default function App() {
-  // Always show on fresh app load (state is in-memory only)
   const [splash, setSplash] = useState(false);
   function handleSplashDone() { setSplash(false); }
 
@@ -213,7 +213,6 @@ export default function App() {
         <PlayerProvider>
           <LibraryProvider>
             <DisplayProvider>
-              {/* Password reset — accessible without being logged in */}
               <Routes>
                 <Route path="/auth/reset" element={<ResetPassword />} />
                 <Route path="*" element={
