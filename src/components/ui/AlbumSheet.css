@@ -17,8 +17,8 @@
 /* ── Sheet ─────────────────────────────────────────────────── */
 .album-sheet {
   position: fixed;
-  /* sit exactly 3 px above the native tab bar (or web mobile nav fallback) */
-  bottom: calc(var(--kyoyu-tab-h, 83px) + 3px);
+  /* sit 1 px above the native tab bar (or web mobile nav fallback) */
+  bottom: calc(var(--kyoyu-tab-h, 83px) + 1px);
   left: 0;
   right: 0;
   z-index: 901;
@@ -42,7 +42,7 @@
     0 -1px   0px rgba(255,255,255,0.12) inset;   /* inner top specular */
 
   /* size: never taller than screen minus tab bar minus a top gap */
-  max-height: calc(100dvh - var(--kyoyu-tab-h, 83px) - 3px - 52px);
+  max-height: calc(100dvh - var(--kyoyu-tab-h, 83px) - 1px - 52px);
 
   display: flex;
   flex-direction: column;
