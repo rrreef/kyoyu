@@ -144,17 +144,32 @@ function CreatorApp() {
         {/* RouteReporter inside CreatorApp so iOS tab bar works for creators too */}
         <RouteReporter />
         <Routes>
-          <Route path="/dashboard"       element={<Dashboard />} />
-          <Route path="/upload"          element={<Upload />} />
+          {/* ── Creator routes ── */}
+          <Route path="/dashboard"        element={<Dashboard />} />
+          <Route path="/upload"           element={<Upload />} />
           <Route path="/releases"         element={<Releases filter="all"     />} />
           <Route path="/releases/public"  element={<Releases filter="public"  />} />
           <Route path="/releases/private" element={<Releases filter="private" />} />
-          <Route path="/artists"         element={<CreatorArtists />} />
-          <Route path="/visual-identity" element={<VisualIdentity />} />
-          <Route path="/preview"         element={<ListenerPreview />} />
-          <Route path="/profile"         element={<Profile />} />
-          <Route path="/settings"        element={<Settings />} />
-          <Route path="*"                element={<Dashboard />} />
+          <Route path="/artists"          element={<CreatorArtists />} />
+          <Route path="/visual-identity"  element={<VisualIdentity />} />
+          <Route path="/preview"          element={<ListenerPreview />} />
+          <Route path="/profile"          element={<Profile />} />
+          <Route path="/settings"         element={<Settings />} />
+
+          {/* ── Listener tab-bar routes — so iOS tab bar works for creator accounts ── */}
+          <Route path="/"                 element={<Home />} />
+          <Route path="/search"           element={<Search />} />
+          <Route path="/library"          element={<Library />} />
+          <Route path="/shop"             element={<Shop />} />
+          <Route path="/marketplace"      element={<Marketplace />} />
+          <Route path="/marketplace/:id"  element={<Marketplace />} />
+          <Route path="/messages"         element={<Messages />} />
+          <Route path="/events"           element={<Events />} />
+          <Route path="/release/:id"      element={<ReleasePage />} />
+          <Route path="/artist/:id"       element={<ArtistPage />} />
+
+          {/* ── Fallback ── */}
+          <Route path="*"                 element={<Dashboard />} />
         </Routes>
       </div>
     </div>
