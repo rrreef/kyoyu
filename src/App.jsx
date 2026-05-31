@@ -104,7 +104,6 @@ function ListenerApp() {
         className="main-content"
         style={{ paddingTop:'var(--page-top)', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 62px)' : 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
       >
-        <RouteReporter />
         <Routes>
           <Route path="/"               element={<Home />} />
           <Route path="/search"         element={<Search />} />
@@ -170,6 +169,9 @@ function RoleGate() {
   if (!role)              return <EntryScreen />;
   return (
     <>
+      {/* RouteReporter at top level — registers window.__kyoyuGo for ALL roles so
+          the native iOS tab bar can always drive React Router navigation */}
+      <RouteReporter />
       <SuccessToast />
       {role === 'admin'    && <AdminApp />}
       {role === 'listener' && <ListenerApp />}
