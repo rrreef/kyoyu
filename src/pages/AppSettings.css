@@ -183,3 +183,60 @@
   font-size: .7rem;
   color: rgba(255,255,255,.3);
 }
+
+/* ── App Icon Picker ───────────────────────────────────────── */
+.appsettings-icon-grid {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+}
+.appsettings-icon-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  position: relative;
+  flex: 1;
+}
+.appsettings-icon-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid transparent;
+  transition: border-color .16s, transform .12s;
+  box-shadow: 0 2px 12px rgba(0,0,0,.4);
+}
+.appsettings-icon-option.active .appsettings-icon-thumb {
+  border-color: rgba(255,255,255,.65);
+  transform: scale(1.04);
+}
+.appsettings-icon-option:active .appsettings-icon-thumb {
+  transform: scale(.96);
+}
+.appsettings-icon-label {
+  font-size: .70rem;
+  font-weight: 500;
+  color: rgba(255,255,255,.50);
+  letter-spacing: .02em;
+}
+.appsettings-icon-option.active .appsettings-icon-label {
+  color: rgba(255,255,255,.85);
+}
+.appsettings-icon-check {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: rgba(255,255,255,.9);
+  color: #000;
+  border-radius: 50%;
+  padding: 2px;
+  width: 16px;
+  height: 16px;
+}
