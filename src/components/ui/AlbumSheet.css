@@ -29,12 +29,13 @@
   -webkit-backdrop-filter: var(--glass-blur-lg);
 
   /* iOS sheet shape — big radius on top corners only */
-  border-radius: 28px 28px 0 0;
+  border-radius: 28px;
 
   /* Specular top edge (the "glass rim" light catch) */
-  border-top:  1px solid rgba(255, 255, 255, 0.22);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  border-right:1px solid rgba(255, 255, 255, 0.08);
+  border-top:    1px solid rgba(255, 255, 255, 0.22);
+  border-left:   1px solid rgba(255, 255, 255, 0.08);
+  border-right:  1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
   box-shadow:
     0 -2px  30px rgba(0,  0,  0,  0.35),
