@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Plus, Wand2, ChevronDown, ChevronUp, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -7,7 +7,33 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDisplay, useLibraryLayoutLive } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
+import AlbumSheet from '../components/ui/AlbumSheet';
 import './Library.css';
+
+function groupByAlbum(tracks) {
+  const map = new Map();
+  tracks.forEach(t => {
+    const hasAlbum = t.album && t.album.trim() && t.album.trim() !== t.title.trim();
+    const key = hasAlbum ? `album::${t.album.trim()}::${t.artist.trim()}` : `single::${t.id}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        id: key,
+        title:  hasAlbum ? t.album.trim() : t.title,
+        artist: t.artist,
+        cover:  t.cover,
+        label:  t.label,
+        genre:  t.genre,
+        year:   t.year,
+        tracks: [],
+      });
+    }
+    const entry = map.get(key);
+    entry.tracks.push(t);
+    if (!entry.cover && t.cover) entry.cover = t.cover;
+  });
+  return Array.from(map.values());
+}
+
 
 /* ── Shelf card — identical to Home ───────────────────────── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
@@ -87,8 +113,41 @@ export default function Library() {
   const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
   const { playRelease } = usePlayer();
   const libraryLayout = useLibraryLayoutLive();
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
+  // Group saved releases into albums for the grid view
+  const savedAlbums = useMemo(() => {
+    // Convert mockData releases to the flat-track format groupByAlbum expects
+    const flat = savedReleaseObjects.map(r => ({
+      id:     r.id,
+      title:  r.title,
+      artist: r.artist,
+      album:  r.title, // mock releases have no separate album field → treat as album
+      cover:  r.cover,
+      label:  r.label  || '',
+      genre:  r.genre  || '',
+      year:   r.year   || '',
+      audioUrl: null,
+      tracks: r.tracks || [],
+    }));
+    // Wrap each as its own album (mock data is already album-level)
+    return savedReleaseObjects.map(r => ({
+      id:     r.id,
+      title:  r.title,
+      artist: r.artist,
+      cover:  r.cover,
+      label:  r.label  || '',
+      genre:  r.genre  || '',
+      year:   r.year   || '',
+      tracks: (r.tracks || []).map(t => ({
+        ...t,
+        artist:   r.artist,
+        cover:    r.cover,
+        audioUrl: t.src || t.fileUrl || null,
+      })),
+    }));
+  }, [savedReleaseObjects]);
 
   // Sort helper — operates on arrays with a date-like field
   const sortByDate = arr => sortDesc ? [...arr].reverse() : [...arr];
@@ -177,16 +236,21 @@ export default function Library() {
               <>
                 <div className="shelf-row-label" style={{marginTop: hasTracks ? 16 : 0}}>Liked Releases</div>
                 <div className="upl-grid upl-grid-3">
-                  {sortByDate(savedReleaseObjects).map(r => (
-                    <div key={r.id} className="upl-grid-cell">
+                  {sortByDate(savedAlbums).map(album => (
+                    <button
+                      key={album.id}
+                      className="upl-grid-cell"
+                      style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                      onClick={() => setSelectedAlbum(album)}
+                    >
                       <div className="upl-grid-art">
-                        {r.cover
-                          ? <img src={r.cover} alt={r.title} loading="lazy"/>
+                        {album.cover
+                          ? <img src={album.cover} alt={album.title} loading="lazy"/>
                           : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                       </div>
-                      <div className="upl-grid-title">{r.title}</div>
-                      <div className="upl-grid-artist">{r.artist}</div>
-                    </div>
+                      <div className="upl-grid-title">{album.title}</div>
+                      <div className="upl-grid-artist">{album.artist}</div>
+                    </button>
                   ))}
                 </div>
               </>
@@ -286,6 +350,11 @@ export default function Library() {
                 : <UploadGridView uploads={myUploads} cols={libraryLayout.cols}/>
               }
             </>
+      )}
+
+      {/* Album sheet */}
+      {selectedAlbum && (
+        <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
 
       {/* Create Playlist Modal */}

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
 import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
@@ -9,7 +9,38 @@ import { useLibrary } from '../contexts/LibraryContext';
 import { useDisplay, useHomeLayoutLive } from '../contexts/DisplayContext';
 import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
+import AlbumSheet from '../components/ui/AlbumSheet';
 import './Home.css';
+
+/**
+ * Groups an array of flat tracks into album objects.
+ * Tracks sharing the same non-empty `album` field are grouped together.
+ * Standalone tracks (no album or album === title) get their own entry.
+ */
+function groupByAlbum(tracks) {
+  const map = new Map();
+  tracks.forEach(t => {
+    const hasAlbum = t.album && t.album.trim() && t.album.trim() !== t.title.trim();
+    const key = hasAlbum ? `album::${t.album.trim()}::${t.artist.trim()}` : `single::${t.id}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        id:     key,
+        title:  hasAlbum ? t.album.trim() : t.title,
+        artist: t.artist,
+        cover:  t.cover,
+        label:  t.label,
+        genre:  t.genre,
+        year:   t.year,
+        tracks: [],
+      });
+    }
+    const entry = map.get(key);
+    entry.tracks.push(t);
+    // Prefer a track with a cover for the album art
+    if (!entry.cover && t.cover) entry.cover = t.cover;
+  });
+  return Array.from(map.values());
+}
 
 /* ── Compact shelf card for playlists / radios ── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
@@ -37,13 +68,17 @@ export default function Home() {
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
   const homeLayout = useHomeLayoutLive();
-  const [myUploads, setMyUploads] = useState([]);
+  const [myUploads,      setMyUploads]      = useState([]);
   const [publicReleases, setPublicReleases] = useState([]);
+  const [selectedAlbum,  setSelectedAlbum]  = useState(null);
 
-  // The featured hero is just the newest public release
-  const featured = publicReleases[0] || null;
+  // Group flat tracks into albums
+  const publicAlbums = useMemo(() => groupByAlbum(publicReleases), [publicReleases]);
 
-  // Load real public releases from backend (visible to all listeners)
+  // Featured hero = first album that has a cover
+  const featured = publicAlbums.find(a => a.cover) || publicAlbums[0] || null;
+
+  // Load real public releases from backend
   useEffect(() => {
     fetchPublicTracks().then(setPublicReleases).catch(() => {});
   }, []);
@@ -234,51 +269,66 @@ export default function Home() {
       )}
 
 
-      {/* New Releases — real data from creators */}
+      {/* New Releases — grouped by album */}
       <section className="home-section">
         <div className="section-title">
           <span>New Releases</span>
           <Link to="/search">See All <ArrowRight size={12} /></Link>
         </div>
-        {publicReleases.length === 0 ? (
+        {publicAlbums.length === 0 ? (
           <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
         ) : (
           <div className="upl-grid upl-grid-3">
-            {publicReleases.map(r => (
-              <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
+            {publicAlbums.map(album => (
+              <button
+                key={album.id}
+                className="upl-grid-cell"
+                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => setSelectedAlbum(album)}
+              >
                 <div className="upl-grid-art">
-                  {r.cover
-                    ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/>
+                  {album.cover
+                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
                     : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                 </div>
-                <div className="upl-grid-title">{r.title}</div>
-                <div className="upl-grid-artist">{r.artist}</div>
-              </Link>
+                <div className="upl-grid-title">{album.title}</div>
+                <div className="upl-grid-artist">{album.artist}</div>
+              </button>
             ))}
           </div>
         )}
       </section>
 
       {/* Because You Listened */}
-      {publicReleases.length >= 3 && (
+      {publicAlbums.length >= 3 && (
         <section className="home-section">
           <div className="section-title">
             <span>Because You Listened</span>
           </div>
           <div className="upl-grid upl-grid-3">
-            {publicReleases.slice(0, 6).map(r => (
-              <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
+            {publicAlbums.slice(0, 6).map(album => (
+              <button
+                key={album.id}
+                className="upl-grid-cell"
+                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => setSelectedAlbum(album)}
+              >
                 <div className="upl-grid-art">
-                  {r.cover
-                    ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/>
+                  {album.cover
+                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
                     : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                 </div>
-                <div className="upl-grid-title">{r.title}</div>
-                <div className="upl-grid-artist">{r.artist}</div>
-              </Link>
+                <div className="upl-grid-title">{album.title}</div>
+                <div className="upl-grid-artist">{album.artist}</div>
+              </button>
             ))}
           </div>
         </section>
+      )}
+
+      {/* Album detail sheet */}
+      {selectedAlbum && (
+        <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
       {/* Artists */}
       <section className="home-section">
