@@ -446,39 +446,47 @@ export async function fetchAllArtists() {
  * Fetches all public releases directly from Supabase REST API.
  * Uses the anon key — works because of the RLS policy:
  *   "Public tracks readable by everyone" (visibility = 'public')
- * No serverless function needed.
  *
- * @param {string} [query] - optional search filter
- * @returns {Promise<Array>} normalized release objects
+ * Actual tracks table columns (verified):
+ *   id, creator_id, title, artist, album, genre, year, duration, format,
+ *   tags, visibility, status, storage_key, artwork_key, artwork_url,
+ *   created_at, published_at, label, publish_at
+ *
+ * Audio lives on R2 at: ${R2_PUBLIC}/${storage_key}
  */
 export async function fetchPublicTracks(query = '') {
   try {
-    // Build filter string
-    let filter = 'visibility=eq.public';
+    let qs = 'visibility=eq.public&order=created_at.desc&limit=200';
+
     if (query) {
       const q = encodeURIComponent(`%${query}%`);
-      filter += `&or=(title.ilike.${q},artist.ilike.${q},album.ilike.${q},label.ilike.${q},genre.ilike.${q})`;
+      qs += `&or=(title.ilike.${q},artist.ilike.${q},album.ilike.${q},label.ilike.${q},genre.ilike.${q})`;
     }
 
-    const url = `${supabaseUrl}/rest/v1/tracks?${filter}&order=created_at.desc&limit=200&select=id,title,artist,album,label,genre,year,artwork_url,artwork_key,audio_url,audio_key,creator_id,created_at,digital_format,physical_format`;
+    // select=* — safe against any future schema changes, avoids 400 on unknown columns
+    const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*`;
 
     const res = await fetch(url, {
       headers: {
-        'apikey':  supabaseAnon,
-        'Accept':  'application/json',
-        'Range':   '0-199',
+        'apikey': supabaseAnon,
+        'Accept': 'application/json',
+        'Range':  '0-199',
       },
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      console.warn('[fetchPublicTracks] Supabase error:', err);
+      console.warn('[fetchPublicTracks] error:', err);
       return [];
     }
 
     const tracks = await res.json();
+    if (!Array.isArray(tracks)) {
+      console.warn('[fetchPublicTracks] unexpected response:', tracks);
+      return [];
+    }
 
-    return (tracks || []).map(t => ({
+    return tracks.map(t => ({
       id:       t.id,
       title:    t.title   || 'Untitled',
       artist:   t.artist  || 'Unknown Artist',
@@ -487,20 +495,14 @@ export async function fetchPublicTracks(query = '') {
       label:    t.label   || '',
       genre:    t.genre   || '',
       year:     t.year    || new Date().getFullYear(),
+      // Artwork: stored either as full URL or key in Supabase storage
       cover:
         t.artwork_url ||
         (t.artwork_key
           ? `${supabaseUrl}/storage/v1/object/public/artwork/${t.artwork_key}`
           : null),
-      audioUrl:
-        t.audio_url ||
-        (t.audio_key
-          ? `${supabaseUrl}/storage/v1/object/public/audio/${t.audio_key}`
-          : null),
-      formats: [
-        t.digital_format  !== 'None' ? t.digital_format  : null,
-        t.physical_format !== 'None' ? t.physical_format : null,
-      ].filter(Boolean),
+      // Audio: lives on R2
+      audioUrl: t.storage_key ? `${R2_PUBLIC}/${t.storage_key}` : null,
       createdAt: t.created_at,
     }));
   } catch (e) {
