@@ -443,20 +443,66 @@ export async function fetchAllArtists() {
 }
 
 /**
- * Fetches all public releases — no auth required.
- * Calls /api/public-tracks which uses the service role key to bypass RLS.
+ * Fetches all public releases directly from Supabase REST API.
+ * Uses the anon key — works because of the RLS policy:
+ *   "Public tracks readable by everyone" (visibility = 'public')
+ * No serverless function needed.
+ *
  * @param {string} [query] - optional search filter
  * @returns {Promise<Array>} normalized release objects
  */
 export async function fetchPublicTracks(query = '') {
   try {
-    const url = query
-      ? `/api/public-tracks?q=${encodeURIComponent(query)}`
-      : '/api/public-tracks';
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { tracks } = await res.json();
-    return tracks || [];
+    // Build filter string
+    let filter = 'visibility=eq.public';
+    if (query) {
+      const q = encodeURIComponent(`%${query}%`);
+      filter += `&or=(title.ilike.${q},artist.ilike.${q},album.ilike.${q},label.ilike.${q},genre.ilike.${q})`;
+    }
+
+    const url = `${supabaseUrl}/rest/v1/tracks?${filter}&order=created_at.desc&limit=200&select=id,title,artist,album,label,genre,year,artwork_url,artwork_key,audio_url,audio_key,creator_id,created_at,digital_format,physical_format`;
+
+    const res = await fetch(url, {
+      headers: {
+        'apikey':  supabaseAnon,
+        'Accept':  'application/json',
+        'Range':   '0-199',
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[fetchPublicTracks] Supabase error:', err);
+      return [];
+    }
+
+    const tracks = await res.json();
+
+    return (tracks || []).map(t => ({
+      id:       t.id,
+      title:    t.title   || 'Untitled',
+      artist:   t.artist  || 'Unknown Artist',
+      artistId: t.creator_id,
+      album:    t.album   || t.title || '',
+      label:    t.label   || '',
+      genre:    t.genre   || '',
+      year:     t.year    || new Date().getFullYear(),
+      cover:
+        t.artwork_url ||
+        (t.artwork_key
+          ? `${supabaseUrl}/storage/v1/object/public/artwork/${t.artwork_key}`
+          : null),
+      audioUrl:
+        t.audio_url ||
+        (t.audio_key
+          ? `${supabaseUrl}/storage/v1/object/public/audio/${t.audio_key}`
+          : null),
+      formats: [
+        t.digital_format  !== 'None' ? t.digital_format  : null,
+        t.physical_format !== 'None' ? t.physical_format : null,
+      ].filter(Boolean),
+      createdAt: t.created_at,
+    }));
   } catch (e) {
     console.warn('[fetchPublicTracks]', e.message);
     return [];
