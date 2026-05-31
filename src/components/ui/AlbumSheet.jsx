@@ -1,44 +1,42 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useCallback } from 'react';
-import { Play, Pause, X, Music2, PlayCircle } from 'lucide-react';
+import { X, Music2, Play, Pause, PlayCircle } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import './AlbumSheet.css';
 
-/**
- * Converts a public track object into the format expected by PlayerContext.playTrack().
- * The player looks for `src` or `fileUrl` for the audio URL.
- */
+/** Map a public track to the shape PlayerContext.playTrack() expects. */
 function toPlayerTrack(t, album) {
   return {
     id:           t.id,
     title:        t.title,
     artist:       t.artist,
-    src:          t.audioUrl || '',
-    fileUrl:      t.audioUrl || '',
-    releaseCover: t.cover || album.cover,
+    src:          t.audioUrl   || t.src   || '',
+    fileUrl:      t.audioUrl   || t.src   || '',
+    releaseCover: t.cover      || album.cover,
     releaseTitle: album.title,
     artistName:   t.artist,
   };
 }
 
 /**
- * AlbumSheet — iOS-style slide-up sheet showing an album's tracks.
+ * AlbumSheet
+ * iOS liquid-glass slide-up sheet — sits 3px above the native tab bar.
  *
  * Props:
- *   album   — { id, title, artist, cover, label, genre, year, tracks: [] }
+ *   album   — { id, title, artist, cover, label, genre, year, tracks[] }
  *   onClose — () => void
  */
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack, state } = usePlayer();
 
-  // Close on Escape
+  /* Close on Escape */
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
-  // Lock body scroll while open
+  /* Lock body scroll while open */
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -54,30 +52,36 @@ export default function AlbumSheet({ album, onClose }) {
   const playOne = useCallback((track) => {
     const queue = album.tracks.map(t => toPlayerTrack(t, album));
     const idx   = queue.findIndex(q => q.id === track.id);
-    playTrack(queue[idx], queue);
+    playTrack(queue[Math.max(idx, 0)], queue);
   }, [album, playTrack]);
 
-  const isCurrentlyPlaying = (track) =>
-    state.currentTrack?.id === track.id && state.isPlaying;
+  const isPlaying = (t) => state.currentTrack?.id === t.id && state.isPlaying;
 
-  const sheet = (
+  return createPortal(
     <>
-      <div className="album-sheet-backdrop" onClick={onClose} />
-      <div className="album-sheet" role="dialog" aria-modal="true">
+      {/* Backdrop */}
+      <div className="album-sheet-backdrop" onClick={onClose} aria-hidden="true" />
+
+      {/* Sheet */}
+      <div className="album-sheet" role="dialog" aria-modal="true" aria-label={album.title}>
+
+        {/* Handle + Close */}
         <div className="as-handle-row">
           <div className="as-handle" />
         </div>
         <button className="as-close" onClick={onClose} aria-label="Close">
-          <X size={14} />
+          <X size={13} strokeWidth={2.5} />
         </button>
 
+        {/* Scrollable content */}
         <div className="as-body">
+
           {/* Hero */}
           <div className="as-hero">
             <div className="as-art">
               {album.cover
-                ? <img src={album.cover} alt={album.title} />
-                : <Music2 size={32} color="rgba(255,255,255,.25)" />}
+                ? <img src={album.cover} alt={album.title} loading="eager" />
+                : <Music2 size={30} color="rgba(255,255,255,.22)" />}
             </div>
             <div className="as-meta">
               <div className="as-album-title">{album.title}</div>
@@ -95,44 +99,47 @@ export default function AlbumSheet({ album, onClose }) {
 
           {/* Play All */}
           <button className="as-play-all" onClick={playAll}>
-            <PlayCircle size={20} />
+            <PlayCircle size={18} strokeWidth={2} />
             Play All
           </button>
 
+          <div className="as-divider" />
+
           {/* Track list */}
-          <div className="as-tracks">
+          <div className="as-tracks" role="list">
             {album.tracks.map((t, i) => {
-              const playing = isCurrentlyPlaying(t);
+              const playing = isPlaying(t);
               return (
                 <div
                   key={t.id}
                   className={`as-track${playing ? ' as-playing' : ''}`}
+                  role="listitem"
                   onClick={() => playOne(t)}
                 >
-                  <div className="as-track-num">{i + 1}</div>
+                  <span className="as-track-num">{i + 1}</span>
                   <div className="as-track-info">
                     <div className="as-track-title">{t.title}</div>
-                    {t.artist !== album.artist && (
+                    {t.artist && t.artist !== album.artist && (
                       <div className="as-track-artist">{t.artist}</div>
                     )}
                   </div>
                   <button
                     className="as-track-play"
                     onClick={(e) => { e.stopPropagation(); playOne(t); }}
-                    aria-label={playing ? 'Now playing' : `Play ${t.title}`}
+                    aria-label={playing ? 'Playing' : `Play ${t.title}`}
                   >
                     {playing
-                      ? <Pause size={14} fill="currentColor" />
-                      : <Play  size={14} fill="currentColor" style={{ marginLeft: 2 }} />}
+                      ? <Pause size={13} fill="currentColor" strokeWidth={0} />
+                      : <Play  size={13} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />}
                   </button>
                 </div>
               );
             })}
           </div>
+
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
-
-  return createPortal(sheet, document.body);
 }
