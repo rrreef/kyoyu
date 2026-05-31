@@ -276,7 +276,7 @@ export default function Home() {
         </div>
         {homeLayout.mode === 'list' ? (
           <div className="upl-exp-list">
-            {releases.slice(0,4).map(r => (
+            {publicReleases.slice(0,4).map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-exp-item" style={{textDecoration:'none'}}>
                 <div className="upl-exp-art">{r.cover && <img src={r.cover} alt={r.title} loading="lazy"/>}</div>
                 <div className="upl-exp-meta" style={{flex:1,minWidth:0}}>
@@ -288,7 +288,7 @@ export default function Home() {
           </div>
         ) : (
           <div className={`upl-grid upl-grid-${Math.min(5,Math.max(1,homeLayout.cols))}`}>
-            {releases.slice(0,4).map(r => (
+            {publicReleases.slice(0,4).map(r => (
               <Link key={r.id} to={`/release/${r.id}`} className="upl-grid-cell" style={{textDecoration:'none'}}>
                 <div className="upl-grid-art">
                   {r.cover ? <img src={r.cover} alt={r.title} loading="lazy" decoding="async"/> : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
