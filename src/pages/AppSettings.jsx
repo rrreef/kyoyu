@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List } from 'lucide-react';
+import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { useDisplay } from '../contexts/DisplayContext';
+import { useAuth } from '../contexts/AuthContext';
 import './AppSettings.css';
 
 const isNativeApp = navigator.userAgent.includes('KyoyuApp');
@@ -66,6 +67,7 @@ function LayoutPicker({ value, onChange }) {
 
 export default function AppSettings() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [theme, setTheme] = useTheme();
   const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
   const [notifications,  setNotifications]  = useState(true);
@@ -278,6 +280,14 @@ export default function AppSettings() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Sign Out */}
+      <div className="appsettings-section">
+        <button className="appsettings-signout glass" onClick={logout}>
+          <LogOut size={16} />
+          Sign Out
+        </button>
       </div>
 
     </div>

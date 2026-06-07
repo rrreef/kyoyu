@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut, Palette, ChevronLeft } from 'lucide-react';
+import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut, ChevronLeft } from 'lucide-react';
 import { userProfile, payoutData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import './Profile.css';
@@ -77,7 +77,7 @@ export default function Profile() {
             { icon: Music,     label: 'My Releases',       to: '/releases'  },
             { icon: FileText,  label: 'Upload New Release', to: '/upload'   },
             { icon: Bell,      label: 'Notifications',     to: '/profile'   },
-            { icon: Settings,  label: 'Account Settings',  to: '/settings'  },
+            { icon: Settings,  label: 'Account Settings',  to: '/app-settings' },
           ].map(({ icon: Icon, label, to }) => (
             <Link key={label} to={to} className="profile-menu-item glass">
               <Icon size={18} />
