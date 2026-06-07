@@ -163,7 +163,6 @@ export default function Profile() {
           { icon: Download, label: 'Downloads',             to: '/downloads'    },
           { icon: Disc3,    label: 'Merch Orders',          to: '/orders'       },
           { icon: BarChart3,label: 'Manage Subscription',   to: '/subscription' },
-          { icon: Palette,  label: 'Appearance',            to: '/settings'     },
           { icon: Settings, label: 'Settings',              to: '/app-settings' },
         ].map(({ icon: Icon, label, to }) => (
           <Link key={label} to={to} className="profile-menu-item glass">

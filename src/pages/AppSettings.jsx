@@ -1,16 +1,38 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Layers } from 'lucide-react';
+import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List } from 'lucide-react';
+import { useTheme, THEMES } from '../hooks/useTheme';
+import { useDisplay } from '../contexts/DisplayContext';
 import './AppSettings.css';
 
 const isNativeApp = navigator.userAgent.includes('KyoyuApp');
 
 const LANGUAGES = ['English','Français','Deutsch','Italiano','Español','Português','Nederlands','Svenska','日本語'];
 const QUALITIES  = [
-  { id:'low',    label:'Low',    sub:'~96 kbps — saves data' },
-  { id:'normal', label:'Normal', sub:'~160 kbps' },
-  { id:'high',   label:'High',   sub:'~320 kbps' },
+  { id:'low',     label:'Low',     sub:'~96 kbps — saves data' },
+  { id:'normal',  label:'Normal',  sub:'~160 kbps' },
+  { id:'high',    label:'High',    sub:'~320 kbps' },
   { id:'lossless',label:'Lossless',sub:'FLAC / ALAC — best quality' },
+];
+
+const THEME_PREVIEWS = {
+  dark:  { bg: '#060608', surface: 'rgba(255,255,255,0.05)' },
+  grey:  { bg: '#16161e', surface: 'rgba(255,255,255,0.08)' },
+  white: { bg: '#f0f0f5', surface: 'rgba(255,255,255,0.85)' },
+};
+
+const LAYOUT_OPTIONS = [
+  { id: 'list', label: 'List' },
+  { id: '1', label: '1' },
+  { id: '2', label: '2' },
+  { id: '3', label: '3' },
+  { id: '4', label: '4' },
+  { id: '5', label: '5' },
+];
+
+const ICONS = [
+  { id: 'default', label: 'Default', thumb: '/icon-default-thumb.png', nativeName: 'default' },
+  { id: 'alt',     label: 'Minimal', thumb: '/icon-alt-thumb.png',     nativeName: 'AppIconAlt' },
 ];
 
 function Toggle({ on, onChange }) {
@@ -21,30 +43,48 @@ function Toggle({ on, onChange }) {
   );
 }
 
+function LayoutPicker({ value, onChange }) {
+  const current = value.mode === 'list' ? 'list' : String(value.cols);
+  return (
+    <div className="appsettings-layout-picker">
+      {LAYOUT_OPTIONS.map(opt => (
+        <button
+          key={opt.id}
+          className={`appsettings-layout-btn${current === opt.id ? ' active' : ''}`}
+          onClick={() => onChange(
+            opt.id === 'list'
+              ? { mode: 'list', cols: 1 }
+              : { mode: 'grid', cols: parseInt(opt.id) }
+          )}
+        >
+          {opt.id === 'list' ? <List size={13} strokeWidth={2}/> : <span className="appsettings-layout-num">{opt.label}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AppSettings() {
   const navigate = useNavigate();
-  const [notifications,    setNotifications]    = useState(true);
-  const [dynamicIsland,    setDynamicIsland]    = useState(true);
-  const [tracking,         setTracking]         = useState(false);
-  const [language,         setLanguage]         = useState('English');
-  const [quality,          setQuality]          = useState('high');
-  const [langOpen,         setLangOpen]         = useState(false);
-  const [checking,         setChecking]         = useState(false);
-  const [upToDate,         setUpToDate]         = useState(false);
-  const [activeIcon,       setActiveIcon]       = useState('default');
+  const [theme, setTheme] = useTheme();
+  const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
+  const [notifications,  setNotifications]  = useState(true);
+  const [dynamicIsland,  setDynamicIsland]  = useState(true);
+  const [tracking,       setTracking]       = useState(false);
+  const [language,       setLanguage]       = useState('English');
+  const [quality,        setQuality]        = useState('high');
+  const [langOpen,       setLangOpen]       = useState(false);
+  const [checking,       setChecking]       = useState(false);
+  const [upToDate,       setUpToDate]       = useState(false);
+  const [activeIcon,     setActiveIcon]     = useState('default');
   const APP_VERSION = '1.0.4';
-
-  const ICONS = [
-    { id: 'default',    label: 'Default',   thumb: '/icon-default-thumb.png', nativeName: 'default' },
-    { id: 'alt',        label: 'Minimal',   thumb: '/icon-alt-thumb.png',     nativeName: 'AppIconAlt' },
-  ];
 
   function changeIcon(icon) {
     if (icon.id === activeIcon) return;
     if (window.webkit?.messageHandlers?.changeAppIcon) {
       window.webkit.messageHandlers.changeAppIcon.postMessage(icon.nativeName);
-      setActiveIcon(icon.id);
     }
+    setActiveIcon(icon.id);
   }
 
   function checkUpdate() {
@@ -60,6 +100,88 @@ export default function AppSettings() {
           <ChevronLeft size={18} />
         </button>}
         <h1>Settings</h1>
+      </div>
+
+      {/* Appearance — Theme */}
+      <div className="appsettings-section">
+        <div className="appsettings-label">Appearance</div>
+        <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Paintbrush2 size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="appsettings-row-title">Theme</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+            {THEMES.map(({ id, label }) => {
+              const p = THEME_PREVIEWS[id] || THEME_PREVIEWS.dark;
+              const active = theme === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setTheme(id)}
+                  style={{
+                    flex: 1, border: 'none', cursor: 'pointer', padding: '8px 0',
+                    borderRadius: 10,
+                    background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                    outline: active ? '1.5px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    transition: 'all .15s',
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 24, borderRadius: 6,
+                    background: p.bg, border: '1px solid rgba(255,255,255,0.12)',
+                    position: 'relative', overflow: 'hidden',
+                  }}>
+                    <div style={{ position: 'absolute', bottom: 4, left: 4, right: 4, height: 5, borderRadius: 2, background: p.surface }} />
+                  </div>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? '#fff' : 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {active && <Check size={9} strokeWidth={3} />}{label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Display Layout */}
+      <div className="appsettings-section">
+        <div className="appsettings-label">Display</div>
+        <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <LayoutGrid size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="appsettings-row-title">Layout</span>
+          </div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="appsettings-appearance-row">
+              <span className="appsettings-appearance-row-label">Home</span>
+              <LayoutPicker value={homeLayout} onChange={setHomeLayout} />
+            </div>
+            <div style={{ height: 0.5, background: 'rgba(255,255,255,0.07)' }} />
+            <div className="appsettings-appearance-row">
+              <span className="appsettings-appearance-row-label">Library</span>
+              <LayoutPicker value={libraryLayout} onChange={setLibraryLayout} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* App Icon */}
+      <div className="appsettings-section">
+        <div className="appsettings-label">App Icon</div>
+        <div className="appsettings-icon-grid glass">
+          {ICONS.map(icon => (
+            <button
+              key={icon.id}
+              className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
+              onClick={() => changeIcon(icon)}
+            >
+              <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
+              <span className="appsettings-icon-label">{icon.label}</span>
+              {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Notifications */}
@@ -139,25 +261,7 @@ export default function AppSettings() {
         </div>
       </div>
 
-      {/* App Icon */}
-      <div className="appsettings-section">
-        <div className="appsettings-label">App Icon</div>
-        <div className="appsettings-icon-grid glass">
-          {ICONS.map(icon => (
-            <button
-              key={icon.id}
-              className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
-              onClick={() => changeIcon(icon)}
-            >
-              <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
-              <span className="appsettings-icon-label">{icon.label}</span>
-              {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* App version */}
+      {/* About */}
       <div className="appsettings-section">
         <div className="appsettings-label">About</div>
         <div className="appsettings-row glass">
