@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
@@ -79,14 +79,31 @@ export default function AppSettings() {
   const [checking,       setChecking]       = useState(false);
   const [upToDate,       setUpToDate]       = useState(false);
   const [activeIcon,     setActiveIcon]     = useState('default');
+  const [iconToast,      setIconToast]      = useState(null); // 'ok' | 'err'
   const APP_VERSION = '1.0.4';
+
+  // Called back by Swift after setAlternateIconName completes
+  useEffect(() => {
+    window.__kyoyuIconResult = (iconId, success, error) => {
+      if (success) {
+        setActiveIcon(iconId);
+        setIconToast('ok');
+      } else {
+        console.warn('[Kyoyu] Icon change failed:', error);
+        setIconToast('err');
+      }
+      setTimeout(() => setIconToast(null), 2200);
+    };
+    return () => { delete window.__kyoyuIconResult; };
+  }, []);
 
   function changeIcon(icon) {
     if (icon.id === activeIcon) return;
     if (window.webkit?.messageHandlers?.changeAppIcon) {
-      window.webkit.messageHandlers.changeAppIcon.postMessage(icon.nativeName);
+      // Send "iconId|nativeName" so Swift can call back with the correct id
+      window.webkit.messageHandlers.changeAppIcon.postMessage(`${icon.id}|${icon.nativeName}`);
+      setActiveIcon(icon.id); // optimistic update
     }
-    setActiveIcon(icon.id);
   }
 
   function checkUpdate() {
@@ -184,6 +201,11 @@ export default function AppSettings() {
             </button>
           ))}
         </div>
+        {iconToast && (
+          <div className={`appsettings-icon-toast ${iconToast}`}>
+            {iconToast === 'ok' ? '✓ Icon changed' : '✗ Could not change icon — check Xcode Info.plist'}
+          </div>
+        )}
       </div>
 
       {/* Notifications */}

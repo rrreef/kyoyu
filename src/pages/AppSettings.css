@@ -264,3 +264,17 @@
   background: rgba(220, 60, 60, 0.18);
   color: rgba(255, 80, 80, 1);
 }
+
+/* ── Icon change toast ─────────────────────────────────────── */
+.appsettings-icon-toast {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  animation: iconToastIn 0.2s ease;
+}
+.appsettings-icon-toast.ok  { background: rgba(60,200,100,0.15); color: rgba(80,220,120,0.9); }
+.appsettings-icon-toast.err { background: rgba(220,60,60,0.15);  color: rgba(240,80,80,0.9);  }
+@keyframes iconToastIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
