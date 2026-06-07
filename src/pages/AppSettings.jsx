@@ -139,25 +139,23 @@ export default function AppSettings() {
         </div>
       </div>
 
-      {/* App Icon — iOS native only */}
-      {isNativeApp && (
-        <div className="appsettings-section">
-          <div className="appsettings-label">App Icon</div>
-          <div className="appsettings-icon-grid glass">
-            {ICONS.map(icon => (
-              <button
-                key={icon.id}
-                className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
-                onClick={() => changeIcon(icon)}
-              >
-                <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
-                <span className="appsettings-icon-label">{icon.label}</span>
-                {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
-              </button>
-            ))}
-          </div>
+      {/* App Icon */}
+      <div className="appsettings-section">
+        <div className="appsettings-label">App Icon</div>
+        <div className="appsettings-icon-grid glass">
+          {ICONS.map(icon => (
+            <button
+              key={icon.id}
+              className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
+              onClick={() => changeIcon(icon)}
+            >
+              <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
+              <span className="appsettings-icon-label">{icon.label}</span>
+              {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* App version */}
       <div className="appsettings-section">
