@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { Check, Paintbrush2, LayoutGrid, List } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { useDisplay } from '../contexts/DisplayContext';
@@ -47,20 +47,6 @@ function LayoutPicker({ value, onChange }) {
 export default function ListenerSettings() {
   const [theme, setTheme] = useTheme();
   const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
-  const [activeIcon, setActiveIcon] = useState('default');
-
-  const ICONS = [
-    { id: 'default', label: 'Default', thumb: '/icon-default-thumb.png', nativeName: 'default' },
-    { id: 'alt',     label: 'Minimal', thumb: '/icon-alt-thumb.png',     nativeName: 'AppIconAlt' },
-  ];
-
-  function changeIcon(icon) {
-    if (icon.id === activeIcon) return;
-    if (window.webkit?.messageHandlers?.changeAppIcon) {
-      window.webkit.messageHandlers.changeAppIcon.postMessage(icon.nativeName);
-      setActiveIcon(icon.id);
-    }
-  }
 
   return (
     <div className="page animate-in">
@@ -132,31 +118,6 @@ export default function ListenerSettings() {
                 <span><LayoutGrid size={10}/> 1–5 — grid columns of artwork tiles</span>
               </div>
             </div>
-
-            {/* App Icon — iOS native only */}
-            {isNativeApp && (
-              <div className="s-card glass" style={{ marginTop: 16 }}>
-                <div className="s-section-heading">
-                  App Icon
-                </div>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: 16 }}>
-                  Choose your home screen icon
-                </p>
-                <div className="appsettings-icon-grid" style={{ padding: 0 }}>
-                  {ICONS.map(icon => (
-                    <button
-                      key={icon.id}
-                      className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
-                      onClick={() => changeIcon(icon)}
-                    >
-                      <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
-                      <span className="appsettings-icon-label">{icon.label}</span>
-                      {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
           </div>
         </div>

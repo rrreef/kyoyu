@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
@@ -31,10 +31,6 @@ const LAYOUT_OPTIONS = [
   { id: '5', label: '5' },
 ];
 
-const ICONS = [
-  { id: 'default', label: 'Default', thumb: '/icon-default-thumb.png', nativeName: 'default' },
-  { id: 'alt',     label: 'Minimal', thumb: '/icon-alt-thumb.png',     nativeName: 'AppIconAlt' },
-];
 
 function Toggle({ on, onChange }) {
   return (
@@ -78,33 +74,8 @@ export default function AppSettings() {
   const [langOpen,       setLangOpen]       = useState(false);
   const [checking,       setChecking]       = useState(false);
   const [upToDate,       setUpToDate]       = useState(false);
-  const [activeIcon,     setActiveIcon]     = useState('default');
-  const [iconToast,      setIconToast]      = useState(null); // 'ok' | 'err'
   const APP_VERSION = '1.0.4';
 
-  // Called back by Swift after setAlternateIconName completes
-  useEffect(() => {
-    window.__kyoyuIconResult = (iconId, success, error) => {
-      if (success) {
-        setActiveIcon(iconId);
-        setIconToast('ok');
-      } else {
-        console.warn('[Kyoyu] Icon change failed:', error);
-        setIconToast('err');
-      }
-      setTimeout(() => setIconToast(null), 2200);
-    };
-    return () => { delete window.__kyoyuIconResult; };
-  }, []);
-
-  function changeIcon(icon) {
-    if (icon.id === activeIcon) return;
-    if (window.webkit?.messageHandlers?.changeAppIcon) {
-      // Send "iconId|nativeName" so Swift can call back with the correct id
-      window.webkit.messageHandlers.changeAppIcon.postMessage(`${icon.id}|${icon.nativeName}`);
-      setActiveIcon(icon.id); // optimistic update
-    }
-  }
 
   function checkUpdate() {
     setChecking(true);
@@ -183,29 +154,6 @@ export default function AppSettings() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* App Icon */}
-      <div className="appsettings-section">
-        <div className="appsettings-label">App Icon</div>
-        <div className="appsettings-icon-grid glass">
-          {ICONS.map(icon => (
-            <button
-              key={icon.id}
-              className={`appsettings-icon-option${activeIcon === icon.id ? ' active' : ''}`}
-              onClick={() => changeIcon(icon)}
-            >
-              <img src={icon.thumb} alt={icon.label} className="appsettings-icon-thumb" />
-              <span className="appsettings-icon-label">{icon.label}</span>
-              {activeIcon === icon.id && <Check size={12} className="appsettings-icon-check" />}
-            </button>
-          ))}
-        </div>
-        {iconToast && (
-          <div className={`appsettings-icon-toast ${iconToast}`}>
-            {iconToast === 'ok' ? '✓ Icon changed' : '✗ Could not change icon — check Xcode Info.plist'}
-          </div>
-        )}
       </div>
 
       {/* Notifications */}
