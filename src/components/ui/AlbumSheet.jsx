@@ -10,11 +10,12 @@ function toPlayerTrack(t, album) {
     id:           t.id,
     title:        t.title,
     artist:       t.artist,
-    src:          t.audioUrl   || t.src   || '',
-    fileUrl:      t.audioUrl   || t.src   || '',
-    releaseCover: t.cover      || album.cover,
+    artistName:   t.artistName || t.artist || album.artist || '',
+    src:          t.src || t.fileUrl || t.audioUrl || '',
+    fileUrl:      t.audioUrl || t.fileUrl || t.src || '',
+    releaseCover: t.cover || album.cover,
     releaseTitle: album.title,
-    artistName:   t.artist,
+    duration:     t.duration || null,
   };
 }
 
@@ -123,6 +124,7 @@ export default function AlbumSheet({ album, onClose }) {
                       <div className="as-track-artist">{t.artist}</div>
                     )}
                   </div>
+                  {t.duration && <span className="as-track-dur">{t.duration}</span>}
                   <button
                     className="as-track-play"
                     onClick={(e) => { e.stopPropagation(); playOne(t); }}

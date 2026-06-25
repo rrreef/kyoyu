@@ -295,6 +295,14 @@
   white-space: nowrap;
 }
 
+.as-track-dur {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  font-variant-numeric: tabular-nums;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
 /* Play button per track */
 .as-track-play {
   width: 32px;

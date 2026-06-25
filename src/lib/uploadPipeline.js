@@ -1,4 +1,5 @@
 import { supabaseUrl, supabaseAnon } from './supabase';
+import { parseBlob } from 'music-metadata-browser';
 
 const R2_PUBLIC = import.meta.env.VITE_R2_PUBLIC_URL || 'https://audio.ree.fm';
 
@@ -231,6 +232,25 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const { file } = audioFiles[i];
     const meta = trackMetas[i] || {};
 
+    // ── 0. Parse duration from audio file ────────────────────────────
+    let durationString = null;
+    let durationSeconds = null;
+    if (meta.duration) {
+      durationString = meta.duration;
+    } else {
+      try {
+        const metadata = await parseBlob(file);
+        const durationSecs = metadata.format.duration || 0;
+        durationSeconds = Math.round(durationSecs);
+        const mins = Math.floor(durationSecs / 60);
+        const secs = Math.floor(durationSecs % 60);
+        durationString = `${mins}:${secs.toString().padStart(2, '0')}`;
+        console.log('[KYOYU] Parsed duration:', durationString);
+      } catch (e) {
+        console.warn('[KYOYU] Could not parse duration:', e.message);
+      }
+    }
+
     // ── 1. Upload audio to R2 ──────────────────────────────────────
     onProgress?.({ track: i, total: audioFiles.length, phase: 'audio' });
     console.log('[KYOYU] Uploading audio:', file?.name, file?.size, 'bytes');
@@ -309,6 +329,8 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
       artwork_url: artworkUrl,
       label:       meta.label?.trim() || null,
       publish_at:  meta.publishAt     || null,
+      duration:    durationString,
+      duration_seconds: durationSeconds,
     }, token);
 
     console.log('[KYOYU] Track saved:', track?.id);
@@ -501,8 +523,20 @@ export async function fetchPublicTracks(query = '') {
         (t.artwork_key
           ? `${supabaseUrl}/storage/v1/object/public/artwork/${t.artwork_key}`
           : null),
-      // Audio: lives on R2
-      audioUrl: t.storage_key ? `${R2_PUBLIC}/${t.storage_key}` : null,
+      // Audio: prefer streaming AAC copy for AIFF/WAV (browsers can't stream those)
+      // Convention: streaming/{original_key_without_ext}.m4a
+      audioUrl: (() => {
+        if (!t.storage_key) return null;
+        const fmt = (t.format || '').toUpperCase();
+        if (fmt === 'AIFF' || fmt === 'AIF' || fmt === 'WAV') {
+          const base = t.storage_key.replace(/\.[^.]+$/, '');
+          return `${R2_PUBLIC}/streaming/${base}.m4a`;
+        }
+        return `${R2_PUBLIC}/${t.storage_key}`;
+      })(),
+      // Keep original URL for DJ downloads
+      downloadUrl: t.storage_key ? `${R2_PUBLIC}/${t.storage_key}` : null,
+      duration: t.duration || null,
       createdAt: t.created_at,
     }));
   } catch (e) {
