@@ -30,13 +30,20 @@ function playerReducer(state, action) {
     case 'NEXT_TRACK': {
       if (!state.queue.length) return state;
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
-      return { ...state, currentTrack: state.queue[(idx+1)%state.queue.length], progress:0, duration:0, isPlaying:true };
+      if (idx < 0) return { ...state, currentTrack: state.queue[0], progress:0, duration:0, isPlaying:true };
+      const nextIdx = (idx + 1) % state.queue.length;
+      return { ...state, currentTrack: { ...state.queue[nextIdx] }, progress:0, duration:0, isPlaying:true };
     }
     case 'PREV_TRACK': {
       if (!state.queue.length) return state;
-      if (state.progress > 3) return { ...state, progress:0 };
+      if (state.progress > 3) {
+        // Restart current track — create new object ref so useEffect re-fires
+        return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
+      }
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
-      return { ...state, currentTrack: state.queue[(idx-1+state.queue.length)%state.queue.length], progress:0, duration:0, isPlaying:true };
+      if (idx < 0) return { ...state, currentTrack: state.queue[0], progress:0, duration:0, isPlaying:true };
+      const prevIdx = (idx - 1 + state.queue.length) % state.queue.length;
+      return { ...state, currentTrack: { ...state.queue[prevIdx] }, progress:0, duration:0, isPlaying:true };
     }
     default: return state;
   }
@@ -138,7 +145,7 @@ export function PlayerProvider({ children }) {
       audio.removeEventListener('canplay', onCanPlay);
       clearTimeout(fallbackTimer);
     };
-  }, [state.currentTrack?.id]); // eslint-disable-line
+  }, [state.currentTrack?.id, state.currentTrack?._restart]); // eslint-disable-line
 
   // ── Play / pause sync ──
   useEffect(() => {
