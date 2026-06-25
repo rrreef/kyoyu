@@ -44,15 +44,14 @@ function playerReducer(state, action) {
 
 export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
-  const audioRef    = useRef(null);
-  const gainRef     = useRef(null);   // Web Audio API GainNode — controls volume on iOS
-  const ctxRef      = useRef(null);   // AudioContext
-  const sourceReady = useRef(false);  // createMediaElementSource called only once
+  const audioRef = useRef(null);
 
   // ── Create audio element on mount ──
   useEffect(() => {
     const audio = document.createElement('audio');
     audio.preload = 'metadata';
+    audio.crossOrigin = 'anonymous'; // Enable CORS for cross-origin audio
+    audio.volume = 0.8;
     audioRef.current = audio;
 
     const onTime  = () => dispatch({ type:'SET_PROGRESS', value: audio.currentTime });
@@ -79,56 +78,6 @@ export function PlayerProvider({ children }) {
     };
   }, []);
 
-  // ── Wire Web Audio API gain node (call once after first user gesture) ──
-  // On iOS, AudioContext must be created / resumed inside a user gesture.
-  // We call this from playTrack (which is always user-initiated).
-  function ensureGain() {
-    const audio = audioRef.current;
-    if (!audio || sourceReady.current) return;
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx  = new Ctx();
-      const gain = ctx.createGain();
-      gain.gain.value = 0.8;
-      const src  = ctx.createMediaElementSource(audio);
-      src.connect(gain);
-      gain.connect(ctx.destination);
-      ctxRef.current  = ctx;
-      gainRef.current = gain;
-      sourceReady.current = true;
-      // Resume immediately — must happen inside user gesture
-      if (ctx.state !== 'running') {
-        ctx.resume().catch(() => {});
-        // Retry resume after a short delay (belt & suspenders)
-        setTimeout(() => {
-          if (ctx.state !== 'running') ctx.resume().catch(() => {});
-        }, 100);
-        setTimeout(() => {
-          if (ctx.state !== 'running') ctx.resume().catch(() => {});
-        }, 500);
-      }
-    } catch(e) {
-      // Web Audio not available — fall back to audio.volume
-    }
-  }
-
-  // ── Watchdog: ensure AudioContext is running during playback ──
-  useEffect(() => {
-    if (!state.isPlaying) return;
-    const ctx = ctxRef.current;
-    if (!ctx) return;
-    // If context is suspended while we're supposed to be playing, resume it
-    const check = setInterval(() => {
-      if (ctx.state !== 'running' && state.isPlaying) {
-        ctx.resume().catch(() => {});
-      }
-    }, 1000);
-    // Also resume right now
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
-    return () => clearInterval(check);
-  }, [state.isPlaying]);
-
   // ── Track change → load + play ──
   useEffect(() => {
     const audio = audioRef.current;
@@ -137,8 +86,6 @@ export function PlayerProvider({ children }) {
     if (!src) return;
     audio.src = src;
     audio.load();
-    // Resume AudioContext if needed (iOS suspends it)
-    ctxRef.current?.resume().catch(() => {});
     audio.play().catch(() => {});
   }, [state.currentTrack?.id]); // eslint-disable-line
 
@@ -147,7 +94,6 @@ export function PlayerProvider({ children }) {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
     if (state.isPlaying) {
-      ctxRef.current?.resume().catch(() => {});
       audio.play().catch(() => {});
     } else {
       audio.pause();
@@ -155,11 +101,10 @@ export function PlayerProvider({ children }) {
   }, [state.isPlaying]); // eslint-disable-line
 
   // ── Sync in-app slider when hardware volume buttons are pressed ──
-  // Swift observes AVAudioSession.outputVolume via KVO and calls this.
   useEffect(() => {
     window.__kyoyuSystemVolumeChanged = (v) => {
       const vol = Math.max(0, Math.min(1, Number(v)));
-      if (gainRef.current) gainRef.current.gain.value = vol;
+      if (audioRef.current) audioRef.current.volume = vol;
       dispatch({ type:'SET_VOLUME', value: vol });
     };
     return () => { delete window.__kyoyuSystemVolumeChanged; };
@@ -175,29 +120,20 @@ export function PlayerProvider({ children }) {
     dispatch({ type:'SET_PROGRESS', value: t });
   }, []);
 
-  // Called on every drag frame — sets gain directly, no dispatch
+  // Called on every drag frame — sets volume directly, no dispatch
   const setAudioVolumeDirect = useCallback((v) => {
     const vol = Math.max(0, Math.min(1, v));
-    if (gainRef.current) {
-      gainRef.current.gain.value = vol;
-    } else if (audioRef.current) {
-      audioRef.current.volume = vol;   // fallback (non-iOS)
-    }
+    if (audioRef.current) audioRef.current.volume = vol;
   }, []);
 
-  // Called on drag release — sets gain + syncs React state
+  // Called on drag release — sets volume + syncs React state
   const setVolume = useCallback((v) => {
     const vol = Math.max(0, Math.min(1, v));
-    if (gainRef.current) {
-      gainRef.current.gain.value = vol;
-    } else if (audioRef.current) {
-      audioRef.current.volume = vol;
-    }
+    if (audioRef.current) audioRef.current.volume = vol;
     dispatch({ type:'SET_VOLUME', value: vol });
   }, []);
 
   function playTrack(track, queue = []) {
-    ensureGain();   // create Web Audio graph on first play (user gesture)
     // Normalise track shape — public tracks use audioUrl (R2), uploads use fileUrl/src
     const normTrack = {
       ...track,
@@ -217,7 +153,6 @@ export function PlayerProvider({ children }) {
     if (!src) return;
     audio.src = src;
     audio.load();
-    ctxRef.current?.resume().catch(() => {});
     audio.play().catch(() => {});
   }
 
@@ -243,3 +178,4 @@ export function PlayerProvider({ children }) {
 }
 
 export function usePlayer() { return useContext(PlayerContext); }
+
