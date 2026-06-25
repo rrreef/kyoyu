@@ -97,18 +97,43 @@ export function PlayerProvider({ children }) {
       ctxRef.current  = ctx;
       gainRef.current = gain;
       sourceReady.current = true;
-      // Resume in case iOS started it suspended
-      ctx.resume().catch(() => {});
+      // Resume immediately — must happen inside user gesture
+      if (ctx.state !== 'running') {
+        ctx.resume().catch(() => {});
+        // Retry resume after a short delay (belt & suspenders)
+        setTimeout(() => {
+          if (ctx.state !== 'running') ctx.resume().catch(() => {});
+        }, 100);
+        setTimeout(() => {
+          if (ctx.state !== 'running') ctx.resume().catch(() => {});
+        }, 500);
+      }
     } catch(e) {
       // Web Audio not available — fall back to audio.volume
     }
   }
 
+  // ── Watchdog: ensure AudioContext is running during playback ──
+  useEffect(() => {
+    if (!state.isPlaying) return;
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    // If context is suspended while we're supposed to be playing, resume it
+    const check = setInterval(() => {
+      if (ctx.state !== 'running' && state.isPlaying) {
+        ctx.resume().catch(() => {});
+      }
+    }, 1000);
+    // Also resume right now
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    return () => clearInterval(check);
+  }, [state.isPlaying]);
+
   // ── Track change → load + play ──
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
-    const src = state.currentTrack.src || state.currentTrack.fileUrl || '';
+    const src = state.currentTrack.src || state.currentTrack.fileUrl || state.currentTrack.audioUrl || '';
     if (!src) return;
     audio.src = src;
     audio.load();
@@ -173,11 +198,22 @@ export function PlayerProvider({ children }) {
 
   function playTrack(track, queue = []) {
     ensureGain();   // create Web Audio graph on first play (user gesture)
-    dispatch({ type:'PLAY_TRACK', track });
-    if (queue.length) dispatch({ type:'SET_QUEUE', queue });
+    // Normalise track shape — public tracks use audioUrl (R2), uploads use fileUrl/src
+    const normTrack = {
+      ...track,
+      src: track.src || track.fileUrl || track.audioUrl || '',
+      artistName: track.artistName || track.artist || '',
+    };
+    dispatch({ type:'PLAY_TRACK', track: normTrack });
+    const normQueue = queue.map(t => ({
+      ...t,
+      src: t.src || t.fileUrl || t.audioUrl || '',
+      artistName: t.artistName || t.artist || '',
+    }));
+    if (normQueue.length) dispatch({ type:'SET_QUEUE', queue: normQueue });
     const audio = audioRef.current;
     if (!audio) return;
-    const src = track.src || track.fileUrl || '';
+    const src = normTrack.src;
     if (!src) return;
     audio.src = src;
     audio.load();
@@ -188,8 +224,13 @@ export function PlayerProvider({ children }) {
   function playRelease(release) {
     if (!release?.tracks?.length) return;
     const tracks = release.tracks.map(t => ({
-      ...t, releaseId: release.id, releaseCover: release.cover,
-      releaseTitle: release.title, artistName: release.artist,
+      ...t,
+      releaseId:    release.id,
+      releaseCover: t.cover || release.cover,
+      releaseTitle: release.title,
+      artistName:   t.artist || release.artist,
+      // Normalise audio source: public tracks use audioUrl (R2)
+      src:          t.src || t.fileUrl || t.audioUrl || '',
     }));
     playTrack(tracks[0], tracks);
   }
