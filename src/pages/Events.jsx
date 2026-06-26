@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calendar, MapPin, Clock, Users, ExternalLink, ChevronRight } from 'lucide-react';
+import { Calendar, MapPin, Clock, Users, ExternalLink } from 'lucide-react';
 import './Events.css';
 
 const mockEvents = [
@@ -142,108 +142,96 @@ const mockEvents = [
 ];
 
 const TYPE_FILTERS = ['All', 'Concert', 'Club Night', 'Festival'];
-const GENRE_FILTERS = ['All', 'Techno', 'Electronic', 'Ambient', 'Experimental', 'Various'];
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+    weekday: 'short', day: 'numeric', month: 'short',
   });
 }
 
 export default function Events() {
-  const [typeFilter, setType]   = useState('All');
-  const [genreFilter, setGenre] = useState('All');
-  const [view, setView]         = useState('grid'); // 'grid' | 'list'
+  const [typeFilter, setType] = useState('All');
 
   const filtered = useMemo(() =>
     mockEvents.filter(e => {
-      if (typeFilter  !== 'All' && e.type  !== typeFilter)  return false;
-      if (genreFilter !== 'All' && e.genre !== genreFilter) return false;
+      if (typeFilter !== 'All' && e.type !== typeFilter) return false;
       return true;
     }),
-  [typeFilter, genreFilter]);
+  [typeFilter]);
 
   return (
     <div className="page events-page animate-in">
 
-      {/* ── Header ── */}
-      <div className="ev-header">
-        <div>
-          <h1>Events</h1>
-          <p className="ev-subtitle">Live shows, club nights & festivals from artists you follow</p>
-        </div>
+      {/* ── Filter chips (horizontal scroll) ── */}
+      <div className="ev-filter-row">
+        {TYPE_FILTERS.map(t => (
+          <button
+            key={t}
+            className={`ev-chip${typeFilter === t ? ' active' : ''}`}
+            onClick={() => setType(t)}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      {/* ── Filters ── */}
-      <div className="ev-filters">
-        <div className="ev-filter-group">
-          <span className="ev-filter-label">Type</span>
-          <div className="ev-chips">
-            {TYPE_FILTERS.map(t => (
-              <button key={t} className={`ev-chip${typeFilter === t ? ' active' : ''}`} onClick={() => setType(t)}>
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="ev-filter-group">
-          <span className="ev-filter-label">Genre</span>
-          <div className="ev-chips">
-            {GENRE_FILTERS.map(g => (
-              <button key={g} className={`ev-chip${genreFilter === g ? ' active' : ''}`} onClick={() => setGenre(g)}>
-                {g}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Count ── */}
-      <div className="ev-count">{filtered.length} upcoming event{filtered.length !== 1 ? 's' : ''}</div>
-
-      {/* ── Grid ── */}
-      <div className="ev-grid">
+      {/* ── Event cards — full-width, stacked ── */}
+      <div className="ev-list">
         {filtered.map(ev => (
-          <div key={ev.id} className={`ev-card glass${ev.sold_out ? ' ev-card--soldout' : ''}`}>
+          <div key={ev.id} className={`ev-card${ev.sold_out ? ' ev-card--soldout' : ''}`}>
 
-            {/* Cover / art placeholder */}
-            <div className="ev-cover">
-              <div className="ev-cover-initials">{ev.initials}</div>
-              {ev.sold_out && <div className="ev-sold-badge">Sold Out</div>}
-              <div className="ev-type-badge">{ev.type}</div>
+            {/* Left: cover art / initials */}
+            <div className="ev-card-art">
+              <div className="ev-card-initials">{ev.initials}</div>
+              {ev.sold_out && <div className="ev-badge ev-badge--sold">Sold Out</div>}
             </div>
 
-            {/* Body */}
-            <div className="ev-body">
-              <div className="ev-title">{ev.title}</div>
-              <div className="ev-artist">{ev.artist}</div>
-
-              <div className="ev-details">
-                <div className="ev-detail">
-                  <Calendar size={12} strokeWidth={1.8} />
-                  <span>{formatDate(ev.date)}</span>
-                </div>
-                <div className="ev-detail">
-                  <Clock size={12} strokeWidth={1.8} />
-                  <span>{ev.time}</span>
-                </div>
-                <div className="ev-detail">
-                  <MapPin size={12} strokeWidth={1.8} />
-                  <span>{ev.venue} · {ev.city}</span>
-                </div>
-                <div className="ev-detail">
-                  <Users size={12} strokeWidth={1.8} />
-                  <span>{ev.attending.toLocaleString()} going</span>
-                </div>
+            {/* Right: info */}
+            <div className="ev-card-body">
+              <div className="ev-card-top">
+                <div className="ev-card-title">{ev.title}</div>
+                <div className="ev-card-artist">{ev.artist}</div>
               </div>
 
-              <div className="ev-footer">
-                <span className="ev-price">{ev.price}</span>
-                <button className={`ev-btn${ev.sold_out ? ' ev-btn--disabled' : ''}`} disabled={ev.sold_out}>
-                  {ev.sold_out ? 'Sold Out' : 'Get Tickets'}
-                  {!ev.sold_out && <ExternalLink size={11} strokeWidth={2} />}
-                </button>
+              <div className="ev-card-meta">
+                <span className="ev-meta-item">
+                  <Calendar size={11} strokeWidth={1.8} />
+                  {formatDate(ev.date)}
+                </span>
+                <span className="ev-meta-item">
+                  <Clock size={11} strokeWidth={1.8} />
+                  {ev.time}
+                </span>
+                <span className="ev-meta-item">
+                  <MapPin size={11} strokeWidth={1.8} />
+                  {ev.venue}
+                </span>
               </div>
+
+              <div className="ev-card-bottom">
+                <div className="ev-card-stats">
+                  <span className="ev-stat-city">{ev.city}</span>
+                  <span className="ev-stat-going">
+                    <Users size={10} strokeWidth={1.8} />
+                    {ev.attending.toLocaleString()}
+                  </span>
+                </div>
+                <div className="ev-card-actions">
+                  <span className="ev-price">{ev.price}</span>
+                  <button
+                    className={`ev-btn${ev.sold_out ? ' ev-btn--disabled' : ''}`}
+                    disabled={ev.sold_out}
+                  >
+                    {ev.sold_out ? 'Sold Out' : 'Tickets'}
+                    {!ev.sold_out && <ExternalLink size={10} strokeWidth={2} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Type badge */}
+            <div className={`ev-type-pill ev-type-pill--${ev.type.toLowerCase().replace(/\s/g, '')}`}>
+              {ev.type}
             </div>
           </div>
         ))}
