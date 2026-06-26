@@ -290,7 +290,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
 }
 
 /* ── Root ── */
-export default function Player() {
+export default function Player({ hideMini = false }) {
   const { state, dispatch, seekTo } = usePlayer();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration } = state;
@@ -318,7 +318,10 @@ export default function Player() {
   if(!currentTrack) return null;
   return (
     <>
-      {!exp&&!isNative()&&<MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>}
+      {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
+      {!hideMini && !exp && !isNative() && (
+        <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
+      )}
       <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
         open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}/>
     </>

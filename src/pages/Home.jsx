@@ -39,6 +39,18 @@ function groupByAlbum(tracks) {
     // Prefer a track with a cover for the album art
     if (!entry.cover && t.cover) entry.cover = t.cover;
   });
+  // Sort tracks within each album by track number from storage_key
+  // e.g. "...Good_Night__Whatever_That_Is_-_03_Rousing_Rhythms.aiff" → 3
+  const extractNum = (t) => {
+    const sk = t.storageKey || t.downloadUrl || '';
+    const m = sk.match(/[-_](\d{1,3})[-_]/);
+    return m ? parseInt(m[1], 10) : 9999;
+  };
+  for (const entry of map.values()) {
+    if (entry.tracks.length > 1) {
+      entry.tracks.sort((a, b) => extractNum(a) - extractNum(b));
+    }
+  }
   return Array.from(map.values());
 }
 

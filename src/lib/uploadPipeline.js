@@ -536,6 +536,7 @@ export async function fetchPublicTracks(query = '') {
       })(),
       // Keep original URL for DJ downloads
       downloadUrl: t.storage_key ? `${R2_PUBLIC}/${t.storage_key}` : null,
+      storageKey: t.storage_key || '',
       duration: t.duration || null,
       createdAt: t.created_at,
     }));

@@ -591,6 +591,7 @@ img {
 
 /* ─── Mobile performance: disable backdrop-filter on touch devices ─── */
 /* backdrop-filter blur is GPU-intensive and causes scroll jank on mobile */
+/* .bottom-dock is excluded — it overrides this in its own CSS file      */
 @media (hover: none) and (pointer: coarse) {
   .glass,
   .glass-card,
@@ -604,3 +605,4 @@ img {
     -webkit-backdrop-filter: none !important;
   }
 }
+

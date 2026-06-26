@@ -31,6 +31,17 @@ function groupByAlbum(tracks) {
     entry.tracks.push(t);
     if (!entry.cover && t.cover) entry.cover = t.cover;
   });
+  // Sort tracks within each album by track number from storage_key
+  const extractNum = (t) => {
+    const sk = t.storageKey || t.downloadUrl || '';
+    const m = sk.match(/[-_](\d{1,3})[-_]/);
+    return m ? parseInt(m[1], 10) : 9999;
+  };
+  for (const entry of map.values()) {
+    if (entry.tracks.length > 1) {
+      entry.tracks.sort((a, b) => extractNum(a) - extractNum(b));
+    }
+  }
   return Array.from(map.values());
 }
 

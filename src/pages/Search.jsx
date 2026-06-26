@@ -135,7 +135,11 @@ export default function Search() {
           ) : filteredPublicTracks.length > 0 ? (
             <div className="search-grid">
               {filteredPublicTracks.map(t => (
-                <ReleaseCard key={t.id} release={t} />
+                <ReleaseCard key={t.id} release={{
+                  ...t,
+                  // Wrap the flat track in a release shape so playRelease works
+                  tracks: [{ ...t, src: t.audioUrl || t.src || '' }],
+                }} />
               ))}
             </div>
           ) : (

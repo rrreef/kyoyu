@@ -9,10 +9,11 @@ import { useTheme } from './hooks/useTheme';
 // Nav
 import Sidebar from './components/nav/Sidebar';
 import CreatorSidebar from './components/nav/CreatorSidebar';
-import MobileNav from './components/nav/MobileNav';
+import BottomDock from './components/nav/BottomDock';
 import TopBar from './components/nav/TopBar';
 import Player from './components/player/Player';
 import SuccessToast from './components/ui/SuccessToast';
+
 
 // Auth screens
 import EntryScreen    from './pages/auth/EntryScreen';
@@ -100,7 +101,7 @@ function ListenerApp() {
       <TopBar />
       <div
         className="main-content"
-        style={{ paddingTop:'var(--page-top)', paddingBottom: hasTrack ? 'calc(var(--kyoyu-tab-h, 83px) + 62px)' : 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
+        style={{ paddingTop:'var(--page-top)', paddingBottom: 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
       >
         {/* RouteReporter inside ListenerApp so navigate() uses this Routes context */}
         <RouteReporter />
@@ -128,8 +129,10 @@ function ListenerApp() {
           <Route path="*"               element={<Home />} />
         </Routes>
       </div>
-      <MobileNav />
-      <Player />
+      {/* BottomDock owns the mini player + nav pill (swipeable, one at a time) */}
+      <BottomDock onExpandPlayer={() => window.__kyoyuPlayerCmd?.('expand')} />
+      {/* Full-screen Player — mini bar suppressed; BottomDock shows it instead */}
+      <Player hideMini />
     </div>
   );
 }
