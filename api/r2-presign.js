@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { filename, contentType, fileSize, userId } = req.body ?? {};
+  const { filename, contentType, fileSize, userId, customKey } = req.body ?? {};
 
   if (!filename || !contentType || !userId) {
     return res.status(400).json({ error: 'Missing: filename, contentType, userId' });
@@ -42,8 +42,9 @@ export default async function handler(req, res) {
   // Normalise content type for browsers that report empty type for AIFF
   const mime = contentType || guessMime(filename);
 
+  // Use customKey if provided (e.g. streaming copies), otherwise auto-generate
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const key      = `${userId}/${Date.now()}-${safeName}`;
+  const key      = customKey || `${userId}/${Date.now()}-${safeName}`;
 
   const command = new PutObjectCommand({
     Bucket:      process.env.R2_BUCKET_NAME,

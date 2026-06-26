@@ -3,6 +3,23 @@ import { parseBlob } from 'music-metadata-browser';
 
 const R2_PUBLIC = import.meta.env.VITE_R2_PUBLIC_URL || 'https://audio.ree.fm';
 
+/* ─── Lazy-loaded ffmpeg WASM for browser-side transcoding ────────────── */
+let _ffmpeg = null;
+async function getFFmpeg() {
+  if (_ffmpeg && _ffmpeg.loaded) return _ffmpeg;
+  const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+  const { toBlobURL } = await import('@ffmpeg/util');
+  const ff = new FFmpeg();
+  // Load WASM from CDN (cached after first load)
+  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm';
+  await ff.load({
+    coreURL:   await toBlobURL(`${baseURL}/ffmpeg-core.js`,   'text/javascript'),
+    wasmURL:   await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+  _ffmpeg = ff;
+  return ff;
+}
+
 /* ─── Auth helper (NO Supabase JS client — reads JWT from localStorage) ── */
 
 /**
@@ -191,6 +208,88 @@ export function r2Url(key) {
   return `${R2_PUBLIC}/${key}`;
 }
 
+/* ─── Browser-side transcoding: AIFF/WAV → AAC M4A ──────────────────── */
+
+const TRANSCODE_FORMATS = new Set(['AIFF', 'AIF', 'WAV']);
+
+/**
+ * Transcodes an audio File (AIFF/WAV) → AAC 256k M4A using ffmpeg WASM.
+ * Returns a File object with the .m4a extension, or null on failure.
+ */
+async function transcodeToAAC(file, onProgress) {
+  try {
+    onProgress?.('loading');
+    const ff = await getFFmpeg();
+    const { fetchFile } = await import('@ffmpeg/util');
+
+    const inputName  = 'input' + (file.name.match(/\.[^.]+$/)?.[0] || '.aiff');
+    const outputName = 'output.m4a';
+
+    onProgress?.('transcoding');
+    await ff.writeFile(inputName, await fetchFile(file));
+    await ff.exec([
+      '-i', inputName,
+      '-c:a', 'aac',
+      '-b:a', '256k',
+      '-movflags', '+faststart',
+      '-y', outputName,
+    ]);
+
+    const data = await ff.readFile(outputName);
+    // Clean up WASM filesystem
+    try { await ff.deleteFile(inputName); } catch {}
+    try { await ff.deleteFile(outputName); } catch {}
+
+    const m4aBlob = new Blob([data.buffer], { type: 'audio/mp4' });
+    const m4aName = file.name.replace(/\.[^.]+$/, '.m4a');
+    onProgress?.('done');
+    return new File([m4aBlob], m4aName, { type: 'audio/mp4' });
+  } catch (e) {
+    console.warn('[KYOYU] Transcode failed (non-fatal):', e.message);
+    onProgress?.('error');
+    return null;
+  }
+}
+
+/**
+ * Uploads a transcoded streaming copy to R2 under the streaming/ prefix.
+ * storageKey = original key, e.g. "userId/timestamp-Artist_-_Title.aiff"
+ * streamingFile = the transcoded .m4a File
+ */
+async function uploadStreamingCopy(streamingFile, storageKey, userId, onProgress) {
+  const streamingKey = 'streaming/' + storageKey.replace(/\.[^.]+$/, '.m4a');
+  try {
+    // Presign for the streaming key
+    const presignRes = await fetch('/api/r2-presign', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        filename:    streamingKey.split('/').pop(),
+        contentType: 'audio/mp4',
+        fileSize:    streamingFile.size,
+        userId,
+        customKey:   streamingKey,
+      }),
+    });
+    if (!presignRes.ok) throw new Error(`Presign failed: ${presignRes.status}`);
+    const { presignedUrl } = await presignRes.json();
+
+    const uploadRes = await fetch(presignedUrl, {
+      method:  'PUT',
+      body:    streamingFile,
+      headers: { 'Content-Type': 'audio/mp4' },
+    });
+    if (!uploadRes.ok) throw new Error(`R2 upload failed: ${uploadRes.status}`);
+
+    console.log('[KYOYU] Streaming copy uploaded:', streamingKey);
+    onProgress?.(100);
+    return streamingKey;
+  } catch (e) {
+    console.warn('[KYOYU] Streaming upload failed (non-fatal):', e.message);
+    return null;
+  }
+}
+
 /* ─── Main pipeline ──────────────────────────────────────────────────── */
 
 /**
@@ -258,6 +357,23 @@ export async function uploadRelease({ audioFiles, trackMetas, globalForm, onProg
     const audioKey = await uploadToR2(file, user.id, (pct) =>
       onProgress?.({ track: i, total: audioFiles.length, phase: 'audio', pct })
     );
+
+    // ── 1b. Transcode AIFF/WAV → AAC M4A (browser-side ffmpeg WASM) ──
+    const fmt = file.name.split('.').pop().toUpperCase();
+    let streamingKey = null;
+    if (TRANSCODE_FORMATS.has(fmt)) {
+      onProgress?.({ track: i, total: audioFiles.length, phase: 'transcoding' });
+      console.log('[KYOYU] Transcoding to AAC:', file.name);
+      const m4aFile = await transcodeToAAC(file, (status) => {
+        onProgress?.({ track: i, total: audioFiles.length, phase: 'transcoding', status });
+      });
+      if (m4aFile) {
+        onProgress?.({ track: i, total: audioFiles.length, phase: 'uploading-stream' });
+        streamingKey = await uploadStreamingCopy(m4aFile, audioKey, user.id, (pct) => {
+          onProgress?.({ track: i, total: audioFiles.length, phase: 'uploading-stream', pct });
+        });
+      }
+    }
 
     // ── 2. Upload artwork to Supabase Storage ──────────────────────
     let artworkKey = null;
