@@ -284,6 +284,7 @@ function DockInner({ onExpandPlayer }) {
 
 /* ── Public export — returns null inside native iOS shell ──────── */
 export default function BottomDock({ onExpandPlayer }) {
-  if (navigator.userAgent.includes('KyoyuApp')) return null;
+  // Detect native iOS shell via webkit message handlers (our UA is standard Safari)
+  if (window.webkit?.messageHandlers?.player) return null;
   return <DockInner onExpandPlayer={onExpandPlayer} />;
 }
