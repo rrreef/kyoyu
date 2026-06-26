@@ -29,3 +29,8 @@ dist-ssr
 *.sln
 *.sw?
 .github/workflows/
+
+# Build/transcode artifacts
+.tmp-transcode/
+ffmpeg
+scripts/backfill-streaming.js
