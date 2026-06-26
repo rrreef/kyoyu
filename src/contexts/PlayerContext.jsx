@@ -30,20 +30,22 @@ function playerReducer(state, action) {
     case 'NEXT_TRACK': {
       if (!state.queue.length) return state;
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
-      if (idx < 0) return { ...state, currentTrack: state.queue[0], progress:0, duration:0, isPlaying:true };
-      const nextIdx = (idx + 1) % state.queue.length;
-      return { ...state, currentTrack: { ...state.queue[nextIdx] }, progress:0, duration:0, isPlaying:true };
+      if (idx < 0) return state;
+      // At the last track — do nothing
+      if (idx >= state.queue.length - 1) return state;
+      return { ...state, currentTrack: { ...state.queue[idx + 1] }, progress:0, duration:0, isPlaying:true };
     }
     case 'PREV_TRACK': {
       if (!state.queue.length) return state;
       if (state.progress > 3) {
-        // Restart current track — create new object ref so useEffect re-fires
+        // Restart current track
         return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
       }
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
-      if (idx < 0) return { ...state, currentTrack: state.queue[0], progress:0, duration:0, isPlaying:true };
-      const prevIdx = (idx - 1 + state.queue.length) % state.queue.length;
-      return { ...state, currentTrack: { ...state.queue[prevIdx] }, progress:0, duration:0, isPlaying:true };
+      if (idx < 0) return state;
+      // At the first track — do nothing
+      if (idx <= 0) return state;
+      return { ...state, currentTrack: { ...state.queue[idx - 1] }, progress:0, duration:0, isPlaying:true };
     }
     default: return state;
   }
