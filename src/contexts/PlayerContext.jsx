@@ -113,6 +113,19 @@ export function PlayerProvider({ children }) {
     audio.pause();
     audio.currentTime = 0;
 
+    // ── Send URL directly to native AVPlayer (iOS) ──
+    // Don't rely on the play() JS override to read currentSrc — it's racy.
+    // We know the exact URL from the track object.
+    try {
+      const mh = window.webkit?.messageHandlers;
+      if (mh?.audioFallback) {
+        // Update lastSentUrl so the play() override doesn't re-send a stale URL
+        if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
+        mh.audioFallback.postMessage({ url: src });
+      }
+      if (mh?.audioSession) mh.audioSession.postMessage('play');
+    } catch (e) { /* not in WKWebView */ }
+
     // Set pre-computed duration from DB if available (show instantly)
     if (state.currentTrack.duration) {
       const parts = String(state.currentTrack.duration).split(':');
@@ -122,14 +135,13 @@ export function PlayerProvider({ children }) {
       }
     }
 
-    // Load new source
+    // Load web audio (muted) for scrubber/duration UI
     audio.src = src;
     audio.load();
 
-    // Play when audio is ready (avoids AbortError from premature play())
+    // Play muted web audio when ready (for scrubber tracking)
     const onCanPlay = () => {
       audio.removeEventListener('canplay', onCanPlay);
-      // Only play if this is still the current track (user didn't switch again)
       if (playIdRef.current === myPlayId) {
         audio.play().catch(() => {});
       }
