@@ -69,10 +69,9 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 const FILTERS = [
   { key: 'likes',     label: 'Likes'     },
   { key: 'playlists', label: 'Playlists' },
-  { key: 'podcasts',  label: 'Podcasts'  },
-  { key: 'following', label: 'Following' },
-  { key: 'downloads', label: 'Downloads' },
-  { key: 'uploads',   label: 'My Uploads', icon: Lock },
+  { key: 'follows',   label: 'Follows'   },
+  { key: 'shared',    label: 'Shared'    },
+  { key: 'uploads',   label: 'Uploads'   },
 ];
 
 // Sub-filters that appear when Likes is active
@@ -186,41 +185,11 @@ export default function Library() {
         </button>
       </div>
 
-      {/* ── Filter bar ── */}
-      <div className="lib-filter-bar">
-        <div className="lib-filters">
-
-          {FILTERS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              className={`lib-filter-btn${activeFilter === key ? ' active' : ''}`}
-              onClick={() => handleFilterClick(key)}
-            >
-              {Icon && <Icon size={11} style={{marginRight:4,verticalAlign:'middle'}}/>}{label}
-            </button>
-          ))}
-
-          {/* Contextual Likes sub-filters */}
-          {activeFilter === 'likes' && (
-            <div className="lib-sub-filters">
-              {LIKES_SUB.map(({ key, label }) => (
-                <button
-                  key={key}
-                  className={`lib-filter-btn lib-sub-btn${likesSub === key ? ' active' : ''}`}
-                  onClick={() => setLikesSub(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Sort toggle — far right */}
-        <button className="lib-sort-btn" onClick={() => setSort(s => !s)}>
-          {sortDesc ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          <span>{sortDesc ? 'Recent' : 'Oldest'}</span>
-        </button>
+      {/* Hidden filter buttons — targeted by native LibraryFilterBar */}
+      <div style={{ display: 'none' }}>
+        {FILTERS.map(({ key }) => (
+          <button key={key} data-library-filter={key} onClick={() => handleFilterClick(key)} />
+        ))}
       </div>
 
       {/* ── Content ── */}
@@ -308,22 +277,8 @@ export default function Library() {
         </>
       )}
 
-      {/* Podcasts & DJ Sets */}
-      {activeFilter === 'podcasts' && (
-        djSets.length === 0
-          ? <div className="lib-empty"><p>No saved podcasts yet.</p><Link to="/search" className="lib-empty-link">Browse podcasts →</Link></div>
-          : <>
-              <div className="shelf-row-label">Podcasts &amp; DJ Sets</div>
-              <div className="scroll-row">
-                {djSets.map(s => (
-                  <ShelfCard key={s.id} cover={s.cover} title={s.title} sub={s.artist} badge={s.type==='podcast'?'POD':'DJ'}/>
-                ))}
-              </div>
-            </>
-      )}
-
-      {/* Following */}
-      {activeFilter === 'following' && (
+      {/* Follows */}
+      {activeFilter === 'follows' && (
         followedArtists?.length > 0
           ? <>
               <div className="shelf-row-label">Artists</div>
@@ -336,18 +291,9 @@ export default function Library() {
           : <div className="lib-empty"><p>Artists you follow will appear here.</p><Link to="/search" className="lib-empty-link">Find artists →</Link></div>
       )}
 
-      {/* Downloads */}
-      {activeFilter === 'downloads' && (
-        downloads.length === 0
-          ? <div className="lib-empty"><p>No downloads yet.</p><Link to="/shop" className="lib-empty-link">Browse DJ downloads →</Link></div>
-          : <>
-              <div className="shelf-row-label">Downloads</div>
-              <div className="scroll-row">
-                {sortByDate(downloads).map(d => (
-                  <ShelfCard key={d.id} cover={d.cover||''} title={d.title} sub={d.artistName} badge="WAV"/>
-                ))}
-              </div>
-            </>
+      {/* Shared */}
+      {activeFilter === 'shared' && (
+        <div className="lib-empty"><p>No shared items yet.</p><p style={{fontSize:'0.8rem',color:'var(--text-dim)'}}>Music shared with you will appear here.</p></div>
       )}
 
       {/* My Uploads */}
