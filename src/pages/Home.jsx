@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
-import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2, Heart, ListPlus } from 'lucide-react';
+import { Play, Pause, ArrowRight, Zap, Radio, Lock, Music2, Heart, ListPlus } from 'lucide-react';
 import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -118,35 +118,35 @@ export default function Home() {
   }, [user?.id]);
 
   // Shelf filter state
-  const [shelfFilter, setShelfFilter]   = useState('all');       // all | music | podcast | suggestions
-  const [followingOnly, setFollowing]   = useState(false);        // sub-filter
+  const [shelfFilter, setShelfFilter]   = useState('all');
+  const [followingOnly, setFollowing]   = useState(false);
 
-  const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcast' || shelfFilter === 'radios';
+  const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcast';
 
-  // Decide which rows to render
-  const showPlaylists   = shelfFilter === 'all' || shelfFilter === 'music';
-  const showLiked       = shelfFilter === 'all' || shelfFilter === 'music';
-  const showPodcasts    = shelfFilter === 'all' || shelfFilter === 'podcast';
-  const showRadios      = shelfFilter === 'all' || shelfFilter === 'music' || shelfFilter === 'radios';
-  const showEvents      = shelfFilter === 'all' || shelfFilter === 'events';
-
+  // Decide which sections to render per filter
+  const f = shelfFilter;
+  const showFeatured    = f === 'all' || f === 'music';
+  const showPlaylists   = f === 'all' || f === 'music';
+  const showReleases    = f === 'all' || f === 'music';
+  const showArtists     = f === 'all' || f === 'music';
+  const showPodcasts    = f === 'all' || f === 'music' || f === 'podcast';
+  const showRadios      = f === 'all' || f === 'music';
+  const showEvents      = f === 'all' || f === 'events';
+  const showMerch       = f === 'all' || f === 'merch';
 
   return (
     <div className="page home-page animate-in">
 
-      {/* ── Shelf with filters ── */}
+      {/* ── Filter bar ── */}
       <section className="home-section mymusic-section">
-
-        {/* Filter bar: All | Music | Podcast | Suggestions  [Following] */}
         <div className="shelf-filter-bar">
           <div className="shelf-filters">
             {[
-              { key: 'all',     label: 'All'     },
-              { key: 'music',   label: 'Music'   },
+              { key: 'all',     label: 'All'      },
+              { key: 'music',   label: 'Music'    },
               { key: 'podcast', label: 'Podcasts' },
-              { key: 'radios',  label: 'Radios'  },
-              { key: 'merch',   label: 'Merch'   },
-              { key: 'events',  label: 'Events'  },
+              { key: 'merch',   label: 'Merch'    },
+              { key: 'events',  label: 'Events'   },
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -157,8 +157,6 @@ export default function Home() {
               </button>
             ))}
           </div>
-
-          {/* Contextual Following toggle — only for Music / Podcast */}
           {showFollowingToggle && (
             <button
               className={`shelf-following-btn${followingOnly ? ' active' : ''}`}
@@ -168,75 +166,12 @@ export default function Home() {
             </button>
           )}
         </div>
-
-        {/* Playlists */}
-        {showPlaylists && (
-          <>
-            <div className="shelf-row-label">Playlists</div>
-            <div className="scroll-row">
-              {myPlaylists.map(pl => (
-                <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.trackCount} tracks`} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Liked — private liked uploads + public albums */}
-        {showLiked && (() => {
-          const likedUpl = getLikedUploads(user?.id);
-          const totalLiked = likedUpl.length + likedAlbums.length;
-          if (totalLiked === 0) return null;
-          return (
-            <>
-              <div className="shelf-row-label">Liked</div>
-              {likedUpl.length > 0 && (
-                homeLayout.mode === 'list'
-                  ? <UploadExpandedList uploads={likedUpl}/>
-                  : <UploadGridView uploads={likedUpl} cols={homeLayout.cols}/>
-              )}
-              {likedAlbums.length > 0 && (
-                <div className="scroll-row" style={{marginTop: likedUpl.length > 0 ? 10 : 0}}>
-                  {likedAlbums.map(a => (
-                    <ShelfCard key={a.id} cover={a.cover} title={a.title} sub={a.artist} />
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
-
-        {/* Artist Radio */}
-        {showRadios && (
-          <>
-            <div className="shelf-row-label">Radio</div>
-            <div className="scroll-row">
-              {artistRadios.map(r => (
-                <ShelfCard key={r.id} cover={r.cover} title={r.name} sub={r.artist} badge="Radio" badgeIcon={Radio} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Events */}
-        {showEvents && (
-          <>
-            <div className="shelf-row-label">Events</div>
-            <div className="scroll-row">
-              {upcomingEvents.map(e => (
-                <ShelfCard key={e.id} cover={e.cover} title={e.title} sub={`${e.date} · ${e.venue}`} badge={e.date} />
-              ))}
-            </div>
-          </>
-        )}
-
       </section>
 
-      {featured && (
+      {/* 1 — Featured Release */}
+      {showFeatured && featured && (
       <section className="hero-section">
-        {/* Ambient blurred background */}
         <div className="hero-cover-bg" style={{ backgroundImage: `url(${featured.cover})` }} />
-
-        {/* Left — text info */}
         <div className="hero-info">
           <div className="hero-badge"><Zap size={12} /><span>Featured Release</span></div>
           <div className="hero-label">
@@ -263,15 +198,26 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Right — album cover art */}
         <div className="hero-cover-art">
           <img src={featured.cover} alt={featured.title} />
         </div>
       </section>
       )}
 
-      {myUploads.length > 0 && (
+      {/* 2 — Playlists */}
+      {showPlaylists && (
+        <section className="home-section">
+          <div className="shelf-row-label">Playlists</div>
+          <div className="scroll-row">
+            {myPlaylists.map(pl => (
+              <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.trackCount} tracks`} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* My Uploads (private) */}
+      {showReleases && myUploads.length > 0 && (
         <section className="home-section">
           <div className="section-title">
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
@@ -284,61 +230,35 @@ export default function Home() {
         </section>
       )}
 
-
-      {/* New Releases — grouped by album */}
-      <section className="home-section">
-        <div className="section-title">
-          <span>New Releases</span>
-          <Link to="/search">See All <ArrowRight size={12} /></Link>
-        </div>
-        {publicAlbums.length === 0 ? (
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
-        ) : (
-          <div className="upl-grid upl-grid-3">
-            {publicAlbums.map(album => (
-              <button
-                key={album.id}
-                className="upl-grid-cell"
-                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => setSelectedAlbum(album)}
-              >
-                <div className="upl-grid-art">
-                  {album.cover
-                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
-                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                </div>
-                <div className="upl-grid-title">{album.title}</div>
-                <div className="upl-grid-artist">{album.artist}</div>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Because You Listened */}
-      {publicAlbums.length >= 3 && (
+      {/* 3 — Releases */}
+      {showReleases && (
         <section className="home-section">
           <div className="section-title">
-            <span>Because You Listened</span>
+            <span>Releases</span>
+            <Link to="/search">See All <ArrowRight size={12} /></Link>
           </div>
-          <div className="upl-grid upl-grid-3">
-            {publicAlbums.slice(0, 6).map(album => (
-              <button
-                key={album.id}
-                className="upl-grid-cell"
-                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => setSelectedAlbum(album)}
-              >
-                <div className="upl-grid-art">
-                  {album.cover
-                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
-                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                </div>
-                <div className="upl-grid-title">{album.title}</div>
-                <div className="upl-grid-artist">{album.artist}</div>
-              </button>
-            ))}
-          </div>
+          {publicAlbums.length === 0 ? (
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
+          ) : (
+            <div className="upl-grid upl-grid-3">
+              {publicAlbums.map(album => (
+                <button
+                  key={album.id}
+                  className="upl-grid-cell"
+                  style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setSelectedAlbum(album)}
+                >
+                  <div className="upl-grid-art">
+                    {album.cover
+                      ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
+                      : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                  </div>
+                  <div className="upl-grid-title">{album.title}</div>
+                  <div className="upl-grid-artist">{album.artist}</div>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -346,39 +266,71 @@ export default function Home() {
       {selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
-      {/* Artists */}
-      <section className="home-section">
-        <div className="section-title">
-          <span>Featured Artists</span>
-          <Link to="/search">All Artists</Link>
-        </div>
-        <div className="scroll-row">
-          {artists.map(a => <ArtistCard key={a.id} artist={a} />)}
-        </div>
-      </section>
 
-      {/* Trending Vinyl */}
-      <section className="home-section">
-        <div className="section-title">
-          <span><TrendingUp size={16} /> Trending Vinyl</span>
-          <Link to="/marketplace">Marketplace</Link>
-        </div>
-        <div className="scroll-row">
-          {vinylMarketplace.map(v => <VinylCard key={v.id} listing={v} />)}
-        </div>
-      </section>
+      {/* 4 — Featured Artists */}
+      {showArtists && (
+        <section className="home-section">
+          <div className="section-title">
+            <span>Featured Artists</span>
+            <Link to="/search">All Artists</Link>
+          </div>
+          <div className="scroll-row">
+            {artists.map(a => <ArtistCard key={a.id} artist={a} />)}
+          </div>
+        </section>
+      )}
 
-      {/* DJ Sets & Podcasts */}
-      <section className="home-section">
-        <div className="section-title">
-          <span>DJ Sets & Podcasts</span>
-          <Link to="/search">See More</Link>
-        </div>
-        <div className="scroll-row">
-          {djSets.map(s => <LongFormCard key={s.id} item={s} />)}
-        </div>
-      </section>
+      {/* 5 — Podcasts */}
+      {showPodcasts && (
+        <section className="home-section">
+          <div className="section-title">
+            <span>Podcasts</span>
+            <Link to="/search">See More</Link>
+          </div>
+          <div className="scroll-row">
+            {djSets.map(s => <LongFormCard key={s.id} item={s} />)}
+          </div>
+        </section>
+      )}
+
+      {/* 6 — Radio */}
+      {showRadios && (
+        <section className="home-section">
+          <div className="shelf-row-label">Radio</div>
+          <div className="scroll-row">
+            {artistRadios.map(r => (
+              <ShelfCard key={r.id} cover={r.cover} title={r.name} sub={r.artist} badge="Radio" badgeIcon={Radio} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 7 — Events */}
+      {showEvents && (
+        <section className="home-section">
+          <div className="shelf-row-label">Events</div>
+          <div className="scroll-row">
+            {upcomingEvents.map(e => (
+              <ShelfCard key={e.id} cover={e.cover} title={e.title} sub={`${e.date} · ${e.venue}`} badge={e.date} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 8 — Vinyl / Merch */}
+      {showMerch && (
+        <section className="home-section">
+          <div className="section-title">
+            <span>Vinyl</span>
+            <Link to="/marketplace">Marketplace</Link>
+          </div>
+          <div className="scroll-row">
+            {vinylMarketplace.map(v => <VinylCard key={v.id} listing={v} />)}
+          </div>
+        </section>
+      )}
 
     </div>
   );
 }
+
