@@ -181,7 +181,7 @@
 .upl-edit-save:hover { background:rgba(255,255,255,.16); }
 
 /* ── Grid view ───────────────────────────────────────────────── */
-.upl-grid { display:grid; gap:10px; padding:6px 16px 20px; width:100%; box-sizing:border-box; }
+.upl-grid { display:grid; gap:10px; padding:6px 0 20px; width:100%; box-sizing:border-box; }
 .upl-grid-1 { grid-template-columns: 1fr; }
 .upl-grid-2 { grid-template-columns: repeat(2, 1fr); }
 .upl-grid-3 { grid-template-columns: repeat(3, 1fr); }
