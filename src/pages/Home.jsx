@@ -251,7 +251,7 @@ export default function Home() {
           <p className="hero-desc">{featured.description}</p>
           <div className="hero-actions">
             <button className="hero-play-glass" onClick={() => playRelease(featured)}>
-              <Play size={26} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
+              <Play size={24} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
             </button>
             <div className="hero-actions-right">
               <button className="hero-play-glass" title="Like">
