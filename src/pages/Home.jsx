@@ -130,7 +130,7 @@ export default function Home() {
   const showReleases    = f === 'all' || f === 'music';
   const showArtists     = f === 'all' || f === 'music';
   const showPodcasts    = f === 'all' || f === 'music' || f === 'podcast';
-  const showRadios      = f === 'all' || f === 'music';
+  const showRadios      = false; // Radio removed from home
   const showEvents      = f === 'all' || f === 'events';
   const showMerch       = f === 'all' || f === 'merch';
 
@@ -150,6 +150,7 @@ export default function Home() {
             ].map(({ key, label }) => (
               <button
                 key={key}
+                data-home-filter={key}
                 className={`shelf-filter-btn${shelfFilter === key ? ' active' : ''}`}
                 onClick={() => { setShelfFilter(key); setFollowing(false); }}
               >
@@ -308,7 +309,9 @@ export default function Home() {
       {/* 7 — Events */}
       {showEvents && (
         <section className="home-section">
-          <div className="shelf-row-label">Events</div>
+          <div className="section-title">
+            <span>Events</span>
+          </div>
           <div className="scroll-row">
             {upcomingEvents.map(e => (
               <ShelfCard key={e.id} cover={e.cover} title={e.title} sub={`${e.date} · ${e.venue}`} badge={e.date} />
