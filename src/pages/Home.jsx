@@ -250,13 +250,9 @@ export default function Home() {
           </div>
           <p className="hero-desc">{featured.description}</p>
           <div className="hero-actions">
-            <button className="hero-play-btn" onClick={() => playRelease(featured)}>
-              <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />
-              <span>Play</span>
+            <button className="hero-play-glass" onClick={() => playRelease(featured)}>
+              <Play size={22} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
             </button>
-            <Link to={`/release/${featured.id}`} className="hero-explore-btn">
-              View Release
-            </Link>
           </div>
         </div>
 
