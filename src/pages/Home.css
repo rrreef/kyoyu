@@ -208,6 +208,7 @@
     aspect-ratio: 1 / 1;
     border-radius: var(--radius-lg);
   }
+  .hero-info { width: 100%; }
   .hero-title { font-size: 1.5rem; }
   .hero-desc { display: none; } /* keep it clean on small screen */
   .payout-banner { flex-direction: column; text-align: center; }
