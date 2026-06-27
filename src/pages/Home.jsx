@@ -249,26 +249,24 @@ export default function Home() {
             <Link to={`/artist/${featured.artistId}`}>{featured.artist}</Link>
           </div>
           <p className="hero-desc">{featured.description}</p>
+          <div className="hero-actions">
+            <button className="hero-play-glass" onClick={() => playRelease(featured)}>
+              <Play size={32} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
+            </button>
+            <div className="hero-actions-right">
+              <button className="hero-play-glass" title="Like">
+                <Heart size={30} fill="currentColor" strokeWidth={0} />
+              </button>
+              <button className="hero-play-glass" title="Add to Playlist">
+                <ListPlus size={32} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Right — album cover art */}
         <div className="hero-cover-art">
           <img src={featured.cover} alt={featured.title} />
-        </div>
-
-        {/* Full-width actions bar at bottom of hero card */}
-        <div className="hero-actions">
-          <button className="hero-play-glass" onClick={() => playRelease(featured)}>
-            <Play size={32} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
-          </button>
-          <div className="hero-actions-right">
-            <button className="hero-play-glass" title="Like">
-              <Heart size={30} fill="currentColor" strokeWidth={0} />
-            </button>
-            <button className="hero-play-glass" title="Add to Playlist">
-              <ListPlus size={32} strokeWidth={2} />
-            </button>
-          </div>
         </div>
       </section>
       )}
