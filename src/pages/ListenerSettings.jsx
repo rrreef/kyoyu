@@ -5,7 +5,7 @@ import { useDisplay } from '../contexts/DisplayContext';
 import './Settings.css';
 import './AppSettings.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 
 const THEME_PREVIEWS = {

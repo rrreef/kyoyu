@@ -4,7 +4,7 @@ import { Bell, LayoutDashboard, Upload, Music, Users, Palette, Settings } from '
 import { useAuth } from '../../contexts/AuthContext';
 import './TopBar.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 const ITEMS = [
   { label: 'Dashboard',       path: '/dashboard',       icon: LayoutDashboard, hint: 'Overview · Stats · Payouts' },

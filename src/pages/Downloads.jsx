@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Download, Search, ChevronUp, ChevronDown, ChevronLeft, FileAudio, X } from 'lucide-react';
 import './Downloads.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 const mockDownloads = [
   { id: 'd1',  title: 'Phantom Grid — Full Album',           artist: 'Phantom Grid',     format: 'WAV', size: '412 MB', date: '2025-04-18', type: 'Album'     },

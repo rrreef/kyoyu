@@ -76,7 +76,7 @@ async function extractMeta(file) {
 
 const STEPS = ['Files','Track Info','Review'];
 
-const isNativeApp = () => navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = () => !!window.webkit?.messageHandlers?.player;
 
 const SORT_OPTS = [
   { key:'newest', label:'Newest' },

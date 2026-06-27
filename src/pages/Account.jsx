@@ -4,7 +4,7 @@ import { ChevronLeft, User, Mail, Lock, Cake, CreditCard, Globe, Music2, Chevron
 import { useAuth } from '../contexts/AuthContext';
 import './Account.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 const GENRES = ['Electronic','Hip-Hop','Jazz','Classical','Rock','Indie','R&B','Ambient','Folk','Metal','Pop','Soul','Reggae','Latin','World'];
 const COUNTRIES = ['France','Germany','United Kingdom','Switzerland','Italy','Spain','Netherlands','Belgium','Sweden','United States','Japan','Brazil','Canada','Australia','Portugal'];

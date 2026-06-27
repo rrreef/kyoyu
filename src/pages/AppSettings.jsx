@@ -6,7 +6,7 @@ import { useDisplay } from '../contexts/DisplayContext';
 import { useAuth } from '../contexts/AuthContext';
 import './AppSettings.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 const LANGUAGES = ['English','Français','Deutsch','Italiano','Español','Português','Nederlands','Svenska','日本語'];
 const QUALITIES  = [

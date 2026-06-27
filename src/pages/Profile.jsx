@@ -8,7 +8,7 @@ import './Profile.css';
 export default function Profile() {
   const { user, role, logout, avatarSrc, setAvatarSrc } = useAuth();
   const navigate = useNavigate();
-  const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+  const isNativeApp = !!window.webkit?.messageHandlers?.player;
   const u = userProfile;
   const [avatarMenu, setAvatarMenu] = useState(false);
   const [showSignOut, setShowSignOut] = useState(false);

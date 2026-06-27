@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Package, CheckCircle, Truck, Clock, ChevronLeft } from 'lucide-react';
 import './Orders.css';
 
-const isNativeApp = navigator.userAgent.includes('KyoyuApp');
+const isNativeApp = !!window.webkit?.messageHandlers?.player;
 
 const mockOrders = [
   {
