@@ -95,7 +95,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 6px;
+  margin-top: 9px;
 }
 .hero-actions-right {
   display: flex;
@@ -198,7 +198,7 @@
     flex-direction: column-reverse;
     align-items: flex-start;
     gap: var(--sp-5);
-    padding: var(--sp-5) var(--sp-5) 10px;
+    padding: var(--sp-5) var(--sp-5) 13px;
     min-height: unset;
   }
   .hero-cover-art {
