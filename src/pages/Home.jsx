@@ -121,7 +121,7 @@ export default function Home() {
   const [shelfFilter, setShelfFilter]   = useState('all');
   const [followingOnly, setFollowing]   = useState(false);
 
-  const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcast';
+  const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcasts';
 
   // Decide which sections to render per filter
   const f = shelfFilter;
@@ -129,7 +129,7 @@ export default function Home() {
   const showPlaylists   = f === 'all' || f === 'music';
   const showReleases    = f === 'all' || f === 'music';
   const showArtists     = f === 'all' || f === 'music';
-  const showPodcasts    = f === 'all' || f === 'music' || f === 'podcast';
+  const showPodcasts    = f === 'all' || f === 'music' || f === 'podcasts';
   const showRadios      = false; // Radio removed from home
   const showEvents      = f === 'all' || f === 'events';
   const showMerch       = f === 'all' || f === 'merch';
@@ -144,7 +144,7 @@ export default function Home() {
             {[
               { key: 'all',     label: 'All'      },
               { key: 'music',   label: 'Music'    },
-              { key: 'podcast', label: 'Podcasts' },
+              { key: 'podcasts', label: 'Podcasts' },
               { key: 'merch',   label: 'Merch'    },
               { key: 'events',  label: 'Events'   },
             ].map(({ key, label }) => (
