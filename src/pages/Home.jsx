@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
-import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2 } from 'lucide-react';
+import { Play, Pause, ArrowRight, TrendingUp, Zap, Radio, Lock, Music2, Heart, ListPlus } from 'lucide-react';
 import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios, upcomingEvents } from '../data/mockData';
 import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -253,6 +253,14 @@ export default function Home() {
             <button className="hero-play-glass" onClick={() => playRelease(featured)}>
               <Play size={32} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
             </button>
+            <div className="hero-actions-right">
+              <button className="hero-play-glass" title="Like">
+                <Heart size={32} strokeWidth={1.5} />
+              </button>
+              <button className="hero-play-glass" title="Add to Playlist">
+                <ListPlus size={32} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
         </div>
 

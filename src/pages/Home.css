@@ -91,7 +91,16 @@
   overflow: hidden;
   max-width: 420px;
 }
-.hero-actions { display: flex; align-items: center; gap: var(--sp-4); }
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hero-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .hero-play-glass {
   width: 48px;
   height: 48px;
