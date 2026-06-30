@@ -62,8 +62,8 @@ export default function Search() {
     const onKeyboard = (e) => {
       const newHeight = e.detail || 0;
       setKeyboardHeight(prevHeight => {
-        const oldPadding = prevHeight > 0 ? prevHeight + 94 : 128;
-        const newPadding = newHeight > 0 ? newHeight + 94 : 128;
+        const oldPadding = prevHeight > 0 ? prevHeight + 128 : 128;
+        const newPadding = newHeight > 0 ? newHeight + 128 : 128;
         const paddingDiff = newPadding - oldPadding;
         
         // If padding increased (keyboard opened/grew), scroll down to push content up smoothly
@@ -92,9 +92,9 @@ export default function Search() {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
       // 114px is the top of the filter card. 128px padding creates a perfect 14px gap.
-      // When open, the filter card moves up by (keyboardHeight - 34), so we add exactly that!
+      // When open, the filter card moves up by keyboardHeight, so we add exactly that!
       const paddingStyle = keyboardHeight > 0 
-        ? (keyboardHeight + 94) + 'px' 
+        ? (keyboardHeight + 128) + 'px' 
         : '128px';
       mainContent.style.paddingBottom = paddingStyle;
       mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
