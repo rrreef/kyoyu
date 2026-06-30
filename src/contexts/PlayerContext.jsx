@@ -211,12 +211,14 @@ export function PlayerProvider({ children }) {
       ...track,
       src: track.src || track.fileUrl || track.audioUrl || '',
       artistName: track.artistName || track.artist || '',
+      releaseCover: track.releaseCover || track.cover || '',
     };
     dispatch({ type:'PLAY_TRACK', track: normTrack });
     const normQueue = queue.map(t => ({
       ...t,
       src: t.src || t.fileUrl || t.audioUrl || '',
       artistName: t.artistName || t.artist || '',
+      releaseCover: t.releaseCover || t.cover || '',
     }));
     if (normQueue.length) dispatch({ type:'SET_QUEUE', queue: normQueue });
     // Note: actual audio loading happens in the useEffect above (triggered by PLAY_TRACK)
