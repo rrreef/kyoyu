@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { useLibrary } from '../contexts/LibraryContext';
+import { usePlayer } from '../contexts/PlayerContext';
 import './Search.css';
 
 export default function Search() {
@@ -13,6 +14,7 @@ export default function Search() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
+  const { playTrack } = usePlayer();
 
   // Load history from localStorage
   useEffect(() => {
@@ -147,19 +149,6 @@ export default function Search() {
     localStorage.removeItem('kyoyu-search-history');
   };
 
-  const playTrack = (track) => {
-    const msg = JSON.stringify({
-      type: 'play',
-      title: track.title,
-      artist: track.artist,
-      artwork: track.cover || '',
-      audioUrl: track.audioUrl || '',
-    });
-    if (window.webkit?.messageHandlers?.playerBridge) {
-      window.webkit.messageHandlers.playerBridge.postMessage(msg);
-    }
-  };
-
   // Process and Group Results
   const q = query.toLowerCase();
   
@@ -226,7 +215,7 @@ export default function Search() {
         <button className="search-action-btn" title="Add to Playlist">
           <ListPlus size={16} />
         </button>
-        <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track)}>
+        <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track, [track])}>
           <Play size={16} fill="currentColor" />
         </button>
       </div>
@@ -243,7 +232,18 @@ export default function Search() {
         <span className="search-result-artist">{track.artist}</span>
       </div>
       <div className="search-result-actions">
-        <button className="search-action-btn search-play-btn" title="Play Album">
+        {track.downloadUrl && (
+          <a href={track.downloadUrl} download className="search-action-btn" title="Download">
+            <Download size={16} />
+          </a>
+        )}
+        <button className="search-action-btn" title="Like">
+          <Heart size={16} />
+        </button>
+        <button className="search-action-btn" title="Add to Playlist">
+          <ListPlus size={16} />
+        </button>
+        <button className="search-action-btn search-play-btn" title="Play Album" onClick={() => playTrack(track, [track])}>
           <Play size={16} fill="currentColor" />
         </button>
       </div>
