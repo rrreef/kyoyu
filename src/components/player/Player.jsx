@@ -301,6 +301,7 @@ export default function Player({ hideMini = false }) {
       if(cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if(cmd==='prev')   dispatch({type:'PREV_TRACK'});
+      if(cmd==='stop')   dispatch({type:'STOP'});
       if(cmd==='expand'){ setExp(true); postNative({expanded:true}); }
     };
     return ()=>{ delete window.__kyoyuPlayerCmd; };

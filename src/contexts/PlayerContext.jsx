@@ -15,6 +15,13 @@ const initialState = {
 
 function playerReducer(state, action) {
   switch (action.type) {
+    case 'STOP': {
+      if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
+        window.__kyoyuAudioRef.pause();
+        window.__kyoyuAudioRef.src = '';
+      }
+      return { ...state, currentTrack: null, isPlaying: false, progress: 0, duration: 0, queue: [] };
+    }
     case 'PLAY_TRACK':   return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0 };
     case 'TOGGLE_PLAY':  return { ...state, isPlaying: !state.isPlaying };
     case 'SET_PLAYING':  return { ...state, isPlaying: action.value };
@@ -65,6 +72,7 @@ export function PlayerProvider({ children }) {
     audio.style.display = 'none';
     document.body.appendChild(audio);
     audioRef.current = audio;
+    window.__kyoyuAudioRef = audio;
 
     const onTime  = () => dispatch({ type:'SET_PROGRESS', value: audio.currentTime });
     const onMeta  = () => {
