@@ -63,8 +63,8 @@ export default function Search() {
       const newHeight = e.detail || 0;
       setKeyboardHeight(prevHeight => {
         // Calculate new and old padding
-        const oldPadding = prevHeight > 0 ? prevHeight + 96 : 130;
-        const newPadding = newHeight > 0 ? newHeight + 96 : 130;
+        const oldPadding = prevHeight > 0 ? prevHeight + 96 : 126;
+        const newPadding = newHeight > 0 ? newHeight + 96 : 126;
         const paddingDiff = newPadding - oldPadding;
         
         // If padding increased (keyboard opened/grew), scroll down to push content up smoothly
@@ -87,6 +87,24 @@ export default function Search() {
       window.removeEventListener('kyoyu-keyboard-change', onKeyboard);
     };
   }, []);
+
+  // Override .main-content padding dynamically for perfect alignment
+  useEffect(() => {
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      const padding = keyboardHeight > 0 ? keyboardHeight + 96 : 126;
+      mainContent.style.paddingBottom = `${padding}px`;
+      mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+    }
+
+    return () => {
+      // Clear inline styles when leaving the search page
+      if (mainContent) {
+        mainContent.style.paddingBottom = '';
+        mainContent.style.transition = '';
+      }
+    };
+  }, [keyboardHeight]);
 
   // Debounced search — fires on every query change
   useEffect(() => {
@@ -152,7 +170,7 @@ export default function Search() {
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
-    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 96 : 130, transition: 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
+    <div className="page search-page animate-in">
 
       {/* Search History — shown when no active query */}
       {showHistory && (
