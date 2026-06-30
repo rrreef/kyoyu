@@ -220,6 +220,9 @@
   flex-direction: column;
   margin-bottom: 24px;
 }
+.search-section:last-child {
+  margin-bottom: 0;
+}
 .search-section-title {
   font-size: 0.95rem;
   font-weight: 700;
