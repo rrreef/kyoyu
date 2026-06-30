@@ -9,10 +9,6 @@ export default function Search() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef(null);
-  const queryRef = useRef('');
-
-  // Keep queryRef in sync so callbacks can read latest
-  queryRef.current = query;
 
   // Load history from localStorage
   useEffect(() => {
@@ -22,13 +18,13 @@ export default function Search() {
     } catch {}
   }, []);
 
-  // Expose search setter so native can push queries
+  // Register search handlers — multiple pathways for reliability
   useEffect(() => {
-    const handleLive = (q) => {
+    // 1. Override the native-injected stubs with real React state setters
+    window.__kyoyuSearchLive = (q) => {
       setQuery(q || '');
     };
-
-    const handleSubmit = (q) => {
+    window.__kyoyuSetSearch = (q) => {
       setQuery(q || '');
       if (q && q.trim().length >= 2) {
         setHistory(prev => {
@@ -40,22 +36,19 @@ export default function Search() {
       }
     };
 
-    window.__kyoyuSearchLive = handleLive;
-    window.__kyoyuSetSearch = handleSubmit;
+    // 2. Listen for document-level custom event (fired by native-injected stubs)
+    const onSearch = (e) => {
+      setQuery(e.detail || '');
+    };
+    document.addEventListener('kyoyu-search', onSearch);
 
-    // Also listen for custom events as fallback
-    const onLive = (e) => handleLive(e.detail);
-    const onSubmit = (e) => handleSubmit(e.detail);
-    window.addEventListener('kyoyu-search-live', onLive);
-    window.addEventListener('kyoyu-search-submit', onSubmit);
-
-    console.log('[Search] handlers registered');
+    // 3. Check if native already set a pending query before React mounted
+    if (window.__kyoyuSearchQuery) {
+      setQuery(window.__kyoyuSearchQuery);
+    }
 
     return () => {
-      delete window.__kyoyuSearchLive;
-      delete window.__kyoyuSetSearch;
-      window.removeEventListener('kyoyu-search-live', onLive);
-      window.removeEventListener('kyoyu-search-submit', onSubmit);
+      document.removeEventListener('kyoyu-search', onSearch);
     };
   }, []);
 
@@ -71,16 +64,11 @@ export default function Search() {
 
     setLoading(true);
     debounceRef.current = setTimeout(() => {
-      const q = query.trim();
-      console.log('[Search] fetching:', q);
-
-      fetchPublicTracks(q)
+      fetchPublicTracks(query.trim())
         .then(tracks => {
-          console.log('[Search] got', tracks.length, 'tracks');
           setResults(tracks);
         })
-        .catch(err => {
-          console.warn('[Search] error:', err);
+        .catch(() => {
           setResults([]);
         })
         .finally(() => setLoading(false));
@@ -101,7 +89,6 @@ export default function Search() {
   };
 
   const playTrack = (track) => {
-    // Use the global player bridge
     const msg = JSON.stringify({
       type: 'play',
       title: track.title,
@@ -129,9 +116,7 @@ export default function Search() {
           </div>
           <div className="search-history-list">
             {history.map((item, i) => (
-              <div key={i} className="search-history-item" onClick={() => {
-                setQuery(item);
-              }}>
+              <div key={i} className="search-history-item" onClick={() => setQuery(item)}>
                 <Clock size={14} className="search-history-icon" />
                 <span className="search-history-text">{item}</span>
                 <button
@@ -191,15 +176,10 @@ export default function Search() {
         <div className="search-loading">Searching...</div>
       )}
 
-      {/* Empty state */}
+      {/* No results */}
       {!loading && query.length >= 2 && !hasResults && (
         <div className="search-empty">No results found</div>
       )}
-
-      {/* Debug info — remove once verified */}
-      <div style={{ position: 'fixed', bottom: 80, left: 10, fontSize: 10, color: 'rgba(255,255,255,0.2)', pointerEvents: 'none', zIndex: 9999 }}>
-        q: "{query}" | r: {results.length} | l: {loading ? 'y' : 'n'}
-      </div>
     </div>
   );
 }
