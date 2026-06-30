@@ -62,9 +62,8 @@ export default function Search() {
     const onKeyboard = (e) => {
       const newHeight = e.detail || 0;
       setKeyboardHeight(prevHeight => {
-        // Calculate new and old padding
-        const oldPadding = prevHeight > 0 ? prevHeight + 96 : 126;
-        const newPadding = newHeight > 0 ? newHeight + 96 : 126;
+        const oldPadding = prevHeight > 0 ? prevHeight + 64 : 98;
+        const newPadding = newHeight > 0 ? newHeight + 64 : 98;
         const paddingDiff = newPadding - oldPadding;
         
         // If padding increased (keyboard opened/grew), scroll down to push content up smoothly
@@ -92,7 +91,10 @@ export default function Search() {
   useEffect(() => {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
-      const padding = keyboardHeight > 0 ? keyboardHeight + 96 : 126;
+      // Total desired padding: 130px (closed)
+      // Since .page class adds 32px of padding-bottom intrinsically, 
+      // we only need 130 - 32 = 98px on the scroll container.
+      const padding = keyboardHeight > 0 ? keyboardHeight + 64 : 98;
       mainContent.style.paddingBottom = `${padding}px`;
       mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
     }
