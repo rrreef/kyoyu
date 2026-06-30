@@ -1,5 +1,7 @@
 .search-page {
   padding-top: var(--sp-6);
+  padding-left: 32px;
+  padding-right: 32px;
 }
 
 /* ── Search History ── */
@@ -86,6 +88,126 @@
   justify-content: center;
 }
 .search-history-remove:active { opacity: 0.8; }
+
+/* ── Live Search Results List ── */
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.search-result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.search-result-row:last-child {
+  border-bottom: none;
+}
+
+/* Artwork */
+.search-result-art {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.search-result-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.search-result-art-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+/* Info column */
+.search-result-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.search-result-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.search-result-album {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary, rgba(255,255,255,0.55));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.search-result-artist {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted, rgba(255,255,255,0.35));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* Action buttons */
+.search-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.search-action-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+}
+.search-action-btn:active {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.search-play-btn {
+  color: var(--text-primary, #fff);
+  opacity: 0.8;
+}
+.search-play-btn:active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Loading & Empty */
+.search-loading,
+.search-empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted, rgba(255,255,255,0.35));
+  font-weight: 500;
+}
 
 /* ── Old search bar — hidden (moved to native) ── */
 .search-bar { display: none !important; }

@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Clock, X } from 'lucide-react';
-import { releases, artists } from '../data/mockData';
-import { ReleaseCard, ArtistCard } from '../components/ui/Cards';
+import { useState, useEffect, useRef } from 'react';
+import { Clock, X, Download, Heart, ListPlus, Play } from 'lucide-react';
+import { fetchPublicTracks } from '../lib/uploadPipeline';
 import './Search.css';
 
 export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
 
   // Load history from localStorage
   useEffect(() => {
@@ -21,6 +23,7 @@ export default function Search() {
     window.__kyoyuSetSearch = (q) => {
       setQuery(q);
       if (q.trim().length >= 2) {
+        // Save to history
         setHistory(prev => {
           const cleaned = prev.filter(h => h.toLowerCase() !== q.toLowerCase());
           const next = [q, ...cleaned].slice(0, 20);
@@ -29,8 +32,34 @@ export default function Search() {
         });
       }
     };
-    return () => { delete window.__kyoyuSetSearch; };
+
+    // Live typing handler (no history save, just filter)
+    window.__kyoyuSearchLive = (q) => {
+      setQuery(q);
+    };
+
+    return () => {
+      delete window.__kyoyuSetSearch;
+      delete window.__kyoyuSearchLive;
+    };
   }, []);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    debounceRef.current = setTimeout(() => {
+      fetchPublicTracks(query.trim())
+        .then(tracks => setResults(tracks))
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
 
   const removeHistoryItem = (idx) => {
     const next = history.filter((_, i) => i !== idx);
@@ -43,21 +72,20 @@ export default function Search() {
     localStorage.removeItem('kyoyu-search-history');
   };
 
-  const filtered = query.length < 2 ? [] : releases.filter(r =>
-    r.title.toLowerCase().includes(query.toLowerCase()) ||
-    r.artist.toLowerCase().includes(query.toLowerCase())
-  );
-  const filteredArtists = query.length < 2 ? [] : artists.filter(a =>
-    a.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const playTrack = (track) => {
+    if (window.__kyoyuPlayTrack) {
+      window.__kyoyuPlayTrack(track);
+    }
+  };
 
-  const hasResults = filtered.length > 0 || filteredArtists.length > 0;
+  const hasResults = results.length > 0;
+  const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
     <div className="page search-page animate-in">
 
       {/* Search History — shown when no active query */}
-      {!hasResults && history.length > 0 && (
+      {showHistory && (
         <div className="search-history">
           <div className="search-history-header">
             <span className="search-history-title">Recent</span>
@@ -80,23 +108,54 @@ export default function Search() {
         </div>
       )}
 
-      {/* Results */}
-      {filtered.length > 0 && (
-        <section className="home-section">
-          <div className="section-title"><span>Releases</span></div>
-          <div className="scroll-row">
-            {filtered.map(r => <ReleaseCard key={r.id} release={r} />)}
-          </div>
-        </section>
+      {/* Live Results List */}
+      {hasResults && (
+        <div className="search-results-list">
+          {results.map(track => (
+            <div key={track.id} className="search-result-row">
+              <div className="search-result-art">
+                {track.cover ? (
+                  <img src={track.cover} alt="" />
+                ) : (
+                  <div className="search-result-art-placeholder" />
+                )}
+              </div>
+              <div className="search-result-info">
+                <span className="search-result-title">{track.title}</span>
+                {track.album && track.album !== track.title && (
+                  <span className="search-result-album">{track.album}</span>
+                )}
+                <span className="search-result-artist">{track.artist}</span>
+              </div>
+              <div className="search-result-actions">
+                {track.downloadUrl && (
+                  <a href={track.downloadUrl} download className="search-action-btn" title="Download">
+                    <Download size={16} />
+                  </a>
+                )}
+                <button className="search-action-btn" title="Like">
+                  <Heart size={16} />
+                </button>
+                <button className="search-action-btn" title="Add to Playlist">
+                  <ListPlus size={16} />
+                </button>
+                <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track)}>
+                  <Play size={16} fill="currentColor" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      {filteredArtists.length > 0 && (
-        <section className="home-section">
-          <div className="section-title"><span>Artists</span></div>
-          <div className="scroll-row">
-            {filteredArtists.map(a => <ArtistCard key={a.id} artist={a} />)}
-          </div>
-        </section>
+      {/* Loading state */}
+      {loading && query.length >= 2 && !hasResults && (
+        <div className="search-loading">Searching...</div>
+      )}
+
+      {/* Empty state */}
+      {!loading && query.length >= 2 && !hasResults && (
+        <div className="search-empty">No results found</div>
       )}
     </div>
   );
