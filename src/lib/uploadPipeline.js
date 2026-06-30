@@ -601,8 +601,8 @@ export async function fetchPublicTracks(query = '') {
       qs += `&or=(title.ilike.${q},artist.ilike.${q},album.ilike.${q},label.ilike.${q},genre.ilike.${q})`;
     }
 
-    // select=* — safe against any future schema changes, avoids 400 on unknown columns
-    const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*`;
+    // select=*,profiles(display_name,avatar_url) — safe against any future schema changes, avoids 400 on unknown columns
+    const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*,profiles(display_name,avatar_url)`;
 
     const res = await fetch(url, {
       headers: {
@@ -629,6 +629,8 @@ export async function fetchPublicTracks(query = '') {
       title:    t.title   || 'Untitled',
       artist:   t.artist  || 'Unknown Artist',
       artistId: t.creator_id,
+      profileName: t.profiles?.display_name || t.artist || 'Unknown Artist',
+      profileAvatar: t.profiles?.avatar_url || null,
       album:    t.album   || t.title || '',
       label:    t.label   || '',
       genre:    t.genre   || '',

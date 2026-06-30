@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, X, Download, Heart, ListPlus, Play } from 'lucide-react';
+import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
+import { useLibrary } from '../contexts/LibraryContext';
 import './Search.css';
 
 export default function Search() {
@@ -11,6 +12,7 @@ export default function Search() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
+  const { isFollowing, toggleFollow } = useLibrary();
 
   // Load history from localStorage
   useEffect(() => {
@@ -158,19 +160,139 @@ export default function Search() {
     }
   };
 
-  const filteredResults = results.filter(track => {
-    if (activeFilter === 'all') return true;
-    const q = query.toLowerCase();
-    if (activeFilter === 'titles') return track.title.toLowerCase().includes(q);
-    if (activeFilter === 'artists') return track.artist.toLowerCase().includes(q);
-    if (activeFilter === 'albums') return (track.album || '').toLowerCase().includes(q);
-    if (activeFilter === 'labels') return (track.label || '').toLowerCase().includes(q);
-    if (activeFilter === 'podcasts') return (track.genre || '').toLowerCase().includes('podcast');
-    return true;
+  // Process and Group Results
+  const q = query.toLowerCase();
+  
+  const albumMap = new Map();
+  const artistMap = new Map();
+  const labelMap = new Map();
+  const titleList = [];
+  const podcastList = [];
+
+  results.forEach(track => {
+    const matchAlbum = (track.album || '').toLowerCase().includes(q);
+    const matchArtist = track.artist.toLowerCase().includes(q);
+    const matchLabel = (track.label || '').toLowerCase().includes(q);
+    const matchTitle = track.title.toLowerCase().includes(q);
+    const isPodcast = (track.genre || '').toLowerCase().includes('podcast');
+
+    if (matchAlbum && track.album) {
+      if (!albumMap.has(track.album)) albumMap.set(track.album, track);
+    }
+    if (matchArtist && track.artist) {
+      const key = track.artistId || track.artist;
+      if (!artistMap.has(key)) artistMap.set(key, track);
+    }
+    if (matchLabel && track.label) {
+      if (!labelMap.has(track.label)) labelMap.set(track.label, track);
+    }
+    if (isPodcast && matchTitle) {
+      podcastList.push(track);
+    }
+    if (matchTitle && !isPodcast) {
+      titleList.push(track);
+    }
   });
 
-  const hasResults = filteredResults.length > 0;
+  const albums = Array.from(albumMap.values());
+  const artists = Array.from(artistMap.values());
+  const labels = Array.from(labelMap.values());
+
+  const hasResults = results.length > 0;
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
+
+  // Renderers
+  const renderTrackRow = (track, isPodcast = false) => (
+    <div key={track.id} className="search-result-row">
+      <div className="search-result-art">
+        {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder" />}
+      </div>
+      <div className="search-result-info">
+        <span className="search-result-title">{track.title}</span>
+        {track.album && track.album !== track.title && !isPodcast && (
+          <span className="search-result-album">{track.album}</span>
+        )}
+        <span className="search-result-artist">{track.artist}</span>
+      </div>
+      <div className="search-result-actions">
+        {track.downloadUrl && (
+          <a href={track.downloadUrl} download className="search-action-btn" title="Download">
+            <Download size={16} />
+          </a>
+        )}
+        <button className="search-action-btn" title="Like">
+          <Heart size={16} />
+        </button>
+        <button className="search-action-btn" title="Add to Playlist">
+          <ListPlus size={16} />
+        </button>
+        <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track)}>
+          <Play size={16} fill="currentColor" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderAlbumRow = (track) => (
+    <div key={`album-${track.album}`} className="search-result-row">
+      <div className="search-result-art">
+        {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder" />}
+      </div>
+      <div className="search-result-info">
+        <span className="search-result-title">{track.album}</span>
+        <span className="search-result-artist">{track.artist}</span>
+      </div>
+      <div className="search-result-actions">
+        <button className="search-action-btn search-play-btn" title="Play Album">
+          <Play size={16} fill="currentColor" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderArtistRow = (track) => {
+    const aid = track.artistId || track.artist;
+    const following = isFollowing(aid);
+    const avatar = track.profileAvatar || track.cover;
+    const name = track.profileName || track.artist;
+
+    return (
+      <div key={`artist-${aid}`} className="search-result-row search-artist-row">
+        <div className="search-result-art artist-avatar">
+          {avatar ? <img src={avatar} alt="" /> : <div className="search-result-art-placeholder circle" />}
+        </div>
+        <div className="search-result-info">
+          <span className="search-result-title">{name}</span>
+        </div>
+        <div className="search-result-actions">
+          <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(aid)}>
+            {following ? <UserCheck size={16} strokeWidth={2.5} /> : <UserPlus size={16} strokeWidth={2.5} />}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLabelRow = (track) => {
+    const lid = track.label;
+    const following = isFollowing(lid); // Using same follow logic for now
+
+    return (
+      <div key={`label-${lid}`} className="search-result-row search-artist-row">
+        <div className="search-result-art artist-avatar">
+          {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder circle" />}
+        </div>
+        <div className="search-result-info">
+          <span className="search-result-title">{track.label}</span>
+        </div>
+        <div className="search-result-actions">
+          <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(lid)}>
+            {following ? <UserCheck size={16} strokeWidth={2.5} /> : <UserPlus size={16} strokeWidth={2.5} />}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="page search-page animate-in">
@@ -202,40 +324,42 @@ export default function Search() {
       {/* Live Results List */}
       {hasResults && (
         <div className="search-results-list">
-          {filteredResults.map(track => (
-            <div key={track.id} className="search-result-row">
-              <div className="search-result-art">
-                {track.cover ? (
-                  <img src={track.cover} alt="" />
-                ) : (
-                  <div className="search-result-art-placeholder" />
-                )}
-              </div>
-              <div className="search-result-info">
-                <span className="search-result-title">{track.title}</span>
-                {track.album && track.album !== track.title && (
-                  <span className="search-result-album">{track.album}</span>
-                )}
-                <span className="search-result-artist">{track.artist}</span>
-              </div>
-              <div className="search-result-actions">
-                {track.downloadUrl && (
-                  <a href={track.downloadUrl} download className="search-action-btn" title="Download">
-                    <Download size={16} />
-                  </a>
-                )}
-                <button className="search-action-btn" title="Like">
-                  <Heart size={16} />
-                </button>
-                <button className="search-action-btn" title="Add to Playlist">
-                  <ListPlus size={16} />
-                </button>
-                <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track)}>
-                  <Play size={16} fill="currentColor" />
-                </button>
-              </div>
+          
+          {(activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
+            <div className="search-section">
+              {activeFilter === 'all' && <div className="search-section-title">Albums</div>}
+              {albums.map(renderAlbumRow)}
             </div>
-          ))}
+          )}
+
+          {(activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
+            <div className="search-section">
+              {activeFilter === 'all' && <div className="search-section-title">Titles</div>}
+              {titleList.map(t => renderTrackRow(t, false))}
+            </div>
+          )}
+
+          {(activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
+            <div className="search-section">
+              {activeFilter === 'all' && <div className="search-section-title">Artists</div>}
+              {artists.map(renderArtistRow)}
+            </div>
+          )}
+
+          {(activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
+            <div className="search-section">
+              {activeFilter === 'all' && <div className="search-section-title">Labels</div>}
+              {labels.map(renderLabelRow)}
+            </div>
+          )}
+
+          {(activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
+            <div className="search-section">
+              {activeFilter === 'all' && <div className="search-section-title">Podcasts</div>}
+              {podcastList.map(t => renderTrackRow(t, true))}
+            </div>
+          )}
+
         </div>
       )}
 
@@ -248,6 +372,7 @@ export default function Search() {
       {!loading && query.length >= 2 && !hasResults && (
         <div className="search-empty">No results found</div>
       )}
+
     </div>
   );
 }

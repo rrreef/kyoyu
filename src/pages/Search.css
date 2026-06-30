@@ -213,3 +213,35 @@
 .search-bar { display: none !important; }
 .search-tabs { display: none !important; }
 .browse-genres { display: none !important; }
+
+/* Grouping Sections */
+.search-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 24px;
+}
+.search-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Artist/Label Avatars */
+.search-result-art.circle,
+.search-result-art-placeholder.circle {
+  border-radius: 50%;
+}
+
+/* Follow Buttons */
+.search-follow-btn {
+  color: rgba(255, 255, 255, 0.55);
+}
+.search-follow-btn:active {
+  color: rgba(255, 255, 255, 0.85);
+}
+.search-follow-btn.following {
+  color: var(--text-primary);
+}
