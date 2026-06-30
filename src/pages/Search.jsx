@@ -60,7 +60,24 @@ export default function Search() {
 
     // 5. Listen for exact keyboard height changes
     const onKeyboard = (e) => {
-      setKeyboardHeight(e.detail || 0);
+      const newHeight = e.detail || 0;
+      setKeyboardHeight(prevHeight => {
+        // Calculate new and old padding
+        const oldPadding = prevHeight > 0 ? prevHeight + 96 : 130;
+        const newPadding = newHeight > 0 ? newHeight + 96 : 130;
+        const paddingDiff = newPadding - oldPadding;
+        
+        // If padding increased (keyboard opened/grew), scroll down to push content up smoothly
+        if (paddingDiff > 0) {
+          setTimeout(() => {
+            const scrollContainer = document.querySelector('.main-content');
+            if (scrollContainer) {
+              scrollContainer.scrollBy({ top: paddingDiff, behavior: 'smooth' });
+            }
+          }, 50); // slight delay to allow React to apply the new padding first
+        }
+        return newHeight;
+      });
     };
     window.addEventListener('kyoyu-keyboard-change', onKeyboard);
 
@@ -135,7 +152,7 @@ export default function Search() {
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
-    <div className="page search-page animate-in" style={{ paddingBottom: 126 }}>
+    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 96 : 130, transition: 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
 
       {/* Search History — shown when no active query */}
       {showHistory && (
