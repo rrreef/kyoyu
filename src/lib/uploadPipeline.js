@@ -601,8 +601,8 @@ export async function fetchPublicTracks(query = '') {
       qs += `&or=(title.ilike.${q},artist.ilike.${q},album.ilike.${q},label.ilike.${q},genre.ilike.${q})`;
     }
 
-    // select=*,profiles(display_name,avatar_url) — safe against any future schema changes, avoids 400 on unknown columns
-    const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*,profiles(display_name,avatar_url)`;
+    // select=* — safe against any future schema changes, avoids 400 on unknown columns
+    const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*`;
 
     const res = await fetch(url, {
       headers: {
