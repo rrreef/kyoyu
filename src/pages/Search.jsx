@@ -9,6 +9,10 @@ export default function Search() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef(null);
+  const queryRef = useRef('');
+
+  // Keep queryRef in sync so callbacks can read latest
+  queryRef.current = query;
 
   // Load history from localStorage
   useEffect(() => {
@@ -20,10 +24,13 @@ export default function Search() {
 
   // Expose search setter so native can push queries
   useEffect(() => {
-    window.__kyoyuSetSearch = (q) => {
-      setQuery(q);
-      if (q.trim().length >= 2) {
-        // Save to history
+    const handleLive = (q) => {
+      setQuery(q || '');
+    };
+
+    const handleSubmit = (q) => {
+      setQuery(q || '');
+      if (q && q.trim().length >= 2) {
         setHistory(prev => {
           const cleaned = prev.filter(h => h.toLowerCase() !== q.toLowerCase());
           const next = [q, ...cleaned].slice(0, 20);
@@ -33,31 +40,52 @@ export default function Search() {
       }
     };
 
-    // Live typing handler (no history save, just filter)
-    window.__kyoyuSearchLive = (q) => {
-      setQuery(q);
-    };
+    window.__kyoyuSearchLive = handleLive;
+    window.__kyoyuSetSearch = handleSubmit;
+
+    // Also listen for custom events as fallback
+    const onLive = (e) => handleLive(e.detail);
+    const onSubmit = (e) => handleSubmit(e.detail);
+    window.addEventListener('kyoyu-search-live', onLive);
+    window.addEventListener('kyoyu-search-submit', onSubmit);
+
+    console.log('[Search] handlers registered');
 
     return () => {
-      delete window.__kyoyuSetSearch;
       delete window.__kyoyuSearchLive;
+      delete window.__kyoyuSetSearch;
+      window.removeEventListener('kyoyu-search-live', onLive);
+      window.removeEventListener('kyoyu-search-submit', onSubmit);
     };
   }, []);
 
-  // Debounced search
+  // Debounced search — fires on every query change
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
     if (query.trim().length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
+
     setLoading(true);
     debounceRef.current = setTimeout(() => {
-      fetchPublicTracks(query.trim())
-        .then(tracks => setResults(tracks))
-        .catch(() => setResults([]))
+      const q = query.trim();
+      console.log('[Search] fetching:', q);
+
+      fetchPublicTracks(q)
+        .then(tracks => {
+          console.log('[Search] got', tracks.length, 'tracks');
+          setResults(tracks);
+        })
+        .catch(err => {
+          console.warn('[Search] error:', err);
+          setResults([]);
+        })
         .finally(() => setLoading(false));
     }, 300);
+
     return () => clearTimeout(debounceRef.current);
   }, [query]);
 
@@ -73,8 +101,16 @@ export default function Search() {
   };
 
   const playTrack = (track) => {
-    if (window.__kyoyuPlayTrack) {
-      window.__kyoyuPlayTrack(track);
+    // Use the global player bridge
+    const msg = JSON.stringify({
+      type: 'play',
+      title: track.title,
+      artist: track.artist,
+      artwork: track.cover || '',
+      audioUrl: track.audioUrl || '',
+    });
+    if (window.webkit?.messageHandlers?.playerBridge) {
+      window.webkit.messageHandlers.playerBridge.postMessage(msg);
     }
   };
 
@@ -93,7 +129,9 @@ export default function Search() {
           </div>
           <div className="search-history-list">
             {history.map((item, i) => (
-              <div key={i} className="search-history-item" onClick={() => window.__kyoyuSetSearch?.(item)}>
+              <div key={i} className="search-history-item" onClick={() => {
+                setQuery(item);
+              }}>
                 <Clock size={14} className="search-history-icon" />
                 <span className="search-history-text">{item}</span>
                 <button
@@ -157,6 +195,11 @@ export default function Search() {
       {!loading && query.length >= 2 && !hasResults && (
         <div className="search-empty">No results found</div>
       )}
+
+      {/* Debug info — remove once verified */}
+      <div style={{ position: 'fixed', bottom: 80, left: 10, fontSize: 10, color: 'rgba(255,255,255,0.2)', pointerEvents: 'none', zIndex: 9999 }}>
+        q: "{query}" | r: {results.length} | l: {loading ? 'y' : 'n'}
+      </div>
     </div>
   );
 }
