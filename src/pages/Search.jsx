@@ -135,7 +135,7 @@ export default function Search() {
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
-    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? 126 + keyboardHeight - 34 : 126, transition: 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
+    <div className="page search-page animate-in" style={{ paddingBottom: 126 }}>
 
       {/* Search History — shown when no active query */}
       {showHistory && (
