@@ -17,30 +17,24 @@
 /* ── Sheet ─────────────────────────────────────────────────── */
 .album-sheet {
   position: fixed;
-  /* sit 1 px above the native tab bar (or web mobile nav fallback) */
-  bottom: calc(var(--kyoyu-tab-h, 83px) + 1px);
-  left: 0;
-  right: 0;
+  /* sit slightly above the native tab bar */
+  bottom: calc(var(--kyoyu-tab-h, 83px) + 12px);
+  left: 21px;
+  right: 21px;
   z-index: 901;
 
-  /* Liquid Glass — very transparent, heavy blur, brightness boost */
-  background: rgba(12, 12, 20, 0.52);
-  backdrop-filter: var(--glass-blur-lg);           /* blur(64px) saturate(200%) brightness(1.08) */
-  -webkit-backdrop-filter: var(--glass-blur-lg);
+  /* Liquid Glass — match the Swift tab bar and filter card */
+  background: rgba(30, 30, 30, 0.45);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
 
-  /* iOS sheet shape — big radius on top corners only */
-  border-radius: 28px;
+  /* Floating card shape */
+  border-radius: 32px;
 
-  /* Specular top edge (the "glass rim" light catch) */
-  border-top:    1px solid rgba(255, 255, 255, 0.22);
-  border-left:   1px solid rgba(255, 255, 255, 0.08);
-  border-right:  1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Specular rim */
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
 
-  box-shadow:
-    0 -2px  30px rgba(0,  0,  0,  0.35),
-    0  0px   1px rgba(255,255,255,0.06) inset,
-    0 -1px   0px rgba(255,255,255,0.12) inset;   /* inner top specular */
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 
   /* size: never taller than screen minus tab bar minus a top gap */
   max-height: calc(100dvh - var(--kyoyu-tab-h, 83px) - 1px - 52px);
