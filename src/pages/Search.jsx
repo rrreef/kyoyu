@@ -9,7 +9,7 @@ export default function Search() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
 
   // Load history from localStorage
@@ -58,9 +58,9 @@ export default function Search() {
       setActiveFilter(window.__kyoyuSearchFilter);
     }
 
-    // 5. Listen for keyboard height changes
+    // 5. Listen for exact keyboard height changes
     const onKeyboard = (e) => {
-      setIsKeyboardOpen((e.detail || 0) > 0);
+      setKeyboardHeight(e.detail || 0);
     };
     window.addEventListener('kyoyu-keyboard-change', onKeyboard);
 
@@ -135,7 +135,7 @@ export default function Search() {
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
-    <div className="page search-page animate-in" style={{ paddingBottom: isKeyboardOpen ? 303 : 177 }}>
+    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 143 : 177 }}>
 
       {/* Search History — shown when no active query */}
       {showHistory && (
