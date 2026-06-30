@@ -5,8 +5,8 @@
   position: fixed;
   inset: 0;
   z-index: 900;
-  /* subtle dark veil so content behind reads as "behind" */
-  background: rgba(0, 0, 0, 0.28);
+  /* Make the backdrop completely transparent so the liquid glass blur picks up bright content */
+  background: transparent;
   animation: as-bd-in .22s ease forwards;
 }
 @keyframes as-bd-in {
