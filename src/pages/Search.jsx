@@ -8,6 +8,7 @@ export default function Search() {
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('all');
   const debounceRef = useRef(null);
 
   // Load history from localStorage
@@ -42,13 +43,23 @@ export default function Search() {
     };
     document.addEventListener('kyoyu-search', onSearch);
 
-    // 3. Check if native already set a pending query before React mounted
+    // 3. Listen for filter changes from native SearchFilterBar
+    const onFilter = (e) => {
+      setActiveFilter(e.detail || 'all');
+    };
+    document.addEventListener('kyoyu-search-filter', onFilter);
+
+    // 4. Check if native already set a pending query before React mounted
     if (window.__kyoyuSearchQuery) {
       setQuery(window.__kyoyuSearchQuery);
+    }
+    if (window.__kyoyuSearchFilter) {
+      setActiveFilter(window.__kyoyuSearchFilter);
     }
 
     return () => {
       document.removeEventListener('kyoyu-search', onSearch);
+      document.removeEventListener('kyoyu-search-filter', onFilter);
     };
   }, []);
 
@@ -101,7 +112,18 @@ export default function Search() {
     }
   };
 
-  const hasResults = results.length > 0;
+  const filteredResults = results.filter(track => {
+    if (activeFilter === 'all') return true;
+    const q = query.toLowerCase();
+    if (activeFilter === 'titles') return track.title.toLowerCase().includes(q);
+    if (activeFilter === 'artists') return track.artist.toLowerCase().includes(q);
+    if (activeFilter === 'albums') return (track.album || '').toLowerCase().includes(q);
+    if (activeFilter === 'labels') return (track.label || '').toLowerCase().includes(q);
+    if (activeFilter === 'podcasts') return (track.genre || '').toLowerCase().includes('podcast');
+    return true;
+  });
+
+  const hasResults = filteredResults.length > 0;
   const showHistory = !hasResults && query.length < 2 && history.length > 0;
 
   return (
@@ -134,7 +156,7 @@ export default function Search() {
       {/* Live Results List */}
       {hasResults && (
         <div className="search-results-list">
-          {results.map(track => (
+          {filteredResults.map(track => (
             <div key={track.id} className="search-result-row">
               <div className="search-result-art">
                 {track.cover ? (
