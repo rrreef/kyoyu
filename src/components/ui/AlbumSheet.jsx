@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
+import { useLibrary } from '../../contexts/LibraryContext';
 
 export function openNativeAlbumFast(album) {
   if (!album) return null;
@@ -31,22 +32,23 @@ export function openNativeAlbumFast(album) {
 
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
+  const { toggleLikeUpload, isLikedUpload } = useLibrary();
 
   // Keep stable refs so the effect cleanup doesn't fire when these change identity.
-  // playTrack gets a new reference on every PlayerContext re-render (timeupdate etc.),
-  // which was causing the effect to re-run → cleanup → albumOpen:false → sheet closes!
   const playTrackRef = useRef(playTrack);
   playTrackRef.current = playTrack;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const toggleLikeRef = useRef(toggleLikeUpload);
+  toggleLikeRef.current = toggleLikeUpload;
+  const isLikedRef = useRef(isLikedUpload);
+  isLikedRef.current = isLikedUpload;
 
   useLayoutEffect(() => {
     if (!album) return;
 
     // Expose close handler so Swift can trigger it
     window.__kyoyuCloseNativeAlbum = (incomingTs) => {
-      // If the MOST RECENT tap timestamp is different from the incoming close timestamp,
-      // the user must have tapped the album again since this close command was issued!
       if (incomingTs && window.__lastFastOpenTs && String(incomingTs) !== String(window.__lastFastOpenTs)) {
          return;
       }
@@ -55,7 +57,6 @@ export default function AlbumSheet({ album, onClose }) {
 
     // Expose play handler so Swift can trigger it
     window.__kyoyuPlayNativeTrack = (albumId, trackObj) => {
-      // Create a player track format from the raw track data
       const queue = album.tracks.map(t => ({
          id: t.id,
          title: t.title || t.name,
@@ -71,6 +72,46 @@ export default function AlbumSheet({ album, onClose }) {
       const idx = queue.findIndex(q => q.id === trackObj.id);
       playTrackRef.current(queue[Math.max(idx, 0)], queue);
     };
+
+    // Expose like handler so Swift can trigger it
+    window.__kyoyuToggleLikeTrack = (trackId) => {
+      const t = album.tracks.find(tr => tr.id === trackId);
+      if (!t) return false;
+
+      // Toggle in React LibraryContext (shows in Library > Likes)
+      toggleLikeRef.current(t);
+
+      // Also toggle in the injected JS heart system (Supabase persistence + hearts in web UI)
+      if (window.__kyoyuToggleLike) {
+        window.__kyoyuToggleLike({
+          id: t.id,
+          title: t.title || t.name || '',
+          artist: t.artist || album.artist || '',
+          album: album.title || '',
+          artworkUrl: album.cover || album.artworkUrl || ''
+        });
+      }
+
+      // Return new liked state so Swift can update the heart icon
+      const nowLiked = !isLikedRef.current(trackId);
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          likeStateChanged: { trackId: trackId, liked: nowLiked }
+        });
+      } catch(e) {}
+      return nowLiked;
+    };
+
+    // Send initial liked states to Swift so hearts show correctly on open
+    const likedStates = {};
+    album.tracks.forEach(t => {
+      likedStates[t.id] = isLikedRef.current(t.id);
+    });
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({
+        albumLikedStates: likedStates
+      });
+    } catch(e) {}
 
     // Tell Swift to open the native overlay if not already sent
     if (window.__lastFastOpenTs !== album._ts) {
@@ -101,10 +142,9 @@ export default function AlbumSheet({ album, onClose }) {
     }
 
     return () => {
-      // Clean up global handlers
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuPlayNativeTrack;
-      // Tell Swift to close overlay — but only if a NEWER album hasn't already been opened.
+      delete window.__kyoyuToggleLikeTrack;
       const myTs = album?._ts;
       if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
         try {
@@ -114,6 +154,5 @@ export default function AlbumSheet({ album, onClose }) {
     };
   }, [album]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render nothing in DOM — it's fully native now
   return null;
 }
