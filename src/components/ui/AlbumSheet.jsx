@@ -97,10 +97,15 @@ export default function AlbumSheet({ album, onClose }) {
       // Clean up global handlers
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuPlayNativeTrack;
-      // Tell Swift to close overlay if it unmounts
-      try {
-        window.webkit?.messageHandlers?.player?.postMessage({ albumOpen: false });
-      } catch(e) {}
+      // Tell Swift to close overlay — but only if a NEWER album hasn't already been opened.
+      // openNativeAlbumFast sets __lastFastOpenTs BEFORE this cleanup runs,
+      // so if our _ts doesn't match, a new album is incoming and we must NOT send close.
+      const myTs = album?._ts;
+      if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
+        try {
+          window.webkit?.messageHandlers?.player?.postMessage({ albumOpen: false });
+        } catch(e) {}
+      }
     };
   }, [album, onClose, playTrack]);
 
