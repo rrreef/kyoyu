@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 
 export function openNativeAlbumFast(album) {
@@ -32,18 +32,25 @@ export function openNativeAlbumFast(album) {
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
 
+  // Keep stable refs so the effect cleanup doesn't fire when these change identity.
+  // playTrack gets a new reference on every PlayerContext re-render (timeupdate etc.),
+  // which was causing the effect to re-run → cleanup → albumOpen:false → sheet closes!
+  const playTrackRef = useRef(playTrack);
+  playTrackRef.current = playTrack;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useLayoutEffect(() => {
     if (!album) return;
-    
+
     // Expose close handler so Swift can trigger it
     window.__kyoyuCloseNativeAlbum = (incomingTs) => {
       // If the MOST RECENT tap timestamp is different from the incoming close timestamp,
       // the user must have tapped the album again since this close command was issued!
-      // Using window.__lastFastOpenTs protects against React stale closures holding old album._ts values.
       if (incomingTs && window.__lastFastOpenTs && String(incomingTs) !== String(window.__lastFastOpenTs)) {
          return;
       }
-      onClose();
+      onCloseRef.current();
     };
 
     // Expose play handler so Swift can trigger it
@@ -60,9 +67,9 @@ export default function AlbumSheet({ album, onClose }) {
          url: t.url || t.streamUrl || t.audioUrl || t.src || '',
          duration: t.duration || ''
       }));
-      
+
       const idx = queue.findIndex(q => q.id === trackObj.id);
-      playTrack(queue[Math.max(idx, 0)], queue);
+      playTrackRef.current(queue[Math.max(idx, 0)], queue);
     };
 
     // Tell Swift to open the native overlay if not already sent
@@ -98,8 +105,6 @@ export default function AlbumSheet({ album, onClose }) {
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuPlayNativeTrack;
       // Tell Swift to close overlay — but only if a NEWER album hasn't already been opened.
-      // openNativeAlbumFast sets __lastFastOpenTs BEFORE this cleanup runs,
-      // so if our _ts doesn't match, a new album is incoming and we must NOT send close.
       const myTs = album?._ts;
       if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
         try {
@@ -107,8 +112,8 @@ export default function AlbumSheet({ album, onClose }) {
         } catch(e) {}
       }
     };
-  }, [album, onClose, playTrack]);
+  }, [album]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render nothing in DOM - it's fully native now
+  // Render nothing in DOM — it's fully native now
   return null;
 }
