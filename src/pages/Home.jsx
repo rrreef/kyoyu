@@ -9,7 +9,7 @@ import { useLibrary } from '../contexts/LibraryContext';
 import { useDisplay, useHomeLayoutLive } from '../contexts/DisplayContext';
 import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import AlbumSheet from '../components/ui/AlbumSheet';
+import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
 import './Home.css';
 
 /**
@@ -247,7 +247,7 @@ export default function Home() {
                   key={album.id}
                   className="upl-grid-cell"
                   style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setSelectedAlbum(album)}
+                  onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
                 >
                   <div className="upl-grid-art">
                     {album.cover

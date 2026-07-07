@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDisplay, useLibraryLayoutLive } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AlbumSheet from '../components/ui/AlbumSheet';
+import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
 import './Library.css';
 
 function groupByAlbum(tracks) {
@@ -221,7 +221,7 @@ export default function Library() {
                       key={album.id}
                       className="upl-grid-cell"
                       style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
-                      onClick={() => setSelectedAlbum(album)}
+                      onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
                     >
                       <div className="upl-grid-art">
                         {album.cover
