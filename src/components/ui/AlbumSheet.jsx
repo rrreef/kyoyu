@@ -32,7 +32,7 @@ export function openNativeAlbumFast(album) {
 
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
-  const { toggleLikeUpload, isLikedUpload } = useLibrary();
+  const { toggleLikeUpload, isLikedUpload, toggleDownload, isDownloaded, addToPlaylist, createPlaylist, getPlaylists } = useLibrary();
 
   const playTrackRef = useRef(playTrack);
   playTrackRef.current = playTrack;
@@ -40,6 +40,16 @@ export default function AlbumSheet({ album, onClose }) {
   onCloseRef.current = onClose;
   const toggleLikeRef = useRef(toggleLikeUpload);
   toggleLikeRef.current = toggleLikeUpload;
+  const toggleDownloadRef = useRef(toggleDownload);
+  toggleDownloadRef.current = toggleDownload;
+  const isDownloadedRef = useRef(isDownloaded);
+  isDownloadedRef.current = isDownloaded;
+  const addToPlaylistRef = useRef(addToPlaylist);
+  addToPlaylistRef.current = addToPlaylist;
+  const createPlaylistRef = useRef(createPlaylist);
+  createPlaylistRef.current = createPlaylist;
+  const getPlaylistsRef = useRef(getPlaylists);
+  getPlaylistsRef.current = getPlaylists;
 
   useLayoutEffect(() => {
     if (!album) return;
@@ -114,6 +124,46 @@ export default function AlbumSheet({ album, onClose }) {
       } catch(e) {}
     };
 
+    // Download toggle
+    window.__kyoyuDownloadTrack = (trackId) => {
+      const t = album.tracks.find(tr => tr.id === trackId);
+      if (!t) return;
+      const trackObj = {
+        id: t.id,
+        title: t.title || t.name || '',
+        artist: t.artist || album.artist || '',
+        album: album.title || '',
+        cover: album.cover || album.artworkUrl || '',
+        audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+      };
+      toggleDownloadRef.current(trackObj);
+      return !isDownloadedRef.current(trackId);
+    };
+
+    // Playlist bridge
+    window.__kyoyuGetPlaylists = () => {
+      return JSON.stringify(getPlaylistsRef.current());
+    };
+
+    window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
+      const t = album.tracks.find(tr => tr.id === trackId);
+      if (!t) return;
+      const trackObj = {
+        id: t.id,
+        title: t.title || t.name || '',
+        artist: t.artist || album.artist || '',
+        album: album.title || '',
+        cover: album.cover || album.artworkUrl || '',
+        audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+      };
+      addToPlaylistRef.current(playlistId, trackObj);
+    };
+
+    window.__kyoyuCreatePlaylist = (name) => {
+      const pl = createPlaylistRef.current(name);
+      return JSON.stringify({ id: pl.id, name: pl.title, trackCount: 0 });
+    };
+
     // Tell Swift to open the native overlay if not already sent
     if (window.__lastFastOpenTs !== album._ts) {
         window.__lastFastOpenTs = album._ts;
@@ -146,6 +196,10 @@ export default function AlbumSheet({ album, onClose }) {
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuPlayNativeTrack;
       delete window.__kyoyuToggleLikeTrack;
+      delete window.__kyoyuDownloadTrack;
+      delete window.__kyoyuGetPlaylists;
+      delete window.__kyoyuAddToPlaylist;
+      delete window.__kyoyuCreatePlaylist;
       const myTs = album?._ts;
       if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
         try {

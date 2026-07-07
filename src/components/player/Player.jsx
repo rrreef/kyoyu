@@ -311,7 +311,7 @@ export default function Player({ hideMini = false }) {
     return ()=>{ delete window.__kyoyuPlayerCmd; };
   },[dispatch, seekTo]);
   useEffect(()=>{
-    if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||''});
+    if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||'',trackId:currentTrack.id||'',albumId:currentTrack.releaseId||currentTrack.album||'',artist:currentTrack.artist||''});
     else             postNative({visible:false,playing:false,title:'',artwork:''});
   },[currentTrack,isPlaying]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)

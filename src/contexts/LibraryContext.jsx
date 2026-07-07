@@ -17,7 +17,13 @@ export function LibraryProvider({ children }) {
   const [savedReleases, setSavedReleases] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-saved') || '["void-sequence","echo-chamber"]'); } catch { return []; }
   });
-  const [playlists, setPlaylists] = useState(mockPlaylists);
+  const [playlists, setPlaylists] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('kyoyu-playlists'));
+      if (stored && stored.length) return stored;
+    } catch {}
+    return mockPlaylists;
+  });
   const [downloads, setDownloads] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-downloads') || '[]'); } catch { return []; }
   });
@@ -31,6 +37,7 @@ export function LibraryProvider({ children }) {
   useEffect(() => { try { localStorage.setItem('reef-saved', JSON.stringify(savedReleases)); } catch {} }, [savedReleases]);
   useEffect(() => { try { localStorage.setItem('reef-downloads', JSON.stringify(downloads)); } catch {} }, [downloads]);
   useEffect(() => { try { localStorage.setItem('reef-followed', JSON.stringify(followedArtists)); } catch {} }, [followedArtists]);
+  useEffect(() => { try { localStorage.setItem('kyoyu-playlists', JSON.stringify(playlists)); } catch {} }, [playlists]);
 
   function toggleLike(trackId) {
     setLikedTracks(prev =>
@@ -81,11 +88,29 @@ export function LibraryProvider({ children }) {
       setDownloads(prev => [...prev, { ...track, downloadedAt: new Date().toISOString() }]);
     }
   }
+  function toggleDownload(track) {
+    setDownloads(prev => {
+      const exists = prev.find(d => d.id === track.id);
+      if (exists) return prev.filter(d => d.id !== track.id);
+      return [...prev, { ...track, downloadedAt: new Date().toISOString() }];
+    });
+  }
+  function isDownloaded(trackId) { return downloads.some(d => d.id === trackId); }
 
   function createPlaylist(name) {
     const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false };
     setPlaylists(prev => [...prev, newPl]);
     return newPl;
+  }
+  function addToPlaylist(playlistId, track) {
+    setPlaylists(prev => prev.map(pl => {
+      if (pl.id !== playlistId) return pl;
+      if (pl.tracks.some(t => t.id === track.id)) return pl;
+      return { ...pl, tracks: [...pl.tracks, track] };
+    }));
+  }
+  function getPlaylists() {
+    return playlists.map(pl => ({ id: pl.id, name: pl.title, trackCount: (pl.tracks || []).length }));
   }
 
   return (
@@ -94,6 +119,7 @@ export function LibraryProvider({ children }) {
       toggleLike, isLiked, toggleLikeUpload, isLikedUpload, getLikedUploads,
       toggleSave, isSaved, toggleFollow, isFollowing,
       addDownload, createPlaylist,
+      toggleDownload, isDownloaded, addToPlaylist, getPlaylists,
     }}>
       {children}
     </LibraryContext.Provider>

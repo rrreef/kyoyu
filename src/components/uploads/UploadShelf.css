@@ -188,8 +188,8 @@
 .upl-grid-4 { grid-template-columns: repeat(4, 1fr); gap:7px; }
 .upl-grid-5 { grid-template-columns: repeat(5, 1fr); gap:5px; padding:6px 12px 20px; }
 
-.upl-grid-cell { display:flex;flex-direction:column;cursor:pointer;-webkit-tap-highlight-color:transparent;min-width:0;overflow:hidden; }
-.upl-grid-cell:active { opacity:.75; }
+.upl-grid-cell { display:flex;flex-direction:column;cursor:pointer;-webkit-tap-highlight-color:transparent;min-width:0;overflow:hidden; transition: transform 0.1s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease; }
+.upl-grid-cell:active { opacity:.75; transform: scale(0.95); transition: transform 0.05s ease, opacity 0.05s ease; }
 .upl-grid-cell.active .upl-grid-title { color:rgba(255,255,255,.6); }
 
 .upl-grid-art { aspect-ratio:1;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:5px;position:relative;flex-shrink:0; }
