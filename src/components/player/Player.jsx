@@ -297,15 +297,19 @@ export default function Player({ hideMini = false }) {
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
-    window.__kyoyuPlayerCmd = cmd=>{
+    window.__kyoyuPlayerCmd = (cmd, val)=>{
       if(cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
       if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if(cmd==='prev')   dispatch({type:'PREV_TRACK'});
       if(cmd==='stop')   dispatch({type:'STOP'});
       if(cmd==='expand'){ setExp(true); postNative({expanded:true}); }
+      if(cmd==='seekTo' && typeof val === 'number') seekTo(val);
     };
+    // Send initial player style preference to Swift
+    const style = localStorage.getItem('kyoyu-player-style') || 'sheet';
+    postNative({ playerStyle: style });
     return ()=>{ delete window.__kyoyuPlayerCmd; };
-  },[dispatch]);
+  },[dispatch, seekTo]);
   useEffect(()=>{
     if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||''});
     else             postNative({visible:false,playing:false,title:'',artwork:''});

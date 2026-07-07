@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut } from 'lucide-react';
+import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut, Music, Maximize2, CreditCard } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { useDisplay } from '../contexts/DisplayContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -76,6 +76,18 @@ export default function AppSettings() {
   const [upToDate,       setUpToDate]       = useState(false);
   const APP_VERSION = '1.0.4';
 
+  // Player style: 'fullscreen' (classic) or 'sheet' (card)
+  const [playerStyle, setPlayerStyle] = useState(() => localStorage.getItem('kyoyu-player-style') || 'sheet');
+
+  function changePlayerStyle(style) {
+    setPlayerStyle(style);
+    localStorage.setItem('kyoyu-player-style', style);
+    // Notify Swift so it knows which player to show
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({ playerStyle: style });
+    } catch(e) {}
+  }
+
 
   function checkUpdate() {
     setChecking(true);
@@ -124,6 +136,41 @@ export default function AppSettings() {
                   }}>
                     <div style={{ position: 'absolute', bottom: 4, left: 4, right: 4, height: 5, borderRadius: 2, background: p.surface }} />
                   </div>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? '#fff' : 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {active && <Check size={9} strokeWidth={3} />}{label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Player Style */}
+      <div className="appsettings-section">
+        <div className="appsettings-label">Player</div>
+        <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Music size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="appsettings-row-title">Player Style</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+            {[{ id: 'fullscreen', label: 'Full Screen', Icon: Maximize2 }, { id: 'sheet', label: 'Sheet', Icon: CreditCard }].map(({ id, label, Icon }) => {
+              const active = playerStyle === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => changePlayerStyle(id)}
+                  style={{
+                    flex: 1, border: 'none', cursor: 'pointer', padding: '10px 0',
+                    borderRadius: 10,
+                    background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                    outline: active ? '1.5px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    transition: 'all .15s',
+                  }}
+                >
+                  <Icon size={18} strokeWidth={1.8} style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)' }} />
                   <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? '#fff' : 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 3 }}>
                     {active && <Check size={9} strokeWidth={3} />}{label}
                   </span>
