@@ -34,15 +34,12 @@ export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
 
-  // Keep stable refs so the effect cleanup doesn't fire when these change identity.
   const playTrackRef = useRef(playTrack);
   playTrackRef.current = playTrack;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const toggleLikeRef = useRef(toggleLikeUpload);
   toggleLikeRef.current = toggleLikeUpload;
-  const isLikedRef = useRef(isLikedUpload);
-  isLikedRef.current = isLikedUpload;
 
   useLayoutEffect(() => {
     if (!album) return;
@@ -76,42 +73,46 @@ export default function AlbumSheet({ album, onClose }) {
     // Expose like handler so Swift can trigger it
     window.__kyoyuToggleLikeTrack = (trackId) => {
       const t = album.tracks.find(tr => tr.id === trackId);
-      if (!t) return false;
+      if (!t) return;
 
       // Toggle in React LibraryContext (shows in Library > Likes)
-      toggleLikeRef.current(t);
+      try { toggleLikeRef.current(t); } catch(e) { console.warn('toggleLikeUpload error:', e); }
 
       // Also toggle in the injected JS heart system (Supabase persistence + hearts in web UI)
-      if (window.__kyoyuToggleLike) {
-        window.__kyoyuToggleLike({
-          id: t.id,
-          title: t.title || t.name || '',
-          artist: t.artist || album.artist || '',
-          album: album.title || '',
-          artworkUrl: album.cover || album.artworkUrl || ''
-        });
-      }
-
-      // Return new liked state so Swift can update the heart icon
-      const nowLiked = !isLikedRef.current(trackId);
       try {
-        window.webkit?.messageHandlers?.player?.postMessage({
-          likeStateChanged: { trackId: trackId, liked: nowLiked }
-        });
-      } catch(e) {}
-      return nowLiked;
-    };
+        if (window.__kyoyuToggleLike) {
+          window.__kyoyuToggleLike({
+            id: t.id,
+            title: t.title || t.name || '',
+            artist: t.artist || album.artist || '',
+            album: album.title || '',
+            artworkUrl: album.cover || album.artworkUrl || ''
+          });
+        }
+      } catch(e) { console.warn('__kyoyuToggleLike error:', e); }
 
-    // Send initial liked states to Swift so hearts show correctly on open
-    const likedStates = {};
-    album.tracks.forEach(t => {
-      likedStates[t.id] = isLikedRef.current(t.id);
-    });
-    try {
-      window.webkit?.messageHandlers?.player?.postMessage({
-        albumLikedStates: likedStates
-      });
-    } catch(e) {}
+      // Direct localStorage fallback: ensure it's in kyoyu-liked-uploads
+      try {
+        const LS_KEY = 'kyoyu-liked-uploads';
+        const existing = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+        const idx = existing.findIndex(x => x.id === t.id);
+        if (idx >= 0) {
+          existing.splice(idx, 1);
+        } else {
+          existing.push({
+            id: t.id,
+            title: t.title || t.name || '',
+            artist: t.artist || album.artist || '',
+            album: album.title || '',
+            cover: album.cover || album.artworkUrl || '',
+            genre: t.genre || album.genre || '',
+            audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+            storageKey: t.storageKey || ''
+          });
+        }
+        localStorage.setItem(LS_KEY, JSON.stringify(existing));
+      } catch(e) {}
+    };
 
     // Tell Swift to open the native overlay if not already sent
     if (window.__lastFastOpenTs !== album._ts) {
