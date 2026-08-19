@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -24,11 +24,15 @@ import ResetPassword  from './pages/auth/ResetPassword';
 import Home from './pages/Home';
 import Search from './pages/Search';
 import Library from './pages/Library';
+import AllReleases from './pages/AllReleases';
 import Shop from './pages/Shop';
 import Marketplace from './pages/Marketplace';
 import Profile from './pages/Profile';
 import ReleasePage from './pages/ReleasePage';
 import ArtistPage from './pages/ArtistPage';
+import CanonicalArtistPage from './pages/CanonicalArtistPage';
+import CanonicalReleasePage from './pages/CanonicalReleasePage';
+import CanonicalLabelPage from './pages/CanonicalLabelPage';
 import Subscription from './pages/Subscription';
 import ListenerSettings from './pages/ListenerSettings';
 import Account      from './pages/Account';
@@ -85,6 +89,25 @@ function RouteReporter() {
 
 const PROFILE_ROUTES = new Set(['/profile','/account','/uploads','/app-settings','/downloads','/orders','/subscription','/settings']);
 
+// ─── Route Wrappers ───────────────────────────────────────
+function ArtistRoute() {
+  const { id } = useParams();
+  const isCanonical = id?.startsWith('discogs-');
+  return isCanonical ? <CanonicalArtistPage /> : <ArtistPage />;
+}
+
+function ReleaseRoute() {
+  const { id } = useParams();
+  const isCanonical = id?.startsWith('discogs-');
+  return isCanonical ? <CanonicalReleasePage /> : <ReleasePage />;
+}
+
+function LabelRoute() {
+  const { id } = useParams();
+  const isCanonical = id?.startsWith('discogs-');
+  return isCanonical ? <CanonicalLabelPage /> : <ArtistPage />;
+}
+
 // ─── Listener shell ────────────────────────────────────────
 function ListenerApp() {
   const { state } = usePlayer();
@@ -109,13 +132,14 @@ function ListenerApp() {
           <Route path="/"               element={<Home />} />
           <Route path="/search"         element={<Search />} />
           <Route path="/library"        element={<Library />} />
+          <Route path="/all-releases"   element={<AllReleases />} />
           <Route path="/shop"           element={<Shop />} />
           <Route path="/marketplace"    element={<Marketplace />} />
           <Route path="/marketplace/:id" element={<Marketplace />} />
           <Route path="/profile"        element={<Profile />} />
-          <Route path="/release/:id"    element={<ReleasePage />} />
-          <Route path="/artist/:id"     element={<ArtistPage />} />
-          <Route path="/label/:id"      element={<ArtistPage />} />
+          <Route path="/release/:id"    element={<ReleaseRoute />} />
+          <Route path="/artist/:id"     element={<ArtistRoute />} />
+          <Route path="/label/:id"      element={<LabelRoute />} />
           <Route path="/subscription"   element={<Subscription />} />
           <Route path="/settings"        element={<ListenerSettings />} />
           <Route path="/orders"          element={<Orders />} />
@@ -169,8 +193,9 @@ function CreatorApp() {
           <Route path="/marketplace/:id"  element={<Marketplace />} />
           <Route path="/messages"         element={<Messages />} />
           <Route path="/events"           element={<Events />} />
-          <Route path="/release/:id"      element={<ReleasePage />} />
-          <Route path="/artist/:id"       element={<ArtistPage />} />
+          <Route path="/release/:id"      element={<ReleaseRoute />} />
+          <Route path="/artist/:id"       element={<ArtistRoute />} />
+          <Route path="/label/:id"        element={<LabelRoute />} />
 
           {/* ── Fallback ── */}
           <Route path="*"                 element={<Dashboard />} />

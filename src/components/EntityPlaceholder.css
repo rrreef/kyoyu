@@ -1,0 +1,27 @@
+.entity-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.placeholder-circle {
+  border-radius: 50%;
+}
+
+.placeholder-square {
+  border-radius: var(--radius-md);
+}
+
+.placeholder-text {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: 0.05em;
+  /* Scale with container size if needed, though usually controlled by parent */
+}

@@ -1,0 +1,32 @@
+.source-buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+.source-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: var(--transition-base);
+  text-decoration: none;
+  /* Add subtle border color derived from platform color */
+  border: 1px solid color-mix(in srgb, var(--platform-color) 30%, var(--glass-border));
+}
+
+.source-button:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--platform-color) 10%, var(--glass-bg-hover));
+  border-color: color-mix(in srgb, var(--platform-color) 50%, var(--glass-border-hover));
+  transform: translateY(-1px);
+}
+
+.source-icon {
+  font-size: 0.9rem;
+}

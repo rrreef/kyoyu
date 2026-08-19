@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck } from 'lucide-react';
+import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
+import { unifiedSearch } from '../lib/unifiedSearch';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
+import ContentStateBadge from '../components/ContentStateBadge';
+import EntityPlaceholder from '../components/EntityPlaceholder';
 import './Search.css';
 
 export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
+  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [] });
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -125,12 +129,14 @@ export default function Search() {
 
     setLoading(true);
     debounceRef.current = setTimeout(() => {
-      fetchPublicTracks(query.trim())
-        .then(tracks => {
-          setResults(tracks);
+      unifiedSearch(query.trim())
+        .then(({ nativeTracks, external }) => {
+          setResults(nativeTracks);
+          setExternalResults(external);
         })
         .catch(() => {
           setResults([]);
+          setExternalResults({ artists: [], releases: [], labels: [] });
         })
         .finally(() => setLoading(false));
     }, 300);
@@ -188,7 +194,8 @@ export default function Search() {
   const labels = Array.from(labelMap.values());
 
   const hasResults = results.length > 0;
-  const showHistory = !hasResults && query.length < 2 && history.length > 0;
+  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0;
+  const showHistory = !hasResults && !hasExternal && query.length < 2 && history.length > 0;
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -369,8 +376,85 @@ export default function Search() {
       )}
 
       {/* No results */}
-      {!loading && query.length >= 2 && !hasResults && (
+      {!loading && query.length >= 2 && !hasResults && !hasExternal && (
         <div className="search-empty">No results found</div>
+      )}
+
+      {/* External Results from Discogs */}
+      {hasExternal && (activeFilter === 'all') && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header">
+            <ExternalLink size={14} style={{ opacity: 0.5 }} />
+            More Results
+          </div>
+
+          {externalResults.artists.length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Artists</div>
+              {externalResults.artists.map(artist => (
+                <div key={artist.id} className="search-result-row search-artist-row search-external-row"
+                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`)}>
+                  <div className="search-result-art artist-avatar">
+                    <EntityPlaceholder name={artist.name} type="artist" />
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{artist.name}</span>
+                    <ContentStateBadge isNative={false} entityType="artist" />
+                  </div>
+                  <div className="search-result-actions">
+                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {externalResults.releases.length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Releases</div>
+              {externalResults.releases.map(release => (
+                <div key={release.id} className="search-result-row search-external-row"
+                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
+                  <div className="search-result-art">
+                    <EntityPlaceholder name={release.releaseName || release.title} type="release" />
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{release.releaseName}</span>
+                    <span className="search-result-artist">
+                      {release.artistName}
+                      {release.year ? ` · ${release.year}` : ''}
+                    </span>
+                    <ContentStateBadge isNative={false} entityType="release" />
+                  </div>
+                  <div className="search-result-actions">
+                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {externalResults.labels.length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Labels</div>
+              {externalResults.labels.map(label => (
+                <div key={label.id} className="search-result-row search-artist-row search-external-row"
+                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/label/discogs-${label.discogsId}`)}>
+                  <div className="search-result-art artist-avatar">
+                    <EntityPlaceholder name={label.name} type="label" />
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{label.name}</span>
+                    <ContentStateBadge isNative={false} entityType="label" />
+                  </div>
+                  <div className="search-result-actions">
+                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
     </div>

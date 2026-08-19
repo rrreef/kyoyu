@@ -1,0 +1,161 @@
+@import './ArtistPage.css';
+
+.canonical-release-page {}
+
+.release-hero {
+  position: relative;
+  height: 380px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.release-hero-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-card);
+}
+
+.release-hero-content {
+  position: relative;
+  z-index: 1;
+  padding: var(--sp-10) var(--sp-8);
+  width: 100%;
+}
+
+.release-hero-top {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-8);
+}
+
+.canonical-hero-cover {
+  width: 180px;
+  height: 180px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  font-size: 3rem;
+}
+
+.canonical-hero-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.release-hero-title {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-2);
+}
+
+.release-hero-meta {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.release-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: var(--sp-8);
+}
+
+.track-pos {
+  width: 30px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.track-duration {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.meta-card {
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+  border-radius: var(--radius-lg) !important;
+}
+
+.meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.meta-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.credits-card {
+  padding: var(--sp-5);
+  border-radius: var(--radius-lg) !important;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: var(--sp-2);
+}
+
+.credits-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.credit-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+}
+
+.credit-role {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.credit-name {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.credit-name:hover {
+  text-decoration: underline;
+  color: var(--orange-400);
+}
+
+@media (max-width: 768px) {
+  .release-details-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .release-hero-top {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .canonical-hero-info {
+    align-items: center;
+  }
+}

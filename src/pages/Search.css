@@ -248,3 +248,44 @@
 .search-follow-btn.following {
   color: var(--text-primary);
 }
+
+/* ── External Results Section ── */
+.search-external-section {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.search-external-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+}
+
+.search-section-subtitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 0 4px;
+}
+
+.search-external-row {
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+.search-external-row:hover {
+  opacity: 1;
+}
+.search-external-row:active {
+  opacity: 0.6;
+}

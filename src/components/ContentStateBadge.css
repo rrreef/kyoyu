@@ -1,0 +1,26 @@
+.content-state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.state-dot.native {
+  background-color: #1DB954; /* Green dot for native */
+  box-shadow: 0 0 8px rgba(29, 185, 84, 0.4);
+}
+
+.state-dot.external {
+  background-color: var(--text-dim); /* Blue/grey for external */
+}
