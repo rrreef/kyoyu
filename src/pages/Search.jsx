@@ -384,8 +384,7 @@ export default function Search() {
       {hasExternal && (activeFilter === 'all') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header">
-            <ExternalLink size={14} style={{ opacity: 0.5 }} />
-            More Results
+            Discogs
           </div>
 
           {externalResults.artists.length > 0 && (
@@ -394,7 +393,7 @@ export default function Search() {
               {externalResults.artists.map(artist => (
                 <div key={artist.id} className="search-result-row search-artist-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`)}>
-                  <div className="search-result-art artist-avatar">
+                  <div className="search-result-art artist-avatar discogs-art">
                     {artist.thumb ? (
                       <img src={artist.thumb} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                     ) : (
@@ -403,10 +402,6 @@ export default function Search() {
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{artist.name}</span>
-                    <ContentStateBadge isNative={false} entityType="artist" />
-                  </div>
-                  <div className="search-result-actions">
-                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
                   </div>
                 </div>
               ))}
@@ -419,7 +414,7 @@ export default function Search() {
               {externalResults.releases.map(release => (
                 <div key={release.id} className="search-result-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
-                  <div className="search-result-art">
+                  <div className="search-result-art discogs-art">
                     {release.thumb ? (
                       <img src={release.thumb} alt={release.releaseName || release.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                     ) : (
@@ -432,10 +427,6 @@ export default function Search() {
                       {release.artistName}
                       {release.year ? ` · ${release.year}` : ''}
                     </span>
-                    <ContentStateBadge isNative={false} entityType="release" />
-                  </div>
-                  <div className="search-result-actions">
-                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
                   </div>
                 </div>
               ))}
@@ -448,7 +439,7 @@ export default function Search() {
               {externalResults.labels.map(label => (
                 <div key={label.id} className="search-result-row search-artist-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/label/discogs-${label.discogsId}`)}>
-                  <div className="search-result-art artist-avatar">
+                  <div className="search-result-art artist-avatar discogs-art">
                     {label.thumb ? (
                       <img src={label.thumb} alt={label.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                     ) : (
@@ -457,10 +448,6 @@ export default function Search() {
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{label.name}</span>
-                    <ContentStateBadge isNative={false} entityType="label" />
-                  </div>
-                  <div className="search-result-actions">
-                    <ExternalLink size={14} style={{ opacity: 0.4 }} />
                   </div>
                 </div>
               ))}

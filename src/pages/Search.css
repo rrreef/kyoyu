@@ -289,3 +289,15 @@
 .search-external-row:active {
   opacity: 0.6;
 }
+
+/* Bigger artwork for Discogs results */
+.discogs-art {
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px;
+}
+.discogs-art.artist-avatar {
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px;
+}
