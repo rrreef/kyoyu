@@ -1,70 +1,262 @@
-/* Inherit basic layout from ArtistPage.css */
-@import './ArtistPage.css';
-
-.canonical-hero-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 4px solid var(--glass-border);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  font-size: 2.5rem;
+/* Shared canonical entity page styles */
+.canonical-page {
+  padding-top: var(--sp-6);
 }
 
-.artist-hero-top {
+/* ── Hero ── */
+.canonical-hero {
+  position: relative;
+  padding: 24px 32px 32px;
+  overflow: hidden;
+}
+
+.canonical-hero-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.canonical-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.canonical-hero-top {
   display: flex;
-  align-items: flex-end;
-  gap: var(--sp-6);
+  align-items: center;
+  gap: 20px;
+}
+
+.canonical-hero-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.canonical-hero-cover {
+  width: 100px;
+  height: 100px;
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
 .canonical-hero-info {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-2);
+  gap: 4px;
+  min-width: 0;
 }
 
-.tracks-list {
+.canonical-hero-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.canonical-hero-realname {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.canonical-hero-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.canonical-hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* ── Body ── */
+.canonical-body {
+  padding: 0 32px 120px;
+}
+
+.canonical-section {
+  margin-bottom: 28px;
+}
+
+.canonical-bio {
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.canonical-notice {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Tracks list ── */
+.canonical-tracks-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: 2px;
 }
 
-.track-item {
+.canonical-track-item {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius-md) !important;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: var(--transition-fast);
+  transition: background 0.15s ease;
+}
+.canonical-track-item:hover {
+  background: rgba(255,255,255,0.06);
 }
 
-.track-item:hover {
-  background: var(--glass-hover);
+.canonical-track-pos {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
-.track-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
+.canonical-track-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.canonical-track-title {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.canonical-track-album {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.canonical-track-dur {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* ── Meta grid ── */
+.canonical-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.canonical-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canonical-meta-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.canonical-meta-item > span:last-child {
+  font-size: 0.85rem;
   color: var(--text-primary);
 }
 
-.artist-claim-section {
-  margin-bottom: var(--sp-8);
+/* ── Credits ── */
+.canonical-credits {
+  padding: 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.artist-external-links {
-  margin-bottom: var(--sp-8);
+.canonical-credit-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-@media (max-width: 768px) {
-  .artist-hero-top {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  
-  .canonical-hero-info {
-    align-items: center;
-  }
+.canonical-credit-role {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.canonical-credit-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+/* ── Releases grid (for label page) ── */
+.canonical-releases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.canonical-release-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.canonical-release-card:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.canonical-release-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+}
+
+.canonical-release-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canonical-release-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.canonical-release-year {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  opacity: 0.5;
 }

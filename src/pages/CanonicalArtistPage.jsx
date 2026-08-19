@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { MapPin, Users, Music, Calendar, Play } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Play } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -16,6 +16,7 @@ export default function CanonicalArtistPage() {
   const [artist, setArtist] = useState(null);
   const [links, setLinks] = useState([]);
   const [nativeTracks, setNativeTracks] = useState([]);
+  const [ingestError, setIngestError] = useState(false);
   
   const { playTrack } = usePlayer();
   const { isFollowing, toggleFollow } = useLibrary();
@@ -23,56 +24,101 @@ export default function CanonicalArtistPage() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setIngestError(false);
       try {
-        let fetchId = id;
-        
-        // 1. Ingest if needed
-        if (id.startsWith('discogs-')) {
-          const discogsId = id.replace('discogs-', '');
-          const res = await fetch('/api/discogs-ingest', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'artist', discogsId })
-          });
-          if (!res.ok) {
-            console.error('Failed to ingest artist');
+        const isDiscogs = id.startsWith('discogs-');
+        const discogsId = isDiscogs ? parseInt(id.replace('discogs-', ''), 10) : null;
+
+        // 1. If discogs entity, try to ingest first (may already exist)
+        if (isDiscogs && discogsId) {
+          try {
+            const res = await fetch('/api/discogs-ingest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'artist', discogsId }),
+            });
+            if (!res.ok) {
+              console.warn('Ingest returned', res.status, '— will try fetching directly');
+              setIngestError(true);
+            }
+          } catch (err) {
+            console.warn('Ingest failed:', err);
+            setIngestError(true);
           }
-          fetchId = discogsId; // We'll query by discogs_id
         }
 
-        // 2. Fetch canonical artist
-        let query = supabase.from('canonical_artists').select('*');
-        if (id.startsWith('discogs-')) {
-          query = query.eq('discogs_id', fetchId);
+        // 2. Fetch canonical artist from DB
+        let artistData = null;
+        if (isDiscogs && discogsId) {
+          const { data, error } = await supabase
+            .from('canonical_artists')
+            .select('*')
+            .eq('discogs_id', discogsId)
+            .maybeSingle();
+          if (!error && data) artistData = data;
         } else {
-          query = query.eq('slug', fetchId);
+          const { data, error } = await supabase
+            .from('canonical_artists')
+            .select('*')
+            .eq('slug', id)
+            .maybeSingle();
+          if (!error && data) artistData = data;
         }
-        
-        const { data: artistData, error: artistError } = await query.single();
-        if (artistError || !artistData) {
-          console.error('Artist not found', artistError);
+
+        // 3. If DB has no data but we have a discogs ID, show a minimal page from Discogs search cache
+        if (!artistData && isDiscogs) {
+          // Fallback: fetch directly from Discogs search to at least show the name
+          try {
+            const searchRes = await fetch('/api/discogs-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: '', type: 'artist', perPage: 1 }),
+            });
+            // If we can't get data, create a minimal placeholder
+            artistData = {
+              id: `temp-${discogsId}`,
+              name: 'Loading artist...',
+              discogs_id: discogsId,
+              native_available: false,
+              profile_text: null,
+            };
+          } catch {
+            artistData = {
+              id: `temp-${discogsId}`,
+              name: 'Artist',
+              discogs_id: discogsId,
+              native_available: false,
+              profile_text: null,
+            };
+          }
+        }
+
+        if (!artistData) {
           setLoading(false);
           return;
         }
+
         setArtist(artistData);
 
-        // 3. Fetch external links
-        const { data: linksData } = await supabase
-          .from('external_links')
-          .select('*')
-          .eq('entity_type', 'artist')
-          .eq('entity_id', artistData.id);
-        
-        if (linksData) setLinks(linksData);
+        // 4. Fetch external links (only if real DB entity)
+        if (artistData.id && !String(artistData.id).startsWith('temp-')) {
+          const { data: linksData } = await supabase
+            .from('external_links')
+            .select('*')
+            .eq('entity_type', 'artist')
+            .eq('entity_id', artistData.id);
+          if (linksData) setLinks(linksData);
+        }
 
-        // 4. Fetch native tracks
-        const { data: tracksData } = await supabase
-          .from('tracks')
-          .select('*')
-          .ilike('artist', `%${artistData.name}%`)
-          .eq('visibility', 'public');
-          
-        if (tracksData) setNativeTracks(tracksData);
+        // 5. Fetch native tracks
+        if (artistData.name && artistData.name !== 'Loading artist...') {
+          const { data: tracksData } = await supabase
+            .from('tracks')
+            .select('*')
+            .ilike('artist', `%${artistData.name}%`)
+            .eq('visibility', 'public');
+          if (tracksData) setNativeTracks(tracksData);
+        }
 
       } catch (err) {
         console.error('Error loading artist data:', err);
@@ -84,81 +130,97 @@ export default function CanonicalArtistPage() {
   }, [id]);
 
   if (loading) {
-    return <div className="artist-page animate-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <div className="loading-spinner">Loading...</div>
-    </div>;
+    return (
+      <div className="canonical-page animate-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <div className="loading-spinner" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Loading...</div>
+      </div>
+    );
   }
 
   if (!artist) {
-    return <div className="artist-page animate-in">Artist not found</div>;
+    return <div className="canonical-page animate-in" style={{ padding: '32px', color: 'var(--text-muted)' }}>Artist not found</div>;
   }
 
   const following = isFollowing(artist.id);
   const hasNativeTracks = nativeTracks.length > 0;
 
   return (
-    <div className="artist-page animate-in">
+    <div className="canonical-page animate-in">
       {/* Hero */}
-      <div className="artist-hero">
-        <div className="artist-hero-bg" />
-        <div className="artist-hero-content">
-          <div className="artist-hero-top">
+      <div className="canonical-hero">
+        <div className="canonical-hero-bg" />
+        <div className="canonical-hero-content">
+          <div className="canonical-hero-top">
             <EntityPlaceholder name={artist.name} type="artist" className="canonical-hero-avatar" />
             <div className="canonical-hero-info">
-              <ContentStateBadge isNative={hasNativeTracks} entityType="artist" />
-              <h1 className="artist-hero-name">{artist.name}</h1>
+              <ContentStateBadge isNative={hasNativeTracks || artist.native_available} entityType="artist" />
+              <h1 className="canonical-hero-name">{artist.name}</h1>
+              {artist.real_name && (
+                <div className="canonical-hero-realname">{artist.real_name}</div>
+              )}
             </div>
           </div>
           
-          <div className="artist-hero-actions" style={{ marginTop: 'var(--sp-4)' }}>
+          <div className="canonical-hero-actions">
             <button className="artist-follow-btn" onClick={() => toggleFollow(artist.id)}>
               {following ? 'Following' : 'Follow'}
             </button>
             {hasNativeTracks && (
-              <button className="artist-play-btn glass-sm" onClick={() => playTrack(nativeTracks[0])}>
+              <button className="artist-play-btn glass-sm" onClick={() => playTrack(nativeTracks[0], nativeTracks)}>
                 <Play size={16} style={{ marginRight: '8px' }} />
-                Play Latest
+                Play
               </button>
             )}
           </div>
         </div>
       </div>
 
-      <div className="page">
-        {/* Profile / Bio */}
-        {artist.profile_text && (
-          <section className="artist-bio-section">
-            <div className="section-title"><span>About</span></div>
-            <p className="artist-bio">{artist.profile_text}</p>
-          </section>
+      <div className="canonical-body">
+        {/* Ingest error notice */}
+        {ingestError && (
+          <div className="canonical-notice glass-sm">
+            Some metadata may be unavailable. Try refreshing.
+          </div>
         )}
 
-        {/* Native Tracks */}
-        {hasNativeTracks ? (
-          <section className="artist-discography">
-            <div className="section-title"><span>Tracks on ree.fm</span></div>
-            <div className="tracks-list">
-              {nativeTracks.map(track => (
-                <div key={track.id} className="track-item glass" onClick={() => playTrack(track)}>
-                  <Play size={16} />
-                  <div className="track-info">
-                    <div className="track-title">{track.title}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <section className="artist-claim-section">
-            <ClaimCTA entityType="artist" entityName={artist.name} />
+        {/* Profile / Bio */}
+        {artist.profile_text && (
+          <section className="canonical-section">
+            <div className="section-title"><span>About</span></div>
+            <p className="canonical-bio">{artist.profile_text}</p>
           </section>
         )}
 
         {/* External Links */}
         {links.length > 0 && (
-          <section className="artist-external-links">
+          <section className="canonical-section">
             <div className="section-title"><span>Find on other platforms</span></div>
             <SourceButtons links={links} />
+          </section>
+        )}
+
+        {/* Native Tracks */}
+        {hasNativeTracks && (
+          <section className="canonical-section">
+            <div className="section-title"><span>Tracks on ree.fm</span></div>
+            <div className="canonical-tracks-list">
+              {nativeTracks.map(track => (
+                <div key={track.id} className="canonical-track-item glass" onClick={() => playTrack(track, nativeTracks)}>
+                  <Play size={14} />
+                  <div className="canonical-track-info">
+                    <div className="canonical-track-title">{track.title}</div>
+                    {track.album && <div className="canonical-track-album">{track.album}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Claim CTA for external-only */}
+        {!hasNativeTracks && (
+          <section className="canonical-section">
+            <ClaimCTA entityType="artist" entityName={artist.name} />
           </section>
         )}
       </div>
