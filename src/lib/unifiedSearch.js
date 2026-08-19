@@ -119,29 +119,61 @@ function categorizeDiscogsResults(discogsResults, nativeResults) {
 }
 
 /**
- * Run unified search: native catalog + Discogs, merged and deduplicated.
+ * Search YouTube via our proxy API endpoint.
+ * Returns normalized video results for display.
+ */
+async function searchYouTube(query) {
+  try {
+    const res = await fetch('/api/youtube-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `${query} music`, maxResults: 8 }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results || []).map(r => ({
+      id: `yt-${r.videoId}`,
+      videoId: r.videoId,
+      title: r.title,
+      channelTitle: r.channelTitle,
+      thumbnail: r.thumbnail,
+      duration: r.duration,
+      publishedAt: r.publishedAt,
+      isExternal: true,
+      provider: 'youtube',
+    }));
+  } catch (err) {
+    console.warn('YouTube search failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Run unified search: native catalog + Discogs + YouTube, merged and deduplicated.
  * Native results always come first.
  * 
  * @param {string} query - Search query (min 2 chars)
- * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array }, loading: boolean }}
+ * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array } }}
  */
 export async function unifiedSearch(query) {
   if (!query || query.trim().length < 2) {
-    return { nativeTracks: [], external: { artists: [], releases: [], labels: [] } };
+    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [] } };
   }
   
   const trimmed = query.trim();
   
-  // Run both searches in parallel
-  const [nativeTracks, discogsResults] = await Promise.all([
+  // Run all searches in parallel
+  const [nativeTracks, discogsResults, youtubeResults] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
+    searchYouTube(trimmed),
   ]);
   
   // Categorize and deduplicate Discogs results
   const external = categorizeDiscogsResults(discogsResults, nativeTracks);
+  external.youtube = youtubeResults;
   
   return { nativeTracks, external };
 }
 
-export { parseDiscogsTitle, searchDiscogs };
+export { parseDiscogsTitle, searchDiscogs, searchYouTube };

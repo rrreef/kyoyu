@@ -137,3 +137,35 @@
   flex:1; display:flex; align-items:center; justify-content:center;
 }
 .fp-q-empty p { font-size:15px; color:rgba(255,255,255,.4); }
+
+/* ── Source badges (YouTube, SoundCloud) ── */
+.fp-source-badge {
+  margin-top: 4px;
+}
+.fp-source-yt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #FF0000;
+  letter-spacing: 0.02em;
+}
+.fp-source-yt::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  background: #FF0000;
+  border-radius: 3px;
+}
+.fp-source-sc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #FF5500;
+  letter-spacing: 0.02em;
+}
+

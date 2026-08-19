@@ -11,6 +11,9 @@ const allTracks = [
 const initialState = {
   currentTrack: null, queue: [], isPlaying: false, volume: 0.8,
   progress: 0, duration: 0, isMuted: false, isShuffled: false, repeatMode: 'none',
+  provider: 'native',       // 'native' | 'youtube' | 'soundcloud'
+  providerItemId: null,     // YouTube videoId or SoundCloud trackId/URL
+  providerUrl: null,        // Original source URL for "Open on..." link
 };
 
 function playerReducer(state, action) {
@@ -20,9 +23,29 @@ function playerReducer(state, action) {
         window.__kyoyuAudioRef.pause();
         window.__kyoyuAudioRef.src = '';
       }
-      return { ...state, currentTrack: null, isPlaying: false, progress: 0, duration: 0, queue: [] };
+      return { ...state, currentTrack: null, isPlaying: false, progress: 0, duration: 0, queue: [],
+               provider: 'native', providerItemId: null, providerUrl: null };
     }
-    case 'PLAY_TRACK':   return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0 };
+    case 'PLAY_TRACK':   return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0,
+                                   provider: 'native', providerItemId: null, providerUrl: null };
+    case 'PLAY_YOUTUBE': {
+      // Pause native audio when switching to YouTube
+      if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
+        window.__kyoyuAudioRef.pause();
+        window.__kyoyuAudioRef.src = '';
+      }
+      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
+               provider: 'youtube', providerItemId: action.videoId, providerUrl: `https://www.youtube.com/watch?v=${action.videoId}` };
+    }
+    case 'PLAY_SOUNDCLOUD': {
+      // Pause native audio when switching to SoundCloud
+      if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
+        window.__kyoyuAudioRef.pause();
+        window.__kyoyuAudioRef.src = '';
+      }
+      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
+               provider: 'soundcloud', providerItemId: action.trackUrl, providerUrl: action.trackUrl };
+    }
     case 'TOGGLE_PLAY':  return { ...state, isPlaying: !state.isPlaying };
     case 'SET_PLAYING':  return { ...state, isPlaying: action.value };
     case 'SET_VOLUME':   return { ...state, volume: action.value };
@@ -111,6 +134,8 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
+    // Skip native audio loading for external providers
+    if (state.provider !== 'native') return;
     const src = state.currentTrack.src || state.currentTrack.fileUrl || state.currentTrack.audioUrl || '';
     if (!src) return;
 
@@ -173,12 +198,14 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
+    // External providers handle their own play/pause
+    if (state.provider !== 'native') return;
     if (state.isPlaying) {
       audio.play().catch(() => {});
     } else {
       audio.pause();
     }
-  }, [state.isPlaying]); // eslint-disable-line
+  }, [state.isPlaying, state.provider]); // eslint-disable-line
 
   // ── Sync in-app slider when hardware volume buttons are pressed ──
   useEffect(() => {
@@ -246,8 +273,32 @@ export function PlayerProvider({ children }) {
     playTrack(tracks[0], tracks);
   }
 
+  function playYouTube(videoId, metadata = {}) {
+    const track = {
+      id: `yt-${videoId}`,
+      title: metadata.title || 'YouTube Video',
+      artistName: metadata.channelTitle || metadata.artist || '',
+      releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+      duration: metadata.duration || 0,
+      src: '', // No native audio
+    };
+    dispatch({ type: 'PLAY_YOUTUBE', videoId, track });
+  }
+
+  function playSoundCloud(trackUrl, metadata = {}) {
+    const track = {
+      id: `sc-${metadata.trackId || Date.now()}`,
+      title: metadata.title || 'SoundCloud Track',
+      artistName: metadata.artistName || metadata.artist || '',
+      releaseCover: metadata.artworkUrl || '',
+      duration: metadata.duration || 0,
+      src: '', // No native audio
+    };
+    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track });
+  }
+
   return (
-    <PlayerContext.Provider value={{ state, dispatch, playTrack, playRelease, seekTo, setVolume, setAudioVolumeDirect, allTracks }}>
+    <PlayerContext.Provider value={{ state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud, seekTo, setVolume, setAudioVolumeDirect, allTracks }}>
       {children}
     </PlayerContext.Provider>
   );

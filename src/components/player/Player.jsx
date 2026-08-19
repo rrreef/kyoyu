@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
+import YouTubePlayer from './YouTubePlayer';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X } from 'lucide-react';
 import './Player.css';
@@ -213,7 +214,8 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo }) {
+function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume }) {
+  const ytRef = useRef(null);
   const fpRef    = useRef(null);
   const handleRef= useRef(null);
   const startY   = useRef(0);
@@ -277,9 +279,36 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
         </>
       ) : (
         <>
-          <div className="fp-top"><div className="fp-art-wrap"><Artwork big={true}/></div></div>
+          <div className="fp-top">
+            <div className="fp-art-wrap">
+              {provider === 'youtube' && providerItemId ? (
+                <YouTubePlayer
+                  ref={ytRef}
+                  videoId={providerItemId}
+                  isPlaying={isPlaying}
+                  volume={volume}
+                  onStateChange={({ isPlaying: ytPlaying, progress: ytProg, duration: ytDur }) => {
+                    dispatch({ type: 'SET_PROGRESS', value: ytProg });
+                    if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
+                  }}
+                  onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+                />
+              ) : (
+                <Artwork big={true}/>
+              )}
+            </div>
+          </div>
           <div className="fp-meta">
-            <div className="fp-meta-text"><div className="fp-title">{track.title}</div><div className="fp-artist">{track.artistName||'—'}</div></div>
+            <div className="fp-meta-text">
+              <div className="fp-title">{track.title}</div>
+              <div className="fp-artist">{track.artistName||'—'}</div>
+              {provider && provider !== 'native' && (
+                <div className="fp-source-badge">
+                  {provider === 'youtube' && <span className="fp-source-yt">Playing via YouTube</span>}
+                  {provider === 'soundcloud' && <span className="fp-source-sc">Playing via SoundCloud</span>}
+                </div>
+              )}
+            </div>
             <div className="fp-meta-btns"><button className="fp-icon-btn"><Star size={20}/></button><button className="fp-icon-btn"><MoreHorizontal size={20}/></button></div>
           </div>
           {controls}
@@ -296,7 +325,7 @@ export default function Player({ hideMini = false }) {
   const { state, dispatch, seekTo } = usePlayer();
   const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
-  const { currentTrack, isPlaying, progress, duration } = state;
+  const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume } = state;
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
@@ -361,7 +390,8 @@ export default function Player({ hideMini = false }) {
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
       )}
       <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
-        open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}/>
+        open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
+        provider={provider} providerItemId={providerItemId} volume={volume}/>
     </>
   );
 }

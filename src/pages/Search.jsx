@@ -12,13 +12,13 @@ export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
-  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [] });
+  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [] });
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
-  const { playTrack } = usePlayer();
+  const { playTrack, playYouTube } = usePlayer();
 
   // Load history from localStorage
   useEffect(() => {
@@ -194,7 +194,7 @@ export default function Search() {
   const labels = Array.from(labelMap.values());
 
   const hasResults = results.length > 0;
-  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0;
+  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
   const showHistory = !hasResults && !hasExternal && query.length < 2 && history.length > 0;
 
   // Renderers
@@ -453,6 +453,45 @@ export default function Search() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── YouTube Results ── */}
+      {externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
+            YouTube
+          </div>
+          <div className="search-section">
+            {externalResults.youtube.map(yt => (
+              <div key={yt.id} className="search-result-row search-external-row"
+                onClick={() => {
+                  playYouTube(yt.videoId, {
+                    title: yt.title,
+                    channelTitle: yt.channelTitle,
+                    thumbnail: yt.thumbnail,
+                    duration: yt.duration,
+                  });
+                  // Auto-expand the full player
+                  window.__kyoyuPlayerCmd?.('expand');
+                }}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {yt.thumbnail ? (
+                    <img src={yt.thumbnail} alt={yt.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={yt.title} type="release" />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{yt.title}</span>
+                  <span className="search-result-artist">{yt.channelTitle}</span>
+                </div>
+                <div className="search-result-actions">
+                  <Play size={16} style={{ opacity: 0.6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
