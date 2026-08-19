@@ -56,6 +56,17 @@ function classifyUrl(url) {
   return 'website';
 }
 
+/**
+ * Extract the primary image URL from a Discogs entity.
+ * Prefers 'primary' type, falls back to first available image.
+ */
+function getPrimaryImage(entity) {
+  if (!entity.images || entity.images.length === 0) return null;
+  const primary = entity.images.find(img => img.type === 'primary');
+  const img = primary || entity.images[0];
+  return img.uri || img.resource_url || null;
+}
+
 async function generateSlug(table, name) {
   const base = slugify(name);
   const { data } = await supabase.from(table).select('slug').like('slug', `${base}%`);
@@ -123,6 +134,7 @@ export default async function handler(req, res) {
           real_name: artist.realname || null,
           profile_text: artist.profile || null,
           discogs_id: artist.id,
+          image_url: getPrimaryImage(artist),
         })
         .select().single();
       if (error) throw error;
@@ -150,6 +162,7 @@ export default async function handler(req, res) {
           profile_text: label.profile || null,
           contact_info: label.contact_info || null,
           discogs_id: label.id,
+          image_url: getPrimaryImage(label),
         })
         .select().single();
       if (error) throw error;
@@ -212,6 +225,7 @@ export default async function handler(req, res) {
           genres: release.genres || [],
           styles: release.styles || [],
           notes: release.notes || null,
+          image_url: getPrimaryImage(release),
         })
         .select().single();
       if (error) throw error;

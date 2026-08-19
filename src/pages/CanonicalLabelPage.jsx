@@ -105,7 +105,11 @@ export default function CanonicalLabelPage() {
         <div className="canonical-hero-bg" />
         <div className="canonical-hero-content">
           <div className="canonical-hero-top">
-            <EntityPlaceholder name={label.name} type="label" className="canonical-hero-avatar" />
+            {label.image_url ? (
+              <img src={label.image_url} alt={label.name} className="canonical-hero-avatar" />
+            ) : (
+              <EntityPlaceholder name={label.name} type="label" className="canonical-hero-avatar" />
+            )}
             <div className="canonical-hero-info">
               <ContentStateBadge isNative={label.native_available} entityType="label" />
               <h1 className="canonical-hero-name">{label.name}</h1>

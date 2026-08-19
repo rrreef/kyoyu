@@ -114,7 +114,11 @@ export default function CanonicalReleasePage() {
         <div className="canonical-hero-bg" />
         <div className="canonical-hero-content">
           <div className="canonical-hero-top">
-            <EntityPlaceholder name={release.title} type="release" className="canonical-hero-cover" />
+            {release.image_url ? (
+              <img src={release.image_url} alt={release.title} className="canonical-hero-cover" />
+            ) : (
+              <EntityPlaceholder name={release.title} type="release" className="canonical-hero-cover" />
+            )}
             <div className="canonical-hero-info">
               <ContentStateBadge isNative={release.native_available} entityType="release" />
               <h1 className="canonical-hero-name">{release.title}</h1>

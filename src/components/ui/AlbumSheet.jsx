@@ -32,7 +32,12 @@ export function openNativeAlbumFast(album) {
 
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
-  const { toggleLikeUpload, isLikedUpload, toggleDownload, isDownloaded, addToPlaylist, createPlaylist, getPlaylists } = useLibrary();
+  const {
+    toggleLikeUpload, isLikedUpload, toggleDownload, isDownloaded,
+    addToPlaylist, createPlaylist, getPlaylists, updatePlaylistCover,
+    deletePlaylist, removeFromPlaylist, reorderPlaylist, togglePlaylistPublic,
+    getPlaylistPublic, toggleLike
+  } = useLibrary();
 
   const playTrackRef = useRef(playTrack);
   playTrackRef.current = playTrack;
@@ -40,6 +45,8 @@ export default function AlbumSheet({ album, onClose }) {
   onCloseRef.current = onClose;
   const toggleLikeRef = useRef(toggleLikeUpload);
   toggleLikeRef.current = toggleLikeUpload;
+  const isLikedUploadRef = useRef(isLikedUpload);
+  isLikedUploadRef.current = isLikedUpload;
   const toggleDownloadRef = useRef(toggleDownload);
   toggleDownloadRef.current = toggleDownload;
   const isDownloadedRef = useRef(isDownloaded);
@@ -50,6 +57,16 @@ export default function AlbumSheet({ album, onClose }) {
   createPlaylistRef.current = createPlaylist;
   const getPlaylistsRef = useRef(getPlaylists);
   getPlaylistsRef.current = getPlaylists;
+  const updatePlaylistCoverRef = useRef(updatePlaylistCover);
+  updatePlaylistCoverRef.current = updatePlaylistCover;
+  const deletePlaylistRef = useRef(deletePlaylist);
+  deletePlaylistRef.current = deletePlaylist;
+  const removeFromPlaylistRef = useRef(removeFromPlaylist);
+  removeFromPlaylistRef.current = removeFromPlaylist;
+  const reorderPlaylistRef = useRef(reorderPlaylist);
+  reorderPlaylistRef.current = reorderPlaylist;
+  const togglePlaylistPublicRef = useRef(togglePlaylistPublic);
+  togglePlaylistPublicRef.current = togglePlaylistPublic;
 
   useLayoutEffect(() => {
     if (!album) return;
@@ -80,49 +97,33 @@ export default function AlbumSheet({ album, onClose }) {
       playTrackRef.current(queue[Math.max(idx, 0)], queue);
     };
 
-    // Expose like handler so Swift can trigger it
-    window.__kyoyuToggleLikeTrack = (trackId) => {
-      const t = album.tracks.find(tr => tr.id === trackId);
+    const handleNativeLike = (e) => {
+      if (e.detail.handled) return;
+      const trackId = String(e.detail.trackId).split('?ts=')[0];
+      const t = album.tracks.find(tr => String(tr.id) === trackId);
       if (!t) return;
 
-      // Toggle in React LibraryContext (shows in Library > Likes)
-      try { toggleLikeRef.current(t); } catch(e) { console.warn('toggleLikeUpload error:', e); }
+      e.detail.handled = true;
+      const trackObj = {
+        ...t,
+        cover: album.cover || album.artworkUrl || '',
+        album: album.title || '',
+        storageKey: t.storageKey || ''
+      };
 
-      // Also toggle in the injected JS heart system (Supabase persistence + hearts in web UI)
-      try {
-        if (window.__kyoyuToggleLike) {
-          window.__kyoyuToggleLike({
-            id: t.id,
-            title: t.title || t.name || '',
-            artist: t.artist || album.artist || '',
-            album: album.title || '',
-            artworkUrl: album.cover || album.artworkUrl || ''
-          });
-        }
-      } catch(e) { console.warn('__kyoyuToggleLike error:', e); }
+      try { toggleLikeRef.current(trackObj); } catch(err) { console.warn('toggleLikeUpload error:', err); }
 
-      // Direct localStorage fallback: ensure it's in kyoyu-liked-uploads
       try {
-        const LS_KEY = 'kyoyu-liked-uploads';
-        const existing = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
-        const idx = existing.findIndex(x => x.id === t.id);
-        if (idx >= 0) {
-          existing.splice(idx, 1);
-        } else {
-          existing.push({
-            id: t.id,
-            title: t.title || t.name || '',
-            artist: t.artist || album.artist || '',
-            album: album.title || '',
-            cover: album.cover || album.artworkUrl || '',
-            genre: t.genre || album.genre || '',
-            audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
-            storageKey: t.storageKey || ''
-          });
+        let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+        if (!saved.some(x => String(x.id) === String(t.id))) {
+          // eslint-disable-next-line no-unused-vars
+          const { artworkUrl, artworkFile, ...slim } = trackObj;
+          saved.push(slim);
+          localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
         }
-        localStorage.setItem(LS_KEY, JSON.stringify(existing));
-      } catch(e) {}
+      } catch(err) {}
     };
+    window.addEventListener('kyoyu-native-like', handleNativeLike);
 
     // Download toggle
     window.__kyoyuDownloadTrack = (trackId) => {
@@ -164,6 +165,30 @@ export default function AlbumSheet({ album, onClose }) {
       return JSON.stringify({ id: pl.id, name: pl.title, trackCount: 0 });
     };
 
+    // Playlist cover update from native
+    window.__kyoyuUpdatePlaylistCover = (playlistId, coverDataUrl) => {
+      updatePlaylistCoverRef.current(playlistId, coverDataUrl || null);
+    };
+
+    // Playlist editing callbacks
+    window.__kyoyuDeletePlaylist = (playlistId) => {
+      deletePlaylistRef.current(playlistId);
+    };
+    window.__kyoyuRemoveFromPlaylist = (playlistId, trackId) => {
+      removeFromPlaylistRef.current(playlistId, trackId);
+    };
+    window.__kyoyuReorderPlaylist = (playlistId, fromIndex, toIndex) => {
+      reorderPlaylistRef.current(playlistId, fromIndex, toIndex);
+    };
+    window.__kyoyuTogglePlaylistPublic = (playlistId) => {
+      togglePlaylistPublicRef.current(playlistId);
+    };
+    window.__kyoyuGetPlaylistPublic = (playlistId) => {
+      const pl = getPlaylistsRef.current().find(p => p.id === playlistId);
+      // need full playlist data for isPublic
+      return false; // default
+    };
+
     // Tell Swift to open the native overlay if not already sent
     if (window.__lastFastOpenTs !== album._ts) {
         window.__lastFastOpenTs = album._ts;
@@ -193,13 +218,19 @@ export default function AlbumSheet({ album, onClose }) {
     }
 
     return () => {
+      window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuPlayNativeTrack;
-      delete window.__kyoyuToggleLikeTrack;
       delete window.__kyoyuDownloadTrack;
       delete window.__kyoyuGetPlaylists;
       delete window.__kyoyuAddToPlaylist;
       delete window.__kyoyuCreatePlaylist;
+      delete window.__kyoyuUpdatePlaylistCover;
+      delete window.__kyoyuDeletePlaylist;
+      delete window.__kyoyuRemoveFromPlaylist;
+      delete window.__kyoyuReorderPlaylist;
+      delete window.__kyoyuTogglePlaylistPublic;
+      delete window.__kyoyuGetPlaylistPublic;
       const myTs = album?._ts;
       if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
         try {

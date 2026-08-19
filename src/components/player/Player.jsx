@@ -289,9 +289,12 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   );
 }
 
+import { useLibrary } from '../../contexts/LibraryContext';
+
 /* ── Root ── */
 export default function Player({ hideMini = false }) {
   const { state, dispatch, seekTo } = usePlayer();
+  const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration } = state;
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
@@ -305,15 +308,45 @@ export default function Player({ hideMini = false }) {
       if(cmd==='expand'){ setExp(true); postNative({expanded:true}); }
       if(cmd==='seekTo' && typeof val === 'number') seekTo(val);
     };
+    
+    // Listen for global native like event
+    const handleNativeLike = (e) => {
+      if (e.detail.handled) return;
+      const trackId = String(e.detail.trackId).split('?ts=')[0];
+      if (currentTrack && String(currentTrack.id) === trackId) {
+        e.detail.handled = true;
+        const trackObj = {
+          ...currentTrack,
+          cover: currentTrack.releaseCover || currentTrack.artworkUrl || ''
+        };
+        try { toggleLikeUpload(trackObj); } catch(err) {}
+      }
+    };
+    window.addEventListener('kyoyu-native-like', handleNativeLike);
+
     // Send initial player style preference to Swift
     const style = localStorage.getItem('kyoyu-player-style') || 'sheet';
     postNative({ playerStyle: style });
-    return ()=>{ delete window.__kyoyuPlayerCmd; };
-  },[dispatch, seekTo]);
-  useEffect(()=>{
-    if(currentTrack) postNative({visible:true,playing:isPlaying,title:currentTrack.title||'',artwork:currentTrack.releaseCover||'',trackId:currentTrack.id||'',albumId:currentTrack.releaseId||currentTrack.album||'',artist:currentTrack.artist||''});
-    else             postNative({visible:false,playing:false,title:'',artwork:''});
-  },[currentTrack,isPlaying]);
+    return ()=>{ 
+      window.removeEventListener('kyoyu-native-like', handleNativeLike);
+      delete window.__kyoyuPlayerCmd; 
+    };
+  },[dispatch, seekTo, currentTrack, toggleLikeUpload]);
+  useEffect(() => {
+    if (currentTrack) {
+      postNative({
+        visible: true,
+        playing: isPlaying,
+        title: currentTrack.title || '',
+        artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
+        trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
+        albumId: String(currentTrack.releaseId || currentTrack.album || ''),
+        artist: currentTrack.artist || ''
+      });
+    } else {
+      postNative({ visible: false, playing: false });
+    }
+  }, [currentTrack, isPlaying, likedUploads, likedTracks]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');

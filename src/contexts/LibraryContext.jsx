@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import { playlists as mockPlaylists, releases } from '../data/mockData';
 
 const LibraryContext = createContext(null);
@@ -39,6 +40,22 @@ export function LibraryProvider({ children }) {
   useEffect(() => { try { localStorage.setItem('reef-followed', JSON.stringify(followedArtists)); } catch {} }, [followedArtists]);
   useEffect(() => { try { localStorage.setItem('kyoyu-playlists', JSON.stringify(playlists)); } catch {} }, [playlists]);
 
+  // Synchronize across multiple WKWebViews
+  useEffect(() => {
+    const handleStorage = (e) => {
+      try {
+        if (e.key === 'reef-liked') setLikedTracks(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'kyoyu-liked-uploads') setLikedUploads(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'reef-saved') setSavedReleases(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'reef-downloads') setDownloads(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'reef-followed') setFollowedArtists(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'kyoyu-playlists') setPlaylists(JSON.parse(e.newValue || '[]'));
+      } catch (err) {}
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   function toggleLike(trackId) {
     setLikedTracks(prev =>
       prev.includes(trackId) ? prev.filter(id => id !== trackId) : [...prev, trackId]
@@ -48,26 +65,69 @@ export function LibraryProvider({ children }) {
 
   function toggleLikeUpload(track) {
     setLikedUploads(prev => {
-      const exists = prev.find(t => t.id === track.id);
-      if (exists) return prev.filter(t => t.id !== track.id);
-      // Strip artworkUrl — large data URL that blows localStorage quota.
-      // Stays in kyoyu-art-{uid}-{id} key and is rehydrated on display.
-      // eslint-disable-next-line no-unused-vars
-      const { artworkUrl: _art, artworkFile: _file, ...slim } = track;
+      const exists = prev.find(t => String(t.id) === String(track.id));
+      if (exists) return prev.filter(t => String(t.id) !== String(track.id));
+      
+      // Save artwork in a separate key to avoid quota issues on the main array
+      const art = track.artworkUrl || track.cover || track.releaseCover;
+      if (art) {
+        try {
+          const uid = user?.id || 'anon';
+          localStorage.setItem(`kyoyu-art-${uid}-${track.id}`, art);
+        } catch(e) {}
+      }
+
+      // Strip artworkUrl only if it's a massive base64 data URL.
+      // Normal HTTP URLs for cover should be kept in the main array.
+      const slim = { ...track };
+      delete slim.artworkFile;
+      if (slim.artworkUrl && typeof slim.artworkUrl === 'string' && slim.artworkUrl.startsWith('data:')) {
+        delete slim.artworkUrl;
+      }
+      if (slim.cover && typeof slim.cover === 'string' && slim.cover.startsWith('data:')) {
+        delete slim.cover;
+      }
+      if (slim.releaseCover && typeof slim.releaseCover === 'string' && slim.releaseCover.startsWith('data:')) {
+        delete slim.releaseCover;
+      }
       return [...prev, slim];
     });
+
+    try {
+      if (window.__kyoyuToggleLike) {
+        window.__kyoyuToggleLike({
+          id: track.id,
+          title: track.title || track.name || '',
+          artist: track.artist || '',
+          album: track.album || '',
+          artworkUrl: track.cover || track.artworkUrl || ''
+        });
+      }
+    } catch(e) {}
   }
+
+  useEffect(() => {
+    window.__kyoyuToggleLikeTrack = (trackId) => {
+      window.dispatchEvent(new CustomEvent('kyoyu-native-like', { detail: { trackId, handled: false } }));
+    };
+    window.__kyoyuIsLikedTrack = (trackId) => {
+      const cleanId = String(trackId).split('?ts=')[0];
+      const inUploads = likedUploads.some(t => String(t.id) === cleanId);
+      const inCatalog = likedTracks.some(id => String(id) === cleanId);
+      return inUploads || inCatalog;
+    };
+  }, [likedUploads, likedTracks]);
 
   // Returns liked uploads with artworkUrl rehydrated from per-art keys
   function getLikedUploads(uid) {
-    if (!uid) return likedUploads;
+    const safeUid = uid || 'anon';
     return likedUploads.map(t => ({
       ...t,
-      artworkUrl: localStorage.getItem(`kyoyu-art-${uid}-${t.id}`) || null,
+      artworkUrl: localStorage.getItem(`kyoyu-art-${safeUid}-${t.id}`) || t.artworkUrl || t.cover || null,
     }));
   }
 
-  function isLikedUpload(trackId) { return likedUploads.some(t => t.id === trackId); }
+  function isLikedUpload(trackId) { return likedUploads.some(t => String(t.id) === String(trackId)); }
 
   function toggleSave(releaseId) {
     setSavedReleases(prev =>
@@ -112,6 +172,30 @@ export function LibraryProvider({ children }) {
   function getPlaylists() {
     return playlists.map(pl => ({ id: pl.id, name: pl.title, trackCount: (pl.tracks || []).length }));
   }
+  function updatePlaylistCover(playlistId, coverUrl) {
+    setPlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, cover: coverUrl } : pl));
+  }
+  function deletePlaylist(playlistId) {
+    setPlaylists(prev => prev.filter(pl => pl.id !== playlistId));
+  }
+  function removeFromPlaylist(playlistId, trackId) {
+    setPlaylists(prev => prev.map(pl => {
+      if (pl.id !== playlistId) return pl;
+      return { ...pl, tracks: pl.tracks.filter(t => t.id !== trackId) };
+    }));
+  }
+  function reorderPlaylist(playlistId, fromIndex, toIndex) {
+    setPlaylists(prev => prev.map(pl => {
+      if (pl.id !== playlistId) return pl;
+      const tracks = [...pl.tracks];
+      const [moved] = tracks.splice(fromIndex, 1);
+      tracks.splice(toIndex, 0, moved);
+      return { ...pl, tracks };
+    }));
+  }
+  function togglePlaylistPublic(playlistId) {
+    setPlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, isPublic: !pl.isPublic } : pl));
+  }
 
   return (
     <LibraryContext.Provider value={{
@@ -119,7 +203,8 @@ export function LibraryProvider({ children }) {
       toggleLike, isLiked, toggleLikeUpload, isLikedUpload, getLikedUploads,
       toggleSave, isSaved, toggleFollow, isFollowing,
       addDownload, createPlaylist,
-      toggleDownload, isDownloaded, addToPlaylist, getPlaylists,
+      toggleDownload, isDownloaded, addToPlaylist, getPlaylists, updatePlaylistCover,
+      deletePlaylist, removeFromPlaylist, reorderPlaylist, togglePlaylistPublic,
     }}>
       {children}
     </LibraryContext.Provider>

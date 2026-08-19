@@ -33,6 +33,7 @@
   height: 80px;
   border-radius: 50%;
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .canonical-hero-cover {
@@ -40,6 +41,7 @@
   height: 100px;
   border-radius: 12px;
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .canonical-hero-info {

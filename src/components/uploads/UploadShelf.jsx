@@ -282,8 +282,8 @@ export function UploadExpandedList({ uploads }) {
 
   function play(t) {
     const queue = sorted.map(u => ({
-      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '',
-      releaseCover: u.artworkUrl || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || '',
+      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
+      releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
     }));
     playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
     setActiveId(t.id);
@@ -309,8 +309,8 @@ export function UploadExpandedList({ uploads }) {
       <div className="upl-expanded-list">
         {sorted.map(t => (
           <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`}>
-            {t.artworkUrl
-              ? <img src={t.artworkUrl} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
+            {((t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null') || (t.cover && t.cover !== 'undefined' && t.cover !== 'null'))
+              ? <img src={(t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null) || (t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null)} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
               : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={15}/></div>
             }
             <div className="upl-exp-info">
@@ -321,8 +321,9 @@ export function UploadExpandedList({ uploads }) {
               className={`upl-exp-heart${isLikedUpload(t.id) ? ' liked' : ''}`}
               onClick={(e) => { e.stopPropagation(); toggleLikeUpload(t); }}
               aria-label={isLikedUpload(t.id) ? 'Unlike' : 'Like'}
+              data-kyoyu-injected="1"
             >
-              <Heart size={15} fill={isLikedUpload(t.id) ? 'currentColor' : 'none'} strokeWidth={2}/>
+              <Heart size={15} fill={isLikedUpload(t.id) ? '#ffffff' : 'none'} color={isLikedUpload(t.id) ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
             </button>
             <button className="upl-exp-more" onClick={(e) => { e.stopPropagation(); openEdit(t); }}>
               <MoreHorizontal size={16}/>
@@ -367,8 +368,8 @@ export function UploadGridView({ uploads, cols = 2 }) {
 
   function play(t) {
     const queue = sorted.map(u => ({
-      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '',
-      releaseCover: u.artworkUrl || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || '',
+      id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
+      releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
     }));
     playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
   }
@@ -383,8 +384,8 @@ export function UploadGridView({ uploads, cols = 2 }) {
         return (
           <div key={t.id} className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => play(t)}>
             <div className="upl-grid-art">
-              {t.artworkUrl
-                ? <img src={t.artworkUrl} alt={t.title} loading="lazy" decoding="async"/>
+              {((t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null') || (t.cover && t.cover !== 'undefined' && t.cover !== 'null'))
+                ? <img src={(t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null) || (t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null)} alt={t.title} loading="lazy" decoding="async"/>
                 : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
               }
               {isActive && (
@@ -396,8 +397,9 @@ export function UploadGridView({ uploads, cols = 2 }) {
                 className={`upl-grid-heart${liked ? ' liked' : ''}`}
                 onClick={e => { e.stopPropagation(); toggleLikeUpload(t); }}
                 aria-label={liked ? 'Unlike' : 'Like'}
+                data-kyoyu-injected="1"
               >
-                <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? 'currentColor' : 'none'} strokeWidth={2}/>
+                <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? '#ffffff' : 'none'} color={liked ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
               </button>
             </div>
             <div className="upl-grid-title">{t.title || 'Untitled'}</div>

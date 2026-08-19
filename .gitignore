@@ -34,3 +34,5 @@ dist-ssr
 .tmp-transcode/
 ffmpeg
 scripts/backfill-streaming.js
+.vercel
+.env*

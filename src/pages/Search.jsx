@@ -395,7 +395,11 @@ export default function Search() {
                 <div key={artist.id} className="search-result-row search-artist-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`)}>
                   <div className="search-result-art artist-avatar">
-                    <EntityPlaceholder name={artist.name} type="artist" />
+                    {artist.thumb ? (
+                      <img src={artist.thumb} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={artist.name} type="artist" />
+                    )}
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{artist.name}</span>
@@ -416,7 +420,11 @@ export default function Search() {
                 <div key={release.id} className="search-result-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
                   <div className="search-result-art">
-                    <EntityPlaceholder name={release.releaseName || release.title} type="release" />
+                    {release.thumb ? (
+                      <img src={release.thumb} alt={release.releaseName || release.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={release.releaseName || release.title} type="release" />
+                    )}
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{release.releaseName}</span>
@@ -441,7 +449,11 @@ export default function Search() {
                 <div key={label.id} className="search-result-row search-artist-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/label/discogs-${label.discogsId}`)}>
                   <div className="search-result-art artist-avatar">
-                    <EntityPlaceholder name={label.name} type="label" />
+                    {label.thumb ? (
+                      <img src={label.thumb} alt={label.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={label.name} type="label" />
+                    )}
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{label.name}</span>

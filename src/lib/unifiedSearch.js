@@ -22,6 +22,8 @@ async function searchDiscogs(query) {
       discogsId: r.discogsId,
       type: r.type, // 'artist', 'release', 'master', 'label'
       title: r.title,
+      thumb: r.thumb || null,
+      coverImage: r.coverImage || null,
       year: r.year,
       genres: r.genre || [],
       styles: r.style || [],

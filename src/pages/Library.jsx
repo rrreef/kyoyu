@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Plus, Wand2, ChevronDown, ChevronUp, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
+import { Play, Plus, ChevronDown, ChevronUp, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +8,9 @@ import { useDisplay, useLibraryLayoutLive } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import EventSheet from '../components/ui/EventSheet';
+import { berghainEvents } from '../data/berghainEvents';
+import { BerghainEventCard } from '../components/ui/Cards';
 import './Library.css';
 
 function groupByAlbum(tracks) {
@@ -72,6 +75,7 @@ const FILTERS = [
   { key: 'follows',   label: 'Follows'   },
   { key: 'shared',    label: 'Shared'    },
   { key: 'uploads',   label: 'Uploads'   },
+  { key: 'events',    label: 'Events'    },
 ];
 
 // Sub-filters that appear when Likes is active
@@ -88,6 +92,8 @@ export default function Library() {
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [myUploads,    setMyUploads]  = useState([]);
   const [uploadsSort,  setUploadsSort]= useState('newest');
+  const [eventsFilter, setEventsFilter]= useState('All');
+  const [selectedEventIndex, setSelectedEventIndex] = useState(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -120,7 +126,7 @@ export default function Library() {
     if(user?.id) localStorage.setItem(`kyoyu-uploads-${user.id}`, JSON.stringify(next));
   }
 
-  const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads } = useLibrary();
+  const { savedReleases, playlists, downloads, followedArtists, createPlaylist, getLikedUploads, likedTracks } = useLibrary();
   const { playRelease } = usePlayer();
   const libraryLayout = useLibraryLayoutLive();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
@@ -196,9 +202,20 @@ export default function Library() {
 
       {/* Likes → Releases */}
       {activeFilter === 'likes' && likesSub === 'releases' && (() => {
-        const likedTracks = getLikedUploads(user?.id);
+        const likedUploadsArr = getLikedUploads(user?.id);
+        const catalogLiked = Array.from(new Set(likedTracks)).map(id => {
+          let t = releases.flatMap(r => r.tracks).find(x => String(x.id) === String(id));
+          if (t) {
+            const r = releases.find(rel => rel.tracks.some(tr => tr.id === t.id));
+            return { ...t, artworkUrl: r ? r.cover : null, artist: t.artist || r?.artist, album: r?.title, fileUrl: t.src || t.audioUrl || '' };
+          }
+          return null;
+        }).filter(Boolean);
+        
+        const combinedLikedTracks = [...catalogLiked, ...likedUploadsArr];
+
         const hasReleases = savedReleaseObjects.length > 0;
-        const hasTracks   = likedTracks.length > 0;
+        const hasTracks   = combinedLikedTracks.length > 0;
         if (!hasReleases && !hasTracks)
           return <div className="lib-empty"><p>No liked titles yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>;
         return (
@@ -207,8 +224,8 @@ export default function Library() {
               <>
                 <div className="shelf-row-label">Liked Tracks</div>
                 {libraryLayout.mode === 'list'
-                  ? <UploadExpandedList uploads={likedTracks}/>
-                  : <UploadGridView uploads={likedTracks} cols={libraryLayout.cols}/>
+                  ? <UploadExpandedList uploads={combinedLikedTracks}/>
+                  : <UploadGridView uploads={combinedLikedTracks} cols={libraryLayout.cols}/>
                 }
               </>
             )}
@@ -261,19 +278,40 @@ export default function Library() {
             ? <div className="lib-empty"><p>No playlists yet.</p></div>
             : <div className="scroll-row">
                 {playlists.map(pl => (
-                  <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
+                  <div key={pl.id} onClick={() => {
+                    const ts = Date.now();
+                    window.__lastFastOpenTs = ts;
+                    // Build album-like object for React AlbumSheet (registers JS callbacks)
+                    const albumObj = {
+                      ...pl,
+                      artist: pl.creator || user?.displayName || 'You',
+                      _ts: ts,
+                    };
+                    setSelectedAlbum(albumObj);
+                    try {
+                      window.webkit?.messageHandlers?.player?.postMessage({
+                        playlistOpen: true,
+                        nativePlaylist: {
+                          _ts: String(ts),
+                          id: pl.id,
+                          title: pl.title,
+                          cover: pl.cover || null,
+                          creator: pl.creator || user?.displayName || 'You',
+                          tracks: (pl.tracks || []).map(t => ({
+                            id: t.id || String(Date.now() + Math.random()),
+                            title: t.title || t.name || 'Unknown Track',
+                            artist: t.artist || '',
+                            url: t.url || t.streamUrl || t.audioUrl || ''
+                          }))
+                        }
+                      });
+                    } catch(e) {}
+                  }}>
+                    <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
+                  </div>
                 ))}
               </div>
           }
-          {/* AI Builder */}
-          <div className="ai-playlist-builder glass" style={{margin:'16px 16px 0'}}>
-            <div className="ai-builder-icon"><Wand2 size={24}/></div>
-            <div>
-              <div className="ai-builder-title">Build an AI Playlist</div>
-              <div className="ai-builder-sub">Tell KYO AI what you want — a mood, a track, an era, or a BPM range.</div>
-            </div>
-            <button className="ai-builder-btn">Build</button>
-          </div>
         </>
       )}
 
@@ -309,6 +347,51 @@ export default function Library() {
             </>
       )}
 
+      {/* Events */}
+      {activeFilter === 'events' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="shelf-row-label" style={{display: 'flex', gap: '8px', paddingBottom: '8px', borderBottom: '1px solid var(--glass-border)'}}>
+            {['All', 'This Week', 'This Month'].map(f => (
+              <button 
+                key={f}
+                onClick={() => setEventsFilter(f)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '16px',
+                  background: eventsFilter === f ? 'var(--text-primary)' : 'var(--glass-bg)',
+                  color: eventsFilter === f ? '#000' : 'var(--text-primary)',
+                  fontSize: '0.8rem',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {berghainEvents.filter(e => {
+              if (eventsFilter === 'All') return true;
+              const [d, m, y] = e.date.split('.');
+              const eventDate = new Date(`${y}-${m}-${d}`);
+              const now = new Date();
+              now.setHours(0,0,0,0);
+              if (eventsFilter === 'This Week') {
+                const diffTime = eventDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays >= 0 && diffDays <= 7;
+              }
+              if (eventsFilter === 'This Month') {
+                return eventDate.getMonth() === now.getMonth() && eventDate.getFullYear() === now.getFullYear();
+              }
+              return true;
+            }).map((e) => (
+              <BerghainEventCard key={e.id} event={e} onClick={() => setSelectedEventIndex(berghainEvents.indexOf(e))} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Album sheet */}
       {selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
@@ -333,6 +416,14 @@ export default function Library() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedEventIndex !== null && (
+        <EventSheet 
+          events={berghainEvents} 
+          initialIndex={selectedEventIndex} 
+          onClose={() => setSelectedEventIndex(null)} 
+        />
       )}
     </div>
   );

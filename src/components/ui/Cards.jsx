@@ -167,3 +167,18 @@ export function LongFormCard({ item }) {
     </div>
   );
 }
+
+export function BerghainEventCard({ event, onClick }) {
+  return (
+    <button onClick={onClick} className="berghain-event-card block" style={{ border: 'none', textAlign: 'left', cursor: 'pointer' }}>
+      <div className="berghain-event-content">
+        <p className="berghain-event-date">
+          {event.day} <span>{event.date}</span> {event.time && `start ${event.time}`}
+        </p>
+        <h2 className="berghain-event-title" style={{ color: event.color || '#eb8abc' }}>
+          {event.title}
+        </h2>
+      </div>
+    </button>
+  );
+}

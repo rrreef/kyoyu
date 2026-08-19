@@ -485,6 +485,7 @@ export async function fetchMyTracks() {
     'apikey':        supabaseAnon,
     'Accept':        'application/json',
     'Range':         '0-9999',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
   };
 
   // Fetch tracks AND creator profile in parallel
@@ -594,7 +595,7 @@ export async function fetchAllArtists() {
  */
 export async function fetchPublicTracks(query = '') {
   try {
-    let qs = 'visibility=eq.public&order=created_at.desc&limit=200';
+    let qs = 'visibility=eq.public&order=created_at.desc&limit=2000';
 
     if (query) {
       const q = encodeURIComponent(`%${query}%`);
@@ -605,10 +606,11 @@ export async function fetchPublicTracks(query = '') {
     const url = `${supabaseUrl}/rest/v1/tracks?${qs}&select=*`;
 
     const res = await fetch(url, {
+      cache: 'no-store',
       headers: {
         'apikey': supabaseAnon,
         'Accept': 'application/json',
-        'Range':  '0-199',
+        'Range':  '0-1999',
       },
     });
 

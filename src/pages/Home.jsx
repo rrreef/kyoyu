@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
 import { Play, Pause, ArrowRight, Zap, Radio, Lock, Music2, Heart, ListPlus } from 'lucide-react';
-import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios, upcomingEvents } from '../data/mockData';
-import { ReleaseCard, ArtistCard, VinylCard, LongFormCard } from '../components/ui/Cards';
+import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios } from '../data/mockData';
+import { berghainEvents } from '../data/berghainEvents';
+import { ReleaseCard, ArtistCard, VinylCard, LongFormCard, BerghainEventCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -10,6 +11,7 @@ import { useDisplay, useHomeLayoutLive } from '../contexts/DisplayContext';
 import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import EventSheet from '../components/ui/EventSheet';
 import './Home.css';
 
 /**
@@ -83,12 +85,16 @@ export default function Home() {
   const [myUploads,      setMyUploads]      = useState([]);
   const [publicReleases, setPublicReleases] = useState([]);
   const [selectedAlbum,  setSelectedAlbum]  = useState(null);
+  const [selectedEventIndex, setSelectedEventIndex] = useState(null);
 
   // Group flat tracks into albums
   const publicAlbums = useMemo(() => groupByAlbum(publicReleases), [publicReleases]);
 
-  // Featured hero = first album that has a cover
+  // Featured hero = first album that has a cover (web only)
   const featured = publicAlbums.find(a => a.cover) || publicAlbums[0] || null;
+
+  // Detect iOS native app (WKWebView)
+  const isNativeApp = useMemo(() => !!window.webkit?.messageHandlers, []);
 
   // Load real public releases from backend
   useEffect(() => {
@@ -169,8 +175,35 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 1 — Featured Release */}
-      {showFeatured && featured && (
+      {/* 1 — Featured Releases */}
+      {showFeatured && isNativeApp && publicAlbums.length > 0 && (
+      <section className="home-section featured-releases-section">
+        <div className="section-title">
+          <span>Featured Releases</span>
+          <Link to="/search">See All <ArrowRight size={12} /></Link>
+        </div>
+        <div className="featured-scroll-row">
+          {publicAlbums.map(album => (
+            <button
+              key={album.id}
+              className="featured-card"
+              onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+            >
+              <div className="featured-card-art">
+                {album.cover
+                  ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                  : <div className="featured-card-art-ph"><Music2 size={28} strokeWidth={1.2} /></div>}
+              </div>
+              <div className="featured-card-title">{album.title}</div>
+              <div className="featured-card-artist">{album.artist}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+      )}
+
+      {/* 1b — Featured Release hero (web only) */}
+      {showFeatured && !isNativeApp && featured && (
       <section className="hero-section">
         <div className="hero-cover-bg" style={{ backgroundImage: `url(${featured.cover})` }} />
         <div className="hero-info">
@@ -236,13 +269,13 @@ export default function Home() {
         <section className="home-section">
           <div className="section-title">
             <span>Releases</span>
-            <Link to="/search">See All <ArrowRight size={12} /></Link>
+            <Link to="/all-releases">See All <ArrowRight size={12} /></Link>
           </div>
           {publicAlbums.length === 0 ? (
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
           ) : (
             <div className="upl-grid upl-grid-3">
-              {publicAlbums.map(album => (
+              {publicAlbums.slice(0, 6).map(album => (
                 <button
                   key={album.id}
                   className="upl-grid-cell"
@@ -313,8 +346,8 @@ export default function Home() {
             <span>Events</span>
           </div>
           <div className="scroll-row">
-            {upcomingEvents.map(e => (
-              <ShelfCard key={e.id} cover={e.cover} title={e.title} sub={`${e.date} · ${e.venue}`} badge={e.date} />
+            {berghainEvents.map((e, idx) => (
+              <BerghainEventCard key={e.id} event={e} onClick={() => setSelectedEventIndex(idx)} />
             ))}
           </div>
         </section>
@@ -331,6 +364,14 @@ export default function Home() {
             {vinylMarketplace.map(v => <VinylCard key={v.id} listing={v} />)}
           </div>
         </section>
+      )}
+
+      {selectedEventIndex !== null && (
+        <EventSheet 
+          events={berghainEvents} 
+          initialIndex={selectedEventIndex} 
+          onClose={() => setSelectedEventIndex(null)} 
+        />
       )}
 
     </div>

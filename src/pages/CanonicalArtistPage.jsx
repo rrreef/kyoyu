@@ -151,7 +151,11 @@ export default function CanonicalArtistPage() {
         <div className="canonical-hero-bg" />
         <div className="canonical-hero-content">
           <div className="canonical-hero-top">
-            <EntityPlaceholder name={artist.name} type="artist" className="canonical-hero-avatar" />
+            {artist.image_url ? (
+              <img src={artist.image_url} alt={artist.name} className="canonical-hero-avatar" />
+            ) : (
+              <EntityPlaceholder name={artist.name} type="artist" className="canonical-hero-avatar" />
+            )}
             <div className="canonical-hero-info">
               <ContentStateBadge isNative={hasNativeTracks || artist.native_available} entityType="artist" />
               <h1 className="canonical-hero-name">{artist.name}</h1>
