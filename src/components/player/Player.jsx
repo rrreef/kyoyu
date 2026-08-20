@@ -389,16 +389,51 @@ export default function Player({ hideMini = false }) {
     else             document.body.classList.remove('has-mini-player');
     return ()=>{ document.body.classList.remove('has-mini-player'); };
   },[currentTrack]);
+  const ytHiddenRef = useRef(null);
+  // Expose YouTube progress to Swift's NativePlayerView
+  useEffect(() => {
+    if (isNative() && provider === 'youtube') {
+      window.__kyoyuYTProgress = () => JSON.stringify({ progress, duration });
+    } else {
+      delete window.__kyoyuYTProgress;
+    }
+    return () => { delete window.__kyoyuYTProgress; };
+  }, [provider, progress, duration]);
+
   if(!currentTrack) return null;
+
+  // On native iOS with YouTube, render a hidden YouTube player for audio only
+  // The native sheet player handles the UI
+  const isNativeYT = isNative() && provider === 'youtube' && providerItemId;
+
   return (
     <>
       {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
       )}
-      <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
-        open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
-        provider={provider} providerItemId={providerItemId} volume={volume}/>
+      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI */}
+      {isNativeYT && (
+        <div style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+          <YouTubePlayer
+            ref={ytHiddenRef}
+            videoId={providerItemId}
+            isPlaying={isPlaying}
+            volume={volume}
+            onStateChange={({ progress: ytProg, duration: ytDur }) => {
+              dispatch({ type: 'SET_PROGRESS', value: ytProg });
+              if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
+            }}
+            onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+          />
+        </div>
+      )}
+      {/* Web FullPlayer — skip on native iOS since native sheet handles UI */}
+      {!isNative() && (
+        <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
+          open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
+          provider={provider} providerItemId={providerItemId} volume={volume}/>
+      )}
     </>
   );
 }
