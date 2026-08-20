@@ -258,8 +258,21 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     ? <img src={track.releaseCover} className={big?'fp-art':'fp-q-art'} alt=""/>
     : <div className={big?'fp-art fp-art-ph':'fp-q-art fp-art-ph'}><Music2 size={big?72:24}/></div>;
 
+  // Provider-aware seek: route to YouTube, SoundCloud, or native audio
+  const handleSeek = useCallback((seconds) => {
+    if (provider === 'youtube' && ytRef.current?.seekTo) {
+      ytRef.current.seekTo(seconds);
+      dispatch({ type: 'SET_PROGRESS', value: seconds });
+    } else if (provider === 'soundcloud' && scRef.current?.seekTo) {
+      scRef.current.seekTo(seconds);
+      dispatch({ type: 'SET_PROGRESS', value: seconds });
+    } else {
+      seekTo(seconds);
+    }
+  }, [provider, seekTo, dispatch]);
+
   const controls = <PlayerControls progress={progress} duration={duration}
-    isPlaying={isPlaying} dispatch={dispatch} onSeek={seekTo}
+    isPlaying={isPlaying} dispatch={dispatch} onSeek={handleSeek}
     showQueue={showQueue} setShowQueue={setShowQueue}/>;
 
   /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
@@ -370,7 +383,18 @@ export default function Player({ hideMini = false }) {
           setExp(true); postNative({expanded:true});
         }
       }
-      if(cmd==='seekTo' && typeof val === 'number') seekTo(val);
+      if(cmd==='seekTo' && typeof val === 'number') {
+        // Route seek to the correct player based on provider
+        if (provider === 'youtube') {
+          ytHiddenRef.current?.seekTo?.(val);
+          dispatch({ type: 'SET_PROGRESS', value: val });
+        } else if (provider === 'soundcloud') {
+          scHiddenRef.current?.seekTo?.(val);
+          dispatch({ type: 'SET_PROGRESS', value: val });
+        } else {
+          seekTo(val);
+        }
+      }
     };
     
     // Listen for global native like event
@@ -395,7 +419,7 @@ export default function Player({ hideMini = false }) {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuPlayerCmd; 
     };
-  },[dispatch, seekTo, currentTrack, toggleLikeUpload]);
+  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider]);
   useEffect(() => {
     if (currentTrack) {
       postNative({
