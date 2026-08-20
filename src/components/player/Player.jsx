@@ -419,9 +419,11 @@ export default function Player({ hideMini = false }) {
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
       )}
-      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI */}
+      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
+           transform: scale(0.001) shrinks the hardware video layer to near-zero so it can't
+           bleed through the native SwiftUI glass overlay. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 2, height: 2, transform: 'scale(0.001)', transformOrigin: 'bottom right', clipPath: 'inset(100%)', overflow: 'hidden', pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
