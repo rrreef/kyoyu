@@ -177,31 +177,65 @@ async function searchYouTube(query) {
 }
 
 /**
- * Run unified search: native catalog + Discogs + YouTube, merged and deduplicated.
+ * Search SoundCloud via our proxy API endpoint.
+ * Returns normalized track results for display and playback.
+ */
+async function searchSoundCloud(query) {
+  try {
+    const res = await fetch('/api/soundcloud-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit: 50 }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results || []).map(r => ({
+      id: `sc-${r.trackId}`,
+      trackId: r.trackId,
+      title: r.title,
+      artistName: r.artistName,
+      artworkUrl: r.artworkUrl,
+      duration: r.duration,
+      permalinkUrl: r.permalinkUrl,
+      playbackCount: r.playbackCount,
+      genre: r.genre,
+      isExternal: true,
+      provider: 'soundcloud',
+    }));
+  } catch (err) {
+    console.warn('SoundCloud search failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Run unified search: native catalog + Discogs + YouTube + SoundCloud, merged and deduplicated.
  * Native results always come first.
  * 
  * @param {string} query - Search query (min 2 chars)
- * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array } }}
+ * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array } }}
  */
 export async function unifiedSearch(query) {
   if (!query || query.trim().length < 2) {
-    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [] } };
+    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [] } };
   }
   
   const trimmed = query.trim();
   
   // Run all searches in parallel
-  const [nativeTracks, discogsResults, youtubeResults] = await Promise.all([
+  const [nativeTracks, discogsResults, youtubeResults, soundcloudResults] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
+    searchSoundCloud(trimmed),
   ]);
   
   // Categorize and deduplicate Discogs results
   const external = categorizeDiscogsResults(discogsResults, nativeTracks);
   external.youtube = youtubeResults;
+  external.soundcloud = soundcloudResults;
   
   return { nativeTracks, external };
 }
 
-export { parseDiscogsTitle, searchDiscogs, searchYouTube };
+export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud };

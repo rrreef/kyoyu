@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import YouTubePlayer from './YouTubePlayer';
+import SoundCloudPlayer from './SoundCloudPlayer';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X } from 'lucide-react';
 import './Player.css';
@@ -216,6 +217,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
 /* ── Full screen player ── */
 function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume }) {
   const ytRef = useRef(null);
+  const scRef = useRef(null);
   const fpRef    = useRef(null);
   const handleRef= useRef(null);
   const startY   = useRef(0);
@@ -230,6 +232,11 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     // For YouTube thumbnails, set a default red accent since CORS blocks canvas sampling
     if (url.includes('ytimg.com') || url.includes('youtube.com')) {
       setAccent('180,40,40');
+      return;
+    }
+    // For SoundCloud, use orange accent
+    if (provider === 'soundcloud') {
+      setAccent('255,85,0');
       return;
     }
     extractColor(url).then(c => { if (c) setAccent(c); });
@@ -296,6 +303,20 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
                     onStateChange={({ isPlaying: ytPlaying, progress: ytProg, duration: ytDur }) => {
                       dispatch({ type: 'SET_PROGRESS', value: ytProg });
                       if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
+                    }}
+                    onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+                  />
+                </div>
+              ) : provider === 'soundcloud' && providerItemId ? (
+                <div className="fp-art" style={{ overflow: 'hidden', padding: 0, background: '#1a1a1a' }}>
+                  <SoundCloudPlayer
+                    ref={scRef}
+                    trackUrl={providerItemId}
+                    isPlaying={isPlaying}
+                    volume={volume}
+                    onStateChange={({ progress: scProg, duration: scDur }) => {
+                      dispatch({ type: 'SET_PROGRESS', value: scProg });
+                      if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
                     }}
                     onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
                   />
@@ -398,9 +419,10 @@ export default function Player({ hideMini = false }) {
     return ()=>{ document.body.classList.remove('has-mini-player'); };
   },[currentTrack]);
   const ytHiddenRef = useRef(null);
-  // Expose YouTube progress to Swift's NativePlayerView
+  const scHiddenRef = useRef(null);
+  // Expose YouTube/SoundCloud progress to Swift's NativePlayerView
   useEffect(() => {
-    if (isNative() && provider === 'youtube') {
+    if (isNative() && (provider === 'youtube' || provider === 'soundcloud')) {
       window.__kyoyuYTProgress = () => JSON.stringify({ progress, duration });
     } else {
       delete window.__kyoyuYTProgress;
@@ -413,6 +435,7 @@ export default function Player({ hideMini = false }) {
   // On native iOS with YouTube, render a hidden YouTube player for audio only
   // The native sheet player handles the UI
   const isNativeYT = isNative() && provider === 'youtube' && providerItemId;
+  const isNativeSC = isNative() && provider === 'soundcloud' && providerItemId;
 
   return (
     <>
@@ -434,6 +457,23 @@ export default function Player({ hideMini = false }) {
             onStateChange={({ progress: ytProg, duration: ytDur }) => {
               dispatch({ type: 'SET_PROGRESS', value: ytProg });
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
+            }}
+            onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+          />
+        </div>
+      )}
+      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI */}
+      {isNativeSC && (
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 2, height: 2, overflow: 'hidden', pointerEvents: 'none' }}>
+          <SoundCloudPlayer
+            ref={scHiddenRef}
+            trackUrl={providerItemId}
+            isPlaying={isPlaying}
+            volume={volume}
+            audioOnly={true}
+            onStateChange={({ progress: scProg, duration: scDur }) => {
+              dispatch({ type: 'SET_PROGRESS', value: scProg });
+              if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
             }}
             onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
           />

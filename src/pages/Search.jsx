@@ -12,13 +12,13 @@ export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
-  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [] });
+  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [] });
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
-  const { playTrack, playYouTube } = usePlayer();
+  const { playTrack, playYouTube, playSoundCloud } = usePlayer();
 
   // Load history from localStorage
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function Search() {
         })
         .catch(() => {
           setResults([]);
-          setExternalResults({ artists: [], releases: [], labels: [] });
+          setExternalResults({ artists: [], releases: [], labels: [], soundcloud: [] });
         })
         .finally(() => setLoading(false));
     }, 300);
@@ -485,6 +485,46 @@ export default function Search() {
                 <div className="search-result-info">
                   <span className="search-result-title">{yt.title}</span>
                   <span className="search-result-artist">{yt.channelTitle}</span>
+                </div>
+                <div className="search-result-actions">
+                  <Play size={16} style={{ opacity: 0.6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── SoundCloud Results ── */}
+      {externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
+            SoundCloud
+          </div>
+          <div className="search-section">
+            {externalResults.soundcloud.map(sc => (
+              <div key={sc.id} className="search-result-row search-external-row"
+                onClick={() => {
+                  playSoundCloud(sc.permalinkUrl, {
+                    trackId: sc.trackId,
+                    title: sc.title,
+                    artistName: sc.artistName,
+                    artworkUrl: sc.artworkUrl,
+                    duration: sc.duration,
+                  });
+                  // Auto-expand the full player
+                  window.__kyoyuPlayerCmd?.('expand');
+                }}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {sc.artworkUrl ? (
+                    <img src={sc.artworkUrl} alt={sc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={sc.title} type="release" />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{sc.title}</span>
+                  <span className="search-result-artist">{sc.artistName}</span>
                 </div>
                 <div className="search-result-actions">
                   <Play size={16} style={{ opacity: 0.6 }} />
