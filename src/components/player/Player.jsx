@@ -384,7 +384,8 @@ export default function Player({ hideMini = false }) {
         artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
         trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
-        artist: currentTrack.artistName || currentTrack.artist || ''
+        artist: currentTrack.artistName || currentTrack.artist || '',
+        provider: provider || 'native'
       });
     } else {
       postNative({ visible: false, playing: false });
