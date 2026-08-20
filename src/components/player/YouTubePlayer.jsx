@@ -48,7 +48,8 @@ const YouTubePlayer = forwardRef(({
   volume, 
   onStateChange, 
   onReady, 
-  onEnded 
+  onEnded,
+  audioOnly = false 
 }, ref) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
@@ -86,12 +87,12 @@ const YouTubePlayer = forwardRef(({
         if (!isMounted || !containerRef.current) return;
 
         playerRef.current = new YT.Player(containerRef.current, {
-          width: '100%',
-          height: '100%',
+          width: audioOnly ? 1 : '100%',
+          height: audioOnly ? 1 : '100%',
           videoId: videoId,
           playerVars: {
             autoplay: 0,
-            controls: 1,
+            controls: audioOnly ? 0 : 1,
             modestbranding: 1,
             rel: 0,
             playsinline: 1,

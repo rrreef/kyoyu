@@ -429,6 +429,7 @@ export default function Player({ hideMini = false }) {
             videoId={providerItemId}
             isPlaying={isPlaying}
             volume={volume}
+            audioOnly={true}
             onStateChange={({ progress: ytProg, duration: ytDur }) => {
               dispatch({ type: 'SET_PROGRESS', value: ytProg });
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
