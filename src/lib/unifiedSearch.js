@@ -13,7 +13,7 @@ async function searchDiscogs(query) {
     const res = await fetch('/api/discogs-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, perPage: 50 }),
+      body: JSON.stringify({ query, perPage: 100 }),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -124,6 +124,7 @@ function categorizeDiscogsResults(discogsResults, nativeResults) {
  */
 async function searchYouTube(query) {
   try {
+    // Page 1
     const res = await fetch('/api/youtube-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -131,7 +132,7 @@ async function searchYouTube(query) {
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.results || []).map(r => ({
+    const page1 = (data.results || []).map(r => ({
       id: `yt-${r.videoId}`,
       videoId: r.videoId,
       title: r.title,
@@ -142,6 +143,33 @@ async function searchYouTube(query) {
       isExternal: true,
       provider: 'youtube',
     }));
+
+    // Page 2 if there's a nextPageToken
+    if (data.nextPageToken) {
+      try {
+        const res2 = await fetch('/api/youtube-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: `${query} music`, maxResults: 50, pageToken: data.nextPageToken }),
+        });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const page2 = (data2.results || []).map(r => ({
+            id: `yt-${r.videoId}`,
+            videoId: r.videoId,
+            title: r.title,
+            channelTitle: r.channelTitle,
+            thumbnail: r.thumbnail,
+            duration: r.duration,
+            publishedAt: r.publishedAt,
+            isExternal: true,
+            provider: 'youtube',
+          }));
+          return [...page1, ...page2];
+        }
+      } catch {}
+    }
+    return page1;
   } catch (err) {
     console.warn('YouTube search failed:', err);
     return [];

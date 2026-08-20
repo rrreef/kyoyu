@@ -77,6 +77,7 @@ export default async function handler(req, res) {
   const query = body?.query;
   const maxResults = Math.min(parseInt(body?.maxResults) || 10, 50);
   const type = body?.type || 'video';
+  const pageToken = body?.pageToken || null;
 
   if (!query || typeof query !== 'string' || query.length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
@@ -97,6 +98,7 @@ export default async function handler(req, res) {
       maxResults: maxResults.toString(),
       key: apiKey
     });
+    if (pageToken) searchParams.set('pageToken', pageToken);
 
     const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`);
     
@@ -159,7 +161,7 @@ export default async function handler(req, res) {
       };
     }).filter(item => item.videoId);
 
-    return res.status(200).json({ results });
+    return res.status(200).json({ results, nextPageToken: searchData.nextPageToken || null });
 
   } catch (error) {
     console.error('API Error:', error);
