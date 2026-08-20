@@ -13,7 +13,7 @@ async function searchDiscogs(query) {
     const res = await fetch('/api/discogs-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, perPage: 15 }),
+      body: JSON.stringify({ query, perPage: 50 }),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -127,7 +127,7 @@ async function searchYouTube(query) {
     const res = await fetch('/api/youtube-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `${query} music`, maxResults: 8 }),
+      body: JSON.stringify({ query: `${query} music`, maxResults: 50 }),
     });
     if (!res.ok) return [];
     const data = await res.json();

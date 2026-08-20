@@ -75,7 +75,7 @@ export default async function handler(req, res) {
   }
 
   const query = body?.query;
-  const maxResults = Math.min(parseInt(body?.maxResults) || 10, 25);
+  const maxResults = Math.min(parseInt(body?.maxResults) || 10, 50);
   const type = body?.type || 'video';
 
   if (!query || typeof query !== 'string' || query.length < 2) {
@@ -95,7 +95,6 @@ export default async function handler(req, res) {
       q: query,
       type: type,
       maxResults: maxResults.toString(),
-      videoCategoryId: '10', // Music
       key: apiKey
     });
 

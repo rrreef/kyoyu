@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     url.searchParams.set('q', query);
     if (type) url.searchParams.set('type', type);
     url.searchParams.set('page', String(page || 1));
-    url.searchParams.set('per_page', String(perPage || 20));
+    url.searchParams.set('per_page', String(perPage || 50));
 
     const headers = {
       'User-Agent': process.env.DISCOGS_USER_AGENT || 'Kyoyu/1.0 +https://ree.fm',
