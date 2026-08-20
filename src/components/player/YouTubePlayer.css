@@ -7,19 +7,14 @@
 .youtube-player-container {
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-height: 300px;
   border-radius: 12px;
   overflow: hidden;
   background-color: #000;
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-@media (max-width: 768px) {
-  .youtube-player-container {
-    max-height: 300px;
-  }
+  /* Match the native artwork shadow */
+  box-shadow: 0 16px 48px rgba(0,0,0,.5);
 }
 
 .youtube-player-container iframe {
