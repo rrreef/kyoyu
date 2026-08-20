@@ -10,7 +10,7 @@ function fmt(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
-const isNative = () => { try { return !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
+const isNative = () => { try { return !!window.__kyoyuIsNativeApp || !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
 /* ── Dominant colour extraction (canvas-based, cached per URL) ── */
 const _fpColorCache = new Map();
@@ -341,7 +341,14 @@ export default function Player({ hideMini = false }) {
       if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
       if(cmd==='prev')   dispatch({type:'PREV_TRACK'});
       if(cmd==='stop')   dispatch({type:'STOP'});
-      if(cmd==='expand'){ setExp(true); postNative({expanded:true}); }
+      if(cmd==='expand'){
+        // On native iOS, only forward to Swift — don't open web FullPlayer
+        if (isNative()) {
+          postNative({expanded:true});
+        } else {
+          setExp(true); postNative({expanded:true});
+        }
+      }
       if(cmd==='seekTo' && typeof val === 'number') seekTo(val);
     };
     
