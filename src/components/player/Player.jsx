@@ -370,19 +370,39 @@ export default function Player({ hideMini = false }) {
   },[dispatch, seekTo, currentTrack, toggleLikeUpload]);
   useEffect(() => {
     if (currentTrack) {
-      postNative({
-        visible: true,
-        playing: isPlaying,
-        title: currentTrack.title || '',
-        artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
-        trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
-        albumId: String(currentTrack.releaseId || currentTrack.album || ''),
-        artist: currentTrack.artist || ''
-      });
+      // For external providers (YouTube/SoundCloud), force the web full-screen player
+      // instead of letting the native iOS sheet player handle it
+      if (provider && provider !== 'native') {
+        postNative({
+          visible: true,
+          playing: isPlaying,
+          title: currentTrack.title || '',
+          artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
+          trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
+          albumId: '',
+          artist: currentTrack.artistName || currentTrack.artist || '',
+          playerStyle: 'fullscreen',  // Force web player, not native sheet
+        });
+        // Auto-expand the web full player for YouTube/SoundCloud
+        if (!exp) {
+          setExp(true);
+          postNative({ expanded: true });
+        }
+      } else {
+        postNative({
+          visible: true,
+          playing: isPlaying,
+          title: currentTrack.title || '',
+          artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
+          trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
+          albumId: String(currentTrack.releaseId || currentTrack.album || ''),
+          artist: currentTrack.artist || ''
+        });
+      }
     } else {
       postNative({ visible: false, playing: false });
     }
-  }, [currentTrack, isPlaying, likedUploads, likedTracks]);
+  }, [currentTrack, isPlaying, likedUploads, likedTracks, provider]); // eslint-disable-line
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');
