@@ -1,20 +1,10 @@
-.youtube-player-wrapper {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
+/* YouTube player — fills its parent fp-art container */
 .youtube-player-container {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
+  height: 100%;
+  border-radius: inherit;
   overflow: hidden;
   background-color: #000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  /* Match the native artwork shadow */
-  box-shadow: 0 16px 48px rgba(0,0,0,.5);
 }
 
 .youtube-player-container iframe {
@@ -23,50 +13,17 @@
   border: none;
 }
 
+.youtube-player-container > div {
+  width: 100%;
+  height: 100%;
+}
+
 .youtube-player-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.9rem;
-}
-
-.youtube-info-row {
-  display: flex;
-  align-items: center;
-  margin-top: 10px;
-  width: 100%;
-}
-
-.youtube-source-badge {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.78rem;
-}
-
-.youtube-source-badge .yt-icon {
-  display: inline-block;
-  width: 18px;
-  height: 12px;
-  background-color: #FF0000;
-  border-radius: 3px;
-}
-
-.youtube-open-link {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.75rem;
-  text-decoration: none;
-  margin-left: auto;
-  transition: color 0.2s ease;
-}
-
-.youtube-open-link:hover {
-  color: #ffffff;
-}
-
-.yt-external-link-icon {
-  margin-left: 2px;
 }

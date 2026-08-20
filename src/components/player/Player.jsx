@@ -227,6 +227,11 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     const url = track?.releaseCover;
     if (!url) { setAccent(null); return; }
     if (_fpColorCache.has(url)) { setAccent(_fpColorCache.get(url)); return; }
+    // For YouTube thumbnails, set a default red accent since CORS blocks canvas sampling
+    if (url.includes('ytimg.com') || url.includes('youtube.com')) {
+      setAccent('180,40,40');
+      return;
+    }
     extractColor(url).then(c => { if (c) setAccent(c); });
   }, [track?.releaseCover]);
 
@@ -282,17 +287,19 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
           <div className="fp-top">
             <div className="fp-art-wrap">
               {provider === 'youtube' && providerItemId ? (
-                <YouTubePlayer
-                  ref={ytRef}
-                  videoId={providerItemId}
-                  isPlaying={isPlaying}
-                  volume={volume}
-                  onStateChange={({ isPlaying: ytPlaying, progress: ytProg, duration: ytDur }) => {
-                    dispatch({ type: 'SET_PROGRESS', value: ytProg });
-                    if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
-                  }}
-                  onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
-                />
+                <div className="fp-art" style={{ aspectRatio: '16/9', overflow: 'hidden', padding: 0 }}>
+                  <YouTubePlayer
+                    ref={ytRef}
+                    videoId={providerItemId}
+                    isPlaying={isPlaying}
+                    volume={volume}
+                    onStateChange={({ isPlaying: ytPlaying, progress: ytProg, duration: ytDur }) => {
+                      dispatch({ type: 'SET_PROGRESS', value: ytProg });
+                      if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
+                    }}
+                    onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+                  />
+                </div>
               ) : (
                 <Artwork big={true}/>
               )}

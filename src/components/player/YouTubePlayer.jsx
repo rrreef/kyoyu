@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { ExternalLink } from 'lucide-react';
 import './YouTubePlayer.css';
 
 // Module-level variables for API loading state
@@ -206,30 +205,11 @@ const YouTubePlayer = forwardRef(({
   }));
 
   return (
-    <div className="youtube-player-wrapper">
-      <div className="youtube-player-container">
-        {error ? (
-          <div className="youtube-player-error">{error}</div>
-        ) : (
-          <div ref={containerRef}></div>
-        )}
-      </div>
-      {videoId && (
-        <div className="youtube-info-row">
-          <div className="youtube-source-badge">
-            <span className="yt-icon"></span>
-            Playing via YouTube
-          </div>
-          <a
-            href={`https://www.youtube.com/watch?v=${videoId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="youtube-open-link"
-          >
-            Open on YouTube
-            <ExternalLink size={12} className="yt-external-link-icon" />
-          </a>
-        </div>
+    <div className="youtube-player-container">
+      {error ? (
+        <div className="youtube-player-error">{error}</div>
+      ) : (
+        <div ref={containerRef}></div>
       )}
     </div>
   );
