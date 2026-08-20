@@ -287,7 +287,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
           <div className="fp-top">
             <div className="fp-art-wrap">
               {provider === 'youtube' && providerItemId ? (
-                <div className="fp-art" style={{ aspectRatio: '16/9', overflow: 'hidden', padding: 0 }}>
+                <div className="fp-art" style={{ overflow: 'hidden', padding: 0, background: '#000' }}>
                   <YouTubePlayer
                     ref={ytRef}
                     videoId={providerItemId}
