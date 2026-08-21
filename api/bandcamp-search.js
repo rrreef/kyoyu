@@ -1,9 +1,9 @@
 // POST /api/bandcamp-search
-// Body: { query: string, limit?: number }
+// Body: { query: string }
 // Returns: { results: [...] }
 //
-// Scrapes Bandcamp's public search page and extracts track results.
-// No API key required — uses publicly accessible search.
+// Uses Bandcamp's public search API (bcsearch_public_api).
+// No API key required.
 
 const ALLOWED_ORIGINS = ['https://ree.fm', 'https://www.ree.fm'];
 
@@ -11,7 +11,7 @@ let requestLog = [];
 const RATE_LIMIT = 40;
 const RATE_WINDOW = 60000;
 
-// Simple result cache: query → { results, timestamp }
+// Result cache: query → { results, timestamp }
 const searchCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
@@ -58,24 +58,41 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch Bandcamp search page for tracks
-    const searchUrl = `https://bandcamp.com/search?q=${encodeURIComponent(query)}&item_type=t`;
-
-    const bcRes = await fetch(searchUrl, {
+    // Use Bandcamp's public search API
+    const bcRes = await fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
+      method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
       },
+      body: JSON.stringify({
+        search_text: query,
+        search_filter: 't', // tracks only
+        full_page: true,
+        fan_id: 0,
+      }),
     });
 
     if (!bcRes.ok) {
-      console.error('Bandcamp search error:', bcRes.status);
+      console.error('Bandcamp search API error:', bcRes.status);
       return res.status(200).json({ results: [] });
     }
 
-    const html = await bcRes.text();
-    const results = parseSearchResults(html);
+    const data = await bcRes.json();
+    const items = data?.auto?.results || [];
+
+    const results = items
+      .filter(item => item.type === 't') // tracks only
+      .map(item => ({
+        trackId: item.id,
+        title: item.name || '',
+        artistName: item.band_name || '',
+        artworkUrl: item.img ? item.img.replace(/_\d+\./, '_10.') : '', // Higher res
+        trackUrl: item.item_url_path || '',
+        albumName: item.album_name || '',
+        albumId: item.album_id || null,
+      }));
 
     // Cache results
     searchCache.set(cacheKey, { results, timestamp: now });
@@ -93,80 +110,4 @@ export default async function handler(req, res) {
     console.error('Bandcamp search error:', err);
     return res.status(200).json({ results: [] });
   }
-}
-
-/**
- * Parse Bandcamp search results HTML and extract track data.
- */
-function parseSearchResults(html) {
-  const results = [];
-
-  // Split by search result items
-  // Bandcamp wraps each result in <li class="searchresult ...">
-  const resultBlocks = html.split(/class="searchresult\s/);
-
-  for (let i = 1; i < resultBlocks.length && results.length < 50; i++) {
-    const block = resultBlocks[i];
-
-    try {
-      // Extract track URL
-      const urlMatch = block.match(/class="heading">\s*<a\s+href="([^"]+)"/);
-      const trackUrl = urlMatch ? urlMatch[1].trim() : null;
-      if (!trackUrl || !trackUrl.includes('bandcamp.com')) continue;
-
-      // Extract title
-      const titleMatch = block.match(/class="heading">\s*<a[^>]*>\s*([^<]+)/);
-      const title = titleMatch ? titleMatch[1].trim() : '';
-      if (!title) continue;
-
-      // Extract artist — "by Artist Name" or "from Album by Artist"
-      let artist = '';
-      const subheadMatch = block.match(/class="subhead">\s*([\s\S]*?)<\/div>/);
-      if (subheadMatch) {
-        const subhead = subheadMatch[1];
-        // Try "by Artist Name"
-        const byMatch = subhead.match(/by\s+([^<\n]+)/);
-        if (byMatch) artist = byMatch[1].trim();
-      }
-
-      // Extract artwork
-      let artworkUrl = '';
-      const imgMatch = block.match(/<img[^>]+src="([^"]+)"/);
-      if (imgMatch) {
-        artworkUrl = imgMatch[1];
-        // Get higher res: replace _2. or _3. with _10. for 350x350
-        artworkUrl = artworkUrl.replace(/_\d+\./, '_10.');
-      }
-
-      // Extract album name
-      let albumName = '';
-      const albumMatch = block.match(/from\s+<a[^>]*>([^<]+)<\/a>/);
-      if (albumMatch) albumName = albumMatch[1].trim();
-
-      // Extract genre
-      let genre = '';
-      const genreMatch = block.match(/class="genre">\s*genre:\s*([^<]+)/i);
-      if (genreMatch) genre = genreMatch[1].trim();
-
-      // Extract release date
-      let released = '';
-      const releasedMatch = block.match(/class="released">\s*released\s+([^<]+)/i);
-      if (releasedMatch) released = releasedMatch[1].trim();
-
-      results.push({
-        title,
-        artistName: artist,
-        artworkUrl,
-        trackUrl,
-        albumName,
-        genre,
-        released,
-      });
-    } catch (e) {
-      // Skip malformed results
-      continue;
-    }
-  }
-
-  return results;
 }
