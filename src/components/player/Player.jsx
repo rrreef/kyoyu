@@ -513,15 +513,12 @@ export default function Player({ hideMini = false }) {
   },[currentTrack]);
   const ytHiddenRef = useRef(null);
   const scHiddenRef = useRef(null);
-  // Expose YouTube/SoundCloud progress to Swift's NativePlayerView
+  // Push progress + duration to Swift on every update (replaces old polling approach)
   useEffect(() => {
-    if (isNative() && (provider === 'youtube' || provider === 'soundcloud')) {
-      window.__kyoyuYTProgress = () => JSON.stringify({ progress, duration });
-    } else {
-      delete window.__kyoyuYTProgress;
+    if (isNative() && currentTrack) {
+      postNative({ progress, dur: duration });
     }
-    return () => { delete window.__kyoyuYTProgress; };
-  }, [provider, progress, duration]);
+  }, [progress, duration]);
 
   // Handle _restart for external providers (PREV_TRACK → seek to 0)
   useEffect(() => {
