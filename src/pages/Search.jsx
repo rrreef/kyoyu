@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import { unifiedSearch } from '../lib/unifiedSearch';
+import { unifiedSearch, resolveBandcamp } from '../lib/unifiedSearch';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import ContentStateBadge from '../components/ContentStateBadge';
@@ -12,8 +12,9 @@ export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
-  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [] });
+  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
   const [loading, setLoading] = useState(false);
+  const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
@@ -528,6 +529,61 @@ export default function Search() {
                 </div>
                 <div className="search-result-actions">
                   <Play size={16} style={{ opacity: 0.6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* ── Bandcamp Results ── */}
+      {externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
+            Bandcamp
+          </div>
+          <div className="search-section">
+            {externalResults.bandcamp.map(bc => (
+              <div key={bc.id} className="search-result-row search-external-row"
+                style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
+                onClick={async () => {
+                  if (bandcampLoading) return; // prevent double-click
+                  setBandcampLoading(bc.trackUrl);
+                  try {
+                    const resolved = await resolveBandcamp(bc.trackUrl);
+                    if (resolved && resolved.streamUrl) {
+                      playTrack({
+                        id: bc.id,
+                        title: resolved.title || bc.title,
+                        artistName: resolved.artist || bc.artistName,
+                        releaseCover: resolved.artworkUrl || bc.artworkUrl,
+                        src: resolved.streamUrl,
+                        duration: resolved.duration || 0,
+                      });
+                      window.__kyoyuPlayerCmd?.('expand');
+                    }
+                  } catch (err) {
+                    console.warn('Bandcamp play failed:', err);
+                  } finally {
+                    setBandcampLoading(null);
+                  }
+                }}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {bc.artworkUrl ? (
+                    <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={bc.title} type="release" />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{bc.title}</span>
+                  <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
+                </div>
+                <div className="search-result-actions">
+                  {bandcampLoading === bc.trackUrl ? (
+                    <span style={{ opacity: 0.4, fontSize: 11 }}>···</span>
+                  ) : (
+                    <Play size={16} style={{ opacity: 0.6 }} />
+                  )}
                 </div>
               </div>
             ))}

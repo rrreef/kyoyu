@@ -209,33 +209,86 @@ async function searchSoundCloud(query) {
 }
 
 /**
- * Run unified search: native catalog + Discogs + YouTube + SoundCloud, merged and deduplicated.
+ * Search Bandcamp via our scraping proxy endpoint.
+ */
+async function searchBandcamp(query) {
+  try {
+    const res = await fetch('/api/bandcamp-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results || []).map((r, i) => ({
+      id: `bc-${i}-${Date.now()}`,
+      title: r.title,
+      artistName: r.artistName,
+      artworkUrl: r.artworkUrl,
+      trackUrl: r.trackUrl,
+      albumName: r.albumName,
+      genre: r.genre,
+      released: r.released,
+      isExternal: true,
+      provider: 'bandcamp',
+    }));
+  } catch (err) {
+    console.warn('Bandcamp search failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Resolve a Bandcamp track URL to get the audio stream URL.
+ * Called when user clicks play on a Bandcamp result.
+ */
+export async function resolveBandcamp(trackUrl) {
+  try {
+    const res = await fetch('/api/bandcamp-resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: trackUrl }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.error || !data.streamUrl) return null;
+    return data;
+  } catch (err) {
+    console.warn('Bandcamp resolve failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Run unified search: native catalog + Discogs + YouTube + SoundCloud + Bandcamp, merged and deduplicated.
  * Native results always come first.
  * 
  * @param {string} query - Search query (min 2 chars)
- * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array } }}
+ * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array, bandcamp: Array } }}
  */
 export async function unifiedSearch(query) {
   if (!query || query.trim().length < 2) {
-    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [] } };
+    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] } };
   }
   
   const trimmed = query.trim();
   
   // Run all searches in parallel
-  const [nativeTracks, discogsResults, youtubeResults, soundcloudResults] = await Promise.all([
+  const [nativeTracks, discogsResults, youtubeResults, soundcloudResults, bandcampResults] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
     searchSoundCloud(trimmed),
+    searchBandcamp(trimmed),
   ]);
   
   // Categorize and deduplicate Discogs results
   const external = categorizeDiscogsResults(discogsResults, nativeTracks);
   external.youtube = youtubeResults;
   external.soundcloud = soundcloudResults;
+  external.bandcamp = bandcampResults;
   
   return { nativeTracks, external };
 }
 
-export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud };
+export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud, searchBandcamp };
