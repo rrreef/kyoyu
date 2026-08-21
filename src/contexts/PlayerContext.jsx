@@ -110,7 +110,13 @@ export function PlayerProvider({ children }) {
     };
     const onPlay  = () => dispatch({ type:'SET_PLAYING',  value: true  });
     const onPause = () => dispatch({ type:'SET_PLAYING',  value: false });
-    const onEnded = () => dispatch({ type:'NEXT_TRACK' });
+    const onEnded = () => {
+      if (searchQueueRef.current.length > 0 && searchQueueIdxRef.current >= 0) {
+        playNextSearch();
+      } else {
+        dispatch({ type:'NEXT_TRACK' });
+      }
+    };
     const onError = () => {
       console.warn('[Player] audio error:', audio.error?.code, audio.error?.message);
     };
@@ -303,8 +309,104 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track });
   }
 
+  // ── Search queue: multi-provider playlist from search results ──
+  const searchQueueRef = useRef([]);
+  const searchQueueIdxRef = useRef(-1);
+
+  // Play a single item from the search queue based on its provider
+  async function playSearchItem(item) {
+    if (!item) return;
+    if (item.provider === 'youtube') {
+      playYouTube(item.providerItemId, {
+        title: item.title,
+        channelTitle: item.artistName,
+        thumbnail: item.artworkUrl,
+        duration: item.duration,
+      });
+    } else if (item.provider === 'soundcloud') {
+      playSoundCloud(item.providerItemId, {
+        trackId: item.id,
+        title: item.title,
+        artistName: item.artistName,
+        artworkUrl: item.artworkUrl,
+        duration: item.duration,
+      });
+    } else if (item.provider === 'bandcamp') {
+      // Bandcamp needs async resolve
+      try {
+        const { resolveBandcamp } = await import('../lib/unifiedSearch');
+        const resolved = await resolveBandcamp(item.providerItemId);
+        if (resolved && resolved.streamUrl) {
+          playTrack({
+            id: item.id,
+            title: resolved.title || item.title,
+            artistName: resolved.artist || item.artistName,
+            releaseCover: resolved.artworkUrl || item.artworkUrl,
+            src: resolved.streamUrl,
+            duration: resolved.duration || 0,
+          });
+        }
+      } catch (err) {
+        console.warn('Bandcamp resolve failed in queue:', err);
+        // Skip to next
+        playNextSearch();
+      }
+    } else {
+      // native track
+      playTrack(item);
+    }
+  }
+
+  function setSearchQueue(queue, startIndex) {
+    searchQueueRef.current = queue;
+    searchQueueIdxRef.current = startIndex;
+  }
+
+  function playNextSearch() {
+    const q = searchQueueRef.current;
+    const idx = searchQueueIdxRef.current;
+    if (!q.length || idx < 0) return false;
+    if (idx >= q.length - 1) {
+      // End of queue
+      dispatch({ type: 'SET_PLAYING', value: false });
+      return true;
+    }
+    const nextIdx = idx + 1;
+    searchQueueIdxRef.current = nextIdx;
+    playSearchItem(q[nextIdx]);
+    return true;
+  }
+
+  function playPrevSearch() {
+    const q = searchQueueRef.current;
+    const idx = searchQueueIdxRef.current;
+    if (!q.length || idx < 0) return false;
+    // If progress > 3s, restart current
+    if (state.progress > 3) {
+      playSearchItem(q[idx]);
+      return true;
+    }
+    if (idx <= 0) {
+      // At start — restart current
+      playSearchItem(q[0]);
+      return true;
+    }
+    const prevIdx = idx - 1;
+    searchQueueIdxRef.current = prevIdx;
+    playSearchItem(q[prevIdx]);
+    return true;
+  }
+
+  function isInSearchQueue() {
+    return searchQueueRef.current.length > 0 && searchQueueIdxRef.current >= 0;
+  }
+
   return (
-    <PlayerContext.Provider value={{ state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud, seekTo, setVolume, setAudioVolumeDirect, allTracks }}>
+    <PlayerContext.Provider value={{
+      state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,
+      seekTo, setVolume, setAudioVolumeDirect, allTracks,
+      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue
+    }}>
       {children}
     </PlayerContext.Provider>
   );

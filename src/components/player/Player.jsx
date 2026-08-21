@@ -166,7 +166,7 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek, buffering 
     on every progress tick, causing React to unmount/remount Scrubber
     and tear down its event listeners each second)                    ── */
 const PlayerControls = memo(function PlayerControls({
-  progress, duration, isPlaying, dispatch, onSeek, showQueue, setShowQueue, buffering
+  progress, duration, isPlaying, dispatch, onSeek, onNext, onPrev, showQueue, setShowQueue, buffering
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
   return (
@@ -176,11 +176,11 @@ const PlayerControls = memo(function PlayerControls({
         <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
       </div>
       <div className="fp-ctrls">
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'PREV_TRACK'})}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
+        <button className="fp-ctrl" onClick={onPrev}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
         <button className="fp-ctrl" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
           {isPlaying ? <Pause size={48} fill="currentColor" strokeWidth={0}/> : <Play size={48} fill="currentColor" strokeWidth={0} style={{marginLeft:3}}/>}
         </button>
-        <button className="fp-ctrl" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
+        <button className="fp-ctrl" onClick={onNext}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
       </div>
       <div className="fp-actions">
         <button className="fp-action-btn"><MessageSquare size={22}/></button>
@@ -194,7 +194,7 @@ const PlayerControls = memo(function PlayerControls({
 });
 
 /* ── Mini bar ── */
-function MiniBar({ track, isPlaying, onExpand, dispatch }) {
+function MiniBar({ track, isPlaying, onExpand, dispatch, onNext }) {
   const ref = useRef(null); const startY = useRef(0);
   useEffect(() => {
     const el=ref.current; if(!el) return;
@@ -211,14 +211,14 @@ function MiniBar({ track, isPlaying, onExpand, dispatch }) {
         <button className="mini-btn" onClick={()=>dispatch({type:'TOGGLE_PLAY'})}>
           {isPlaying?<Pause size={22} fill="currentColor" strokeWidth={0}/>:<Play size={22} fill="currentColor" strokeWidth={0} style={{marginLeft:2}}/>}
         </button>
-        <button className="mini-btn" onClick={()=>dispatch({type:'NEXT_TRACK'})}><FastForward size={22} fill="currentColor" strokeWidth={0}/></button>
+        <button className="mini-btn" onClick={onNext}><FastForward size={22} fill="currentColor" strokeWidth={0}/></button>
       </div>
     </div>
   );
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume }) {
+function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev }) {
   const ytRef = useRef(null);
   const scRef = useRef(null);
   const fpRef    = useRef(null);
@@ -305,7 +305,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const handleSeek = useCallback((seconds) => {
     setBuffering(true);
     seekTargetRef.current = seconds;
-    lastProgressRef.current = progress;
+    lastProgressRef.current = seconds;
     if (provider === 'youtube' && ytRef.current?.seekTo) {
       ytRef.current.seekTo(seconds);
       dispatch({ type: 'SET_PROGRESS', value: seconds });
@@ -315,10 +315,11 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     } else {
       seekTo(seconds);
     }
-  }, [provider, seekTo, dispatch, progress]);
+  }, [provider, seekTo, dispatch]);
 
   const controls = <PlayerControls progress={progress} duration={duration}
     isPlaying={isPlaying} dispatch={dispatch} onSeek={handleSeek}
+    onNext={onNext} onPrev={onPrev}
     showQueue={showQueue} setShowQueue={setShowQueue} buffering={buffering}/>;
 
   /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
@@ -363,7 +364,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
                       dispatch({ type: 'SET_PROGRESS', value: ytProg });
                       if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
                     }}
-                    onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+                    onEnded={() => onNext()}
                   />
                 </div>
               ) : provider === 'soundcloud' && providerItemId ? (
@@ -377,7 +378,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
                       dispatch({ type: 'SET_PROGRESS', value: scProg });
                       if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
                     }}
-                    onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+                    onEnded={() => onNext()}
                   />
                 </div>
               ) : (
@@ -409,10 +410,21 @@ import { useLibrary } from '../../contexts/LibraryContext';
 
 /* ── Root ── */
 export default function Player({ hideMini = false }) {
-  const { state, dispatch, seekTo } = usePlayer();
+  const { state, dispatch, seekTo, playNextSearch, playPrevSearch, isInSearchQueue } = usePlayer();
   const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume } = state;
+
+  // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
+  const handleNext = useCallback(() => {
+    if (isInSearchQueue()) { playNextSearch(); }
+    else { dispatch({ type: 'NEXT_TRACK' }); }
+  }, [isInSearchQueue, playNextSearch, dispatch]);
+
+  const handlePrev = useCallback(() => {
+    if (isInSearchQueue()) { playPrevSearch(); }
+    else { dispatch({ type: 'PREV_TRACK' }); }
+  }, [isInSearchQueue, playPrevSearch, dispatch]);
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
@@ -429,13 +441,8 @@ export default function Player({ hideMini = false }) {
           else          scHiddenRef.current?.pause?.();
         }
       }
-      if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
-      if(cmd==='prev') {
-        dispatch({type:'PREV_TRACK'});
-        // For external providers, seek to 0 directly
-        if (provider === 'youtube')    ytHiddenRef.current?.seekTo?.(0);
-        if (provider === 'soundcloud') scHiddenRef.current?.seekTo?.(0);
-      }
+      if(cmd==='next') handleNext();
+      if(cmd==='prev') handlePrev();
       if(cmd==='stop')   dispatch({type:'STOP'});
       if(cmd==='expand'){
         // On native iOS, only forward to Swift — don't open web FullPlayer
@@ -481,7 +488,7 @@ export default function Player({ hideMini = false }) {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuPlayerCmd; 
     };
-  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying]);
+  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying, handleNext, handlePrev]);
   useEffect(() => {
     if (currentTrack) {
       postNative({
@@ -537,7 +544,7 @@ export default function Player({ hideMini = false }) {
     <>
       {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
       {!hideMini && !exp && !isNative() && (
-        <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch}/>
+        <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
       )}
       {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
            transform: scale(0.001) shrinks the hardware video layer to near-zero so it can't
@@ -554,7 +561,7 @@ export default function Player({ hideMini = false }) {
               dispatch({ type: 'SET_PROGRESS', value: ytProg });
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
             }}
-            onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+            onEnded={() => handleNext()}
           />
         </div>
       )}
@@ -571,7 +578,7 @@ export default function Player({ hideMini = false }) {
               dispatch({ type: 'SET_PROGRESS', value: scProg });
               if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
             }}
-            onEnded={() => dispatch({ type: 'NEXT_TRACK' })}
+            onEnded={() => handleNext()}
           />
         </div>
       )}
@@ -579,7 +586,8 @@ export default function Player({ hideMini = false }) {
       {!isNative() && (
         <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
           open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
-          provider={provider} providerItemId={providerItemId} volume={volume}/>
+          provider={provider} providerItemId={providerItemId} volume={volume}
+          onNext={handleNext} onPrev={handlePrev}/>
       )}
     </>
   );

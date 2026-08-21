@@ -19,7 +19,7 @@ export default function Search() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
-  const { playTrack, playYouTube, playSoundCloud } = usePlayer();
+  const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
 
   // Load history from localStorage
   useEffect(() => {
@@ -155,6 +155,63 @@ export default function Search() {
     setHistory([]);
     localStorage.removeItem('kyoyu-search-history');
   };
+
+  // Build a unified search queue from all visible external results (in display order)
+  function buildSearchQueue() {
+    const queue = [];
+    // YouTube results
+    if (externalResults.youtube) {
+      for (const yt of externalResults.youtube) {
+        queue.push({
+          id: yt.id || `yt-${yt.videoId}`,
+          title: yt.title,
+          artistName: yt.channelTitle,
+          artworkUrl: yt.thumbnail,
+          duration: yt.duration || 0,
+          provider: 'youtube',
+          providerItemId: yt.videoId,
+        });
+      }
+    }
+    // SoundCloud results
+    if (externalResults.soundcloud) {
+      for (const sc of externalResults.soundcloud) {
+        queue.push({
+          id: sc.id || `sc-${sc.trackId}`,
+          title: sc.title,
+          artistName: sc.artistName,
+          artworkUrl: sc.artworkUrl,
+          duration: sc.duration || 0,
+          provider: 'soundcloud',
+          providerItemId: sc.permalinkUrl,
+        });
+      }
+    }
+    // Bandcamp results
+    if (externalResults.bandcamp) {
+      for (const bc of externalResults.bandcamp) {
+        queue.push({
+          id: bc.id || `bc-${bc.trackId}`,
+          title: bc.title,
+          artistName: bc.artistName,
+          artworkUrl: bc.artworkUrl,
+          duration: 0,
+          provider: 'bandcamp',
+          providerItemId: bc.trackUrl,
+        });
+      }
+    }
+    return queue;
+  }
+
+  // Play a search result and set up the queue for next/prev
+  function handleSearchPlay(item) {
+    const queue = buildSearchQueue();
+    const idx = queue.findIndex(q => q.id === item.id);
+    setSearchQueue(queue, idx >= 0 ? idx : 0);
+    playSearchItem(item);
+    window.__kyoyuPlayerCmd?.('expand');
+  }
 
   // Process and Group Results
   const q = query.toLowerCase();
@@ -466,16 +523,15 @@ export default function Search() {
           <div className="search-section">
             {externalResults.youtube.map(yt => (
               <div key={yt.id} className="search-result-row search-external-row"
-                onClick={() => {
-                  playYouTube(yt.videoId, {
-                    title: yt.title,
-                    channelTitle: yt.channelTitle,
-                    thumbnail: yt.thumbnail,
-                    duration: yt.duration,
-                  });
-                  // Auto-expand the full player
-                  window.__kyoyuPlayerCmd?.('expand');
-                }}>
+                onClick={() => handleSearchPlay({
+                  id: yt.id || `yt-${yt.videoId}`,
+                  title: yt.title,
+                  artistName: yt.channelTitle,
+                  artworkUrl: yt.thumbnail,
+                  duration: yt.duration || 0,
+                  provider: 'youtube',
+                  providerItemId: yt.videoId,
+                })}>
                 <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
                   {yt.thumbnail ? (
                     <img src={yt.thumbnail} alt={yt.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -505,17 +561,15 @@ export default function Search() {
           <div className="search-section">
             {externalResults.soundcloud.map(sc => (
               <div key={sc.id} className="search-result-row search-external-row"
-                onClick={() => {
-                  playSoundCloud(sc.permalinkUrl, {
-                    trackId: sc.trackId,
-                    title: sc.title,
-                    artistName: sc.artistName,
-                    artworkUrl: sc.artworkUrl,
-                    duration: sc.duration,
-                  });
-                  // Auto-expand the full player
-                  window.__kyoyuPlayerCmd?.('expand');
-                }}>
+                onClick={() => handleSearchPlay({
+                  id: sc.id || `sc-${sc.trackId}`,
+                  title: sc.title,
+                  artistName: sc.artistName,
+                  artworkUrl: sc.artworkUrl,
+                  duration: sc.duration || 0,
+                  provider: 'soundcloud',
+                  providerItemId: sc.permalinkUrl,
+                })}>
                 <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
                   {sc.artworkUrl ? (
                     <img src={sc.artworkUrl} alt={sc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -545,27 +599,20 @@ export default function Search() {
             {externalResults.bandcamp.map(bc => (
               <div key={bc.id} className="search-result-row search-external-row"
                 style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
-                onClick={async () => {
-                  if (bandcampLoading) return; // prevent double-click
+                onClick={() => {
+                  if (bandcampLoading) return;
                   setBandcampLoading(bc.trackUrl);
-                  try {
-                    const resolved = await resolveBandcamp(bc.trackUrl);
-                    if (resolved && resolved.streamUrl) {
-                      playTrack({
-                        id: bc.id,
-                        title: resolved.title || bc.title,
-                        artistName: resolved.artist || bc.artistName,
-                        releaseCover: resolved.artworkUrl || bc.artworkUrl,
-                        src: resolved.streamUrl,
-                        duration: resolved.duration || 0,
-                      });
-                      window.__kyoyuPlayerCmd?.('expand');
-                    }
-                  } catch (err) {
-                    console.warn('Bandcamp play failed:', err);
-                  } finally {
-                    setBandcampLoading(null);
-                  }
+                  handleSearchPlay({
+                    id: bc.id || `bc-${bc.trackId}`,
+                    title: bc.title,
+                    artistName: bc.artistName,
+                    artworkUrl: bc.artworkUrl,
+                    duration: 0,
+                    provider: 'bandcamp',
+                    providerItemId: bc.trackUrl,
+                  });
+                  // Clear loading after a delay (resolve happens in PlayerContext)
+                  setTimeout(() => setBandcampLoading(null), 3000);
                 }}>
                 <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
                   {bc.artworkUrl ? (
