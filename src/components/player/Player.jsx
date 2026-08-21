@@ -496,7 +496,7 @@ export default function Player({ hideMini = false }) {
         playing: isPlaying,
         title: currentTrack.title || '',
         artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
-        trackId: String(currentTrack.id || '') + '?ts=' + Date.now(),
+        trackId: String(currentTrack.id || ''),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
         artist: currentTrack.artistName || currentTrack.artist || '',
         provider: provider || 'native'
