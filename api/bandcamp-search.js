@@ -84,15 +84,22 @@ export default async function handler(req, res) {
 
     const results = items
       .filter(item => item.type === 't') // tracks only
-      .map(item => ({
-        trackId: item.id,
-        title: item.name || '',
-        artistName: item.band_name || '',
-        artworkUrl: item.img ? item.img.replace(/_\d+\./, '_10.') : '', // Higher res
-        trackUrl: item.item_url_path || '',
-        albumName: item.album_name || '',
-        albumId: item.album_id || null,
-      }));
+      .map(item => {
+        // Bandcamp artwork URLs use 'a' prefix: /img/a{art_id}_{size}.jpg
+        let artworkUrl = '';
+        if (item.art_id) {
+          artworkUrl = `https://f4.bcbits.com/img/a${item.art_id}_10.jpg`;
+        }
+        return {
+          trackId: item.id,
+          title: item.name || '',
+          artistName: item.band_name || '',
+          artworkUrl,
+          trackUrl: item.item_url_path || '',
+          albumName: item.album_name || '',
+          albumId: item.album_id || null,
+        };
+      });
 
     // Cache results
     searchCache.set(cacheKey, { results, timestamp: now });
