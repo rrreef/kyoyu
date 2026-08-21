@@ -124,7 +124,7 @@ function useScrub(hitRef, fillRef, thumbRef, onMovePct, onEndPct) {
 }
 
 /* ── Progress scrubber ── */
-const Scrubber = memo(function Scrubber({ progress, duration, onSeek }) {
+const Scrubber = memo(function Scrubber({ progress, duration, onSeek, buffering }) {
   const hitRef   = useRef(null);
   const fillRef  = useRef(null);
   const thumbRef = useRef(null);
@@ -151,6 +151,9 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek }) {
   return (
     <div className="fp-scrub">
       <div ref={fillRef}  className="fp-scrub-fill"  style={{ width:`${p}%` }}/>
+      {buffering && (
+        <div className="fp-scrub-loading" style={{ left:`${p}%`, width:`${100-p}%` }}/>
+      )}
       <div ref={thumbRef} className="fp-scrub-thumb" style={{ left:`${p}%`  }}/>
       <div ref={hitRef}   className="fp-scrub-hit"/>
     </div>
@@ -163,13 +166,13 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek }) {
     on every progress tick, causing React to unmount/remount Scrubber
     and tear down its event listeners each second)                    ── */
 const PlayerControls = memo(function PlayerControls({
-  progress, duration, isPlaying, dispatch, onSeek, showQueue, setShowQueue
+  progress, duration, isPlaying, dispatch, onSeek, showQueue, setShowQueue, buffering
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
   return (
     <>
       <div className="fp-scrub-wrap">
-        <Scrubber progress={progress} duration={duration} onSeek={onSeek}/>
+        <Scrubber progress={progress} duration={duration} onSeek={onSeek} buffering={buffering}/>
         <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
       </div>
       <div className="fp-ctrls">
@@ -223,6 +226,30 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const startY   = useRef(0);
   const [showQueue, setShowQueue] = useState(false);
   const [accent,    setAccent]    = useState(() => _fpColorCache.get(track?.releaseCover) ?? null);
+  const [buffering, setBuffering] = useState(false);
+  const seekTargetRef = useRef(null);
+  const lastProgressRef = useRef(progress);
+
+  // Clear buffering once progress starts moving after a seek
+  useEffect(() => {
+    if (!buffering) { lastProgressRef.current = progress; return; }
+    // Progress changed meaningfully since seek — audio has resumed
+    if (seekTargetRef.current !== null) {
+      const diff = Math.abs(progress - lastProgressRef.current);
+      if (diff > 0.3) {
+        setBuffering(false);
+        seekTargetRef.current = null;
+      }
+    }
+    lastProgressRef.current = progress;
+  }, [progress, buffering]);
+
+  // Fallback: clear buffering after 3 seconds max
+  useEffect(() => {
+    if (!buffering) return;
+    const t = setTimeout(() => setBuffering(false), 3000);
+    return () => clearTimeout(t);
+  }, [buffering]);
 
   /* Extract dominant colour whenever artwork changes — instant from cache */
   useEffect(() => {
@@ -260,6 +287,9 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
 
   // Provider-aware seek: route to YouTube, SoundCloud, or native audio
   const handleSeek = useCallback((seconds) => {
+    setBuffering(true);
+    seekTargetRef.current = seconds;
+    lastProgressRef.current = progress;
     if (provider === 'youtube' && ytRef.current?.seekTo) {
       ytRef.current.seekTo(seconds);
       dispatch({ type: 'SET_PROGRESS', value: seconds });
@@ -269,11 +299,11 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     } else {
       seekTo(seconds);
     }
-  }, [provider, seekTo, dispatch]);
+  }, [provider, seekTo, dispatch, progress]);
 
   const controls = <PlayerControls progress={progress} duration={duration}
     isPlaying={isPlaying} dispatch={dispatch} onSeek={handleSeek}
-    showQueue={showQueue} setShowQueue={setShowQueue}/>;
+    showQueue={showQueue} setShowQueue={setShowQueue} buffering={buffering}/>;
 
   /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
   const fpStyle = (() => {
@@ -453,6 +483,16 @@ export default function Player({ hideMini = false }) {
     }
     return () => { delete window.__kyoyuYTProgress; };
   }, [provider, progress, duration]);
+
+  // Handle _restart for external providers (PREV_TRACK → seek to 0)
+  useEffect(() => {
+    if (!currentTrack?._restart) return;
+    if (provider === 'youtube') {
+      ytHiddenRef.current?.seekTo?.(0);
+    } else if (provider === 'soundcloud') {
+      scHiddenRef.current?.seekTo?.(0);
+    }
+  }, [currentTrack?._restart, provider]);
 
   if(!currentTrack) return null;
 

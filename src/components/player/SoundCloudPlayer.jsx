@@ -161,6 +161,14 @@ const SoundCloudPlayer = forwardRef(({
       } else {
         widgetRef.current.pause();
       }
+    } else if (isPlaying) {
+      // Widget not ready yet — retry after short delay
+      const retryTimer = setTimeout(() => {
+        if (widgetRef.current && isReadyRef.current) {
+          widgetRef.current.play();
+        }
+      }, 500);
+      return () => clearTimeout(retryTimer);
     }
   }, [isPlaying]);
 

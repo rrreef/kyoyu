@@ -58,7 +58,10 @@ function playerReducer(state, action) {
       return { ...state, repeatMode: modes[(modes.indexOf(state.repeatMode)+1)%modes.length] };
     }
     case 'NEXT_TRACK': {
-      if (!state.queue.length) return state;
+      if (!state.queue.length) {
+        // No queue — stop playback (e.g. end of YT/SC/BC track)
+        return { ...state, isPlaying: false };
+      }
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
       if (idx < 0) return state;
       // At the last track — do nothing
@@ -66,7 +69,10 @@ function playerReducer(state, action) {
       return { ...state, currentTrack: { ...state.queue[idx + 1] }, progress:0, duration:0, isPlaying:true };
     }
     case 'PREV_TRACK': {
-      if (!state.queue.length) return state;
+      if (!state.queue.length) {
+        // No queue — restart current track from beginning
+        return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
+      }
       if (state.progress > 3) {
         // Restart current track
         return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };

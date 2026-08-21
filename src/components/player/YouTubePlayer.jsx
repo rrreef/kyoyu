@@ -176,6 +176,14 @@ const YouTubePlayer = forwardRef(({
       } else if (!isPlaying && state === YT.PlayerState.PLAYING) {
         playerRef.current.pauseVideo();
       }
+    } else if (isPlaying) {
+      // Player not ready yet — retry after short delay
+      const retryTimer = setTimeout(() => {
+        if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+          playerRef.current.playVideo();
+        }
+      }, 500);
+      return () => clearTimeout(retryTimer);
     }
   }, [isPlaying]);
 
