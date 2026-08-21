@@ -179,8 +179,19 @@ const SoundCloudPlayer = forwardRef(({
     }
   }, [volume]);
 
-  // Expose seekTo
+  // Expose play/pause/seekTo for direct control
   useImperativeHandle(ref, () => ({
+    play: () => {
+      if (widgetRef.current && isReadyRef.current) {
+        widgetRef.current.play();
+      }
+    },
+    pause: () => {
+      if (widgetRef.current && isReadyRef.current) {
+        widgetRef.current.pause();
+      }
+    },
+    isReady: () => isReadyRef.current,
     seekTo: (seconds) => {
       if (widgetRef.current && isReadyRef.current) {
         widgetRef.current.seekTo(seconds * 1000); // seconds → ms

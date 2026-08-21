@@ -229,11 +229,27 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const [buffering, setBuffering] = useState(false);
   const seekTargetRef = useRef(null);
   const lastProgressRef = useRef(progress);
+  const trackIdRef = useRef(track?.id);
 
-  // Clear buffering once progress starts moving after a seek
+  // When a new track starts, show loading until progress begins
+  useEffect(() => {
+    if (track?.id !== trackIdRef.current) {
+      trackIdRef.current = track?.id;
+      setBuffering(true);
+      seekTargetRef.current = null;
+      lastProgressRef.current = 0;
+    }
+  }, [track?.id]);
+
+  // Clear buffering once progress starts moving
   useEffect(() => {
     if (!buffering) { lastProgressRef.current = progress; return; }
-    // Progress changed meaningfully since seek — audio has resumed
+    // For initial load: any progress > 0.5s means audio is flowing
+    if (seekTargetRef.current === null && progress > 0.5) {
+      setBuffering(false);
+      return;
+    }
+    // For seek: progress changed meaningfully from where we were
     if (seekTargetRef.current !== null) {
       const diff = Math.abs(progress - lastProgressRef.current);
       if (diff > 0.3) {
@@ -244,10 +260,10 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     lastProgressRef.current = progress;
   }, [progress, buffering]);
 
-  // Fallback: clear buffering after 3 seconds max
+  // Fallback: clear buffering after 5 seconds max (external players can be slow)
   useEffect(() => {
     if (!buffering) return;
-    const t = setTimeout(() => setBuffering(false), 3000);
+    const t = setTimeout(() => setBuffering(false), 5000);
     return () => clearTimeout(t);
   }, [buffering]);
 
@@ -401,9 +417,25 @@ export default function Player({ hideMini = false }) {
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
     window.__kyoyuPlayerCmd = (cmd, val)=>{
-      if(cmd==='toggle') dispatch({type:'TOGGLE_PLAY'});
+      if(cmd==='toggle') {
+        // Directly control external players for instant response
+        const willPlay = !isPlaying; // state BEFORE toggle
+        dispatch({type:'TOGGLE_PLAY'});
+        if (provider === 'youtube') {
+          if (willPlay) ytHiddenRef.current?.play?.();
+          else          ytHiddenRef.current?.pause?.();
+        } else if (provider === 'soundcloud') {
+          if (willPlay) scHiddenRef.current?.play?.();
+          else          scHiddenRef.current?.pause?.();
+        }
+      }
       if(cmd==='next')   dispatch({type:'NEXT_TRACK'});
-      if(cmd==='prev')   dispatch({type:'PREV_TRACK'});
+      if(cmd==='prev') {
+        dispatch({type:'PREV_TRACK'});
+        // For external providers, seek to 0 directly
+        if (provider === 'youtube')    ytHiddenRef.current?.seekTo?.(0);
+        if (provider === 'soundcloud') scHiddenRef.current?.seekTo?.(0);
+      }
       if(cmd==='stop')   dispatch({type:'STOP'});
       if(cmd==='expand'){
         // On native iOS, only forward to Swift — don't open web FullPlayer
@@ -449,7 +481,7 @@ export default function Player({ hideMini = false }) {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuPlayerCmd; 
     };
-  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider]);
+  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying]);
   useEffect(() => {
     if (currentTrack) {
       postNative({

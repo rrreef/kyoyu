@@ -194,8 +194,19 @@ const YouTubePlayer = forwardRef(({
     }
   }, [volume]);
 
-  // Expose seekTo
+  // Expose play/pause/seekTo for direct control
   useImperativeHandle(ref, () => ({
+    play: () => {
+      if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+        playerRef.current.playVideo();
+      }
+    },
+    pause: () => {
+      if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+        playerRef.current.pauseVideo();
+      }
+    },
+    isReady: () => !!(playerRef.current && typeof playerRef.current.getPlayerState === 'function'),
     seekTo: (seconds) => {
       if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
         playerRef.current.seekTo(seconds, true);
