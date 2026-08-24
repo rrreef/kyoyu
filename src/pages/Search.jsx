@@ -401,35 +401,35 @@ export default function Search() {
       {hasResults && (
         <div className="search-results-list">
           
-          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Albums</div>}
               {albums.map(renderAlbumRow)}
             </div>
           )}
 
-          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Titles</div>}
               {titleList.map(t => renderTrackRow(t, false))}
             </div>
           )}
 
-          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Artists</div>}
               {artists.map(renderArtistRow)}
             </div>
           )}
 
-          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Labels</div>}
               {labels.map(renderLabelRow)}
             </div>
           )}
 
-          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Podcasts</div>}
               {podcastList.map(t => renderTrackRow(t, true))}
