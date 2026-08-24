@@ -16,6 +16,7 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeProvider, setActiveProvider] = useState('all');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
@@ -59,12 +60,21 @@ export default function Search() {
     };
     document.addEventListener('kyoyu-search-filter', onFilter);
 
+    // 3b. Listen for provider filter changes from native SearchProviderFilterBar
+    const onProviderFilter = (e) => {
+      setActiveProvider(e.detail || 'all');
+    };
+    document.addEventListener('kyoyu-provider-filter', onProviderFilter);
+
     // 4. Check if native already set a pending query before React mounted
     if (window.__kyoyuSearchQuery) {
       setQuery(window.__kyoyuSearchQuery);
     }
     if (window.__kyoyuSearchFilter) {
       setActiveFilter(window.__kyoyuSearchFilter);
+    }
+    if (window.__kyoyuProviderFilter) {
+      setActiveProvider(window.__kyoyuProviderFilter);
     }
 
     // 5. Listen for exact keyboard height changes
@@ -92,6 +102,7 @@ export default function Search() {
     return () => {
       document.removeEventListener('kyoyu-search', onSearch);
       document.removeEventListener('kyoyu-search-filter', onFilter);
+      document.removeEventListener('kyoyu-provider-filter', onProviderFilter);
       window.removeEventListener('kyoyu-keyboard-change', onKeyboard);
     };
   }, []);
@@ -100,11 +111,12 @@ export default function Search() {
   useEffect(() => {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
-      // 114px is the top of the filter card. 128px padding creates a perfect 14px gap.
-      // When open, the filter card moves up by keyboardHeight, so we add exactly that!
+      // 114px was the top of the first filter card. 128px padding created a perfect 14px gap.
+      // Now we have a second filter bar stacked on top (33px height + 8px gap = 41px extra).
+      // So we increase padding to 169px (128 + 41).
       const paddingStyle = keyboardHeight > 0 
-        ? (keyboardHeight + 128) + 'px' 
-        : '128px';
+        ? (keyboardHeight + 169) + 'px' 
+        : '169px';
       mainContent.style.paddingBottom = paddingStyle;
       mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
     }
@@ -390,35 +402,35 @@ export default function Search() {
       {hasResults && (
         <div className="search-results-list">
           
-          {(activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
+          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Albums</div>}
               {albums.map(renderAlbumRow)}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
+          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Titles</div>}
               {titleList.map(t => renderTrackRow(t, false))}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
+          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Artists</div>}
               {artists.map(renderArtistRow)}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
+          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Labels</div>}
               {labels.map(renderLabelRow)}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
+          {(activeProvider === 'all' || activeProvider === 'native') && (activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Podcasts</div>}
               {podcastList.map(t => renderTrackRow(t, true))}
@@ -439,7 +451,7 @@ export default function Search() {
       )}
 
       {/* External Results from Discogs */}
-      {hasExternal && (activeFilter === 'all') && (
+      {hasExternal && (activeFilter === 'all') && (activeProvider === 'all' || activeProvider === 'discogs') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header">
             Discogs
@@ -515,7 +527,7 @@ export default function Search() {
       )}
 
       {/* ── YouTube Results ── */}
-      {externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (
+      {externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'youtube') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
             YouTube
@@ -553,7 +565,7 @@ export default function Search() {
       )}
 
       {/* ── SoundCloud Results ── */}
-      {externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (
+      {externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
@@ -590,7 +602,7 @@ export default function Search() {
         </div>
       )}
       {/* ── Bandcamp Results ── */}
-      {externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (
+      {externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'bandcamp') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
             Bandcamp
