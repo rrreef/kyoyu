@@ -111,12 +111,11 @@ export default function Search() {
   useEffect(() => {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
-      // 114px was the top of the first filter card. 128px padding created a perfect 14px gap.
-      // Now we have a second filter bar stacked on top (33px height + 8px gap = 41px extra).
-      // So we increase padding to 169px (128 + 41).
+      // 114px is the top of the filter card. 128px padding creates a perfect 14px gap.
+      // When open, the filter card moves up by keyboardHeight, so we add exactly that!
       const paddingStyle = keyboardHeight > 0 
-        ? (keyboardHeight + 169) + 'px' 
-        : '169px';
+        ? (keyboardHeight + 128) + 'px' 
+        : '128px';
       mainContent.style.paddingBottom = paddingStyle;
       mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
     }
