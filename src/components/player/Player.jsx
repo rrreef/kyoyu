@@ -543,17 +543,17 @@ export default function Player({ hideMini = false }) {
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
       )}
-      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
-           transform: scale(0.001) shrinks the hardware video layer to near-zero so it can't
-           bleed through the native SwiftUI glass overlay. */}
+      {/* YouTube player for native iOS — positioned offscreen below viewport.
+           Must have real dimensions (not clipped/scaled to zero) so iOS can grab
+           the video surface for Picture-in-Picture background playback. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 2, height: 2, transform: 'scale(0.001)', transformOrigin: 'bottom right', clipPath: 'inset(100%)', overflow: 'hidden', pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: -200, left: 0, width: 320, height: 180, overflow: 'hidden', pointerEvents: 'none', opacity: 0.01 }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
             isPlaying={isPlaying}
             volume={volume}
-            audioOnly={true}
+            audioOnly={false}
             onStateChange={({ progress: ytProg, duration: ytDur }) => {
               dispatch({ type: 'SET_PROGRESS', value: ytProg });
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });

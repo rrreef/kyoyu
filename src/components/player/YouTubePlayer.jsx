@@ -103,6 +103,14 @@ const YouTubePlayer = forwardRef(({
               if (volume !== undefined) {
                 event.target.setVolume(volume * 100);
               }
+              // Ensure the iframe allows PiP for background playback on iOS
+              try {
+                const iframe = event.target.getIframe();
+                if (iframe) {
+                  iframe.setAttribute('allow', 'autoplay; picture-in-picture; encrypted-media');
+                  iframe.setAttribute('allowfullscreen', '');
+                }
+              } catch(e) {}
               if (onReady) onReady();
               // If it should be playing right away
               if (isPlaying) {
