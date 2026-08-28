@@ -87,6 +87,7 @@ async function handleResolve(body, res) {
   try {
     const token = await getAccessToken();
 
+    // Fetch track details
     const trackRes = await fetch(`https://api.soundcloud.com/tracks/${trackId}`, {
       headers: {
         'Accept': 'application/json; charset=utf-8',
@@ -105,36 +106,78 @@ async function handleResolve(body, res) {
 
     const track = await trackRes.json();
 
-    // Extract stream URL from media transcodings
-    // Prefer progressive (direct MP3 URL) over HLS
     let streamUrl = null;
+
+    // ── Method 1: media transcodings (modern API) ──
     const transcodings = track.media?.transcodings || [];
+    if (transcodings.length > 0) {
+      // Prefer progressive MP3, then HLS MP3, then any
+      const progressive = transcodings.find(t =>
+        t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('mpeg')
+      );
+      const hlsMpeg = transcodings.find(t =>
+        t.format?.protocol === 'hls' && t.format?.mime_type?.includes('mpeg')
+      );
+      const hlsAny = transcodings.find(t =>
+        t.format?.protocol === 'hls'
+      );
+      const chosen = progressive || hlsMpeg || hlsAny || transcodings[0];
 
-    const progressive = transcodings.find(t =>
-      t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('mpeg')
-    );
-    const hls = transcodings.find(t =>
-      t.format?.protocol === 'hls' && t.format?.mime_type?.includes('mpeg')
-    );
-    const anyTranscoding = progressive || hls || transcodings[0];
-
-    if (anyTranscoding?.url) {
-      const streamRes = await fetch(`${anyTranscoding.url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
-        headers: { 'Authorization': `OAuth ${token}` },
-      });
-
-      if (streamRes.ok) {
-        const streamData = await streamRes.json();
-        streamUrl = streamData.url;
+      if (chosen?.url) {
+        try {
+          // Transcoding URLs need OAuth token to resolve
+          const sep = chosen.url.includes('?') ? '&' : '?';
+          const streamRes = await fetch(`${chosen.url}${sep}client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
+            headers: { 'Authorization': `OAuth ${token}` },
+            redirect: 'follow',
+          });
+          if (streamRes.ok) {
+            const streamData = await streamRes.json();
+            if (streamData.url) streamUrl = streamData.url;
+          }
+        } catch (e) {
+          console.warn('SoundCloud transcoding resolve failed:', e.message);
+        }
       }
     }
 
-    // Fallback: try the legacy stream_url field
+    // ── Method 2: legacy stream_url redirect ──
     if (!streamUrl && track.stream_url) {
-      streamUrl = `${track.stream_url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`;
+      try {
+        const legacyRes = await fetch(track.stream_url, {
+          headers: { 'Authorization': `OAuth ${token}` },
+          redirect: 'manual', // Don't follow — we want the redirect URL
+        });
+        const location = legacyRes.headers.get('location');
+        if (location) {
+          streamUrl = location;
+        }
+      } catch (e) {
+        console.warn('SoundCloud legacy stream resolve failed:', e.message);
+      }
+    }
+
+    // ── Method 3: construct stream URL from track ID ──
+    if (!streamUrl) {
+      try {
+        const directRes = await fetch(
+          `https://api.soundcloud.com/tracks/${trackId}/stream`,
+          {
+            headers: { 'Authorization': `OAuth ${token}` },
+            redirect: 'manual',
+          }
+        );
+        const location = directRes.headers.get('location');
+        if (location) {
+          streamUrl = location;
+        }
+      } catch (e) {
+        console.warn('SoundCloud direct stream resolve failed:', e.message);
+      }
     }
 
     if (!streamUrl) {
+      console.error('SoundCloud: all stream resolution methods failed for track', trackId);
       return res.status(200).json({ error: 'No stream URL available for this track' });
     }
 
