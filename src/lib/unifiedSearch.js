@@ -260,6 +260,27 @@ export async function resolveBandcamp(trackUrl) {
 }
 
 /**
+ * Resolve a SoundCloud track ID to get the audio stream URL.
+ * Called when user clicks play on a SoundCloud result.
+ */
+export async function resolveSoundCloud(trackId) {
+  try {
+    const res = await fetch('/api/soundcloud-resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackId }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.error || !data.streamUrl) return null;
+    return data;
+  } catch (err) {
+    console.warn('SoundCloud resolve failed:', err);
+    return null;
+  }
+}
+
+/**
  * Run unified search: native catalog + Discogs + YouTube + SoundCloud + Bandcamp, merged and deduplicated.
  * Native results always come first.
  * 

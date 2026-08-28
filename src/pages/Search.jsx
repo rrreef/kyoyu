@@ -195,6 +195,7 @@ export default function Search() {
           duration: sc.duration || 0,
           provider: 'soundcloud',
           providerItemId: sc.permalinkUrl,
+          scTrackId: sc.trackId,
         });
       }
     }
@@ -580,6 +581,7 @@ export default function Search() {
                   duration: sc.duration || 0,
                   provider: 'soundcloud',
                   providerItemId: sc.permalinkUrl,
+                  scTrackId: sc.trackId,
                 })}>
                 <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
                   {sc.artworkUrl ? (
