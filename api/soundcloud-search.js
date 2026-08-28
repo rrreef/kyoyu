@@ -1,6 +1,8 @@
 // POST /api/soundcloud-search
-// Body: { query: string, limit?: number }
-// Returns: { results: [...] }
+// Handles two actions:
+//   { action: 'search', query: string, limit?: number }  → search tracks
+//   { action: 'resolve', trackId: number }                → resolve stream URL
+// Default action is 'search' for backward compatibility.
 //
 // Uses official SoundCloud API with OAuth2 client_credentials flow.
 // Requires SOUNDCLOUD_CLIENT_ID and SOUNDCLOUD_CLIENT_SECRET in env.
@@ -15,6 +17,10 @@ const RATE_WINDOW = 60000;
 // Cached OAuth token
 let cachedToken = null;
 let tokenExpiresAt = 0;
+
+// Stream URL cache: trackId → { data, timestamp }
+const resolveCache = new Map();
+const RESOLVE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes (stream tokens expire ~15-30min)
 
 /**
  * Get an OAuth2 access token using client_credentials grant.
@@ -57,44 +63,118 @@ async function getAccessToken() {
   return cachedToken;
 }
 
-export default async function handler(req, res) {
-  // CORS
-  const origin = req.headers.origin;
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+/**
+ * Resolve a SoundCloud track ID to a direct audio stream URL.
+ */
+async function handleResolve(body, res) {
+  const trackId = body?.trackId;
+  if (!trackId) {
+    return res.status(400).json({ error: 'trackId is required' });
   }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // Rate limit
   const now = Date.now();
-  requestLog = requestLog.filter(t => now - t < RATE_WINDOW);
-  if (requestLog.length >= RATE_LIMIT) {
-    return res.status(429).json({ error: 'Rate limit reached' });
-  }
-  requestLog.push(now);
+  const cacheKey = String(trackId);
 
-  let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  // Check cache
+  if (resolveCache.has(cacheKey)) {
+    const cached = resolveCache.get(cacheKey);
+    if (now - cached.timestamp < RESOLVE_CACHE_TTL) {
+      return res.status(200).json(cached.data);
+    }
+    resolveCache.delete(cacheKey);
   }
 
+  try {
+    const token = await getAccessToken();
+
+    const trackRes = await fetch(`https://api.soundcloud.com/tracks/${trackId}`, {
+      headers: {
+        'Accept': 'application/json; charset=utf-8',
+        'Authorization': `OAuth ${token}`,
+      },
+    });
+
+    if (!trackRes.ok) {
+      if (trackRes.status === 401) {
+        cachedToken = null;
+        tokenExpiresAt = 0;
+      }
+      console.error('SoundCloud track fetch error:', trackRes.status);
+      return res.status(200).json({ error: 'Failed to fetch track' });
+    }
+
+    const track = await trackRes.json();
+
+    // Extract stream URL from media transcodings
+    // Prefer progressive (direct MP3 URL) over HLS
+    let streamUrl = null;
+    const transcodings = track.media?.transcodings || [];
+
+    const progressive = transcodings.find(t =>
+      t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('mpeg')
+    );
+    const hls = transcodings.find(t =>
+      t.format?.protocol === 'hls' && t.format?.mime_type?.includes('mpeg')
+    );
+    const anyTranscoding = progressive || hls || transcodings[0];
+
+    if (anyTranscoding?.url) {
+      const streamRes = await fetch(`${anyTranscoding.url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
+        headers: { 'Authorization': `OAuth ${token}` },
+      });
+
+      if (streamRes.ok) {
+        const streamData = await streamRes.json();
+        streamUrl = streamData.url;
+      }
+    }
+
+    // Fallback: try the legacy stream_url field
+    if (!streamUrl && track.stream_url) {
+      streamUrl = `${track.stream_url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`;
+    }
+
+    if (!streamUrl) {
+      return res.status(200).json({ error: 'No stream URL available for this track' });
+    }
+
+    const result = {
+      streamUrl,
+      title: track.title || '',
+      artist: track.user?.username || '',
+      artworkUrl: (track.artwork_url || track.user?.avatar_url || '').replace('-large', '-t500x500'),
+      duration: Math.round((track.duration || 0) / 1000),
+      genre: track.genre || '',
+      trackId: track.id,
+    };
+
+    // Cache
+    resolveCache.set(cacheKey, { data: result, timestamp: now });
+
+    // Evict old entries
+    if (resolveCache.size > 500) {
+      const oldest = [...resolveCache.entries()]
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+        .slice(0, 100);
+      oldest.forEach(([key]) => resolveCache.delete(key));
+    }
+
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('SoundCloud resolve error:', err);
+    return res.status(200).json({ error: 'Failed to resolve track' });
+  }
+}
+
+/**
+ * Search SoundCloud tracks.
+ */
+async function handleSearch(body, res) {
   const query = body?.query;
   const limit = Math.min(parseInt(body?.limit) || 50, 50);
 
   if (!query || typeof query !== 'string' || query.length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
-  }
-
-  // Check credentials exist
-  if (!process.env.SOUNDCLOUD_CLIENT_ID || !process.env.SOUNDCLOUD_CLIENT_SECRET) {
-    console.warn('SoundCloud credentials not configured');
-    return res.status(200).json({ results: [] });
   }
 
   try {
@@ -117,7 +197,6 @@ export default async function handler(req, res) {
     if (!scRes.ok) {
       const errText = await scRes.text();
       console.error('SoundCloud API error:', scRes.status, errText);
-      // If token expired, clear cache and retry once
       if (scRes.status === 401) {
         cachedToken = null;
         tokenExpiresAt = 0;
@@ -146,4 +225,46 @@ export default async function handler(req, res) {
     console.error('SoundCloud search error:', err);
     return res.status(200).json({ results: [] });
   }
+}
+
+export default async function handler(req, res) {
+  // CORS
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Rate limit
+  const now = Date.now();
+  requestLog = requestLog.filter(t => now - t < RATE_WINDOW);
+  if (requestLog.length >= RATE_LIMIT) {
+    return res.status(429).json({ error: 'Rate limit reached' });
+  }
+  requestLog.push(now);
+
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  }
+
+  // Check credentials exist
+  if (!process.env.SOUNDCLOUD_CLIENT_ID || !process.env.SOUNDCLOUD_CLIENT_SECRET) {
+    console.warn('SoundCloud credentials not configured');
+    return res.status(200).json({ results: [] });
+  }
+
+  // Route by action: 'resolve' for stream URL, default is 'search'
+  const action = body?.action || 'search';
+
+  if (action === 'resolve') {
+    return handleResolve(body, res);
+  }
+  return handleSearch(body, res);
 }

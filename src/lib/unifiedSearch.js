@@ -265,10 +265,10 @@ export async function resolveBandcamp(trackUrl) {
  */
 export async function resolveSoundCloud(trackId) {
   try {
-    const res = await fetch('/api/soundcloud-resolve', {
+    const res = await fetch('/api/soundcloud-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trackId }),
+      body: JSON.stringify({ action: 'resolve', trackId }),
     });
     if (!res.ok) return null;
     const data = await res.json();
