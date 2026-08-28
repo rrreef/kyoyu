@@ -543,11 +543,11 @@ export default function Player({ hideMini = false }) {
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
       )}
-      {/* YouTube player for native iOS — positioned offscreen below viewport.
-           Must have real dimensions (not clipped/scaled to zero) so iOS can grab
-           the video surface for Picture-in-Picture background playback. */}
+      {/* YouTube player for native iOS — positioned at bottom of viewport behind
+           the native SwiftUI overlay. Must be in-viewport and have real dimensions
+           so iOS can activate Picture-in-Picture for background playback. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', bottom: -200, left: 0, width: 320, height: 180, overflow: 'hidden', pointerEvents: 'none', opacity: 0.01 }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, width: 320, height: 180, zIndex: -1, overflow: 'hidden', pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
