@@ -504,7 +504,7 @@ export default function Player({ hideMini = false }) {
     } else {
       postNative({ visible: false, playing: false });
     }
-  }, [currentTrack, isPlaying, likedUploads, likedTracks]);
+  }, [currentTrack, isPlaying, provider, likedUploads, likedTracks]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');
