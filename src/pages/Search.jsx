@@ -195,7 +195,7 @@ export default function Search() {
           duration: sc.duration || 0,
           provider: 'soundcloud',
           providerItemId: sc.permalinkUrl,
-          scTrackId: sc.trackId,
+          trackId: sc.trackId,
         });
       }
     }

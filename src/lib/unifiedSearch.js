@@ -239,6 +239,25 @@ async function searchBandcamp(query) {
 }
 
 /**
+ * Resolve a SoundCloud track ID to get the audio stream URL.
+ */
+export async function resolveSoundCloud(trackId) {
+  try {
+    const res = await fetch('/api/soundcloud-resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: trackId }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.streamUrl;
+  } catch (err) {
+    console.warn('SoundCloud resolve failed:', err);
+    return null;
+  }
+}
+
+/**
  * Resolve a Bandcamp track URL to get the audio stream URL.
  * Called when user clicks play on a Bandcamp result.
  */

@@ -324,7 +324,25 @@ export function PlayerProvider({ children }) {
         duration: item.duration,
       });
     } else if (item.provider === 'soundcloud') {
-      // Use iframe widget — plays full tracks legally (no background playback, same as YouTube)
+      try {
+        const { resolveSoundCloud } = await import('../lib/unifiedSearch');
+        const streamUrl = await resolveSoundCloud(item.trackId || item.providerItemId);
+        if (streamUrl) {
+          // Play natively without the iframe!
+          playTrack({
+            id: item.id,
+            title: item.title,
+            artistName: item.artistName,
+            releaseCover: item.artworkUrl,
+            src: streamUrl,
+            duration: item.duration || 0,
+            provider: 'soundcloud-native' // bypasses Player.jsx iframe rendering
+          });
+          return;
+        }
+      } catch(err) { console.warn('SC resolve failed, falling back to iframe', err); }
+      
+      // Fallback: Use iframe widget if stream isn't natively available
       playSoundCloud(item.providerItemId, {
         trackId: item.id,
         title: item.title,
