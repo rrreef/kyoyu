@@ -544,6 +544,22 @@ export default function Player({ hideMini = false }) {
 
   const ytHiddenRef = useRef(null);
   const scHiddenRef = useRef(null);
+  const silentSessionLockRef = useRef(null);
+
+  // Play silent audio to lock the WKWebView MediaSession to our parent window
+  // This guarantees that navigator.mediaSession.metadata overrides any iframe's metadata
+  useEffect(() => {
+    if (isNative() && silentSessionLockRef.current) {
+      if (isPlaying) {
+        // Delay slightly to ensure it starts AFTER the iframe starts playing, making it the "active" audio session
+        setTimeout(() => {
+          silentSessionLockRef.current?.play()?.catch(() => {});
+        }, 100);
+      } else {
+        silentSessionLockRef.current?.pause();
+      }
+    }
+  }, [isPlaying]);
   // Push progress + duration to Swift on every update (replaces old polling approach)
   useEffect(() => {
     if (isNative() && currentTrack) {
@@ -570,6 +586,14 @@ export default function Player({ hideMini = false }) {
 
   return (
     <>
+      {/* Silent HTML5 audio to force WKWebView to bind MediaSession to the top window */}
+      {isNative() && (
+        <audio 
+          ref={silentSessionLockRef} 
+          loop 
+          src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAWVhpbmcAAAABAAAAAQAAACcAAQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ//OEAA/wAAAAAAAABnUAAAgAAA0gAAAEAAAABAAAABAAAAAQAAAAEAAAA=" 
+        />
+      )}
       {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
