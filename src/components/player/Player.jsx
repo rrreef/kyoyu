@@ -600,7 +600,7 @@ export default function Player({ hideMini = false }) {
             trackUrl={providerItemId}
             isPlaying={isPlaying}
             volume={volume}
-            audioOnly={true}
+            audioOnly={false}
             onStateChange={({ progress: scProg, duration: scDur }) => {
               dispatch({ type: 'SET_PROGRESS', value: scProg });
               if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
