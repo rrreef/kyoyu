@@ -521,6 +521,27 @@ export default function Player({ hideMini = false }) {
     else             document.body.classList.remove('has-mini-player');
     return ()=>{ document.body.classList.remove('has-mini-player'); };
   },[currentTrack]);
+
+  // Sync Media Session API (ensures WKWebView pushes the right metadata if it overrides Swift)
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: currentTrack.title || 'Kyoyu',
+        artist: currentTrack.artistName || 'Unknown Artist',
+        artwork: [
+          { src: currentTrack.releaseCover || '', sizes: '512x512', type: 'image/jpeg' }
+        ]
+      });
+      
+      try {
+        navigator.mediaSession.setActionHandler('play', () => window.__kyoyuPlayerCmd?.('play'));
+        navigator.mediaSession.setActionHandler('pause', () => window.__kyoyuPlayerCmd?.('pause'));
+        navigator.mediaSession.setActionHandler('previoustrack', () => window.__kyoyuPlayerCmd?.('prev'));
+        navigator.mediaSession.setActionHandler('nexttrack', () => window.__kyoyuPlayerCmd?.('next'));
+      } catch (e) {}
+    }
+  }, [currentTrack]);
+
   const ytHiddenRef = useRef(null);
   const scHiddenRef = useRef(null);
   // Push progress + duration to Swift on every update (replaces old polling approach)
