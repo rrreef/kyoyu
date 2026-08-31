@@ -64,16 +64,20 @@ async function getAccessToken() {
 }
 
 /**
- * Resolve a SoundCloud track ID to a direct audio stream URL.
+ * Resolve a SoundCloud track to a direct audio stream URL.
+ * Uses page scraping (like Bandcamp) because the client_credentials API
+ * only returns 30-second preview clips.
  */
 async function handleResolve(body, res) {
   const trackId = body?.trackId;
-  if (!trackId) {
-    return res.status(400).json({ error: 'trackId is required' });
+  const permalinkUrl = body?.permalinkUrl;
+
+  if (!trackId && !permalinkUrl) {
+    return res.status(400).json({ error: 'trackId or permalinkUrl is required' });
   }
 
   const now = Date.now();
-  const cacheKey = String(trackId);
+  const cacheKey = String(trackId || permalinkUrl);
 
   // Check cache
   if (resolveCache.has(cacheKey)) {
@@ -85,50 +89,120 @@ async function handleResolve(body, res) {
   }
 
   try {
-    const token = await getAccessToken();
+    // ── Step 1: Determine the track page URL ──
+    let pageUrl = permalinkUrl;
+    if (!pageUrl && trackId) {
+      // Use the API to get the permalink URL from trackId
+      const token = await getAccessToken();
+      const trackRes = await fetch(`https://api.soundcloud.com/tracks/${trackId}`, {
+        headers: {
+          'Accept': 'application/json; charset=utf-8',
+          'Authorization': `OAuth ${token}`,
+        },
+      });
+      if (trackRes.ok) {
+        const trackData = await trackRes.json();
+        pageUrl = trackData.permalink_url;
+      }
+    }
 
-    // Fetch track details
-    const trackRes = await fetch(`https://api.soundcloud.com/tracks/${trackId}`, {
+    if (!pageUrl) {
+      return res.status(200).json({ error: 'Could not determine track page URL' });
+    }
+
+    // ── Step 2: Fetch the SoundCloud track page ──
+    const pageRes = await fetch(pageUrl, {
       headers: {
-        'Accept': 'application/json; charset=utf-8',
-        'Authorization': `OAuth ${token}`,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
     });
 
-    if (!trackRes.ok) {
-      if (trackRes.status === 401) {
-        cachedToken = null;
-        tokenExpiresAt = 0;
-      }
-      console.error('SoundCloud track fetch error:', trackRes.status);
-      return res.status(200).json({ error: 'Failed to fetch track' });
+    if (!pageRes.ok) {
+      console.error('SoundCloud page fetch error:', pageRes.status);
+      return res.status(200).json({ error: 'Failed to fetch track page' });
     }
 
-    const track = await trackRes.json();
+    const html = await pageRes.text();
 
+    // ── Step 3: Extract __sc_hydration data ──
+    let trackData = null;
+    const hydrationMatch = html.match(/window\.__sc_hydration\s*=\s*(\[[\s\S]*?\]);\s*<\/script>/);
+    if (hydrationMatch) {
+      try {
+        const hydration = JSON.parse(hydrationMatch[1]);
+        // Find the "sound" entry which contains track data
+        const soundEntry = hydration.find(h => h.hydratable === 'sound');
+        if (soundEntry?.data) {
+          trackData = soundEntry.data;
+        }
+      } catch (e) {
+        console.warn('Failed to parse __sc_hydration:', e.message);
+      }
+    }
+
+    if (!trackData) {
+      // Try alternate format: look for JSON-LD or og:tags for metadata
+      console.warn('No __sc_hydration data found, trying API fallback');
+      return await handleResolveViaAPI(trackId, cacheKey, now, res);
+    }
+
+    // ── Step 4: Extract client_id from page scripts ──
+    let clientId = null;
+    // SoundCloud embeds client_id in their JS bundle URLs or inline scripts
+    const clientIdMatch = html.match(/client_id[=:]\s*["']([a-zA-Z0-9]{32})["']/);
+    if (clientIdMatch) {
+      clientId = clientIdMatch[1];
+    }
+
+    // Also try extracting from crossorigin script URLs
+    if (!clientId) {
+      const scriptUrls = html.match(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g);
+      if (scriptUrls && scriptUrls.length > 0) {
+        // Fetch the last script (usually contains the client_id)
+        const lastUrl = scriptUrls[scriptUrls.length - 1].replace(/^src="/, '').replace(/"$/, '');
+        try {
+          const jsRes = await fetch(lastUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+          });
+          if (jsRes.ok) {
+            const jsText = await jsRes.text();
+            const idMatch = jsText.match(/client_id:"([a-zA-Z0-9]{32})"/);
+            if (idMatch) clientId = idMatch[1];
+          }
+        } catch (e) {
+          console.warn('Failed to extract client_id from JS bundle');
+        }
+      }
+    }
+
+    // Fall back to our own OAuth client_id
+    if (!clientId) {
+      clientId = process.env.SOUNDCLOUD_CLIENT_ID;
+    }
+
+    // ── Step 5: Resolve stream URL from transcodings ──
     let streamUrl = null;
+    const transcodings = trackData.media?.transcodings || [];
 
-    // ── Method 1: media transcodings (modern API) ──
-    const transcodings = track.media?.transcodings || [];
     if (transcodings.length > 0) {
-      // Prefer progressive MP3, then HLS MP3, then any
-      const progressive = transcodings.find(t =>
+      // Prefer non-snipped progressive MP3, then HLS
+      const notSnipped = transcodings.filter(t => !t.snipped);
+      const pool = notSnipped.length > 0 ? notSnipped : transcodings;
+
+      const progressive = pool.find(t =>
         t.format?.protocol === 'progressive' && t.format?.mime_type?.includes('mpeg')
       );
-      const hlsMpeg = transcodings.find(t =>
+      const hlsMpeg = pool.find(t =>
         t.format?.protocol === 'hls' && t.format?.mime_type?.includes('mpeg')
       );
-      const hlsAny = transcodings.find(t =>
-        t.format?.protocol === 'hls'
-      );
-      const chosen = progressive || hlsMpeg || hlsAny || transcodings[0];
+      const chosen = progressive || hlsMpeg || pool[0];
 
       if (chosen?.url) {
         try {
-          // Transcoding URLs need OAuth token to resolve
           const sep = chosen.url.includes('?') ? '&' : '?';
-          const streamRes = await fetch(`${chosen.url}${sep}client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
-            headers: { 'Authorization': `OAuth ${token}` },
+          const streamRes = await fetch(`${chosen.url}${sep}client_id=${clientId}`, {
             redirect: 'follow',
           });
           if (streamRes.ok) {
@@ -141,54 +215,19 @@ async function handleResolve(body, res) {
       }
     }
 
-    // ── Method 2: legacy stream_url redirect ──
-    if (!streamUrl && track.stream_url) {
-      try {
-        const legacyRes = await fetch(track.stream_url, {
-          headers: { 'Authorization': `OAuth ${token}` },
-          redirect: 'manual', // Don't follow — we want the redirect URL
-        });
-        const location = legacyRes.headers.get('location');
-        if (location) {
-          streamUrl = location;
-        }
-      } catch (e) {
-        console.warn('SoundCloud legacy stream resolve failed:', e.message);
-      }
-    }
-
-    // ── Method 3: construct stream URL from track ID ──
     if (!streamUrl) {
-      try {
-        const directRes = await fetch(
-          `https://api.soundcloud.com/tracks/${trackId}/stream`,
-          {
-            headers: { 'Authorization': `OAuth ${token}` },
-            redirect: 'manual',
-          }
-        );
-        const location = directRes.headers.get('location');
-        if (location) {
-          streamUrl = location;
-        }
-      } catch (e) {
-        console.warn('SoundCloud direct stream resolve failed:', e.message);
-      }
-    }
-
-    if (!streamUrl) {
-      console.error('SoundCloud: all stream resolution methods failed for track', trackId);
-      return res.status(200).json({ error: 'No stream URL available for this track' });
+      // Fall back to API-based resolution
+      return await handleResolveViaAPI(trackId, cacheKey, now, res);
     }
 
     const result = {
       streamUrl,
-      title: track.title || '',
-      artist: track.user?.username || '',
-      artworkUrl: (track.artwork_url || track.user?.avatar_url || '').replace('-large', '-t500x500'),
-      duration: Math.round((track.duration || 0) / 1000),
-      genre: track.genre || '',
-      trackId: track.id,
+      title: trackData.title || '',
+      artist: trackData.user?.username || '',
+      artworkUrl: (trackData.artwork_url || trackData.user?.avatar_url || '').replace('-large', '-t500x500'),
+      duration: Math.round((trackData.full_duration || trackData.duration || 0) / 1000),
+      genre: trackData.genre || '',
+      trackId: trackData.id || trackId,
     };
 
     // Cache
@@ -207,6 +246,34 @@ async function handleResolve(body, res) {
     console.error('SoundCloud resolve error:', err);
     return res.status(200).json({ error: 'Failed to resolve track' });
   }
+}
+
+/**
+ * Fallback: resolve via API (may return 30-second previews).
+ */
+async function handleResolveViaAPI(trackId, cacheKey, now, res) {
+  if (!trackId) {
+    return res.status(200).json({ error: 'No stream URL available' });
+  }
+  try {
+    const token = await getAccessToken();
+    const directRes = await fetch(
+      `https://api.soundcloud.com/tracks/${trackId}/stream`,
+      {
+        headers: { 'Authorization': `OAuth ${token}` },
+        redirect: 'manual',
+      }
+    );
+    const location = directRes.headers.get('location');
+    if (location) {
+      const result = { streamUrl: location, trackId };
+      resolveCache.set(cacheKey, { data: result, timestamp: now });
+      return res.status(200).json(result);
+    }
+  } catch (e) {
+    console.warn('SoundCloud API stream resolve failed:', e.message);
+  }
+  return res.status(200).json({ error: 'No stream URL available' });
 }
 
 /**

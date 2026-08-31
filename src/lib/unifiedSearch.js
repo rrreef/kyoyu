@@ -260,15 +260,17 @@ export async function resolveBandcamp(trackUrl) {
 }
 
 /**
- * Resolve a SoundCloud track ID to get the audio stream URL.
+ * Resolve a SoundCloud track to get the audio stream URL.
  * Called when user clicks play on a SoundCloud result.
+ * @param {number|string} trackId - Numeric SoundCloud track ID
+ * @param {string} [permalinkUrl] - Full SoundCloud track URL (e.g. https://soundcloud.com/artist/track)
  */
-export async function resolveSoundCloud(trackId) {
+export async function resolveSoundCloud(trackId, permalinkUrl) {
   try {
     const res = await fetch('/api/soundcloud-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'resolve', trackId }),
+      body: JSON.stringify({ action: 'resolve', trackId, permalinkUrl }),
     });
     if (!res.ok) return null;
     const data = await res.json();

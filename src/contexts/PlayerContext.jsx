@@ -327,10 +327,11 @@ export function PlayerProvider({ children }) {
       // On native iOS, resolve to direct stream URL for AVPlayer background playback.
       // Falls back to iframe widget if resolution fails.
       const numericId = item.scTrackId || (item.id ? String(item.id).replace(/^sc-/, '') : null);
-      if (numericId) {
+      const scPermalink = item.providerItemId; // SoundCloud permalink URL
+      if (numericId || scPermalink) {
         try {
           const { resolveSoundCloud } = await import('../lib/unifiedSearch');
-          const resolved = await resolveSoundCloud(numericId);
+          const resolved = await resolveSoundCloud(numericId, scPermalink);
           if (resolved && resolved.streamUrl) {
             playTrack({
               id: item.id,
