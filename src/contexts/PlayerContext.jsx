@@ -324,30 +324,7 @@ export function PlayerProvider({ children }) {
         duration: item.duration,
       });
     } else if (item.provider === 'soundcloud') {
-      // On native iOS, resolve to direct stream URL for AVPlayer background playback.
-      // Falls back to iframe widget if resolution fails.
-      const numericId = item.scTrackId || (item.id ? String(item.id).replace(/^sc-/, '') : null);
-      const scPermalink = item.providerItemId; // SoundCloud permalink URL
-      if (numericId || scPermalink) {
-        try {
-          const { resolveSoundCloud } = await import('../lib/unifiedSearch');
-          const resolved = await resolveSoundCloud(numericId, scPermalink);
-          if (resolved && resolved.streamUrl) {
-            playTrack({
-              id: item.id,
-              title: resolved.title || item.title,
-              artistName: resolved.artist || item.artistName,
-              releaseCover: resolved.artworkUrl || item.artworkUrl,
-              src: resolved.streamUrl,
-              duration: resolved.duration || item.duration || 0,
-            });
-            return;
-          }
-        } catch (err) {
-          console.warn('SoundCloud resolve failed, falling back to widget:', err);
-        }
-      }
-      // Fallback: use iframe widget (no background playback on iOS)
+      // Use iframe widget — plays full tracks legally (no background playback, same as YouTube)
       playSoundCloud(item.providerItemId, {
         trackId: item.id,
         title: item.title,
