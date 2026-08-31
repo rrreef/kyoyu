@@ -441,6 +441,16 @@ export default function Player({ hideMini = false }) {
           else          scHiddenRef.current?.pause?.();
         }
       }
+      if(cmd==='play') {
+        dispatch({type:'SET_PLAYING', value: true});
+        if (provider === 'youtube') ytHiddenRef.current?.play?.();
+        else if (provider === 'soundcloud') scHiddenRef.current?.play?.();
+      }
+      if(cmd==='pause') {
+        dispatch({type:'SET_PLAYING', value: false});
+        if (provider === 'youtube') ytHiddenRef.current?.pause?.();
+        else if (provider === 'soundcloud') scHiddenRef.current?.pause?.();
+      }
       if(cmd==='next') handleNext();
       if(cmd==='prev') handlePrev();
       if(cmd==='stop')   dispatch({type:'STOP'});
