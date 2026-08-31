@@ -87,9 +87,18 @@ const SoundCloudPlayer = forwardRef(({
             widget.setVolume(volume * 100);
           }
           if (onReady) onReady();
-          if (isPlaying) {
-            widget.play();
-          }
+          
+          // Once the persistent widget is ready, load the actual requested track
+          widget.load(trackUrl, {
+            auto_play: isPlaying,
+            show_artwork: !audioOnly,
+            show_user: false,
+            buying: false,
+            sharing: false,
+            download: false,
+            show_playcount: false,
+            show_comments: false,
+          });
         });
 
         widget.bind(window.SC.Widget.Events.PLAY, () => {
@@ -143,11 +152,6 @@ const SoundCloudPlayer = forwardRef(({
         download: false,
         show_playcount: false,
         show_comments: false,
-        callback: () => {
-          if (volume !== undefined) {
-            widgetRef.current.setVolume(volume * 100);
-          }
-        },
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,12 +206,9 @@ const SoundCloudPlayer = forwardRef(({
     },
   }));
 
-  // Only set iframe src on initial mount so we don't reload the iframe when trackUrl changes.
-  const [initialUrl] = useState(trackUrl);
-
-  const iframeSrc = initialUrl
-    ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}&color=%23FF5500&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`
-    : '';
+  // Use a hardcoded dummy URL so the iframe boots up and establishes the SC.Widget API cleanly.
+  // The actual track is always loaded dynamically via widget.load() inside the READY event.
+  const iframeSrc = `https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/293&color=%23FF5500&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`;
 
   const iframeStyle = audioOnly
     ? { width: 1, height: 1, border: 'none', opacity: 0, pointerEvents: 'none' }
