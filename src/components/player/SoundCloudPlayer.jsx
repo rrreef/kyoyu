@@ -147,9 +147,6 @@ const SoundCloudPlayer = forwardRef(({
           if (volume !== undefined) {
             widgetRef.current.setVolume(volume * 100);
           }
-          if (isPlaying) {
-            widgetRef.current.play();
-          }
         },
       });
     }
@@ -207,10 +204,9 @@ const SoundCloudPlayer = forwardRef(({
 
   // Only set iframe src on initial mount so we don't reload the iframe when trackUrl changes.
   const [initialUrl] = useState(trackUrl);
-  const [initialPlay] = useState(isPlaying);
 
   const iframeSrc = initialUrl
-    ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}&color=%23FF5500&auto_play=${initialPlay}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`
+    ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}&color=%23FF5500&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`
     : '';
 
   const iframeStyle = audioOnly
