@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 
 // Module-level: load SC Widget API once
 let widgetApiPromise = null;
@@ -202,8 +202,11 @@ const SoundCloudPlayer = forwardRef(({
     },
   }));
 
-  const iframeSrc = trackUrl
-    ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(trackUrl)}&color=%23FF5500&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`
+  // Only set iframe src on initial mount so we don't reload the iframe when trackUrl changes.
+  const [initialUrl] = useState(trackUrl);
+
+  const iframeSrc = initialUrl
+    ? `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}&color=%23FF5500&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false`
     : '';
 
   const iframeStyle = audioOnly
