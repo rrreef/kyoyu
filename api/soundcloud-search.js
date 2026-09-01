@@ -84,17 +84,84 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
   }
 
+  // Check credentials exist
+  if (!process.env.SOUNDCLOUD_CLIENT_ID || !process.env.SOUNDCLOUD_CLIENT_SECRET) {
+    console.warn('SoundCloud credentials not configured');
+    return res.status(200).json({ results: [] });
+  }
+
+  // ── Mode 1: Resolve stream URL for a single track ──
+  const resolveTrackId = body?.resolveTrackId;
+  if (resolveTrackId) {
+    try {
+      const token = await getAccessToken();
+
+      // Fetch full track data to get transcodings
+      const trackRes = await fetch(`https://api.soundcloud.com/tracks/${resolveTrackId}?representation=full`, {
+        headers: {
+          'Accept': 'application/json; charset=utf-8',
+          'Authorization': `OAuth ${token}`,
+        },
+      });
+
+      if (!trackRes.ok) {
+        console.error('SoundCloud track fetch error:', trackRes.status);
+        return res.status(404).json({ error: 'Track not found' });
+      }
+
+      const track = await trackRes.json();
+
+      // Look for a progressive (direct MP3) or HLS stream
+      let streamUrl = null;
+
+      if (track.media && track.media.transcodings) {
+        const progressive = track.media.transcodings.find(
+          t => t.format && t.format.protocol === 'progressive'
+        );
+        const hls = track.media.transcodings.find(
+          t => t.format && t.format.protocol === 'hls'
+        );
+
+        const chosen = progressive || hls;
+        if (chosen && chosen.url) {
+          const streamRes = await fetch(`${chosen.url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
+            headers: { 'Authorization': `OAuth ${token}` },
+          });
+          if (streamRes.ok) {
+            const streamData = await streamRes.json();
+            streamUrl = streamData.url;
+          }
+        }
+      }
+
+      // Fallback: legacy stream_url field
+      if (!streamUrl && track.stream_url) {
+        streamUrl = `${track.stream_url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`;
+      }
+
+      if (!streamUrl) {
+        return res.status(404).json({ error: 'No playable stream found' });
+      }
+
+      return res.status(200).json({
+        streamUrl,
+        title: track.title || '',
+        artistName: track.user?.username || '',
+        artworkUrl: (track.artwork_url || track.user?.avatar_url || '').replace('-large', '-t500x500'),
+        duration: Math.round((track.duration || 0) / 1000),
+      });
+    } catch (err) {
+      console.error('SoundCloud resolve error:', err);
+      return res.status(500).json({ error: 'Failed to resolve stream' });
+    }
+  }
+
+  // ── Mode 2: Search for tracks ──
   const query = body?.query;
   const limit = Math.min(parseInt(body?.limit) || 50, 50);
 
   if (!query || typeof query !== 'string' || query.length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
-  }
-
-  // Check credentials exist
-  if (!process.env.SOUNDCLOUD_CLIENT_ID || !process.env.SOUNDCLOUD_CLIENT_SECRET) {
-    console.warn('SoundCloud credentials not configured');
-    return res.status(200).json({ results: [] });
   }
 
   try {

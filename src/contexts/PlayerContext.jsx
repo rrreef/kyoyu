@@ -324,10 +324,10 @@ export function PlayerProvider({ children }) {
 
     // Resolve the actual stream URL from our serverless API
     try {
-      const res = await fetch('/api/soundcloud-stream', {
+      const res = await fetch('/api/soundcloud-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId }),
+        body: JSON.stringify({ resolveTrackId: trackId }),
       });
 
       if (!res.ok) {
