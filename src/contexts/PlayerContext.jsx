@@ -108,8 +108,9 @@ export function PlayerProvider({ children }) {
       const d = audio.duration;
       if (d && isFinite(d) && d > 0) dispatch({ type:'SET_DURATION', value: d });
     };
-    const onPlay  = () => dispatch({ type:'SET_PLAYING',  value: true  });
-    const onPause = () => dispatch({ type:'SET_PLAYING',  value: false });
+    const isNativeIOS = !!window.webkit?.messageHandlers?.audioFallback;
+    const onPlay  = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: true  }); };
+    const onPause = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: false }); };
     const onEnded = () => {
       if (searchQueueRef.current.length > 0 && searchQueueIdxRef.current >= 0) {
         playNextSearch();
