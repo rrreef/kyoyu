@@ -127,11 +127,50 @@ export default async function handler(req, res) {
       if (streamsRes.ok) {
         const streams = await streamsRes.json();
         // Prefer high-quality AAC HLS, fall back to lower quality, then any available
-        streamUrl = streams.hls_aac_160_url
+        let candidateUrl = streams.hls_aac_160_url
           || streams.hls_aac_96_url
           || streams.hls_mp3_128_url
           || streams.http_mp3_128_url
           || null;
+
+        // If none of the expected keys worked, try the first URL value we find
+        if (!candidateUrl) {
+          const keys = Object.keys(streams);
+          for (const key of keys) {
+            if (typeof streams[key] === 'string' && streams[key].startsWith('http')) {
+              candidateUrl = streams[key];
+              break;
+            }
+          }
+        }
+
+        if (candidateUrl) {
+          // If it's an API URL, follow the redirect to get the actual CDN URL
+          if (candidateUrl.includes('api.soundcloud.com')) {
+            try {
+              const cdnRes = await fetch(candidateUrl, {
+                headers: { 'Authorization': `OAuth ${token}` },
+                redirect: 'follow',
+              });
+              if (cdnRes.ok) {
+                // Check if the response is a redirect URL or the actual stream content
+                const contentType = cdnRes.headers.get('content-type') || '';
+                if (contentType.includes('json')) {
+                  const cdnData = await cdnRes.json();
+                  streamUrl = cdnData.url || cdnRes.url;
+                } else {
+                  // The fetch followed the redirect — the final URL is the CDN URL
+                  streamUrl = cdnRes.url;
+                }
+              }
+            } catch (e) {
+              console.error('SC CDN resolve error:', e);
+            }
+          } else {
+            // It's already a CDN URL
+            streamUrl = candidateUrl;
+          }
+        }
       }
 
       // Method 2: Resolve from transcodings (fallback)
