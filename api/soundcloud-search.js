@@ -95,6 +95,7 @@ export default async function handler(req, res) {
   if (resolveTrackId) {
     try {
       const token = await getAccessToken();
+      const clientId = process.env.SOUNDCLOUD_CLIENT_ID;
 
       // Fetch full track data to get transcodings
       const trackRes = await fetch(`https://api.soundcloud.com/tracks/${resolveTrackId}?representation=full`, {
@@ -110,11 +111,13 @@ export default async function handler(req, res) {
       }
 
       const track = await trackRes.json();
+      console.log('SC track media:', JSON.stringify(track.media?.transcodings?.map(t => ({ url: t.url, format: t.format })) || 'none'));
+      console.log('SC track stream_url:', track.stream_url || 'none');
 
-      // Look for a progressive (direct MP3) or HLS stream
+      // Look for a progressive (direct MP3) or HLS stream in transcodings
       let streamUrl = null;
 
-      if (track.media && track.media.transcodings) {
+      if (track.media && track.media.transcodings && track.media.transcodings.length > 0) {
         const progressive = track.media.transcodings.find(
           t => t.format && t.format.protocol === 'progressive'
         );
@@ -124,19 +127,43 @@ export default async function handler(req, res) {
 
         const chosen = progressive || hls;
         if (chosen && chosen.url) {
-          const streamRes = await fetch(`${chosen.url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`, {
-            headers: { 'Authorization': `OAuth ${token}` },
+          // The transcoding URL returns a JSON with the actual stream URL
+          // Use OAuth token only (not client_id + OAuth together)
+          const streamRes = await fetch(`${chosen.url}?client_id=${clientId}`, {
+            headers: { 'Accept': 'application/json' },
           });
+          console.log('SC transcoding fetch status:', streamRes.status);
           if (streamRes.ok) {
             const streamData = await streamRes.json();
+            console.log('SC transcoding response:', JSON.stringify(streamData).substring(0, 200));
             streamUrl = streamData.url;
+          } else {
+            // Try with OAuth header instead
+            const streamRes2 = await fetch(`${chosen.url}`, {
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `OAuth ${token}`,
+              },
+            });
+            console.log('SC transcoding fetch (OAuth) status:', streamRes2.status);
+            if (streamRes2.ok) {
+              const streamData2 = await streamRes2.json();
+              streamUrl = streamData2.url;
+            }
           }
         }
       }
 
-      // Fallback: legacy stream_url field
+      // Fallback: legacy stream_url — follow redirect server-side to get actual CDN URL
       if (!streamUrl && track.stream_url) {
-        streamUrl = `${track.stream_url}?client_id=${process.env.SOUNDCLOUD_CLIENT_ID}`;
+        const legacyRes = await fetch(`${track.stream_url}?client_id=${clientId}&oauth_token=${token}`, {
+          redirect: 'follow',
+        });
+        if (legacyRes.ok || legacyRes.status === 302 || legacyRes.status === 301) {
+          // The redirected URL is the actual CDN stream
+          streamUrl = legacyRes.url;
+        }
+        console.log('SC legacy stream status:', legacyRes.status, 'url:', legacyRes.url?.substring(0, 100));
       }
 
       if (!streamUrl) {
