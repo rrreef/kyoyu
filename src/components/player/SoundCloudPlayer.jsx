@@ -220,7 +220,6 @@ const SoundCloudPlayer = forwardRef(({
       src={iframeSrc}
       style={iframeStyle}
       allow="autoplay"
-      loading="lazy"
       title="SoundCloud Player"
     />
   );

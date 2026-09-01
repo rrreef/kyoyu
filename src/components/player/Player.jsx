@@ -616,9 +616,10 @@ export default function Player({ hideMini = false }) {
           />
         </div>
       )}
-      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI */}
+      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
+           Uses same scale(0.001) trick as YouTube to ensure WKWebView fully loads the iframe. */}
       {isNativeSC && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 2, height: 2, overflow: 'hidden', pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 300, height: 166, transform: 'scale(0.001)', transformOrigin: 'bottom right', overflow: 'hidden', pointerEvents: 'none' }}>
           <SoundCloudPlayer
             ref={scHiddenRef}
             trackUrl={providerItemId}
