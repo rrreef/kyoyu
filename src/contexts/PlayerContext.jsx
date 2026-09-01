@@ -311,16 +311,17 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    // Show the track in the UI immediately (with loading state)
+    // Show the track in the player UI immediately while resolving
+    // Use PLAY_SOUNDCLOUD to update UI without triggering the audio useEffect
     const placeholderTrack = {
       id: `sc-${trackId}`,
       title: metadata.title || 'SoundCloud Track',
       artistName: metadata.artistName || metadata.artist || '',
       releaseCover: metadata.artworkUrl || '',
       duration: metadata.duration || 0,
-      src: '', // Will be filled after resolve
+      src: '',
     };
-    dispatch({ type: 'PLAY_TRACK', track: placeholderTrack });
+    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track: placeholderTrack });
 
     // Resolve the actual stream URL from our serverless API
     try {
@@ -343,15 +344,16 @@ export function PlayerProvider({ children }) {
         return;
       }
 
-      // Play the resolved stream as a native track (same path as uploaded tracks)
+      // Play the resolved stream as a native track — dispatches PLAY_TRACK
+      // which changes provider to 'native' and triggers the audio useEffect
       const resolvedTrack = {
-        id: `sc-${trackId}`,
+        id: `sc-${trackId}-${Date.now()}`, // Unique ID ensures useEffect re-fires
         title: data.title || metadata.title || 'SoundCloud Track',
         artistName: data.artistName || metadata.artistName || metadata.artist || '',
         releaseCover: data.artworkUrl || metadata.artworkUrl || '',
         duration: data.duration || metadata.duration || 0,
         src: data.streamUrl,
-        providerUrl: trackUrl, // Keep original permalink for "Open on SoundCloud" link
+        providerUrl: trackUrl,
       };
       playTrack(resolvedTrack);
     } catch (err) {
