@@ -439,17 +439,35 @@ export default function Player({ hideMini = false }) {
         } else if (provider === 'soundcloud') {
           if (willPlay) scHiddenRef.current?.play?.();
           else          scHiddenRef.current?.pause?.();
+        } else {
+          // Native provider: directly control AVPlayer
+          try {
+            const mh = window.webkit?.messageHandlers?.audioFallback;
+            if (mh) mh.postMessage(willPlay ? 'resume' : 'pause');
+          } catch(e) {}
         }
       }
       if(cmd==='play') {
         dispatch({type:'SET_PLAYING', value: true});
         if (provider === 'youtube') ytHiddenRef.current?.play?.();
         else if (provider === 'soundcloud') scHiddenRef.current?.play?.();
+        else {
+          try {
+            const mh = window.webkit?.messageHandlers?.audioFallback;
+            if (mh) mh.postMessage('resume');
+          } catch(e) {}
+        }
       }
       if(cmd==='pause') {
         dispatch({type:'SET_PLAYING', value: false});
         if (provider === 'youtube') ytHiddenRef.current?.pause?.();
         else if (provider === 'soundcloud') scHiddenRef.current?.pause?.();
+        else {
+          try {
+            const mh = window.webkit?.messageHandlers?.audioFallback;
+            if (mh) mh.postMessage('pause');
+          } catch(e) {}
+        }
       }
       if(cmd==='next') handleNext();
       if(cmd==='prev') handlePrev();

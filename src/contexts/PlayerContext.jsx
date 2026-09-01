@@ -213,10 +213,20 @@ export function PlayerProvider({ children }) {
     if (!audio || !state.currentTrack) return;
     // External providers handle their own play/pause
     if (state.provider !== 'native') return;
+
     if (state.isPlaying) {
       audio.play().catch(() => {});
+      // On native iOS, also directly tell AVPlayer (the web audio path is unreliable)
+      try {
+        const mh = window.webkit?.messageHandlers?.audioFallback;
+        if (mh) mh.postMessage('resume');
+      } catch(e) {}
     } else {
       audio.pause();
+      try {
+        const mh = window.webkit?.messageHandlers?.audioFallback;
+        if (mh) mh.postMessage('pause');
+      } catch(e) {}
     }
   }, [state.isPlaying, state.provider]); // eslint-disable-line
 
