@@ -297,16 +297,67 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'PLAY_YOUTUBE', videoId, track });
   }
 
-  function playSoundCloud(trackUrl, metadata = {}) {
-    const track = {
-      id: `sc-${metadata.trackId || Date.now()}`,
+  async function playSoundCloud(trackUrl, metadata = {}) {
+    // Extract numeric track ID from metadata or the item id (e.g. "sc-88335161")
+    let trackId = metadata.trackId;
+    if (!trackId && metadata.id) {
+      const m = String(metadata.id).match(/^sc-(\d+)$/);
+      if (m) trackId = m[1];
+    }
+    if (!trackId && metadata.scTrackId) trackId = metadata.scTrackId;
+
+    if (!trackId) {
+      console.warn('[Player] SoundCloud: no trackId available, cannot resolve stream');
+      return;
+    }
+
+    // Show the track in the UI immediately (with loading state)
+    const placeholderTrack = {
+      id: `sc-${trackId}`,
       title: metadata.title || 'SoundCloud Track',
       artistName: metadata.artistName || metadata.artist || '',
       releaseCover: metadata.artworkUrl || '',
       duration: metadata.duration || 0,
-      src: '', // No native audio
+      src: '', // Will be filled after resolve
     };
-    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track });
+    dispatch({ type: 'PLAY_TRACK', track: placeholderTrack });
+
+    // Resolve the actual stream URL from our serverless API
+    try {
+      const res = await fetch('/api/soundcloud-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackId }),
+      });
+
+      if (!res.ok) {
+        console.warn('[Player] SoundCloud stream resolve failed:', res.status);
+        dispatch({ type: 'SET_PLAYING', value: false });
+        return;
+      }
+
+      const data = await res.json();
+      if (!data.streamUrl) {
+        console.warn('[Player] SoundCloud: no stream URL returned');
+        dispatch({ type: 'SET_PLAYING', value: false });
+        return;
+      }
+
+      // Play the resolved stream as a native track (same path as uploaded tracks)
+      const resolvedTrack = {
+        id: `sc-${trackId}`,
+        title: data.title || metadata.title || 'SoundCloud Track',
+        artistName: data.artistName || metadata.artistName || metadata.artist || '',
+        releaseCover: data.artworkUrl || metadata.artworkUrl || '',
+        duration: data.duration || metadata.duration || 0,
+        src: data.streamUrl,
+        providerUrl: trackUrl, // Keep original permalink for "Open on SoundCloud" link
+      };
+      playTrack(resolvedTrack);
+    } catch (err) {
+      console.warn('[Player] SoundCloud stream resolve error:', err);
+      dispatch({ type: 'SET_PLAYING', value: false });
+    }
   }
 
   // ── Search queue: multi-provider playlist from search results ──
@@ -324,9 +375,9 @@ export function PlayerProvider({ children }) {
         duration: item.duration,
       });
     } else if (item.provider === 'soundcloud') {
-      // Use iframe widget — plays full tracks legally (no background playback, same as YouTube)
+      // Resolve stream URL via API and play natively (same as native tracks)
       playSoundCloud(item.providerItemId, {
-        trackId: item.id,
+        trackId: item.scTrackId || item.id,
         title: item.title,
         artistName: item.artistName,
         artworkUrl: item.artworkUrl,
