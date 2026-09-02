@@ -68,7 +68,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         search_text: query,
-        search_filter: 't', // tracks only
+        search_filter: 'b,a,t', // bands/labels, albums, tracks
         full_page: true,
         fan_id: 0,
       }),
@@ -83,20 +83,24 @@ export default async function handler(req, res) {
     const items = data?.auto?.results || [];
 
     const results = items
-      .filter(item => item.type === 't') // tracks only
       .map(item => {
-        // Bandcamp artwork URLs use 'a' prefix: /img/a{art_id}_{size}.jpg
-        let artworkUrl = '';
+        let artworkUrl = item.img || '';
         if (item.art_id) {
           artworkUrl = `https://f4.bcbits.com/img/a${item.art_id}_10.jpg`;
+        } else if (item.img_id) {
+          artworkUrl = `https://f4.bcbits.com/img/00${item.img_id}_23.jpg`;
         }
+        
+        const type = item.type === 'b' ? (item.is_label ? 'label' : 'artist') : item.type === 'a' ? 'album' : 'track';
+
         return {
           trackId: item.id,
+          type,
           title: item.name || '',
-          artistName: item.band_name || '',
+          artistName: item.band_name || (type === 'artist' || type === 'label' ? item.name : ''),
           artworkUrl,
-          trackUrl: item.item_url_path || '',
-          albumName: item.album_name || '',
+          trackUrl: item.item_url_path || item.item_url_root || '',
+          albumName: item.album_name || (type === 'album' ? item.name : ''),
           albumId: item.album_id || null,
         };
       });

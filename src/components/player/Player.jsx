@@ -527,6 +527,8 @@ export default function Player({ hideMini = false }) {
         trackId: String(currentTrack.id || ''),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
         artist: currentTrack.artistName || currentTrack.artist || '',
+        albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
+        year: String(currentTrack.year || currentTrack.releaseYear || ''),
         provider: provider || 'native'
       });
     } else {

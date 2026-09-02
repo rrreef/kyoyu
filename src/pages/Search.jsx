@@ -118,6 +118,160 @@ function SwipeableHistoryItem({ item, onClick, onRemove }) {
   );
 }
 
+function BandcampLabelResult({ label, onPlay, onGo }) {
+  const [releases, setReleases] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/bandcamp-label-releases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: label.trackUrl })
+    })
+      .then(r => r.json())
+      .then(d => { setReleases(d.releases); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [label.trackUrl]);
+
+  return (
+    <div className="search-label-group" style={{ marginBottom: '16px' }}>
+      <div className="search-result-row search-artist-row search-external-row"
+        onClick={() => window.open(label.trackUrl, '_blank')}>
+        <div className="search-result-art artist-avatar discogs-art">
+          {label.artworkUrl ? (
+            <img src={label.artworkUrl} alt={label.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+          ) : (
+            <EntityPlaceholder name={label.title} type="label" />
+          )}
+        </div>
+        <div className="search-result-info">
+          <span className="search-result-title">{label.title}</span>
+          <span className="search-result-artist" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '2px' }}>Bandcamp Label</span>
+        </div>
+      </div>
+
+      {/* Indented Releases List */}
+      <div className="search-label-releases" style={{ 
+        paddingLeft: '16px', 
+        marginLeft: '24px', 
+        borderLeft: '2px solid rgba(255,255,255,0.1)', 
+        marginTop: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px'
+      }}>
+        {loading ? (
+          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>Loading releases...</div>
+        ) : releases && releases.length > 0 ? (
+          releases.map((rel, idx) => (
+            <div key={idx} className="search-result-row search-external-row"
+              onClick={() => onPlay({
+                id: `bc-lbl-${idx}-${Date.now()}`,
+                title: rel.title,
+                artistName: rel.artist || label.title,
+                artworkUrl: rel.artworkUrl,
+                duration: 0,
+                provider: 'bandcamp',
+                providerItemId: rel.url,
+              })}>
+              <div className="search-result-art discogs-art" style={{ borderRadius: '4px', width: '36px', height: '36px' }}>
+                {rel.artworkUrl ? (
+                  <img src={rel.artworkUrl} alt={rel.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                ) : (
+                  <EntityPlaceholder name={rel.title} type="release" />
+                )}
+              </div>
+              <div className="search-result-info">
+                <span className="search-result-title" style={{ fontSize: '14px' }}>{rel.title}</span>
+                <span className="search-result-artist" style={{ fontSize: '12px' }}>{rel.artist || label.title}</span>
+              </div>
+              <div className="search-result-actions">
+                <Play size={14} style={{ opacity: 0.6 }} />
+              </div>
+            </div>
+          ))
+        ) : (
+          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>No releases found.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BandcampRecommendations({ trackUrl, onPlay }) {
+  const [recs, setRecs] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/bandcamp-recommendations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: trackUrl })
+    })
+      .then(r => r.json())
+      .then(d => { setRecs(d.recommendations || []); setLoading(false); })
+      .catch(() => { setRecs([]); setLoading(false); });
+  }, [trackUrl]);
+
+  if (loading) {
+    return <div className="search-loading" style={{ marginTop: '20px', fontSize: '12px' }}>Loading fans also bought...</div>;
+  }
+  if (!recs || recs.length === 0) return null;
+
+  const currentRecs = recs.slice(page * 10, (page + 1) * 10);
+  const hasMore = (page + 1) * 10 < recs.length;
+
+  return (
+    <div className="search-results-list search-external-section" style={{ marginTop: '30px' }}>
+      <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
+        Fans Also Bought
+      </div>
+      <div className="search-section">
+        {currentRecs.map((rec, idx) => (
+          <div key={idx} className="search-result-row search-external-row"
+            onClick={() => onPlay({
+              id: `bc-rec-${idx}-${Date.now()}`,
+              title: rec.title,
+              artistName: rec.artistName,
+              artworkUrl: rec.artworkUrl,
+              duration: 0,
+              provider: 'bandcamp',
+              providerItemId: rec.trackUrl,
+            })}>
+            <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+              {rec.artworkUrl ? (
+                <img src={rec.artworkUrl} alt={rec.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+              ) : (
+                <EntityPlaceholder name={rec.title} type="release" />
+              )}
+            </div>
+            <div className="search-result-info">
+              <span className="search-result-title">{rec.title}</span>
+              <span className="search-result-artist">{rec.artistName}</span>
+            </div>
+            <div className="search-result-actions">
+              <Play size={16} style={{ opacity: 0.6 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {hasMore && (
+        <button 
+          onClick={() => setPage(p => p + 1)}
+          style={{
+            marginTop: '10px', width: '100%', padding: '12px', borderRadius: '8px', 
+            background: 'rgba(29, 160, 195, 0.1)', color: '#1DA0C3', border: 'none', 
+            fontSize: '14px', fontWeight: 'bold', cursor: 'pointer'
+          }}>
+          Show next 10 suggestions
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
@@ -589,8 +743,15 @@ export default function Search() {
             <div className="search-section">
               <div className="search-section-subtitle">Artists</div>
               {externalResults.artists.map(artist => (
-                <div key={artist.id} className="search-result-row search-artist-row search-external-row"
-                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`)}>
+                <div key={artist.id || artist.discogsId} className="search-result-row search-artist-row search-external-row"
+                  onClick={() => {
+                    if (artist.isAlias) {
+                      if (window.__kyoyuSetSearch) window.__kyoyuSetSearch(artist.name);
+                      else setQuery(artist.name);
+                    } else {
+                      window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`);
+                    }
+                  }}>
                   <div className="search-result-art artist-avatar discogs-art">
                     {artist.thumb ? (
                       <img src={artist.thumb} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -600,6 +761,11 @@ export default function Search() {
                   </div>
                   <div className="search-result-info">
                     <span className="search-result-title">{artist.name}</span>
+                    {artist.canonicalLabel && (
+                      <span className="search-result-artist" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '2px' }}>
+                        {artist.canonicalLabel}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -737,45 +903,75 @@ export default function Search() {
             Bandcamp
           </div>
           <div className="search-section">
-            {externalResults.bandcamp.map(bc => (
-              <div key={bc.id} className="search-result-row search-external-row"
-                style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
-                onClick={() => {
+            {externalResults.bandcamp.map(bc => {
+              if (bc.entityType === 'label') {
+                return <BandcampLabelResult key={bc.id} label={bc} onPlay={(item) => {
                   if (bandcampLoading) return;
-                  setBandcampLoading(bc.trackUrl);
-                  handleSearchPlay({
-                    id: bc.id || `bc-${bc.trackId}`,
-                    title: bc.title,
-                    artistName: bc.artistName,
-                    artworkUrl: bc.artworkUrl,
-                    duration: 0,
-                    provider: 'bandcamp',
-                    providerItemId: bc.trackUrl,
-                  });
-                  // Clear loading after a delay (resolve happens in PlayerContext)
+                  setBandcampLoading(item.providerItemId);
+                  handleSearchPlay(item);
                   setTimeout(() => setBandcampLoading(null), 3000);
-                }}>
-                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                  {bc.artworkUrl ? (
-                    <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                  ) : (
-                    <EntityPlaceholder name={bc.title} type="release" />
+                }} />;
+              }
+
+              return (
+                <div key={bc.id} className="search-result-row search-external-row"
+                  style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
+                  onClick={() => {
+                    if (bandcampLoading) return;
+                    if (bc.entityType === 'artist') {
+                       window.open(bc.trackUrl, '_blank');
+                       return;
+                    }
+                    setBandcampLoading(bc.trackUrl);
+                    handleSearchPlay({
+                      id: bc.id || `bc-${bc.trackId}`,
+                      title: bc.title,
+                      artistName: bc.artistName,
+                      artworkUrl: bc.artworkUrl,
+                      duration: 0,
+                      provider: 'bandcamp',
+                      providerItemId: bc.trackUrl,
+                    });
+                    setTimeout(() => setBandcampLoading(null), 3000);
+                  }}>
+                  <div className="search-result-art discogs-art" style={{ borderRadius: bc.entityType === 'artist' ? '50%' : '6px' }}>
+                    {bc.artworkUrl ? (
+                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={bc.title} type="release" />
+                    )}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{bc.title}</span>
+                    <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
+                  </div>
+                  {bc.entityType !== 'artist' && (
+                    <div className="search-result-actions">
+                      {bandcampLoading === bc.trackUrl ? (
+                        <span style={{ opacity: 0.4, fontSize: 11 }}>···</span>
+                      ) : (
+                        <Play size={16} style={{ opacity: 0.6 }} />
+                      )}
+                    </div>
                   )}
                 </div>
-                <div className="search-result-info">
-                  <span className="search-result-title">{bc.title}</span>
-                  <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
-                </div>
-                <div className="search-result-actions">
-                  {bandcampLoading === bc.trackUrl ? (
-                    <span style={{ opacity: 0.4, fontSize: 11 }}>···</span>
-                  ) : (
-                    <Play size={16} style={{ opacity: 0.6 }} />
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {/* Recommendations / Fans Also Bought */}
+          {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 
+           (externalResults.bandcamp[0].entityType === 'album' || externalResults.bandcamp[0].entityType === 'track') && (
+            <BandcampRecommendations 
+              trackUrl={externalResults.bandcamp[0].trackUrl} 
+              onPlay={(item) => {
+                setBandcampLoading(item.providerItemId);
+                handleSearchPlay(item);
+                setTimeout(() => setBandcampLoading(null), 3000);
+              }} 
+            />
+          )}
+
         </div>
       )}
 

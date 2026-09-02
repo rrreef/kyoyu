@@ -222,6 +222,7 @@ async function searchBandcamp(query) {
     const data = await res.json();
     return (data.results || []).map((r, i) => ({
       id: `bc-${i}-${Date.now()}`,
+      entityType: r.type,
       title: r.title,
       artistName: r.artistName,
       artworkUrl: r.artworkUrl,
@@ -272,9 +273,32 @@ export async function unifiedSearch(query) {
     return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] } };
   }
   
-  const trimmed = query.trim();
+  let trimmed = query.trim();
+  let aliases = [];
+  let canonical = trimmed;
   
-  // Run all searches in parallel
+  // Resolve typos and aliases
+  try {
+    const res = await fetch('/api/resolve-aliases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: trimmed })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.canonical && data.canonical.toLowerCase() !== trimmed.toLowerCase()) {
+        canonical = data.canonical;
+        trimmed = data.canonical; // Use corrected typo for backend searches
+      }
+      if (data.aliases) {
+        aliases = data.aliases.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
+      }
+    }
+  } catch (err) {
+    console.warn('Alias resolution failed:', err);
+  }
+  
+  // Run all searches in parallel using the (potentially corrected) query
   const [nativeTracks, discogsResults, youtubeResults, soundcloudResults, bandcampResults] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
@@ -285,6 +309,22 @@ export async function unifiedSearch(query) {
   
   // Categorize and deduplicate Discogs results
   const external = categorizeDiscogsResults(discogsResults, nativeTracks);
+  
+  // Inject Aliases as synthetic Artist results
+  if (aliases.length > 0) {
+    const aliasArtists = aliases.map(a => ({
+      discogsId: `alias-${a}`,
+      entityType: 'artist',
+      name: a,
+      title: a,
+      thumb: null,
+      isExternal: true,
+      isAlias: true,
+      canonicalLabel: `Alias of ${canonical}`
+    }));
+    external.artists = [...aliasArtists, ...external.artists];
+  }
+  
   external.youtube = youtubeResults;
   external.soundcloud = soundcloudResults;
   external.bandcamp = bandcampResults;
