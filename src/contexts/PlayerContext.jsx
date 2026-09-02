@@ -247,6 +247,12 @@ export function PlayerProvider({ children }) {
     if (!audio || !isFinite(seconds)) return;
     const t = Math.max(0, Math.min(seconds, audio.duration || 0));
     audio.currentTime = t;
+    
+    try {
+      const mh = window.webkit?.messageHandlers?.audioFallback;
+      if (mh) mh.postMessage({ seek: t });
+    } catch(e) {}
+    
     dispatch({ type:'SET_PROGRESS', value: t });
   }, []);
 
