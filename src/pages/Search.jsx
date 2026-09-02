@@ -8,6 +8,101 @@ import ContentStateBadge from '../components/ContentStateBadge';
 import EntityPlaceholder from '../components/EntityPlaceholder';
 import './Search.css';
 
+function groupHistoryByDay(historyArr) {
+  const groups = [];
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  today.setHours(0,0,0,0);
+  yesterday.setHours(0,0,0,0);
+
+  const map = new Map();
+
+  historyArr.forEach(item => {
+    const date = new Date(item.timestamp);
+    date.setHours(0,0,0,0);
+    
+    let label = date.toLocaleDateString();
+    if (date.getTime() === today.getTime()) {
+      label = 'Today';
+    } else if (date.getTime() === yesterday.getTime()) {
+      label = 'Yesterday';
+    } else if (date.getTime() === yesterday.getTime() - 86400000) {
+      label = `The day before yesterday (${date.toLocaleDateString()})`;
+    }
+
+    if (!map.has(label)) {
+      map.set(label, []);
+    }
+    map.get(label).push(item);
+  });
+  
+  const sortedLabels = Array.from(map.keys()).sort((a, b) => {
+    if (a === 'Today') return -1;
+    if (b === 'Today') return 1;
+    if (a === 'Yesterday') return -1;
+    if (b === 'Yesterday') return 1;
+    if (a.startsWith('The day before yesterday')) return -1;
+    if (b.startsWith('The day before yesterday')) return 1;
+    return new Date(map.get(b)[0].timestamp).getTime() - new Date(map.get(a)[0].timestamp).getTime();
+  });
+
+  return sortedLabels.map(label => ({
+    label,
+    items: map.get(label).sort((a, b) => b.timestamp - a.timestamp)
+  }));
+}
+
+function SwipeableHistoryItem({ item, onClick, onRemove }) {
+  const [translateX, setTranslateX] = useState(0);
+  const [removed, setRemoved] = useState(false);
+  const touchStartRef = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    const diff = e.touches[0].clientX - touchStartRef.current;
+    if (diff > 0) {
+      setTranslateX(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (translateX > 100) {
+      setTranslateX(window.innerWidth);
+      setRemoved(true);
+      setTimeout(onRemove, 300);
+    } else {
+      setTranslateX(0);
+    }
+  };
+
+  if (removed) return null;
+
+  return (
+    <div
+      className="search-history-item swipeable-item"
+      onClick={onClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: `translateX(${translateX}px)`,
+        transition: translateX === 0 || translateX > 100 ? 'transform 0.3s ease-out' : 'none',
+      }}
+    >
+      <Clock size={14} className="search-history-icon" />
+      <span className="search-history-text">{item.query}</span>
+      <span className="search-history-time">
+        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </span>
+    </div>
+  );
+}
+
 export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
@@ -26,7 +121,13 @@ export default function Search() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('kyoyu-search-history');
-      if (raw) setHistory(JSON.parse(raw));
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        if (parsed.length > 0 && typeof parsed[0] === 'string') {
+          parsed = parsed.map(q => ({ query: q, timestamp: Date.now() }));
+        }
+        setHistory(parsed);
+      }
     } catch {}
   }, []);
 
@@ -40,8 +141,11 @@ export default function Search() {
       setQuery(q || '');
       if (q && q.trim().length >= 2) {
         setHistory(prev => {
-          const cleaned = prev.filter(h => h.toLowerCase() !== q.toLowerCase());
-          const next = [q, ...cleaned].slice(0, 20);
+          const cleaned = prev.filter(h => {
+            const queryStr = typeof h === 'string' ? h : h.query;
+            return queryStr.toLowerCase() !== q.toLowerCase();
+          });
+          const next = [{ query: q, timestamp: Date.now() }, ...cleaned].slice(0, 20);
           localStorage.setItem('kyoyu-search-history', JSON.stringify(next));
           return next;
         });
@@ -156,8 +260,8 @@ export default function Search() {
     return () => clearTimeout(debounceRef.current);
   }, [query]);
 
-  const removeHistoryItem = (idx) => {
-    const next = history.filter((_, i) => i !== idx);
+  const removeHistoryItem = (timestamp) => {
+    const next = history.filter(item => item.timestamp !== timestamp);
     setHistory(next);
     localStorage.setItem('kyoyu-search-history', JSON.stringify(next));
   };
@@ -382,16 +486,17 @@ export default function Search() {
             <button className="search-history-clear" onClick={clearHistory}>Clear All</button>
           </div>
           <div className="search-history-list">
-            {history.map((item, i) => (
-              <div key={i} className="search-history-item" onClick={() => setQuery(item)}>
-                <Clock size={14} className="search-history-icon" />
-                <span className="search-history-text">{item}</span>
-                <button
-                  className="search-history-remove"
-                  onClick={(e) => { e.stopPropagation(); removeHistoryItem(i); }}
-                >
-                  <X size={12} />
-                </button>
+            {groupHistoryByDay(history).map(group => (
+              <div key={group.label} className="search-history-group">
+                <div className="search-history-group-label">{group.label}</div>
+                {group.items.map(item => (
+                  <SwipeableHistoryItem
+                    key={item.timestamp}
+                    item={item}
+                    onClick={() => setQuery(item.query)}
+                    onRemove={() => removeHistoryItem(item.timestamp)}
+                  />
+                ))}
               </div>
             ))}
           </div>

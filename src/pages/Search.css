@@ -6,16 +6,17 @@
 
 /* ── Search History ── */
 .search-history {
-  max-height: 33vh;
-  overflow-y: auto;
-  padding: 0;
+  flex: 1;
+  padding: 0 0 40px 0;
+  margin-left: -32px;
+  margin-right: -32px;
 }
 
 .search-history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 12px;
+  padding: 0 32px 12px;
 }
 
 .search-history-title {
@@ -23,6 +24,7 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.01em;
+  display: none; /* Hidden since we group by day now */
 }
 
 .search-history-clear {
@@ -34,20 +36,36 @@
   cursor: pointer;
   padding: 4px 0;
   opacity: 0.7;
+  margin-left: auto;
 }
 .search-history-clear:active { opacity: 0.4; }
+
+.search-history-group {
+  margin-bottom: 20px;
+}
+
+.search-history-group-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  padding-left: 32px;
+  padding-right: 32px;
+}
 
 .search-history-list {
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow-x: hidden;
 }
 
 .search-history-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 0;
+  padding: 12px 32px;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.15s;
@@ -75,19 +93,14 @@
   text-overflow: ellipsis;
 }
 
-.search-history-remove {
-  background: none;
-  border: none;
+.search-history-time {
+  font-size: 0.75rem;
   color: var(--text-muted);
-  opacity: 0.4;
-  cursor: pointer;
-  padding: 6px;
+  opacity: 0.7;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-left: auto;
 }
-.search-history-remove:active { opacity: 0.8; }
+
 
 /* ── Live Search Results List ── */
 .search-results-list {
