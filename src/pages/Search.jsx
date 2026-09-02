@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag } from 'lucide-react';
+import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2 } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp } from '../lib/unifiedSearch';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -65,14 +65,14 @@ function SwipeableHistoryItem({ item, onClick, onRemove }) {
 
   const handleTouchMove = (e) => {
     const diff = e.touches[0].clientX - touchStartRef.current;
-    if (diff > 0) {
+    if (diff < 0) {
       setTranslateX(diff);
     }
   };
 
   const handleTouchEnd = () => {
-    if (translateX > 100) {
-      setTranslateX(window.innerWidth);
+    if (translateX < -100) {
+      setTranslateX(-window.innerWidth);
       setRemoved(true);
       setTimeout(onRemove, 300);
     } else {
@@ -83,22 +83,37 @@ function SwipeableHistoryItem({ item, onClick, onRemove }) {
   if (removed) return null;
 
   return (
-    <div
-      className="search-history-item swipeable-item"
-      onClick={onClick}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{
-        transform: `translateX(${translateX}px)`,
-        transition: translateX === 0 || translateX > 100 ? 'transform 0.3s ease-out' : 'none',
-      }}
-    >
-      <Clock size={14} className="search-history-icon" />
-      <span className="search-history-text">{item.query}</span>
-      <span className="search-history-time">
-        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </span>
+    <div style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Background Trash Icon */}
+      <div style={{
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        paddingRight: '32px', color: '#888', zIndex: 0
+      }}>
+        <Trash2 size={18} />
+      </div>
+
+      {/* Foreground Item */}
+      <div
+        className="search-history-item swipeable-item"
+        onClick={onClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: `translateX(${translateX}px)`,
+          transition: translateX === 0 || translateX < -100 ? 'transform 0.3s ease-out' : 'none',
+          position: 'relative',
+          zIndex: 1,
+          backgroundColor: '#000'
+        }}
+      >
+        <Clock size={14} className="search-history-icon" />
+        <span className="search-history-text">{item.query}</span>
+        <span className="search-history-time">
+          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
     </div>
   );
 }
@@ -369,7 +384,7 @@ export default function Search() {
 
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
-  const showHistory = !hasResults && !hasExternal && query.length < 2 && history.length > 0;
+  const showHistory = !hasResults && !hasExternal && query.length < 2;
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -483,23 +498,31 @@ export default function Search() {
         <div className="search-history">
           <div className="search-history-header">
             <span className="search-history-title">Recent</span>
-            <button className="search-history-clear" onClick={clearHistory}>Clear All</button>
+            {history.length > 0 && (
+              <button className="search-history-clear" onClick={clearHistory}>Clear All</button>
+            )}
           </div>
-          <div className="search-history-list">
-            {groupHistoryByDay(history).map(group => (
-              <div key={group.label} className="search-history-group">
-                <div className="search-history-group-label">{group.label}</div>
-                {group.items.map(item => (
-                  <SwipeableHistoryItem
-                    key={item.timestamp}
-                    item={item}
-                    onClick={() => setQuery(item.query)}
-                    onRemove={() => removeHistoryItem(item.timestamp)}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          {history.length > 0 ? (
+            <div className="search-history-list">
+              {groupHistoryByDay(history).map(group => (
+                <div key={group.label} className="search-history-group">
+                  <div className="search-history-group-label">{group.label}</div>
+                  {group.items.map(item => (
+                    <SwipeableHistoryItem
+                      key={item.timestamp}
+                      item={item}
+                      onClick={() => setQuery(item.query)}
+                      onRemove={() => removeHistoryItem(item.timestamp)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#666', fontSize: '0.9rem', fontWeight: 500 }}>
+              No recent searches
+            </div>
+          )}
         </div>
       )}
 
