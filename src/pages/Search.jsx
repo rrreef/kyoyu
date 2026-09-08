@@ -308,7 +308,7 @@ export default function Search() {
     };
     window.__kyoyuSetSearch = (q) => {
       setQuery(q || '');
-      if (q && q.trim().length >= 2) {
+      if (q && q.trim().length > 0) {
         setHistory(prev => {
           const cleaned = prev.filter(h => {
             const queryStr = typeof h === 'string' ? h : h.query;
@@ -407,7 +407,7 @@ export default function Search() {
     let ignore = false;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (query.trim().length < 2) {
+    if (query.trim().length === 0) {
       setResults([]);
       setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
       setLoading(false);
@@ -547,7 +547,7 @@ export default function Search() {
 
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
-  const isQueryEmpty = query.trim().length < 2;
+  const isQueryEmpty = query.trim().length === 0;
   const showHistory = isQueryEmpty || (!hasResults && !hasExternal);
 
   // Renderers
@@ -734,12 +734,12 @@ export default function Search() {
       )}
 
       {/* Loading state */}
-      {loading && query.length >= 2 && !hasResults && (
+      {loading && query.length > 0 && !hasResults && (
         <div className="search-loading">Searching...</div>
       )}
 
       {/* No results */}
-      {!loading && query.length >= 2 && !hasResults && !hasExternal && (
+      {!loading && query.length > 0 && !hasResults && !hasExternal && (
         <div className="search-empty">No results found</div>
       )}
 

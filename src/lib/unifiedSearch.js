@@ -269,7 +269,7 @@ export async function resolveBandcamp(trackUrl) {
  * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array, bandcamp: Array } }}
  */
 export async function unifiedSearch(query) {
-  if (!query || query.trim().length < 2) {
+  if (!query || query.trim().length === 0) {
     return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] } };
   }
   
