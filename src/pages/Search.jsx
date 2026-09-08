@@ -408,6 +408,7 @@ export default function Search() {
 
     if (query.trim().length < 2) {
       setResults([]);
+      setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
       setLoading(false);
       return;
     }
