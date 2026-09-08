@@ -754,13 +754,15 @@ export default function Search() {
       )}
 
       {/* External Results from Discogs */}
-      {!isQueryEmpty && hasExternal && (activeFilter === 'all') && (activeProvider === 'all' || activeProvider === 'discogs') && (
+      {!isQueryEmpty && hasExternal && (activeProvider === 'all' || activeProvider === 'discogs') && (
         <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header">
-            Discogs
-          </div>
+          {(((activeFilter === 'all' || activeFilter === 'artists') && externalResults.artists.length > 0) || ((activeFilter === 'all' || activeFilter === 'labels') && externalResults.labels.length > 0) || ((activeFilter === 'all' || activeFilter === 'albums') && externalResults.releases.length > 0)) && (
+            <div className="search-section-title search-external-header">
+              Discogs
+            </div>
+          )}
 
-          {externalResults.artists.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'artists') && externalResults.artists.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Artists</div>
               {externalResults.artists.map(artist => (
@@ -793,7 +795,7 @@ export default function Search() {
             </div>
           )}
 
-          {externalResults.releases.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'albums') && externalResults.releases.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Releases</div>
               {externalResults.releases.map(release => (
@@ -818,7 +820,7 @@ export default function Search() {
             </div>
           )}
 
-          {externalResults.labels.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'labels') && externalResults.labels.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Labels</div>
               {externalResults.labels.map(label => (
@@ -842,7 +844,7 @@ export default function Search() {
       )}
 
       {/* ── YouTube Results ── */}
-      {!isQueryEmpty && externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'youtube') && (
+      {!isQueryEmpty && externalResults.youtube && externalResults.youtube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
             YouTube
@@ -880,7 +882,7 @@ export default function Search() {
       )}
 
       {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
+      {!isQueryEmpty && externalResults.soundcloud && externalResults.soundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
@@ -918,13 +920,22 @@ export default function Search() {
         </div>
       )}
       {/* ── Bandcamp Results ── */}
-      {!isQueryEmpty && externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'bandcamp') && (
+      {!isQueryEmpty && externalResults.bandcamp && externalResults.bandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
+        const filteredBc = externalResults.bandcamp.filter(bc => 
+          activeFilter === 'all' || 
+          (activeFilter === 'titles' && bc.entityType === 'track') ||
+          (activeFilter === 'albums' && bc.entityType === 'album') ||
+          (activeFilter === 'artists' && bc.entityType === 'artist') ||
+          (activeFilter === 'labels' && bc.entityType === 'label')
+        );
+        if (filteredBc.length === 0) return null;
+        return (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
             Bandcamp
           </div>
           <div className="search-section">
-            {externalResults.bandcamp.map(bc => {
+            {filteredBc.map(bc => {
               if (bc.entityType === 'label') {
                 return <BandcampLabelResult key={bc.id} label={bc} onPlay={(item) => {
                   if (bandcampLoading) return;
