@@ -555,7 +555,7 @@ export default function Search() {
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
   const isQueryEmpty = query.trim().length === 0;
-  const showHistory = isQueryEmpty || (!hasResults && !hasExternal);
+  const showHistory = isQueryEmpty;
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
