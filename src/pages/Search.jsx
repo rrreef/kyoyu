@@ -307,7 +307,7 @@ export default function Search() {
       setQuery(q || '');
     };
     window.__kyoyuSetSearch = (q) => {
-      setQuery(q || '');
+      syncNativeSearch(q || '');
       if (q && q.trim().length > 0) {
         setHistory(prev => {
           const cleaned = prev.filter(h => {
@@ -437,6 +437,13 @@ export default function Search() {
       clearTimeout(debounceRef.current);
     };
   }, [query]);
+
+  const syncNativeSearch = (text) => {
+    setQuery(text);
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.searchSync) {
+      window.webkit.messageHandlers.searchSync.postMessage(text);
+    }
+  };
 
   const removeHistoryItem = (timestamp) => {
     const next = history.filter(item => item.timestamp !== timestamp);
@@ -675,7 +682,7 @@ export default function Search() {
                     <SwipeableHistoryItem
                       key={item.timestamp}
                       item={item}
-                      onClick={() => setQuery(item.query)}
+                      onClick={() => syncNativeSearch(item.query)}
                       onRemove={() => removeHistoryItem(item.timestamp)}
                     />
                   ))}
@@ -758,7 +765,7 @@ export default function Search() {
                   onClick={() => {
                     if (artist.isAlias) {
                       if (window.__kyoyuSetSearch) window.__kyoyuSetSearch(artist.name);
-                      else setQuery(artist.name);
+                      else syncNativeSearch(artist.name);
                     } else {
                       window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`);
                     }
