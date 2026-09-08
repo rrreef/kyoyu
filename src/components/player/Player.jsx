@@ -554,10 +554,21 @@ export default function Player({ hideMini = false }) {
       });
       
       try {
-        navigator.mediaSession.setActionHandler('play', () => window.__kyoyuPlayerCmd?.('play'));
-        navigator.mediaSession.setActionHandler('pause', () => window.__kyoyuPlayerCmd?.('pause'));
-        navigator.mediaSession.setActionHandler('previoustrack', () => window.__kyoyuPlayerCmd?.('prev'));
-        navigator.mediaSession.setActionHandler('nexttrack', () => window.__kyoyuPlayerCmd?.('next'));
+        if (!isNative()) {
+          navigator.mediaSession.setActionHandler('play', () => window.__kyoyuPlayerCmd?.('play'));
+          navigator.mediaSession.setActionHandler('pause', () => window.__kyoyuPlayerCmd?.('pause'));
+          navigator.mediaSession.setActionHandler('previoustrack', () => window.__kyoyuPlayerCmd?.('prev'));
+          navigator.mediaSession.setActionHandler('nexttrack', () => window.__kyoyuPlayerCmd?.('next'));
+        } else {
+          // In native iOS, MPRemoteCommandCenter handles all lock screen buttons
+          // and sends them down to window.__kyoyuPlayerCmd.
+          // We MUST NOT handle them here, otherwise when AVPlayer steals the Now Playing
+          // session from WKWebView, iOS sends a pause command here that kills playback!
+          navigator.mediaSession.setActionHandler('play', null);
+          navigator.mediaSession.setActionHandler('pause', null);
+          navigator.mediaSession.setActionHandler('previoustrack', null);
+          navigator.mediaSession.setActionHandler('nexttrack', null);
+        }
       } catch (e) {}
     }
   }, [currentTrack]);
