@@ -314,3 +314,7 @@
   height: 52px !important;
   min-width: 52px;
 }
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}

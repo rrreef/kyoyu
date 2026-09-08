@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2 } from 'lucide-react';
+import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2 } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp } from '../lib/unifiedSearch';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -742,7 +742,10 @@ export default function Search() {
 
       {/* Loading state */}
       {loading && query.length > 0 && !hasResults && (
-        <div className="search-loading">Searching...</div>
+        <div className="search-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
+          <Loader2 className="spin-icon" size={28} color="rgba(255,255,255,0.4)" />
+          <span>Searching...</span>
+        </div>
       )}
 
       {/* No results */}
