@@ -621,7 +621,7 @@ export default function Player({ hideMini = false }) {
       {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
            Kept small and behind content to avoid bleeding through the SwiftUI overlay. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 2, height: 2, transform: 'scale(0.001)', transformOrigin: 'bottom right', overflow: 'hidden', pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '100vw', height: '100vh', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
@@ -639,7 +639,7 @@ export default function Player({ hideMini = false }) {
       {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
            Uses same scale(0.001) trick as YouTube to ensure WKWebView fully loads the iframe. */}
       {isNativeSC && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: 300, height: 166, transform: 'scale(0.001)', transformOrigin: 'bottom right', overflow: 'hidden', pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '100vw', height: '100vh', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <SoundCloudPlayer
             ref={scHiddenRef}
             trackUrl={providerItemId}

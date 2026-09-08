@@ -87,8 +87,8 @@ const YouTubePlayer = forwardRef(({
         if (!isMounted || !containerRef.current) return;
 
         playerRef.current = new YT.Player(containerRef.current, {
-          width: audioOnly ? 1 : '100%',
-          height: audioOnly ? 1 : '100%',
+          width: '100%',
+          height: '100%',
           videoId: videoId,
           playerVars: {
             autoplay: 0,
