@@ -438,12 +438,12 @@ export default function Search() {
     };
   }, [query]);
 
-  const syncNativeSearch = (text) => {
+  function syncNativeSearch(text) {
     setQuery(text);
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.searchSync) {
       window.webkit.messageHandlers.searchSync.postMessage(text);
     }
-  };
+  }
 
   const removeHistoryItem = (timestamp) => {
     const next = history.filter(item => item.timestamp !== timestamp);
