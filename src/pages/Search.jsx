@@ -547,7 +547,8 @@ export default function Search() {
 
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
-  const showHistory = !hasResults && !hasExternal && query.length < 2;
+  const isQueryEmpty = query.trim().length < 2;
+  const showHistory = isQueryEmpty || (!hasResults && !hasExternal);
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -690,7 +691,7 @@ export default function Search() {
       )}
 
       {/* Live Results List */}
-      {hasResults && (
+      {!isQueryEmpty && hasResults && (
         <div className="search-results-list">
           
           {(activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
@@ -700,7 +701,8 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
+          {/* Native Tracks */}
+          {!isQueryEmpty && hasResults && (activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
             <div className="search-section">
               {activeFilter === 'all' && <div className="search-section-title">Titles</div>}
               {titleList.map(t => renderTrackRow(t, false))}
@@ -742,7 +744,7 @@ export default function Search() {
       )}
 
       {/* External Results from Discogs */}
-      {hasExternal && (activeFilter === 'all') && (activeProvider === 'all' || activeProvider === 'discogs') && (
+      {!isQueryEmpty && hasExternal && (activeFilter === 'all') && (activeProvider === 'all' || activeProvider === 'discogs') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header">
             Discogs
@@ -830,7 +832,7 @@ export default function Search() {
       )}
 
       {/* ── YouTube Results ── */}
-      {externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'youtube') && (
+      {!isQueryEmpty && externalResults.youtube && externalResults.youtube.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'youtube') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
             YouTube
@@ -868,7 +870,7 @@ export default function Search() {
       )}
 
       {/* ── SoundCloud Results ── */}
-      {externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
+      {!isQueryEmpty && externalResults.soundcloud && externalResults.soundcloud.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
@@ -906,7 +908,7 @@ export default function Search() {
         </div>
       )}
       {/* ── Bandcamp Results ── */}
-      {externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'bandcamp') && (
+      {!isQueryEmpty && externalResults.bandcamp && externalResults.bandcamp.length > 0 && activeFilter === 'all' && (activeProvider === 'all' || activeProvider === 'bandcamp') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
             Bandcamp
