@@ -404,30 +404,38 @@ export default function Search() {
 
   // Debounced search — fires on every query change
   useEffect(() => {
+    let ignore = false;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (query.trim().length < 2) {
       setResults([]);
       setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
       setLoading(false);
-      return;
+      return () => { ignore = true; };
     }
 
     setLoading(true);
     debounceRef.current = setTimeout(() => {
       unifiedSearch(query.trim())
         .then(({ nativeTracks, external }) => {
+          if (ignore) return;
           setResults(nativeTracks);
           setExternalResults(external);
         })
         .catch(() => {
+          if (ignore) return;
           setResults([]);
-          setExternalResults({ artists: [], releases: [], labels: [], soundcloud: [] });
+          setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
     }, 300);
 
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      ignore = true;
+      clearTimeout(debounceRef.current);
+    };
   }, [query]);
 
   const removeHistoryItem = (timestamp) => {
