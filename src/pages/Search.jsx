@@ -430,7 +430,7 @@ export default function Search() {
         .finally(() => {
           if (!ignore) setLoading(false);
         });
-    }, 300);
+    }, 100);
 
     return () => {
       ignore = true;

@@ -7,6 +7,10 @@ let requestLog = [];
 const RATE_LIMIT = 55;
 const RATE_WINDOW = 60000;
 
+// Cache for alias resolution
+const aliasCache = new Map();
+const ALIAS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 export default async function handler(req, res) {
   const origin = req.headers.origin;
   if (ALLOWED_ORIGINS.includes(origin)) {
@@ -37,6 +41,16 @@ export default async function handler(req, res) {
   // ==== ACTION: resolve-aliases ====
   if (action === 'resolve-aliases') {
     if (!query || query.length < 2) return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    
+    const cacheKey = query.trim().toLowerCase();
+    if (aliasCache.has(cacheKey)) {
+      const cached = aliasCache.get(cacheKey);
+      if (now - cached.timestamp < ALIAS_CACHE_TTL) {
+        return res.status(200).json(cached.data);
+      }
+      aliasCache.delete(cacheKey);
+    }
+
     let canonical = query;
     try {
       const fuzzyQ = query.split(' ').filter(w => w.trim()).map(w => w + '~').join(' ');
@@ -63,7 +77,15 @@ export default async function handler(req, res) {
         }
       }
     } catch (err) {}
-    return res.status(200).json({ original: query, canonical, aliases: Array.from(new Set(aliases)) });
+    
+    const result = { original: query, canonical, aliases: Array.from(new Set(aliases)) };
+    aliasCache.set(cacheKey, { data: result, timestamp: now });
+    if (aliasCache.size > 200) {
+      const oldest = [...aliasCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp).slice(0, 50);
+      oldest.forEach(([k]) => aliasCache.delete(k));
+    }
+
+    return res.status(200).json(result);
   }
 
   // ==== DEFAULT ACTION: search ====
