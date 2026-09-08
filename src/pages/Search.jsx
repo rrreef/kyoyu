@@ -123,12 +123,12 @@ function BandcampLabelResult({ label, onPlay, onGo }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/bandcamp-label-releases', {
+    fetch('/api/bandcamp-resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: label.trackUrl })
+      body: JSON.stringify({ action: 'label-releases', url: label.trackUrl }),
     })
-      .then(r => r.json())
+      .then(res => res.json())
       .then(d => { setReleases(d.releases); setLoading(false); })
       .catch(() => setLoading(false));
   }, [label.trackUrl]);
@@ -205,10 +205,10 @@ function BandcampRecommendations({ trackUrl, onPlay }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch('/api/bandcamp-recommendations', {
+    fetch('/api/bandcamp-resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: trackUrl })
+      body: JSON.stringify({ action: 'recommendations', url: trackUrl }),
     })
       .then(r => r.json())
       .then(d => { setRecs(d.recommendations || []); setLoading(false); })

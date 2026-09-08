@@ -1,88 +1,84 @@
 // POST /api/discogs-search
-// Body: { query: string, type?: string, page?: number, perPage?: number }
-// Returns: { results: [...], pagination: {...} }
+// Handles standard search and resolve-aliases action
 
-const DISCOGS_BASE = 'https://api.discogs.com';
 const ALLOWED_ORIGINS = ['https://ree.fm', 'https://www.ree.fm'];
 
-// Simple in-memory rate limiter
 let requestLog = [];
 const RATE_LIMIT = 55;
 const RATE_WINDOW = 60000;
 
 export default async function handler(req, res) {
-  // CORS
   const origin = req.headers.origin;
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const now = Date.now();
+  requestLog = requestLog.filter(t => now - t < RATE_WINDOW);
+  if (requestLog.length >= RATE_LIMIT) {
+    return res.status(429).json({ error: 'Rate limit reached' });
+  }
+  requestLog.push(now);
+
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+  }
+
+  const { query, type, page, perPage, action } = body || {};
+
+  // ==== ACTION: resolve-aliases ====
+  if (action === 'resolve-aliases') {
+    if (!query || query.length < 2) return res.status(400).json({ error: 'Query must be at least 2 characters' });
+    let canonical = query;
+    try {
+      const fuzzyQ = query.split(' ').filter(w => w.trim()).map(w => w + '~').join(' ');
+      const mbRes = await fetch(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(fuzzyQ)}&fmt=json`, { headers: { 'User-Agent': 'Kyoyu/1.0 (https://ree.fm)' } });
+      if (mbRes.ok) {
+        const mbData = await mbRes.json();
+        if (mbData.artists && mbData.artists.length > 0 && mbData.artists[0].score > 50) canonical = mbData.artists[0].name;
+      }
+    } catch (err) {}
+
+    let aliases = [];
+    try {
+      const discogsRes = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(canonical)}&type=artist`, { headers: { 'User-Agent': 'Kyoyu/1.0', 'Authorization': `Discogs token=${process.env.DISCOGS_TOKEN || ''}` } });
+      if (discogsRes.ok) {
+        const discogsData = await discogsRes.json();
+        if (discogsData.results && discogsData.results.length > 0) {
+          const discogsId = discogsData.results[0].id;
+          const artistRes = await fetch(`https://api.discogs.com/artists/${discogsId}`, { headers: { 'User-Agent': 'Kyoyu/1.0', 'Authorization': `Discogs token=${process.env.DISCOGS_TOKEN || ''}` } });
+          if (artistRes.ok) {
+            const artistData = await artistRes.json();
+            if (artistData.aliases) aliases = artistData.aliases.map(a => a.name.replace(/\s\(\d+\)$/, ''));
+            if (artistData.groups) artistData.groups.forEach(g => aliases.push(g.name.replace(/\s\(\d+\)$/, '')));
+          }
+        }
+      }
+    } catch (err) {}
+    return res.status(200).json({ original: query, canonical, aliases: Array.from(new Set(aliases)) });
+  }
+
+  // ==== DEFAULT ACTION: search ====
+  if (!query) return res.status(400).json({ error: 'Missing query' });
+  const p = page || 1;
+  const pp = perPage || 10;
+  let url = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&page=${p}&per_page=${pp}`;
+  if (type) url += `&type=${encodeURIComponent(type)}`;
+
   try {
-    const { query, type, page, perPage } = req.body || {};
-    if (!query || query.length < 2) {
-      return res.status(400).json({ error: 'Query must be at least 2 characters' });
-    }
-
-    // Rate limit check
-    const now = Date.now();
-    requestLog = requestLog.filter(t => now - t < RATE_WINDOW);
-    if (requestLog.length >= RATE_LIMIT) {
-      return res.status(429).json({ error: 'Rate limit reached. Try again shortly.' });
-    }
-    requestLog.push(now);
-
-    // Build Discogs search URL
-    const url = new URL(`${DISCOGS_BASE}/database/search`);
-    url.searchParams.set('q', query);
-    if (type) url.searchParams.set('type', type);
-    url.searchParams.set('page', String(page || 1));
-    url.searchParams.set('per_page', String(Math.min(parseInt(perPage) || 100, 100)));
-
-    const headers = {
-      'User-Agent': process.env.DISCOGS_USER_AGENT || 'Kyoyu/1.0 +https://ree.fm',
-      'Accept': 'application/json',
-    };
-    if (process.env.DISCOGS_TOKEN) {
-      headers['Authorization'] = `Discogs token=${process.env.DISCOGS_TOKEN}`;
-    }
-
-    const discogsRes = await fetch(url.toString(), { headers });
-    if (!discogsRes.ok) {
-      const errText = await discogsRes.text();
-      console.error('Discogs API error:', discogsRes.status, errText);
-      return res.status(502).json({ error: 'Discogs API error' });
-    }
-
+    const discogsRes = await fetch(url, { headers: { 'User-Agent': 'Kyoyu/1.0', 'Authorization': `Discogs token=${process.env.DISCOGS_TOKEN || ''}` } });
+    if (!discogsRes.ok) return res.status(discogsRes.status).json({ error: 'Discogs API error' });
     const data = await discogsRes.json();
-
-    // Transform results — strip images (not CC0)
-    const results = (data.results || []).map(r => ({
-      discogsId: r.id,
-      type: r.type,
-      title: r.title,
-      thumb: r.thumb || null,
-      coverImage: r.cover_image || null,
-      year: r.year || null,
-      genre: r.genre || [],
-      style: r.style || [],
-      format: r.format || [],
-      label: r.label || [],
-      country: r.country || null,
-      catno: r.catno || null,
-      resourceUrl: r.resource_url,
-      uri: r.uri,
-    }));
-
-    return res.status(200).json({
-      results,
-      pagination: data.pagination || {},
-    });
+    return res.status(200).json(data);
   } catch (err) {
-    console.error('Discogs search error:', err);
-    return res.status(500).json({ error: err.message || 'Search failed' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }

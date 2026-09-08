@@ -279,10 +279,10 @@ export async function unifiedSearch(query) {
   
   // Resolve typos and aliases
   try {
-    const res = await fetch('/api/resolve-aliases', {
+    const res = await fetch('/api/discogs-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: trimmed })
+      body: JSON.stringify({ action: 'resolve-aliases', query: trimmed })
     });
     if (res.ok) {
       const data = await res.json();
