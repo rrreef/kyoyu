@@ -31,6 +31,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Valid Bandcamp URL required' });
   }
 
+  const now = Date.now();
+
   // ==== ACTION: album-tracks ====
   if (action === 'album-tracks') {
     const cacheKey = `album:${url}`;
@@ -202,7 +204,6 @@ export default async function handler(req, res) {
   }
 
   // ==== DEFAULT ACTION: resolve track ====
-  const now = Date.now();
   if (resolveCache.has(url)) {
     const cached = resolveCache.get(url);
     if (now - cached.timestamp < CACHE_TTL) return res.status(200).json(cached.data);
