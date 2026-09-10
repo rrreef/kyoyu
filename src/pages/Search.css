@@ -120,12 +120,12 @@
   border-bottom: none;
 }
 
-/* Artwork — sized and positioned to align with the 62px provider filter bar */
+/* Artwork — sized and positioned to align with the 62pt provider filter bar + glass padding */
 .search-result-art {
-  width: 62px;
-  height: 62px;
+  width: 76px;
+  height: 76px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   margin-left: -11px;
 }

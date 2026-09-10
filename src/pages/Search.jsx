@@ -901,15 +901,63 @@ export default function Search() {
                 );
               }
 
+              // ── Artist → opens sheet with their discography ──
+              if (bc.entityType === 'artist') {
+                return (
+                  <div key={bc.id} className="search-result-row search-external-row"
+                    style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
+                    onClick={() => {
+                      if (bandcampLoading) return;
+                      setBandcampLoading(bc.trackUrl);
+                      // Fetch artist releases from their Bandcamp page
+                      fetch('/api/bandcamp-resolve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'label-releases', url: bc.trackUrl }),
+                      })
+                        .then(r => r.json())
+                        .then(d => {
+                          setBandcampLoading(null);
+                          const tracks = (d.releases || []).map((r, i) => ({
+                            id: `bc-artist-${bc.id}-${i}`,
+                            title: r.title || `Release ${i + 1}`,
+                            artist: r.artist || bc.artistName || bc.title,
+                            url: r.url || bc.trackUrl,
+                            streamUrl: null,
+                            duration: 0,
+                          }));
+                          openNativeAlbumFast({
+                            id: bc.id || `bc-artist-${Date.now()}`,
+                            title: bc.title || bc.artistName,
+                            artist: 'Bandcamp Artist',
+                            cover: bc.artworkUrl || (d.releases?.[0]?.artworkUrl) || null,
+                            year: null,
+                            tracks,
+                          });
+                        })
+                        .catch(() => setBandcampLoading(null));
+                    }}>
+                    <div className="search-result-art discogs-art" style={{ borderRadius: '50%' }}>
+                      {bc.artworkUrl ? (
+                        <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                      ) : (
+                        <EntityPlaceholder name={bc.title} type="artist" />
+                      )}
+                    </div>
+                    <div className="search-result-info">
+                      <span className="search-result-title">{bc.title}</span>
+                      <span className="search-result-artist">Bandcamp Artist</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Track → plays directly ──
               return (
                 <div key={bc.id} className="search-result-row search-external-row"
                   style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
                   onClick={() => {
                     if (bandcampLoading) return;
-                    if (bc.entityType === 'artist') {
-                       window.open(bc.trackUrl, '_blank');
-                       return;
-                    }
                     setBandcampLoading(bc.trackUrl);
                     handleSearchPlay({
                       id: bc.id || `bc-${bc.trackId}`,
@@ -922,7 +970,7 @@ export default function Search() {
                     });
                     setTimeout(() => setBandcampLoading(null), 3000);
                   }}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: bc.entityType === 'artist' ? '50%' : '6px' }}>
+                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
                     {bc.artworkUrl ? (
                       <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                     ) : (
