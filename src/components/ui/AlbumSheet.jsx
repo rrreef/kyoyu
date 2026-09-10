@@ -18,11 +18,13 @@ export function openNativeAlbumFast(album) {
         genre: album.genre || null,
         year: album.year ? String(album.year) : null,
         label: album.label || null,
+        description: album.description || null,
         tracks: (album.tracks || []).map(t => ({
           id: t.id || String(Date.now() + Math.random()),
           title: t.title || t.name || 'Unknown Track',
           artist: t.artist || '',
-          url: t.url || t.streamUrl || t.audioUrl || ''
+          url: t.url || t.streamUrl || t.audioUrl || '',
+          cover: t.cover || null
         }))
       }
     });

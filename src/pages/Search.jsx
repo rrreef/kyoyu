@@ -918,20 +918,56 @@ export default function Search() {
                         .then(r => r.json())
                         .then(d => {
                           setBandcampLoading(null);
-                          const tracks = (d.releases || []).map((r, i) => ({
+                          const releases = d.releases || [];
+                          const tracks = releases.map((r, i) => ({
                             id: `bc-artist-${bc.id}-${i}`,
                             title: r.title || `Release ${i + 1}`,
                             artist: r.artist || bc.artistName || bc.title,
                             url: r.url || bc.trackUrl,
+                            cover: r.artworkUrl || null,
                             streamUrl: null,
                             duration: 0,
                           }));
+
+                          // Set up handler so tapping an album opens its own album sheet
+                          window.__kyoyuPlayNativeTrack = (albumId, trackObj) => {
+                            const track = tracks.find(t => t.id === trackObj.id);
+                            if (!track || !track.url) return;
+                            // Fetch album tracks and open album sheet
+                            fetch('/api/bandcamp-resolve', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'album-tracks', url: track.url }),
+                            })
+                              .then(r => r.json())
+                              .then(albumData => {
+                                const albumTracks = (albumData.tracks || []).map((t, i) => ({
+                                  id: `bc-${track.id}-t${i}`,
+                                  title: t.title,
+                                  artist: t.artist || track.artist,
+                                  url: t.url || track.url,
+                                  streamUrl: t.streamUrl || null,
+                                  duration: t.duration || 0,
+                                }));
+                                openNativeAlbumFast({
+                                  id: track.id + '-album',
+                                  title: track.title,
+                                  artist: track.artist,
+                                  cover: track.cover || albumData.artworkUrl || null,
+                                  year: null,
+                                  tracks: albumTracks,
+                                });
+                              })
+                              .catch(() => {});
+                          };
+
                           openNativeAlbumFast({
                             id: bc.id || `bc-artist-${Date.now()}`,
                             title: bc.title || bc.artistName,
-                            artist: 'Bandcamp Artist',
-                            cover: bc.artworkUrl || (d.releases?.[0]?.artworkUrl) || null,
+                            artist: 'bandcamp',
+                            cover: bc.artworkUrl || releases[0]?.artworkUrl || null,
                             year: null,
+                            description: d.bio || '',
                             tracks,
                           });
                         })
@@ -946,7 +982,7 @@ export default function Search() {
                     </div>
                     <div className="search-result-info">
                       <span className="search-result-title">{bc.title}</span>
-                      <span className="search-result-artist">Bandcamp Artist</span>
+                      <span className="search-result-artist" style={{ color: '#1DA0C3' }}>Bandcamp</span>
                     </div>
                   </div>
                 );
