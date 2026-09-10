@@ -898,19 +898,24 @@ export default function Search() {
                               setExpandedAlbums(prev => { const n = { ...prev }; delete n[albumKey]; return n; });
                             } else {
                               setExpandedAlbums(prev => ({ ...prev, [albumKey]: true }));
-                              // Load tracks from Bandcamp
+                              // Load tracks from Bandcamp album page
                               fetch('/api/bandcamp-resolve', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ action: 'label-releases', url: bc.trackUrl }),
+                                body: JSON.stringify({ action: 'album-tracks', url: bc.trackUrl }),
                               })
                                 .then(r => r.json())
                                 .then(d => {
-                                  if (d.releases && d.releases.length > 0) {
-                                    setExpandedAlbums(prev => ({ ...prev, [albumKey]: d.releases }));
+                                  if (d.tracks && d.tracks.length > 0) {
+                                    setExpandedAlbums(prev => ({ ...prev, [albumKey]: d.tracks }));
+                                  } else {
+                                    // No tracks found, show empty message
+                                    setExpandedAlbums(prev => ({ ...prev, [albumKey]: [] }));
                                   }
                                 })
-                                .catch(() => {});
+                                .catch(() => {
+                                  setExpandedAlbums(prev => ({ ...prev, [albumKey]: [] }));
+                                });
                             }
                           }}>
                           {isAlbumExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -920,7 +925,11 @@ export default function Search() {
                     {/* Expanded album tracks */}
                     {isAlbumExpanded && (
                       <div style={{ paddingLeft: '16px', marginLeft: '26px', borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
-                        {albumTracks ? albumTracks.map((t, ti) => (
+                        {albumTracks === null ? (
+                          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>Loading tracks...</div>
+                        ) : albumTracks.length === 0 ? (
+                          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>No tracks found</div>
+                        ) : albumTracks.map((t, ti) => (
                           <div key={ti} className="search-result-row search-external-row"
                             onClick={() => {
                               if (bandcampLoading) return;
@@ -930,7 +939,7 @@ export default function Search() {
                                 title: t.title,
                                 artistName: t.artist || bc.artistName,
                                 artworkUrl: t.artworkUrl || bc.artworkUrl,
-                                duration: 0,
+                                duration: t.duration || 0,
                                 provider: 'bandcamp',
                                 providerItemId: t.url || bc.trackUrl,
                               });
@@ -944,16 +953,14 @@ export default function Search() {
                               )}
                             </div>
                             <div className="search-result-info">
-                              <span className="search-result-title" style={{ fontSize: '14px' }}>{t.title}</span>
-                              <span className="search-result-artist" style={{ fontSize: '12px' }}>{t.artist || bc.artistName}</span>
+                              <span className="search-result-title" style={{ fontSize: '14px' }}>{t.trackNum ? `${t.trackNum}. ` : ''}{t.title}</span>
+                              <span className="search-result-artist" style={{ fontSize: '12px' }}>{t.artist || bc.artistName}{t.duration ? ` · ${Math.floor(t.duration / 60)}:${String(t.duration % 60).padStart(2, '0')}` : ''}</span>
                             </div>
                             <div className="search-result-actions">
                               <Play size={14} style={{ opacity: 0.6 }} />
                             </div>
                           </div>
-                        )) : (
-                          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>Loading tracks...</div>
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>
