@@ -260,6 +260,24 @@ export async function resolveBandcamp(trackUrl) {
   }
 }
 
+/**
+ * Search a single provider by name. Used for retry when provider filter changes.
+ * @param {'youtube'|'soundcloud'|'bandcamp'|'discogs'} provider
+ * @param {string} query
+ * @returns {Promise<Array>}
+ */
+export async function searchSingleProvider(provider, query) {
+  if (!query || query.trim().length === 0) return [];
+  const q = query.trim();
+  switch (provider) {
+    case 'youtube': return searchYouTube(q);
+    case 'soundcloud': return searchSoundCloud(q);
+    case 'bandcamp': return searchBandcamp(q);
+    case 'discogs': return searchDiscogs(q);
+    default: return [];
+  }
+}
+
 
 /**
  * Run unified search: native catalog + Discogs + YouTube + SoundCloud + Bandcamp, merged and deduplicated.

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2 } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import { unifiedSearch, resolveBandcamp } from '../lib/unifiedSearch';
+import { unifiedSearch, resolveBandcamp, searchSingleProvider } from '../lib/unifiedSearch';
+import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import ContentStateBadge from '../components/ContentStateBadge';
@@ -281,6 +282,7 @@ export default function Search() {
   const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeProvider, setActiveProvider] = useState('all');
+  const [providerRetrying, setProviderRetrying] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
@@ -438,6 +440,52 @@ export default function Search() {
     };
   }, [query]);
 
+  // ── Provider filter retry: if user switches to a provider with empty results, retry ──
+  useEffect(() => {
+    if (activeProvider === 'all' || !query || query.trim().length === 0) return;
+    
+    // Check if the selected provider currently has empty results
+    const providerKey = activeProvider; // 'youtube', 'soundcloud', 'bandcamp', 'discogs'
+    let hasResults = false;
+    if (providerKey === 'youtube') hasResults = externalResults.youtube?.length > 0;
+    else if (providerKey === 'soundcloud') hasResults = externalResults.soundcloud?.length > 0;
+    else if (providerKey === 'bandcamp') hasResults = externalResults.bandcamp?.length > 0;
+    else if (providerKey === 'discogs') hasResults = externalResults.artists?.length > 0 || externalResults.releases?.length > 0 || externalResults.labels?.length > 0;
+    
+    if (hasResults) return; // Already have results, no need to retry
+    
+    let ignore = false;
+    setProviderRetrying(true);
+    
+    searchSingleProvider(providerKey, query.trim())
+      .then(freshResults => {
+        if (ignore || !freshResults || freshResults.length === 0) return;
+        
+        setExternalResults(prev => {
+          const next = { ...prev };
+          if (providerKey === 'youtube') next.youtube = freshResults;
+          else if (providerKey === 'soundcloud') next.soundcloud = freshResults;
+          else if (providerKey === 'bandcamp') next.bandcamp = freshResults;
+          else if (providerKey === 'discogs') {
+            // Discogs results need categorization — put them all in releases for now
+            const artists = freshResults.filter(r => r.type === 'artist').map(r => ({ ...r, entityType: 'artist', name: r.title }));
+            const labels = freshResults.filter(r => r.type === 'label').map(r => ({ ...r, entityType: 'label', name: r.title }));
+            const releases = freshResults.filter(r => r.type === 'release' || r.type === 'master').map(r => ({ ...r, entityType: 'release', releaseName: r.title }));
+            if (artists.length > 0) next.artists = [...next.artists, ...artists];
+            if (labels.length > 0) next.labels = [...next.labels, ...labels];
+            if (releases.length > 0) next.releases = [...next.releases, ...releases];
+          }
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => { if (!ignore) setProviderRetrying(false); });
+    
+    return () => { ignore = true; };
+  }, [activeProvider]);
+
+
+
   function syncNativeSearch(text) {
     setQuery(text);
     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.searchSync) {
@@ -553,9 +601,30 @@ export default function Search() {
   const labels = Array.from(labelMap.values());
 
   const hasResults = results.length > 0;
-  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0);
+  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0);
   const isQueryEmpty = query.trim().length === 0;
   const showHistory = isQueryEmpty;
+
+  // ── Rank external results within each provider ──
+  const rankedYoutube = rankResults(query, (externalResults.youtube || []).map(yt => ({
+    ...yt, artistName: yt.channelTitle, entityType: 'track',
+  })));
+  const rankedSoundcloud = rankResults(query, (externalResults.soundcloud || []).map(sc => ({
+    ...sc, entityType: 'track',
+  })));
+  const rankedBandcamp = rankResults(query, (externalResults.bandcamp || []).map(bc => ({
+    ...bc, entityType: bc.entityType || 'track',
+  })));
+  // Rank Discogs artists, releases, labels
+  const rankedDiscogsArtists = rankResults(query, (externalResults.artists || []).map(a => ({
+    ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
+  })));
+  const rankedDiscogsReleases = rankResults(query, (externalResults.releases || []).map(r => ({
+    ...r, title: r.releaseName || r.title, entityType: 'release', provider: 'discogs',
+  })));
+  const rankedDiscogsLabels = rankResults(query, (externalResults.labels || []).map(l => ({
+    ...l, title: l.name || l.title, artistName: l.name || l.title, entityType: 'label', provider: 'discogs',
+  })));
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -741,31 +810,31 @@ export default function Search() {
       )}
 
       {/* Loading state */}
-      {loading && query.length > 0 && !hasResults && (
+      {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && (
         <div className="search-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
           <Loader2 className="spin-icon" size={28} color="rgba(255,255,255,0.4)" />
-          <span>Searching...</span>
+          <span>{providerRetrying ? 'Loading results...' : 'Searching...'}</span>
         </div>
       )}
 
       {/* No results */}
-      {!loading && query.length > 0 && !hasResults && !hasExternal && (
+      {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && (
         <div className="search-empty">No results found</div>
       )}
 
       {/* External Results from Discogs */}
-      {!isQueryEmpty && hasExternal && (activeProvider === 'all' || activeProvider === 'discogs') && (
+      {!isQueryEmpty && (activeProvider === 'all' || activeProvider === 'discogs') && (rankedDiscogsArtists.length > 0 || rankedDiscogsReleases.length > 0 || rankedDiscogsLabels.length > 0) && (
         <div className="search-results-list search-external-section">
-          {(((activeFilter === 'all' || activeFilter === 'artists') && externalResults.artists.length > 0) || ((activeFilter === 'all' || activeFilter === 'labels') && externalResults.labels.length > 0) || ((activeFilter === 'all' || activeFilter === 'albums') && externalResults.releases.length > 0)) && (
+          {(((activeFilter === 'all' || activeFilter === 'artists') && rankedDiscogsArtists.length > 0) || ((activeFilter === 'all' || activeFilter === 'labels') && rankedDiscogsLabels.length > 0) || ((activeFilter === 'all' || activeFilter === 'albums') && rankedDiscogsReleases.length > 0)) && (
             <div className="search-section-title search-external-header">
               Discogs
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'artists') && externalResults.artists.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'artists') && rankedDiscogsArtists.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Artists</div>
-              {externalResults.artists.map(artist => (
+              {rankedDiscogsArtists.map(artist => (
                 <div key={artist.id || artist.discogsId} className="search-result-row search-artist-row search-external-row"
                   onClick={() => {
                     if (artist.isAlias) {
@@ -795,10 +864,10 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'albums') && externalResults.releases.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'albums') && rankedDiscogsReleases.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Releases</div>
-              {externalResults.releases.map(release => (
+              {rankedDiscogsReleases.map(release => (
                 <div key={release.id} className="search-result-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
                   <div className="search-result-art discogs-art">
@@ -820,10 +889,10 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'labels') && externalResults.labels.length > 0 && (
+          {(activeFilter === 'all' || activeFilter === 'labels') && rankedDiscogsLabels.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Labels</div>
-              {externalResults.labels.map(label => (
+              {rankedDiscogsLabels.map(label => (
                 <div key={label.id} className="search-result-row search-artist-row search-external-row"
                   onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/label/discogs-${label.discogsId}`)}>
                   <div className="search-result-art artist-avatar discogs-art">
@@ -844,13 +913,13 @@ export default function Search() {
       )}
 
       {/* ── YouTube Results ── */}
-      {!isQueryEmpty && externalResults.youtube && externalResults.youtube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
+      {!isQueryEmpty && rankedYoutube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
             YouTube
           </div>
           <div className="search-section">
-            {externalResults.youtube.map(yt => (
+            {rankedYoutube.map(yt => (
               <div key={yt.id} className="search-result-row search-external-row"
                 onClick={() => handleSearchPlay({
                   id: yt.id || `yt-${yt.videoId}`,
@@ -882,13 +951,13 @@ export default function Search() {
       )}
 
       {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && externalResults.soundcloud && externalResults.soundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
+      {!isQueryEmpty && rankedSoundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
           </div>
           <div className="search-section">
-            {externalResults.soundcloud.map(sc => (
+            {rankedSoundcloud.map(sc => (
               <div key={sc.id} className="search-result-row search-external-row"
                 onClick={() => handleSearchPlay({
                   id: sc.id || `sc-${sc.trackId}`,
@@ -920,8 +989,8 @@ export default function Search() {
         </div>
       )}
       {/* ── Bandcamp Results ── */}
-      {!isQueryEmpty && externalResults.bandcamp && externalResults.bandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
-        const filteredBc = externalResults.bandcamp.filter(bc => 
+      {!isQueryEmpty && rankedBandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
+        const filteredBc = rankedBandcamp.filter(bc => 
           activeFilter === 'all' || 
           (activeFilter === 'titles' && bc.entityType === 'track') ||
           (activeFilter === 'albums' && bc.entityType === 'album') ||
