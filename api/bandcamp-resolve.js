@@ -40,38 +40,90 @@ export default async function handler(req, res) {
       resolveCache.delete(cacheKey);
     }
     try {
-      const htmlRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' } });
-      if (!htmlRes.ok) return res.status(200).json({ tracks: [] });
+      const htmlRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      if (!htmlRes.ok) return res.status(200).json({ tracks: [], error: `Fetch failed: ${htmlRes.status}` });
       const html = await htmlRes.text();
 
       let tralbumData = null;
-      const dataAttrMatch = html.match(/data-tralbum="([^"]*)"/);
-      if (dataAttrMatch) { try { const decoded = dataAttrMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'"); tralbumData = JSON.parse(decoded); } catch (e) {} }
-      if (!tralbumData) { const varMatch = html.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/); if (varMatch) { try { tralbumData = JSON.parse(varMatch[1]); } catch (e) {} } }
 
-      if (!tralbumData || !tralbumData.trackinfo || !tralbumData.trackinfo.length) {
-        return res.status(200).json({ tracks: [] });
+      // Method 1: data-tralbum attribute
+      const dataAttrMatch = html.match(/data-tralbum="([^"]*)"/);
+      if (dataAttrMatch) {
+        try {
+          const decoded = dataAttrMatch[1]
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#39;/g, "'");
+          tralbumData = JSON.parse(decoded);
+        } catch (e) {
+          console.error('album-tracks: data-tralbum parse failed:', e.message);
+        }
       }
 
+      // Method 2: var TralbumData = {...};
+      if (!tralbumData) {
+        const varMatch = html.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/);
+        if (varMatch) {
+          try { tralbumData = JSON.parse(varMatch[1]); } catch (e) {
+            console.error('album-tracks: TralbumData var parse failed:', e.message);
+          }
+        }
+      }
+
+      // Method 3: trackinfo array in inline script
+      if (!tralbumData) {
+        const scriptMatch = html.match(/"trackinfo"\s*:\s*(\[[\s\S]*?\])\s*,/);
+        if (scriptMatch) {
+          try {
+            const trackinfo = JSON.parse(scriptMatch[1]);
+            tralbumData = { trackinfo };
+          } catch (e) {
+            console.error('album-tracks: trackinfo parse failed:', e.message);
+          }
+        }
+      }
+
+      if (!tralbumData || !tralbumData.trackinfo || !tralbumData.trackinfo.length) {
+        return res.status(200).json({ tracks: [], error: 'No track data found' });
+      }
+
+      // Extract artwork
       let artworkUrl = '';
       const artMatch = html.match(/<a class="popupImage"[^>]*href="([^"]+)"/);
-      if (artMatch) artworkUrl = artMatch[1]; else { const ogImgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/); if (ogImgMatch) artworkUrl = ogImgMatch[1]; }
+      if (artMatch) {
+        artworkUrl = artMatch[1];
+      } else {
+        const ogImgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/);
+        if (ogImgMatch) artworkUrl = ogImgMatch[1];
+      }
 
+      // Extract artist
       let artist = tralbumData.artist || '';
-      if (!artist) { const artistMatch = html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/); if (artistMatch) artist = artistMatch[1]; }
+      if (!artist) {
+        const artistMatch = html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/);
+        if (artistMatch) artist = artistMatch[1];
+      }
 
       const albumName = tralbumData.current?.title || '';
 
       const tracks = tralbumData.trackinfo.map((t, i) => {
         const file = t.file;
-        const streamUrl = file?.['mp3-128'] || (file ? Object.values(file)[0] : null);
+        const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || null) : null;
         return {
           title: t.title || `Track ${i + 1}`,
           artist,
           artworkUrl,
           albumName,
           duration: t.duration ? Math.round(t.duration) : 0,
-          streamUrl: streamUrl || null,
+          streamUrl,
           trackNum: t.track_num || i + 1,
           url: t.title_link ? new URL(t.title_link, url).toString() : url,
         };
@@ -82,7 +134,7 @@ export default async function handler(req, res) {
       return res.status(200).json(result);
     } catch (err) {
       console.error('Bandcamp album-tracks error:', err);
-      return res.status(200).json({ tracks: [] });
+      return res.status(200).json({ tracks: [], error: err.message });
     }
   }
 
