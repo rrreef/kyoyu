@@ -304,16 +304,10 @@
   opacity: 0.6;
 }
 
-/* Bigger artwork for Discogs results */
+/* Specific styles for Discogs if needed, but size should inherit from .search-result-art */
 .discogs-art {
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px;
 }
 .discogs-art.artist-avatar {
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px;
 }
 
 .spin-icon {
