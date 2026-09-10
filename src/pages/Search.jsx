@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2 } from 'lucide-react';
+import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
@@ -283,6 +283,7 @@ export default function Search() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeProvider, setActiveProvider] = useState('all');
   const [providerRetrying, setProviderRetrying] = useState(false);
+  const [expandedAlbums, setExpandedAlbums] = useState({});  // { albumId: tracksArray | true }
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
@@ -799,9 +800,9 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'podcasts') && podcastList.length > 0 && (
+          {activeFilter === 'podcasts' && podcastList.length > 0 && (
             <div className="search-section">
-              {activeFilter === 'all' && <div className="search-section-title">Podcasts</div>}
+              <div className="search-section-title">Sets</div>
               {podcastList.map(t => renderTrackRow(t, true))}
             </div>
           )}
@@ -822,7 +823,284 @@ export default function Search() {
         <div className="search-empty">No results found</div>
       )}
 
-      {/* External Results from Discogs */}
+      {/* ── Bandcamp Results ── */}
+      {!isQueryEmpty && rankedBandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
+        const filteredBc = rankedBandcamp.filter(bc => 
+          activeFilter === 'all' || 
+          (activeFilter === 'titles' && bc.entityType === 'track') ||
+          (activeFilter === 'albums' && bc.entityType === 'album') ||
+          (activeFilter === 'artists' && bc.entityType === 'artist') ||
+          (activeFilter === 'labels' && bc.entityType === 'label')
+        );
+        if (filteredBc.length === 0) return null;
+        return (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
+            Bandcamp
+          </div>
+          <div className="search-section">
+            {filteredBc.map(bc => {
+              if (bc.entityType === 'label') {
+                return <BandcampLabelResult key={bc.id} label={bc} onPlay={(item) => {
+                  if (bandcampLoading) return;
+                  setBandcampLoading(item.providerItemId);
+                  handleSearchPlay(item);
+                  setTimeout(() => setBandcampLoading(null), 3000);
+                }} />;
+              }
+
+              // ── Album expansion for Bandcamp ──
+              if (bc.entityType === 'album') {
+                const albumKey = bc.id || bc.trackUrl;
+                const isAlbumExpanded = !!expandedAlbums[albumKey];
+                const albumTracks = Array.isArray(expandedAlbums[albumKey]) ? expandedAlbums[albumKey] : null;
+
+                return (
+                  <div key={bc.id}>
+                    <div className="search-result-row search-external-row"
+                      style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}>
+                      <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}
+                        onClick={() => {
+                          if (bandcampLoading) return;
+                          setBandcampLoading(bc.trackUrl);
+                          handleSearchPlay({
+                            id: bc.id, title: bc.title, artistName: bc.artistName,
+                            artworkUrl: bc.artworkUrl, duration: 0,
+                            provider: 'bandcamp', providerItemId: bc.trackUrl,
+                          });
+                          setTimeout(() => setBandcampLoading(null), 3000);
+                        }}>
+                        {bc.artworkUrl ? (
+                          <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                        ) : (
+                          <EntityPlaceholder name={bc.title} type="release" />
+                        )}
+                      </div>
+                      <div className="search-result-info" style={{ flex: 1 }}
+                        onClick={() => {
+                          if (bandcampLoading) return;
+                          setBandcampLoading(bc.trackUrl);
+                          handleSearchPlay({
+                            id: bc.id, title: bc.title, artistName: bc.artistName,
+                            artworkUrl: bc.artworkUrl, duration: 0,
+                            provider: 'bandcamp', providerItemId: bc.trackUrl,
+                          });
+                          setTimeout(() => setBandcampLoading(null), 3000);
+                        }}>
+                        <span className="search-result-title">{bc.title}</span>
+                        <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
+                      </div>
+                      <div className="search-result-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button style={{ background: 'none', border: 'none', color: 'inherit', padding: '4px', cursor: 'pointer', opacity: 0.6 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isAlbumExpanded) {
+                              setExpandedAlbums(prev => { const n = { ...prev }; delete n[albumKey]; return n; });
+                            } else {
+                              setExpandedAlbums(prev => ({ ...prev, [albumKey]: true }));
+                              // Load tracks from Bandcamp
+                              fetch('/api/bandcamp-resolve', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'label-releases', url: bc.trackUrl }),
+                              })
+                                .then(r => r.json())
+                                .then(d => {
+                                  if (d.releases && d.releases.length > 0) {
+                                    setExpandedAlbums(prev => ({ ...prev, [albumKey]: d.releases }));
+                                  }
+                                })
+                                .catch(() => {});
+                            }
+                          }}>
+                          {isAlbumExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Expanded album tracks */}
+                    {isAlbumExpanded && (
+                      <div style={{ paddingLeft: '16px', marginLeft: '26px', borderLeft: '2px solid rgba(255,255,255,0.08)' }}>
+                        {albumTracks ? albumTracks.map((t, ti) => (
+                          <div key={ti} className="search-result-row search-external-row"
+                            onClick={() => {
+                              if (bandcampLoading) return;
+                              setBandcampLoading(t.url || bc.trackUrl);
+                              handleSearchPlay({
+                                id: `bc-alb-${ti}-${Date.now()}`,
+                                title: t.title,
+                                artistName: t.artist || bc.artistName,
+                                artworkUrl: t.artworkUrl || bc.artworkUrl,
+                                duration: 0,
+                                provider: 'bandcamp',
+                                providerItemId: t.url || bc.trackUrl,
+                              });
+                              setTimeout(() => setBandcampLoading(null), 3000);
+                            }}>
+                            <div className="search-result-art discogs-art" style={{ borderRadius: '4px', width: '36px', height: '36px' }}>
+                              {(t.artworkUrl || bc.artworkUrl) ? (
+                                <img src={t.artworkUrl || bc.artworkUrl} alt={t.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                              ) : (
+                                <EntityPlaceholder name={t.title} type="release" />
+                              )}
+                            </div>
+                            <div className="search-result-info">
+                              <span className="search-result-title" style={{ fontSize: '14px' }}>{t.title}</span>
+                              <span className="search-result-artist" style={{ fontSize: '12px' }}>{t.artist || bc.artistName}</span>
+                            </div>
+                            <div className="search-result-actions">
+                              <Play size={14} style={{ opacity: 0.6 }} />
+                            </div>
+                          </div>
+                        )) : (
+                          <div style={{ fontSize: '12px', opacity: 0.5, padding: '8px 0' }}>Loading tracks...</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div key={bc.id} className="search-result-row search-external-row"
+                  style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
+                  onClick={() => {
+                    if (bandcampLoading) return;
+                    if (bc.entityType === 'artist') {
+                       window.open(bc.trackUrl, '_blank');
+                       return;
+                    }
+                    setBandcampLoading(bc.trackUrl);
+                    handleSearchPlay({
+                      id: bc.id || `bc-${bc.trackId}`,
+                      title: bc.title,
+                      artistName: bc.artistName,
+                      artworkUrl: bc.artworkUrl,
+                      duration: 0,
+                      provider: 'bandcamp',
+                      providerItemId: bc.trackUrl,
+                    });
+                    setTimeout(() => setBandcampLoading(null), 3000);
+                  }}>
+                  <div className="search-result-art discogs-art" style={{ borderRadius: bc.entityType === 'artist' ? '50%' : '6px' }}>
+                    {bc.artworkUrl ? (
+                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={bc.title} type="release" />
+                    )}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{bc.title}</span>
+                    <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
+                  </div>
+                  {bc.entityType !== 'artist' && (
+                    <div className="search-result-actions">
+                      {bandcampLoading === bc.trackUrl ? (
+                        <span style={{ opacity: 0.4, fontSize: 11 }}>···</span>
+                      ) : (
+                        <Play size={16} style={{ opacity: 0.6 }} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Recommendations / Fans Also Bought */}
+          {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 
+           (externalResults.bandcamp[0].entityType === 'album' || externalResults.bandcamp[0].entityType === 'track') && (
+            <BandcampRecommendations 
+              trackUrl={externalResults.bandcamp[0].trackUrl} 
+              onPlay={(item) => {
+                setBandcampLoading(item.providerItemId);
+                handleSearchPlay(item);
+                setTimeout(() => setBandcampLoading(null), 3000);
+              }} 
+            />
+          )}
+
+        </div>
+        );
+      })()}
+
+      {/* ── SoundCloud Results ── */}
+      {!isQueryEmpty && rankedSoundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
+            SoundCloud
+          </div>
+          <div className="search-section">
+            {rankedSoundcloud.map(sc => (
+              <div key={sc.id} className="search-result-row search-external-row"
+                onClick={() => handleSearchPlay({
+                  id: sc.id || `sc-${sc.trackId}`,
+                  title: sc.title,
+                  artistName: sc.artistName,
+                  artworkUrl: sc.artworkUrl,
+                  duration: sc.duration || 0,
+                  provider: 'soundcloud',
+                  providerItemId: sc.permalinkUrl,
+                  scTrackId: sc.trackId,
+                })}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {sc.artworkUrl ? (
+                    <img src={sc.artworkUrl} alt={sc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={sc.title} type="release" />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{sc.title}</span>
+                  <span className="search-result-artist">{sc.artistName}</span>
+                </div>
+                <div className="search-result-actions">
+                  <Play size={16} style={{ opacity: 0.6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── YouTube Results ── */}
+      {!isQueryEmpty && rankedYoutube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
+        <div className="search-results-list search-external-section">
+          <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
+            YouTube
+          </div>
+          <div className="search-section">
+            {rankedYoutube.map(yt => (
+              <div key={yt.id} className="search-result-row search-external-row"
+                onClick={() => handleSearchPlay({
+                  id: yt.id || `yt-${yt.videoId}`,
+                  title: yt.title,
+                  artistName: yt.channelTitle,
+                  artworkUrl: yt.thumbnail,
+                  duration: yt.duration || 0,
+                  provider: 'youtube',
+                  providerItemId: yt.videoId,
+                })}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {yt.thumbnail ? (
+                    <img src={yt.thumbnail} alt={yt.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={yt.title} type="release" />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{yt.title}</span>
+                  <span className="search-result-artist">{yt.channelTitle}</span>
+                </div>
+                <div className="search-result-actions">
+                  <Play size={16} style={{ opacity: 0.6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Discogs Results ── */}
       {!isQueryEmpty && (activeProvider === 'all' || activeProvider === 'discogs') && (rankedDiscogsArtists.length > 0 || rankedDiscogsReleases.length > 0 || rankedDiscogsLabels.length > 0) && (
         <div className="search-results-list search-external-section">
           {(((activeFilter === 'all' || activeFilter === 'artists') && rankedDiscogsArtists.length > 0) || ((activeFilter === 'all' || activeFilter === 'labels') && rankedDiscogsLabels.length > 0) || ((activeFilter === 'all' || activeFilter === 'albums') && rankedDiscogsReleases.length > 0)) && (
@@ -911,171 +1189,6 @@ export default function Search() {
           )}
         </div>
       )}
-
-      {/* ── YouTube Results ── */}
-      {!isQueryEmpty && rankedYoutube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
-        <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
-            YouTube
-          </div>
-          <div className="search-section">
-            {rankedYoutube.map(yt => (
-              <div key={yt.id} className="search-result-row search-external-row"
-                onClick={() => handleSearchPlay({
-                  id: yt.id || `yt-${yt.videoId}`,
-                  title: yt.title,
-                  artistName: yt.channelTitle,
-                  artworkUrl: yt.thumbnail,
-                  duration: yt.duration || 0,
-                  provider: 'youtube',
-                  providerItemId: yt.videoId,
-                })}>
-                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                  {yt.thumbnail ? (
-                    <img src={yt.thumbnail} alt={yt.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                  ) : (
-                    <EntityPlaceholder name={yt.title} type="release" />
-                  )}
-                </div>
-                <div className="search-result-info">
-                  <span className="search-result-title">{yt.title}</span>
-                  <span className="search-result-artist">{yt.channelTitle}</span>
-                </div>
-                <div className="search-result-actions">
-                  <Play size={16} style={{ opacity: 0.6 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && rankedSoundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
-        <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
-            SoundCloud
-          </div>
-          <div className="search-section">
-            {rankedSoundcloud.map(sc => (
-              <div key={sc.id} className="search-result-row search-external-row"
-                onClick={() => handleSearchPlay({
-                  id: sc.id || `sc-${sc.trackId}`,
-                  title: sc.title,
-                  artistName: sc.artistName,
-                  artworkUrl: sc.artworkUrl,
-                  duration: sc.duration || 0,
-                  provider: 'soundcloud',
-                  providerItemId: sc.permalinkUrl,
-                  scTrackId: sc.trackId,
-                })}>
-                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                  {sc.artworkUrl ? (
-                    <img src={sc.artworkUrl} alt={sc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                  ) : (
-                    <EntityPlaceholder name={sc.title} type="release" />
-                  )}
-                </div>
-                <div className="search-result-info">
-                  <span className="search-result-title">{sc.title}</span>
-                  <span className="search-result-artist">{sc.artistName}</span>
-                </div>
-                <div className="search-result-actions">
-                  <Play size={16} style={{ opacity: 0.6 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* ── Bandcamp Results ── */}
-      {!isQueryEmpty && rankedBandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
-        const filteredBc = rankedBandcamp.filter(bc => 
-          activeFilter === 'all' || 
-          (activeFilter === 'titles' && bc.entityType === 'track') ||
-          (activeFilter === 'albums' && bc.entityType === 'album') ||
-          (activeFilter === 'artists' && bc.entityType === 'artist') ||
-          (activeFilter === 'labels' && bc.entityType === 'label')
-        );
-        if (filteredBc.length === 0) return null;
-        return (
-        <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#1DA0C3' }}>
-            Bandcamp
-          </div>
-          <div className="search-section">
-            {filteredBc.map(bc => {
-              if (bc.entityType === 'label') {
-                return <BandcampLabelResult key={bc.id} label={bc} onPlay={(item) => {
-                  if (bandcampLoading) return;
-                  setBandcampLoading(item.providerItemId);
-                  handleSearchPlay(item);
-                  setTimeout(() => setBandcampLoading(null), 3000);
-                }} />;
-              }
-
-              return (
-                <div key={bc.id} className="search-result-row search-external-row"
-                  style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
-                  onClick={() => {
-                    if (bandcampLoading) return;
-                    if (bc.entityType === 'artist') {
-                       window.open(bc.trackUrl, '_blank');
-                       return;
-                    }
-                    setBandcampLoading(bc.trackUrl);
-                    handleSearchPlay({
-                      id: bc.id || `bc-${bc.trackId}`,
-                      title: bc.title,
-                      artistName: bc.artistName,
-                      artworkUrl: bc.artworkUrl,
-                      duration: 0,
-                      provider: 'bandcamp',
-                      providerItemId: bc.trackUrl,
-                    });
-                    setTimeout(() => setBandcampLoading(null), 3000);
-                  }}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: bc.entityType === 'artist' ? '50%' : '6px' }}>
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                    <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
-                  </div>
-                  {bc.entityType !== 'artist' && (
-                    <div className="search-result-actions">
-                      {bandcampLoading === bc.trackUrl ? (
-                        <span style={{ opacity: 0.4, fontSize: 11 }}>···</span>
-                      ) : (
-                        <Play size={16} style={{ opacity: 0.6 }} />
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Recommendations / Fans Also Bought */}
-          {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 
-           (externalResults.bandcamp[0].entityType === 'album' || externalResults.bandcamp[0].entityType === 'track') && (
-            <BandcampRecommendations 
-              trackUrl={externalResults.bandcamp[0].trackUrl} 
-              onPlay={(item) => {
-                setBandcampLoading(item.providerItemId);
-                handleSearchPlay(item);
-                setTimeout(() => setBandcampLoading(null), 3000);
-              }} 
-            />
-          )}
-
-        </div>
-        );
-      })()}
 
     </div>
   );
