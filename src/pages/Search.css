@@ -122,8 +122,8 @@
 
 /* Artwork — sized and positioned to align with the 62pt provider filter bar + glass padding */
 .search-result-art {
-  width: 86px;
-  height: 86px;
+  width: 77px;
+  height: 77px;
   flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
