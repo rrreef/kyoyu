@@ -982,7 +982,6 @@ export default function Search() {
                     </div>
                     <div className="search-result-info">
                       <span className="search-result-title">{bc.title}</span>
-                      <span className="search-result-artist" style={{ color: '#1DA0C3' }}>Bandcamp</span>
                     </div>
                   </div>
                 );
