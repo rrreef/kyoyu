@@ -1,14 +1,13 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useMemo } from 'react';
-import { Play, Pause, ArrowRight, Zap, Radio, Lock, Music2, Heart, ListPlus } from 'lucide-react';
-import { artists, vinylMarketplace, djSets, myPlaylists, likedAlbums, artistRadios } from '../data/mockData';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { ArrowRight, Lock, Music2 } from 'lucide-react';
 import { berghainEvents } from '../data/berghainEvents';
-import { ReleaseCard, ArtistCard, VinylCard, LongFormCard, BerghainEventCard } from '../components/ui/Cards';
+import { BerghainEventCard } from '../components/ui/Cards';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
-import { useDisplay, useHomeLayoutLive } from '../contexts/DisplayContext';
-import UploadShelf, { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
+import { useHomeLayoutLive } from '../contexts/DisplayContext';
+import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
@@ -16,8 +15,6 @@ import './Home.css';
 
 /**
  * Groups an array of flat tracks into album objects.
- * Tracks sharing the same non-empty `album` field are grouped together.
- * Standalone tracks (no album or album === title) get their own entry.
  */
 function groupByAlbum(tracks) {
   const map = new Map();
@@ -38,11 +35,8 @@ function groupByAlbum(tracks) {
     }
     const entry = map.get(key);
     entry.tracks.push(t);
-    // Prefer a track with a cover for the album art
     if (!entry.cover && t.cover) entry.cover = t.cover;
   });
-  // Sort tracks within each album by track number from storage_key
-  // e.g. "...Good_Night__Whatever_That_Is_-_03_Rousing_Rhythms.aiff" → 3
   const extractNum = (t) => {
     const sk = t.storageKey || t.downloadUrl || '';
     const m = sk.match(/[-_](\d{1,3})[-_]/);
@@ -56,29 +50,8 @@ function groupByAlbum(tracks) {
   return Array.from(map.values());
 }
 
-/* ── Compact shelf card for playlists / radios ── */
-function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon }) {
-  return (
-    <div className="shelf-card">
-      <div className="shelf-card-art">
-        <img src={cover} alt={title} />
-        {badge && (
-          <div className="shelf-card-badge">
-            {BadgeIcon && <BadgeIcon size={9} />}
-            <span>{badge}</span>
-          </div>
-        )}
-      </div>
-      <div className="shelf-card-info">
-        <div className="shelf-card-title">{title}</div>
-        {sub && <div className="shelf-card-sub">{sub}</div>}
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
-  const { playRelease, playTrack } = usePlayer();
+  const { playRelease } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
   const homeLayout = useHomeLayoutLive();
@@ -90,11 +63,23 @@ export default function Home() {
   // Group flat tracks into albums
   const publicAlbums = useMemo(() => groupByAlbum(publicReleases), [publicReleases]);
 
-  // Featured hero = first album that has a cover (web only)
-  const featured = publicAlbums.find(a => a.cover) || publicAlbums[0] || null;
+  // Featured = albums with cover art (will be admin-curated via is_featured flag later)
+  const featuredAlbums = useMemo(() => publicAlbums.filter(a => a.cover), [publicAlbums]);
 
-  // Detect iOS native app (WKWebView)
-  const isNativeApp = useMemo(() => !!window.webkit?.messageHandlers, []);
+  // Featured carousel state
+  const featuredRef = useRef(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  // Track active slide on scroll
+  const handleFeaturedScroll = useCallback(() => {
+    const el = featuredRef.current;
+    if (!el) return;
+    const scrollLeft = el.scrollLeft;
+    const cardWidth = el.firstChild?.offsetWidth || 1;
+    const gap = 14;
+    const idx = Math.round(scrollLeft / (cardWidth + gap));
+    setActiveSlide(idx);
+  }, []);
 
   // Load real public releases from backend
   useEffect(() => {
@@ -126,19 +111,13 @@ export default function Home() {
   // Shelf filter state
   const [shelfFilter, setShelfFilter]   = useState('all');
   const [followingOnly, setFollowing]   = useState(false);
-
   const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcasts';
 
   // Decide which sections to render per filter
   const f = shelfFilter;
   const showFeatured    = f === 'all' || f === 'music';
-  const showPlaylists   = f === 'all' || f === 'music';
   const showReleases    = f === 'all' || f === 'music';
-  const showArtists     = f === 'all' || f === 'music';
-  const showPodcasts    = f === 'all' || f === 'music' || f === 'podcasts';
-  const showRadios      = false; // Radio removed from home
   const showEvents      = f === 'all' || f === 'events';
-  const showMerch       = f === 'all' || f === 'merch';
 
   return (
     <div className="page home-page animate-in">
@@ -175,82 +154,77 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 1 — Featured Releases */}
-      {showFeatured && isNativeApp && publicAlbums.length > 0 && (
-      <section className="home-section featured-releases-section">
-        <div className="section-title">
-          <span>Featured Releases</span>
-          <Link to="/search">See All <ArrowRight size={12} /></Link>
-        </div>
-        <div className="featured-scroll-row">
-          {publicAlbums.map(album => (
-            <button
-              key={album.id}
-              className="featured-card"
-              onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
-            >
-              <div className="featured-card-art">
-                {album.cover
-                  ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
-                  : <div className="featured-card-art-ph"><Music2 size={28} strokeWidth={1.2} /></div>}
-              </div>
-              <div className="featured-card-title">{album.title}</div>
-              <div className="featured-card-artist">{album.artist}</div>
-            </button>
-          ))}
-        </div>
-      </section>
-      )}
+      {/* ═══ 1 — FEATURED CONTENT CAROUSEL ═══ */}
+      {showFeatured && featuredAlbums.length > 0 && (
+        <section className="home-section featured-hero-section">
+          <div className="section-title">
+            <span>Featured</span>
+            <Link to="/all-releases">See All <ArrowRight size={12} /></Link>
+          </div>
 
-      {/* 1b — Featured Release hero (web only) */}
-      {showFeatured && !isNativeApp && featured && (
-      <section className="hero-section">
-        <div className="hero-cover-bg" style={{ backgroundImage: `url(${featured.cover})` }} />
-        <div className="hero-info">
-          <div className="hero-badge"><Zap size={12} /><span>Featured Release</span></div>
-          <div className="hero-label">
-            <Link to={`/label/${featured.labelId}`}>{featured.label}</Link>
-            <span>·</span>
-            <span>{featured.year}</span>
-          </div>
-          <h1 className="hero-title">{featured.title}</h1>
-          <div className="hero-artist">
-            <Link to={`/artist/${featured.artistId}`}>{featured.artist}</Link>
-          </div>
-          <p className="hero-desc">{featured.description}</p>
-          <div className="hero-actions">
-            <button className="hero-play-glass" onClick={() => playRelease(featured)}>
-              <Play size={24} fill="currentColor" strokeWidth={0} style={{ marginLeft: 2 }} />
-            </button>
-            <div className="hero-actions-right">
-              <button className="hero-play-glass" title="Like">
-                <Heart size={24} fill="currentColor" strokeWidth={0} />
-              </button>
-              <button className="hero-play-glass" title="Add to Playlist">
-                <ListPlus size={26} strokeWidth={1.8} />
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="hero-cover-art">
-          <img src={featured.cover} alt={featured.title} />
-        </div>
-      </section>
-      )}
+          <div
+            className="featured-hero-row"
+            ref={featuredRef}
+            onScroll={handleFeaturedScroll}
+          >
+            {featuredAlbums.map((album, idx) => (
+              <button
+                key={album.id}
+                className="featured-hero-card"
+                onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+              >
+                {/* Blurred background from cover art */}
+                {album.cover && (
+                  <div
+                    className="featured-hero-bg"
+                    style={{ backgroundImage: `url(${album.cover})` }}
+                  />
+                )}
 
-      {/* 2 — Playlists */}
-      {showPlaylists && (
-        <section className="home-section">
-          <div className="shelf-row-label">Playlists</div>
-          <div className="scroll-row">
-            {myPlaylists.map(pl => (
-              <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={`${pl.trackCount} tracks`} />
+                {/* Cover art */}
+                <div className="featured-hero-art">
+                  {album.cover
+                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                    : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
+                </div>
+
+                {/* Info overlay */}
+                <div className="featured-hero-info">
+                  <div className="featured-hero-title">{album.title}</div>
+                  <div className="featured-hero-artist">{album.artist}</div>
+                  {album.label && <div className="featured-hero-label">{album.label}</div>}
+                  {album.tracks && (
+                    <div className="featured-hero-meta">
+                      {album.tracks.length} {album.tracks.length === 1 ? 'track' : 'tracks'}
+                      {album.year ? ` · ${album.year}` : ''}
+                    </div>
+                  )}
+                </div>
+              </button>
             ))}
           </div>
+
+          {/* Dot indicators */}
+          {featuredAlbums.length > 1 && (
+            <div className="featured-dots">
+              {featuredAlbums.map((_, i) => (
+                <div
+                  key={i}
+                  className={`featured-dot${i === activeSlide ? ' active' : ''}`}
+                  onClick={() => {
+                    const el = featuredRef.current;
+                    if (!el || !el.firstChild) return;
+                    const cardW = el.firstChild.offsetWidth + 14;
+                    el.scrollTo({ left: i * cardW, behavior: 'smooth' });
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      {/* My Uploads (private) */}
+      {/* ═══ 2 — MY UPLOADS (private) ═══ */}
       {showReleases && myUploads.length > 0 && (
         <section className="home-section">
           <div className="section-title">
@@ -264,7 +238,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* 3 — Releases */}
+      {/* ═══ 3 — RELEASES ═══ */}
       {showReleases && (
         <section className="home-section">
           <div className="section-title">
@@ -301,45 +275,7 @@ export default function Home() {
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
 
-      {/* 4 — Featured Artists */}
-      {showArtists && (
-        <section className="home-section">
-          <div className="section-title">
-            <span>Featured Artists</span>
-            <Link to="/search">All Artists</Link>
-          </div>
-          <div className="scroll-row">
-            {artists.map(a => <ArtistCard key={a.id} artist={a} />)}
-          </div>
-        </section>
-      )}
-
-      {/* 5 — Podcasts */}
-      {showPodcasts && (
-        <section className="home-section">
-          <div className="section-title">
-            <span>Podcasts</span>
-            <Link to="/search">See More</Link>
-          </div>
-          <div className="scroll-row">
-            {djSets.map(s => <LongFormCard key={s.id} item={s} />)}
-          </div>
-        </section>
-      )}
-
-      {/* 6 — Radio */}
-      {showRadios && (
-        <section className="home-section">
-          <div className="shelf-row-label">Radio</div>
-          <div className="scroll-row">
-            {artistRadios.map(r => (
-              <ShelfCard key={r.id} cover={r.cover} title={r.name} sub={r.artist} badge="Radio" badgeIcon={Radio} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 7 — Events */}
+      {/* ═══ 4 — EVENTS ═══ */}
       {showEvents && (
         <section className="home-section">
           <div className="section-title">
@@ -353,28 +289,14 @@ export default function Home() {
         </section>
       )}
 
-      {/* 8 — Vinyl / Merch */}
-      {showMerch && (
-        <section className="home-section">
-          <div className="section-title">
-            <span>Vinyl</span>
-            <Link to="/marketplace">Marketplace</Link>
-          </div>
-          <div className="scroll-row">
-            {vinylMarketplace.map(v => <VinylCard key={v.id} listing={v} />)}
-          </div>
-        </section>
-      )}
-
       {selectedEventIndex !== null && (
-        <EventSheet 
-          events={berghainEvents} 
-          initialIndex={selectedEventIndex} 
-          onClose={() => setSelectedEventIndex(null)} 
+        <EventSheet
+          events={berghainEvents}
+          initialIndex={selectedEventIndex}
+          onClose={() => setSelectedEventIndex(null)}
         />
       )}
 
     </div>
   );
 }
-
