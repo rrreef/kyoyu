@@ -531,8 +531,8 @@ export function PlayerProvider({ children }) {
       }
     };
 
-    // ── Comments bridge (Supabase) ── uses postMessage callback
-    // evaluateJavaScript can't resolve Promises, so we post results back via player handler
+    // ── Comments bridge (Supabase) ──
+    // Swift uses callAsyncJavaScript which natively resolves Promises
     window.__kyoyuGetComments = async (trackId) => {
       try {
         const { supabase } = await import('../lib/supabase');
@@ -542,64 +542,49 @@ export function PlayerProvider({ children }) {
           .eq('track_id', trackId)
           .order('created_at', { ascending: false })
           .limit(50);
-        if (error) { console.warn('Comments fetch error:', error); }
-        const result = JSON.stringify((data || []).map(c => ({
+        if (error) console.warn('Comments fetch error:', error);
+        return JSON.stringify((data || []).map(c => ({
           id: c.id,
           content: c.content,
           created_at: c.created_at,
           username: c.profiles?.username || 'User',
           avatar_url: c.profiles?.avatar_url || '',
         })));
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'commentsResult', data: result }); } catch(e) {}
-      } catch (err) {
-        console.warn('Comments error:', err);
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'commentsResult', data: '[]' }); } catch(e) {}
-      }
+      } catch (err) { console.warn('Comments error:', err); return '[]'; }
     };
 
     window.__kyoyuPostComment = async (trackId, content) => {
       try {
         const { supabase } = await import('../lib/supabase');
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'commentPosted', data: '{}' }); } catch(e) {}
-          return;
-        }
+        if (!user) return '{}';
         const { data, error } = await supabase
           .from('comments')
           .insert({ track_id: trackId, user_id: user.id, content })
           .select('id, content, created_at, user_id, profiles(username, avatar_url)')
           .single();
-        if (error) { console.warn('Comment post error:', error); }
-        const result = JSON.stringify({
+        if (error) console.warn('Comment post error:', error);
+        return JSON.stringify({
           id: data?.id || '',
           content: data?.content || content,
           created_at: data?.created_at || new Date().toISOString(),
           username: data?.profiles?.username || 'You',
           avatar_url: data?.profiles?.avatar_url || '',
         });
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'commentPosted', data: result }); } catch(e) {}
-      } catch (err) {
-        console.warn('Comment post error:', err);
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'commentPosted', data: '{}' }); } catch(e) {}
-      }
+      } catch (err) { console.warn('Comment post error:', err); return '{}'; }
     };
 
-    // ── Track Info bridge ── uses server-side API to avoid CORS + postMessage callback
+    // ── Track Info bridge ── uses server-side Discogs API + MusicBrainz
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
         const query = [artist, album || title].filter(Boolean).join(' ');
-        if (!query.trim()) {
-          const empty = JSON.stringify({ description: 'No information available.', genre: '', label: '', year: '', links: [] });
-          try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'trackInfoResult', data: empty }); } catch(e) {}
-          return;
-        }
+        if (!query.trim()) return JSON.stringify({ description: 'No information available.', genre: '', label: '', year: '', links: [] });
 
-        // Use server-side API for Discogs (avoids CORS)
         let description = '', genre = '', label = '', year = '';
         const links = [];
         let discogsFound = false;
 
+        // Discogs via server-side API (avoids CORS)
         try {
           const discogsRes = await fetch('/api/discogs-search', {
             method: 'POST',
@@ -623,7 +608,7 @@ export function PlayerProvider({ children }) {
           }
         } catch (e) { console.warn('Discogs search error:', e); }
 
-        // MusicBrainz for more details (CORS-friendly)
+        // MusicBrainz (CORS-friendly)
         try {
           const mbQuery = encodeURIComponent(`${title} AND artist:${artist}`);
           const mbRes = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${mbQuery}&fmt=json&limit=3`, {
@@ -633,9 +618,7 @@ export function PlayerProvider({ children }) {
             const mbData = await mbRes.json();
             const rec = mbData.recordings?.[0];
             if (rec) {
-              // Add MusicBrainz link
               links.push({ name: 'View on MusicBrainz', url: `https://musicbrainz.org/recording/${rec.id}` });
-              // Extract more data
               const release = rec.releases?.[0];
               if (release) {
                 if (!year && release.date) year = release.date.substring(0, 4);
@@ -645,7 +628,6 @@ export function PlayerProvider({ children }) {
                 }
                 links.push({ name: 'View Release on MusicBrainz', url: `https://musicbrainz.org/release/${release.id}` });
               }
-              // Tags as genres if missing
               if (!genre && rec.tags?.length) {
                 genre = rec.tags.sort((a, b) => b.count - a.count).slice(0, 5).map(t => t.name).join(', ');
               }
@@ -653,7 +635,6 @@ export function PlayerProvider({ children }) {
           }
         } catch (e) { console.warn('MusicBrainz error:', e); }
 
-        // Build description
         if (!description) {
           const parts = [];
           if (title) parts.push(`"${title}"`);
@@ -662,17 +643,10 @@ export function PlayerProvider({ children }) {
           if (year) parts.push(`(${year})`);
           if (label) parts.push(`on ${label}`);
           description = parts.join(' ') + '.';
-        } else if (!discogsFound) {
-          description = `${title} by ${artist}`;
         }
 
-        const result = JSON.stringify({ description, genre, label, year, links });
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'trackInfoResult', data: result }); } catch(e) {}
-      } catch (err) {
-        console.warn('Track info error:', err);
-        const fallback = JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] });
-        try { window.webkit?.messageHandlers?.player?.postMessage({ event: 'trackInfoResult', data: fallback }); } catch(e) {}
-      }
+        return JSON.stringify({ description, genre, label, year, links });
+      } catch (err) { console.warn('Track info error:', err); return JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] }); }
     };
 
     return () => {
