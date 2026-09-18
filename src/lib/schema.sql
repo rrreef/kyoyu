@@ -141,3 +141,22 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ── Comments ────────────────────────────────────────────────
+-- Track comments — any authenticated user can comment on any track.
+-- track_id is TEXT to support external provider IDs (yt-xxx, sc-xxx, bc-xxx).
+CREATE TABLE IF NOT EXISTS public.comments (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  track_id    TEXT NOT NULL,
+  user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_comments_track ON public.comments(track_id);
+CREATE INDEX IF NOT EXISTS idx_comments_created ON public.comments(created_at DESC);
+
+-- RLS: anyone can read, authenticated users can insert their own
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY comments_select ON public.comments FOR SELECT USING (true);
+CREATE POLICY comments_insert ON public.comments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY comments_delete ON public.comments FOR DELETE USING (auth.uid() = user_id);

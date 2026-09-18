@@ -493,6 +493,166 @@ export function PlayerProvider({ children }) {
     return searchQueueRef.current.length > 0 && searchQueueIdxRef.current >= 0;
   }
 
+  // ── JS Bridges for native Swift UI ─────────────────────────────────
+  // These must be defined in PlayerProvider (always mounted) so Swift
+  // can call them regardless of which sheet/page is currently open.
+
+  useEffect(() => {
+    // ── Queue bridge ──
+    window.__kyoyuGetQueue = () => {
+      const q = state.queue || [];
+      const searchQ = searchQueueRef.current || [];
+      const activeQueue = q.length > 0 ? q : searchQ;
+      return JSON.stringify(activeQueue.map(t => ({
+        id: t.id || '',
+        title: t.title || t.name || 'Unknown',
+        artist: t.artistName || t.artist || '',
+        cover: t.releaseCover || t.cover || t.artworkUrl || '',
+        url: t.src || t.audioUrl || t.fileUrl || '',
+      })));
+    };
+
+    window.__kyoyuPlayQueueItem = (index) => {
+      const q = state.queue || [];
+      const searchQ = searchQueueRef.current || [];
+      if (q.length > 0 && index >= 0 && index < q.length) {
+        dispatch({ type: 'PLAY_TRACK', track: { ...q[index] } });
+      } else if (searchQ.length > 0 && index >= 0 && index < searchQ.length) {
+        searchQueueIdxRef.current = index;
+        playSearchItem(searchQ[index]);
+      }
+    };
+
+    window.__kyoyuRemoveFromQueue = (index) => {
+      const q = [...(state.queue || [])];
+      if (index >= 0 && index < q.length) {
+        q.splice(index, 1);
+        dispatch({ type: 'SET_QUEUE', queue: q });
+      }
+    };
+
+    // ── Comments bridge (Supabase) ──
+    window.__kyoyuGetComments = async (trackId) => {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const { data, error } = await supabase
+          .from('comments')
+          .select('id, content, created_at, user_id, profiles(username, avatar_url)')
+          .eq('track_id', trackId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (error) { console.warn('Comments fetch error:', error); return '[]'; }
+        return JSON.stringify((data || []).map(c => ({
+          id: c.id,
+          content: c.content,
+          created_at: c.created_at,
+          username: c.profiles?.username || 'User',
+          avatar_url: c.profiles?.avatar_url || '',
+        })));
+      } catch (err) { console.warn('Comments error:', err); return '[]'; }
+    };
+
+    window.__kyoyuPostComment = async (trackId, content) => {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return '{}';
+        const { data, error } = await supabase
+          .from('comments')
+          .insert({ track_id: trackId, user_id: user.id, content })
+          .select('id, content, created_at, user_id, profiles(username, avatar_url)')
+          .single();
+        if (error) { console.warn('Comment post error:', error); return '{}'; }
+        return JSON.stringify({
+          id: data.id,
+          content: data.content,
+          created_at: data.created_at,
+          username: data.profiles?.username || 'You',
+          avatar_url: data.profiles?.avatar_url || '',
+        });
+      } catch (err) { console.warn('Comment post error:', err); return '{}'; }
+    };
+
+    // ── Track Info bridge ──
+    window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
+      try {
+        // Search Discogs for release info
+        const query = [artist, album || title].filter(Boolean).join(' ');
+        if (!query.trim()) return JSON.stringify({ description: 'No information available.', genre: '', label: '', year: '', links: [] });
+        
+        const res = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=3`, {
+          headers: { 'User-Agent': 'Kyoyu/1.0 +https://ree.fm' }
+        });
+        if (!res.ok) return JSON.stringify({ description: 'Could not fetch info.', genre: '', label: '', year: '', links: [] });
+        
+        const searchData = await res.json();
+        const results = searchData.results || [];
+        
+        if (results.length === 0) {
+          return JSON.stringify({ description: `No information found for "${title}" by ${artist}.`, genre: '', label: '', year: '', links: [] });
+        }
+
+        const best = results[0];
+        const links = [];
+        
+        // Add Discogs link
+        if (best.uri) links.push({ name: 'View on Discogs', url: `https://www.discogs.com${best.uri}` });
+        
+        // Add provider-specific link
+        if (provider === 'bandcamp' || provider === 'soundcloud' || provider === 'youtube') {
+          // These will come from the trackUrl/albumUrl sent by Swift
+        }
+
+        // Try to get full release details
+        let description = '';
+        let genre = (best.genre || []).join(', ');
+        let label = (best.label || []).join(', ');
+        let year = best.year || '';
+        
+        // Fetch full release for notes/description
+        if (best.id) {
+          try {
+            const detailRes = await fetch(`https://api.discogs.com/releases/${best.id}`, {
+              headers: { 'User-Agent': 'Kyoyu/1.0 +https://ree.fm' }
+            });
+            if (detailRes.ok) {
+              const detail = await detailRes.json();
+              description = detail.notes || '';
+              if (detail.genres) genre = detail.genres.join(', ');
+              if (detail.styles) genre += (genre ? ' · ' : '') + detail.styles.join(', ');
+              if (detail.labels?.[0]?.name) label = detail.labels[0].name;
+              if (detail.labels?.[0]?.catno) label += ` (${detail.labels[0].catno})`;
+              if (detail.year) year = String(detail.year);
+              if (detail.uri) {
+                const discogsUrl = `https://www.discogs.com${detail.uri}`;
+                const existing = links.findIndex(l => l.name === 'View on Discogs');
+                if (existing >= 0) links[existing].url = discogsUrl;
+                else links.push({ name: 'View on Discogs', url: discogsUrl });
+              }
+              // Add MusicBrainz search link
+              links.push({ name: 'Search on MusicBrainz', url: `https://musicbrainz.org/search?query=${encodeURIComponent(artist + ' ' + (album || title))}&type=release` });
+            }
+          } catch (e) { /* ignore detail fetch error */ }
+        }
+        
+        if (!description) {
+          description = `${best.title || title}${artist ? ' by ' + artist : ''}${year ? ' (' + year + ')' : ''}${label ? ' on ' + label : ''}.`;
+        }
+
+        return JSON.stringify({ description, genre, label, year, links });
+      } catch (err) { console.warn('Track info error:', err); return JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] }); }
+    };
+
+    return () => {
+      delete window.__kyoyuGetQueue;
+      delete window.__kyoyuPlayQueueItem;
+      delete window.__kyoyuRemoveFromQueue;
+      delete window.__kyoyuGetComments;
+      delete window.__kyoyuPostComment;
+      delete window.__kyoyuGetTrackInfo;
+    };
+  }); // No deps — always re-bind so closures see latest state
+
   return (
     <PlayerContext.Provider value={{
       state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,

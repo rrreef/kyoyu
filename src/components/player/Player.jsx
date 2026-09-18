@@ -529,7 +529,9 @@ export default function Player({ hideMini = false }) {
         artist: currentTrack.artistName || currentTrack.artist || '',
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
-        provider: provider || 'native'
+        provider: provider || 'native',
+        trackUrl: currentTrack.providerUrl || '',
+        albumUrl: currentTrack.albumUrl || ''
       });
     } else {
       postNative({ visible: false, playing: false });
