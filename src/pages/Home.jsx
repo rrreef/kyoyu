@@ -108,6 +108,20 @@ export default function Home() {
     return () => window.removeEventListener('kyoyu-uploads-changed', loadUploads);
   }, [user?.id]);
 
+  const [playHistory, setPlayHistory] = useState([]);
+  
+  useEffect(() => {
+    function loadHistory() {
+      try {
+        const h = JSON.parse(localStorage.getItem('kyoyu-play-history') || '[]');
+        setPlayHistory(h);
+      } catch (err) {}
+    }
+    loadHistory();
+    window.addEventListener('kyoyu-play-history-changed', loadHistory);
+    return () => window.removeEventListener('kyoyu-play-history-changed', loadHistory);
+  }, []);
+
   // Shelf filter state
   const [shelfFilter, setShelfFilter]   = useState('all');
   const [followingOnly, setFollowing]   = useState(false);
@@ -221,6 +235,32 @@ export default function Home() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {/* ═══ 1.5 — HISTORY ═══ */}
+      {showFeatured && playHistory.length > 0 && (
+        <section className="home-section">
+          <div className="section-title">
+            <span>History</span>
+          </div>
+          <div className="scroll-row">
+            {playHistory.map(item => (
+              <div key={item.id} className="shelf-card" style={{ width: 110 }}>
+                <div className="shelf-card-art">
+                  {item.cover ? (
+                    <img src={item.cover} alt={item.title} loading="lazy" decoding="async" />
+                  ) : (
+                    <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
+                  )}
+                </div>
+                <div className="shelf-card-info">
+                  <div className="shelf-card-title">{item.title}</div>
+                  <div className="shelf-card-sub">{item.artist}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

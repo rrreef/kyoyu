@@ -143,6 +143,26 @@ export function PlayerProvider({ children }) {
     };
   }, []);
 
+  // ── History tracking ──
+  useEffect(() => {
+    if (!state.currentTrack) return;
+    try {
+      const historyStr = localStorage.getItem('kyoyu-play-history') || '[]';
+      let history = JSON.parse(historyStr);
+      history = history.filter(t => t.id !== state.currentTrack.id);
+      history.unshift({
+        id: state.currentTrack.id,
+        title: state.currentTrack.title || state.currentTrack.artistName || 'Unknown Track',
+        artist: state.currentTrack.artistName || state.currentTrack.artist || '',
+        cover: state.currentTrack.releaseCover || state.currentTrack.cover || state.currentTrack.artworkUrl,
+        timestamp: Date.now()
+      });
+      history = history.slice(0, 20);
+      localStorage.setItem('kyoyu-play-history', JSON.stringify(history));
+      window.dispatchEvent(new Event('kyoyu-play-history-changed'));
+    } catch (err) {}
+  }, [state.currentTrack]);
+
   // ── Track change → stop old, load new, play when ready ──
   useEffect(() => {
     const audio = audioRef.current;

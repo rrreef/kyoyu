@@ -18,7 +18,7 @@
 
 .featured-hero-card {
   position: relative;
-  flex: 0 0 calc(100% - 32px);
+  flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: center;
   background: none;
