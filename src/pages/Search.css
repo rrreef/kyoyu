@@ -4,6 +4,71 @@
   padding-right: 32px;
 }
 
+/* ── Filter Rows ── */
+.search-filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+  margin-left: -32px;
+  margin-right: -32px;
+  padding: 0 24px;
+}
+
+.search-filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.search-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.search-filter-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.search-filter-chip:active {
+  transform: scale(0.95);
+}
+
+.search-filter-chip.active {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.search-filter-chip.provider-chip {
+  padding: 8px 14px;
+  min-width: 44px;
+}
+
+.search-filter-chip.provider-chip svg {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.search-filter-chip.provider-chip.active svg {
+  opacity: 1;
+}
+
 /* ── Search History ── */
 .search-history {
   flex: 1;
@@ -312,4 +377,8 @@
 
 .spin-icon {
   animation: spin 1s linear infinite;
+}
+
+body.kyoyu-search-active .search-page {
+    padding-top: 100px !important;
 }
