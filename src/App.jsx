@@ -245,6 +245,58 @@ function HashRedirector() {
   return null;
 }
 
+// ─── Playlist Bridge ────────────────────────────────────────
+// Registers global playlist JS handlers using both PlayerContext and LibraryContext.
+// Lives inside both providers so it always has access to both contexts.
+import { useLibrary } from './contexts/LibraryContext';
+
+function PlaylistBridge() {
+  const { state } = usePlayer();
+  const { getPlaylists, addToPlaylist, createPlaylist } = useLibrary();
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
+  const addRef = React.useRef(addToPlaylist);
+  addRef.current = addToPlaylist;
+  const getRef = React.useRef(getPlaylists);
+  getRef.current = getPlaylists;
+  const createRef = React.useRef(createPlaylist);
+  createRef.current = createPlaylist;
+
+  useEffect(() => {
+    // Always-available playlist handlers (override the AlbumSheet ones)
+    window.__kyoyuGetPlaylists = () => {
+      return JSON.stringify(getRef.current());
+    };
+
+    window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
+      const cur = stateRef.current.currentTrack;
+      // Build track object from current player state
+      const trackObj = {
+        id: trackId || cur?.id || '',
+        title: cur?.title || cur?.name || '',
+        artist: cur?.artistName || cur?.artist || '',
+        album: cur?.releaseTitle || cur?.albumTitle || cur?.album || '',
+        cover: cur?.releaseCover || cur?.cover || cur?.artworkUrl || '',
+        audioUrl: cur?.src || cur?.audioUrl || cur?.fileUrl || '',
+      };
+      addRef.current(playlistId, trackObj);
+    };
+
+    window.__kyoyuCreatePlaylist = (name) => {
+      const pl = createRef.current(name);
+      return JSON.stringify({ id: pl.id, name: pl.title, trackCount: 0 });
+    };
+
+    return () => {
+      delete window.__kyoyuGetPlaylists;
+      delete window.__kyoyuAddToPlaylist;
+      delete window.__kyoyuCreatePlaylist;
+    };
+  }, []);
+
+  return null;
+}
+
 // ─── Root ──────────────────────────────────────────────────
 export default function App() {
   const [splash, setSplash] = useState(false);
@@ -256,6 +308,7 @@ export default function App() {
       <AuthProvider>
         <PlayerProvider>
           <LibraryProvider>
+              <PlaylistBridge />
             <DisplayProvider>
               <Routes>
                 <Route path="/auth/reset" element={<ResetPassword />} />
