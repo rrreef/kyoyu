@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS public.tracks (
   storage_key  TEXT,   -- R2 audio file key (never sent to frontend)
   artwork_key  TEXT,   -- R2 artwork key   (never sent to frontend)
   artwork_url  TEXT,   -- presigned or CDN url (short-lived)
+  is_featured    BOOLEAN DEFAULT false,
+  featured_order INTEGER DEFAULT 0,
+  featured_type  TEXT DEFAULT 'release',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   published_at TIMESTAMPTZ
 );

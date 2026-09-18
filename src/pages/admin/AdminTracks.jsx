@@ -80,6 +80,14 @@ export default function AdminTracks() {
     setTracks(prev => prev.map(t => t.id === track.id ? { ...t, status } : t));
   }
 
+  async function toggleFeatured(track) {
+    const is_featured = !track.is_featured;
+    const { error } = await supabase.from('tracks').update({ is_featured }).eq('id', track.id);
+    if (error) { show(error.message, 'error'); return; }
+    show(is_featured ? 'Track featured' : 'Track unfeatured');
+    setTracks(prev => prev.map(t => t.id === track.id ? { ...t, is_featured } : t));
+  }
+
   const filtered = tracks.filter(t => {
     const q = search.toLowerCase();
     const matchQ = !q
@@ -101,6 +109,7 @@ export default function AdminTracks() {
       status: t.status,
       visibility: t.visibility,
       format: t.format,
+      is_featured: t.is_featured || false,
       created_at: t.created_at,
     }));
   }
@@ -176,7 +185,10 @@ export default function AdminTracks() {
                           : <div className="adm-thumb-ph"><Music size={14}/></div>
                         }
                         <div>
-                          <div className="adm-user-name">{t.title}</div>
+                          <div className="adm-user-name">
+                            {t.title} 
+                            {t.is_featured && <span style={{marginLeft:6, color:'rgb(251, 127, 51)', fontSize:10}}>★</span>}
+                          </div>
                           <div className="adm-user-sub">{t.artist}{t.album ? ` · ${t.album}` : ''}</div>
                         </div>
                       </div>
@@ -191,6 +203,13 @@ export default function AdminTracks() {
                     <td style={{ color: 'var(--adm-txt-2)', fontSize: 12 }}>{new Date(t.created_at).toLocaleDateString()}</td>
                     <td>
                       <div className="adm-actions">
+                        <button 
+                          className={`adm-btn adm-btn-sm ${t.is_featured ? 'adm-btn-ghost' : 'adm-btn-success'}`} 
+                          onClick={() => toggleFeatured(t)}
+                          style={t.is_featured ? { color: 'rgb(251, 127, 51)' } : {}}
+                        >
+                          {t.is_featured ? 'Unfeature' : 'Feature'}
+                        </button>
                         {t.status !== 'live' && (
                           <button className="adm-btn adm-btn-success adm-btn-sm" onClick={() => setStatus(t, 'live')}>
                             <CheckCircle size={12}/> Approve
