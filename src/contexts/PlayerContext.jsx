@@ -150,13 +150,14 @@ export function PlayerProvider({ children }) {
       const historyStr = localStorage.getItem('kyoyu-play-history') || '[]';
       let history = JSON.parse(historyStr);
       history = history.filter(t => t.id !== state.currentTrack.id);
-      history.unshift({
-        id: state.currentTrack.id,
-        title: state.currentTrack.title || state.currentTrack.artistName || 'Unknown Track',
-        artist: state.currentTrack.artistName || state.currentTrack.artist || '',
-        cover: state.currentTrack.releaseCover || state.currentTrack.cover || state.currentTrack.artworkUrl,
-        timestamp: Date.now()
-      });
+      
+      const trackToSave = { ...state.currentTrack };
+      trackToSave.title = trackToSave.title || trackToSave.artistName || 'Unknown Track';
+      trackToSave.artist = trackToSave.artistName || trackToSave.artist || '';
+      trackToSave.cover = trackToSave.releaseCover || trackToSave.cover || trackToSave.artworkUrl;
+      trackToSave.timestamp = Date.now();
+      
+      history.unshift(trackToSave);
       history = history.slice(0, 20);
       localStorage.setItem('kyoyu-play-history', JSON.stringify(history));
       window.dispatchEvent(new Event('kyoyu-play-history-changed'));

@@ -185,7 +185,14 @@ export default function Home() {
               <button
                 key={album.id}
                 className="featured-hero-card"
-                onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                onClick={() => {
+                  if (album.id.startsWith('single::') && album.tracks?.length === 1) {
+                    playTrack(album.tracks[0]);
+                  } else {
+                    playRelease(album);
+                    setSelectedAlbum(openNativeAlbumFast(album));
+                  }
+                }}
               >
                 {/* Blurred background from cover art */}
                 {album.cover && (
@@ -246,7 +253,12 @@ export default function Home() {
           </div>
           <div className="scroll-row">
             {playHistory.map(item => (
-              <div key={item.id} className="shelf-card" style={{ width: 110 }}>
+              <button 
+                key={item.id} 
+                className="shelf-card" 
+                style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
+                onClick={() => playTrack(item)}
+              >
                 <div className="shelf-card-art">
                   {item.cover ? (
                     <img src={item.cover} alt={item.title} loading="lazy" decoding="async" />
@@ -258,7 +270,7 @@ export default function Home() {
                   <div className="shelf-card-title">{item.title}</div>
                   <div className="shelf-card-sub">{item.artist}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </section>
