@@ -735,73 +735,9 @@ export default function Search() {
   return (
     <div className="page search-page animate-in">
 
-      {/* ── Filter Rows ── */}
-      <div className="search-filter-rows">
-        {/* Row 1: Category filters */}
-        <div className="search-filter-row">
-          {[
-            { key: 'titles', label: 'Title' },
-            { key: 'artists', label: 'Artist' },
-            { key: 'albums', label: 'Album' },
-            { key: 'labels', label: 'Label' },
-          ].map(f => (
-            <button
-              key={f.key}
-              className={`search-filter-chip ${activeFilter === f.key ? 'active' : ''}`}
-              onClick={() => setActiveFilter(prev => prev === f.key ? 'all' : f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+      {/* Spacer for native filter overlay */}
+      <div style={{ height: '80px' }} />
 
-        {/* Row 2: Provider filters (icons only) */}
-        <div className="search-filter-row">
-          {/* Bandcamp */}
-          <button
-            className={`search-filter-chip provider-chip ${activeProvider === 'bandcamp' ? 'active' : ''}`}
-            onClick={() => setActiveProvider(prev => prev === 'bandcamp' ? 'all' : 'bandcamp')}
-            title="Bandcamp"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z"/>
-            </svg>
-          </button>
-
-          {/* SoundCloud */}
-          <button
-            className={`search-filter-chip provider-chip ${activeProvider === 'soundcloud' ? 'active' : ''}`}
-            onClick={() => setActiveProvider(prev => prev === 'soundcloud' ? 'all' : 'soundcloud')}
-            title="SoundCloud"
-          >
-            <svg width="20" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.255-2.154c-.009-.057-.049-.1-.099-.1zm-.899.828c-.06 0-.091.037-.104.094L0 14.479l.172 1.282c.013.06.045.094.104.094.057 0 .089-.035.104-.094l.197-1.282-.197-1.332c-.015-.057-.047-.094-.104-.094zm1.835-1.585c-.067 0-.12.058-.127.127l-.213 2.883.213 2.755c.007.072.06.127.127.127.065 0 .12-.055.125-.127l.239-2.755-.239-2.883c-.005-.069-.06-.127-.125-.127zm.899-.574c-.078 0-.139.063-.145.14l-.192 3.457.192 3.305c.006.075.067.135.145.135.076 0 .137-.06.142-.135l.219-3.305-.219-3.457c-.005-.077-.066-.14-.142-.14zm.93-.471c-.088 0-.159.072-.163.163l-.175 3.928.175 3.405c.004.088.075.155.163.155.086 0 .157-.067.163-.155l.197-3.405-.197-3.928c-.006-.091-.077-.163-.163-.163zm.94-.15c-.1 0-.179.082-.183.181l-.155 4.078.155 3.455c.004.098.083.175.183.175.098 0 .177-.077.183-.175l.175-3.455-.175-4.078c-.006-.099-.085-.181-.183-.181zm3.714-1.382c-.028 0-.049.009-.073.018-.095-.217-.319-.36-.573-.36-.124 0-.24.041-.341.111-.074-.528-.514-.927-1.063-.927-.142 0-.278.028-.401.082-.051.022-.064.044-.064.088v8.093c0 .046.035.083.079.088h2.436c.65 0 1.175-.53 1.175-1.18v-.001c0-.65-.525-1.179-1.175-1.179zM7.09 5.478c-.109 0-.2.092-.203.203l-.14 4.322.14 3.455c.003.109.094.197.203.197.108 0 .196-.088.2-.197l.157-3.455-.157-4.322c-.004-.111-.092-.203-.2-.203zm14.738 1.955c-.31 0-.606.063-.877.176-.181-2.01-1.876-3.581-3.949-3.581-.558 0-1.097.116-1.576.322-.186.08-.236.162-.236.321v8.168c0 .166.129.304.295.316h6.343c1.308 0 2.37-1.065 2.37-2.378 0-1.314-1.062-2.378-2.37-2.378v.034z"/>
-            </svg>
-          </button>
-
-          {/* YouTube Music */}
-          <button
-            className={`search-filter-chip provider-chip ${activeProvider === 'youtube' ? 'active' : ''}`}
-            onClick={() => setActiveProvider(prev => prev === 'youtube' ? 'all' : 'youtube')}
-            title="YouTube Music"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm0 19.104c-3.924 0-7.104-3.18-7.104-7.104S8.076 4.896 12 4.896s7.104 3.18 7.104 7.104-3.18 7.104-7.104 7.104zm0-13.332c-3.432 0-6.228 2.796-6.228 6.228S8.568 18.228 12 18.228 18.228 15.432 18.228 12 15.432 5.772 12 5.772zM9.684 15.54V8.46L15.816 12l-6.132 3.54z"/>
-            </svg>
-          </button>
-
-          {/* Discogs */}
-          <button
-            className={`search-filter-chip provider-chip ${activeProvider === 'discogs' ? 'active' : ''}`}
-            onClick={() => setActiveProvider(prev => prev === 'discogs' ? 'all' : 'discogs')}
-            title="Discogs"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 21.6c-5.292 0-9.6-4.308-9.6-9.6S6.708 2.4 12 2.4s9.6 4.308 9.6 9.6-4.308 9.6-9.6 9.6zm0-16.8c-3.972 0-7.2 3.228-7.2 7.2s3.228 7.2 7.2 7.2 7.2-3.228 7.2-7.2-3.228-7.2-7.2-7.2zm0 12c-2.652 0-4.8-2.148-4.8-4.8s2.148-4.8 4.8-4.8 4.8 2.148 4.8 4.8-2.148 4.8-4.8 4.8zm0-7.2c-1.326 0-2.4 1.074-2.4 2.4s1.074 2.4 2.4 2.4 2.4-1.074 2.4-2.4-1.074-2.4-2.4-2.4z"/>
-            </svg>
-          </button>
-        </div>
-      </div>
       {/* Search History — shown when no active query */}
       {showHistory && (
         <div className="search-history">
