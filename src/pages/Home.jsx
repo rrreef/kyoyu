@@ -51,7 +51,7 @@ function groupByAlbum(tracks) {
 }
 
 export default function Home() {
-  const { playRelease } = usePlayer();
+  const { playRelease, playTrack, playYouTube, playSoundCloud } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
   const homeLayout = useHomeLayoutLive();
@@ -257,7 +257,15 @@ export default function Home() {
                 key={item.id} 
                 className="shelf-card" 
                 style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                onClick={() => playTrack(item)}
+                onClick={() => {
+                  if (item.provider === 'youtube') {
+                    playYouTube(item.videoId || item.id.replace('yt-', ''), item);
+                  } else if (item.provider === 'soundcloud') {
+                    playSoundCloud(item.permalinkUrl || item.src || item.id, item);
+                  } else {
+                    playTrack(item);
+                  }
+                }}
               >
                 <div className="shelf-card-art">
                   {item.cover ? (
