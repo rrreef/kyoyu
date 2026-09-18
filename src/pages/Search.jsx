@@ -607,6 +607,10 @@ export default function Search() {
   const isQueryEmpty = query.trim().length === 0;
   const showHistory = isQueryEmpty;
 
+  // Multi-select filter helpers
+  const filterMatch = (key) => activeFilter === 'all' || activeFilter.split(',').includes(key);
+  const providerMatch = (key) => activeProvider === 'all' || activeProvider.split(',').includes(key);
+
   // ── Rank external results within each provider ──
   const rankedYoutube = rankResults(query, (externalResults.youtube || []).map(yt => ({
     ...yt, artistName: yt.channelTitle, entityType: 'track',
@@ -775,36 +779,36 @@ export default function Search() {
       {!isQueryEmpty && hasResults && (
         <div className="search-results-list">
           
-          {(activeFilter === 'all' || activeFilter === 'albums') && albums.length > 0 && (
+          {filterMatch('albums') && albums.length > 0 && (
             <div className="search-section">
-              {activeFilter === 'all' && <div className="search-section-title">Albums</div>}
+              {<div className="search-section-title">Albums</div>}
               {albums.map(renderAlbumRow)}
             </div>
           )}
 
           {/* Native Tracks */}
-          {!isQueryEmpty && hasResults && (activeFilter === 'all' || activeFilter === 'titles') && titleList.length > 0 && (
+          {!isQueryEmpty && hasResults && filterMatch('titles') && titleList.length > 0 && (
             <div className="search-section">
-              {activeFilter === 'all' && <div className="search-section-title">Titles</div>}
+              {<div className="search-section-title">Titles</div>}
               {titleList.map(t => renderTrackRow(t, false))}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'artists') && artists.length > 0 && (
+          {filterMatch('artists') && artists.length > 0 && (
             <div className="search-section">
-              {activeFilter === 'all' && <div className="search-section-title">Artists</div>}
+              {<div className="search-section-title">Artists</div>}
               {artists.map(renderArtistRow)}
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'labels') && labels.length > 0 && (
+          {filterMatch('labels') && labels.length > 0 && (
             <div className="search-section">
-              {activeFilter === 'all' && <div className="search-section-title">Labels</div>}
+              {<div className="search-section-title">Labels</div>}
               {labels.map(renderLabelRow)}
             </div>
           )}
 
-          {activeFilter === 'podcasts' && podcastList.length > 0 && (
+          {filterMatch('podcasts') && podcastList.length > 0 && (
             <div className="search-section">
               <div className="search-section-title">Sets</div>
               {podcastList.map(t => renderTrackRow(t, true))}
@@ -828,13 +832,13 @@ export default function Search() {
       )}
 
       {/* ── Bandcamp Results ── */}
-      {!isQueryEmpty && rankedBandcamp.length > 0 && (activeProvider === 'all' || activeProvider === 'bandcamp') && (() => {
+      {!isQueryEmpty && rankedBandcamp.length > 0 && providerMatch('bandcamp') && (() => {
         const filteredBc = rankedBandcamp.filter(bc => 
           activeFilter === 'all' || 
-          (activeFilter === 'titles' && bc.entityType === 'track') ||
-          (activeFilter === 'albums' && bc.entityType === 'album') ||
-          (activeFilter === 'artists' && bc.entityType === 'artist') ||
-          (activeFilter === 'labels' && bc.entityType === 'label')
+          (filterMatch('titles') && bc.entityType === 'track') ||
+          (filterMatch('albums') && bc.entityType === 'album') ||
+          (filterMatch('artists') && bc.entityType === 'artist') ||
+          (filterMatch('labels') && bc.entityType === 'label')
         );
         if (filteredBc.length === 0) return null;
         return (
@@ -1042,7 +1046,7 @@ export default function Search() {
       })()}
 
       {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && rankedSoundcloud.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'soundcloud') && (
+      {!isQueryEmpty && rankedSoundcloud.length > 0 && filterMatch('titles') && providerMatch('soundcloud') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
@@ -1078,7 +1082,7 @@ export default function Search() {
       )}
 
       {/* ── YouTube Results ── */}
-      {!isQueryEmpty && rankedYoutube.length > 0 && (activeFilter === 'all' || activeFilter === 'titles') && (activeProvider === 'all' || activeProvider === 'youtube') && (
+      {!isQueryEmpty && rankedYoutube.length > 0 && filterMatch('titles') && providerMatch('youtube') && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
             YouTube
@@ -1113,15 +1117,15 @@ export default function Search() {
       )}
 
       {/* ── Discogs Results ── */}
-      {!isQueryEmpty && (activeProvider === 'all' || activeProvider === 'discogs') && (rankedDiscogsArtists.length > 0 || rankedDiscogsReleases.length > 0 || rankedDiscogsLabels.length > 0) && (
+      {!isQueryEmpty && providerMatch('discogs') && (rankedDiscogsArtists.length > 0 || rankedDiscogsReleases.length > 0 || rankedDiscogsLabels.length > 0) && (
         <div className="search-results-list search-external-section">
-          {(((activeFilter === 'all' || activeFilter === 'artists') && rankedDiscogsArtists.length > 0) || ((activeFilter === 'all' || activeFilter === 'labels') && rankedDiscogsLabels.length > 0) || ((activeFilter === 'all' || activeFilter === 'albums') && rankedDiscogsReleases.length > 0)) && (
+          {((filterMatch('artists') && rankedDiscogsArtists.length > 0) || (filterMatch('labels') && rankedDiscogsLabels.length > 0) || (filterMatch('albums') && rankedDiscogsReleases.length > 0)) && (
             <div className="search-section-title search-external-header">
               Discogs
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'artists') && rankedDiscogsArtists.length > 0 && (
+          {filterMatch('artists') && rankedDiscogsArtists.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Artists</div>
               {rankedDiscogsArtists.map(artist => (
@@ -1154,7 +1158,7 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'albums') && rankedDiscogsReleases.length > 0 && (
+          {filterMatch('albums') && rankedDiscogsReleases.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Releases</div>
               {rankedDiscogsReleases.map(release => (
@@ -1179,7 +1183,7 @@ export default function Search() {
             </div>
           )}
 
-          {(activeFilter === 'all' || activeFilter === 'labels') && rankedDiscogsLabels.length > 0 && (
+          {filterMatch('labels') && rankedDiscogsLabels.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Labels</div>
               {rankedDiscogsLabels.map(label => (
