@@ -733,7 +733,7 @@ export default function Search() {
   };
 
   return (
-    <div className="page search-page animate-in">
+    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 80}px` : undefined }}>
 
       {/* Spacer for native filter overlay */}
       <div style={{ height: '80px' }} />
