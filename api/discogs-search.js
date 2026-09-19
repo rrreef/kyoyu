@@ -51,7 +51,8 @@ async function fetchDiscogsRelease(query) {
       title: detail?.title || best.title || '',
       year: detail?.year || best.year || '',
       genre: [...(detail?.genres || best.genre || []), ...(detail?.styles || best.style || [])].join(', '),
-      labels, country: detail?.country || '', description: detail?.notes || '',
+      labels, country: detail?.country || '',
+      description: (detail?.notes || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, ''),
       formats: (detail?.formats || []).map(f => {
         const parts = [f.name];
         if (f.descriptions) parts.push(...f.descriptions);
@@ -92,8 +93,9 @@ async function fetchDiscogsArtistFull(artistId) {
         topReleases = mainReleases.slice(0, 3).map(r => ({ title: r.title || '', year: r.year || 0, label: r.label || '' }));
       }
     } catch (e) {}
+    const cleanBio = (data.profile || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, '');
     return {
-      bio: data.profile || '', realName: data.realname || '',
+      bio: cleanBio, realName: data.realname || '',
       members: (data.members || []).map(m => m.name?.replace(/\s\(\d+\)$/, '') || '').slice(0, 10),
       discogsUrl: data.uri ? `https://www.discogs.com/artist/${data.id}` : '',
       topReleases, latestReleases,
@@ -107,10 +109,12 @@ async function fetchDiscogsLabel(labelId) {
     const res = await fetch(`https://api.discogs.com/labels/${labelId}`, { headers: DISCOGS_HEADERS });
     if (!res.ok) return null;
     const data = await res.json();
-    return {
-      name: data.name || '', parentLabel: data.parent_label?.name || '',
-      sublabels: (data.sublabels || []).map(s => s.name).slice(0, 5),
-      profile: data.profile || '',
+      // Clean Discogs markup: [a=Artist Name] → Artist Name, [l=Label Name] → Label Name, etc.
+      const rawProfile = (data.profile || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, '');
+      return {
+        name: data.name || '', parentLabel: data.parent_label?.name || '',
+        sublabels: (data.sublabels || []).map(s => s.name).slice(0, 5),
+        profile: rawProfile,
       discogsUrl: data.uri ? `https://www.discogs.com/label/${data.id}` : '',
     };
   } catch (e) { return null; }
@@ -181,7 +185,9 @@ async function handleTrackInfo(body, res) {
   let labelDisplay = '';
   if (labelInfo) {
     labelDisplay = labelInfo.name;
-    if (labelInfo.parentLabel) labelDisplay += ` (sub-label of ${labelInfo.parentLabel})`;
+    if (labelInfo.parentLabel && labelInfo.parentLabel.toLowerCase() !== labelInfo.name.toLowerCase()) {
+      labelDisplay += ` (sub-label of ${labelInfo.parentLabel})`;
+    }
   } else {
     labelDisplay = discogs?.labels?.[0]?.name || mb?.label || '';
   }

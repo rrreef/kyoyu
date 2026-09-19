@@ -540,16 +540,29 @@ export function PlayerProvider({ children }) {
         // supabase imported at top
         const { data, error } = await supabase
           .from('comments')
-          .select('id, content, created_at, user_id, profiles(username, avatar_url)')
+          .select('id, content, created_at, user_id, profiles(display_name, avatar_url)')
           .eq('track_id', trackId)
           .order('created_at', { ascending: false })
           .limit(50);
-        if (error) console.warn('Comments fetch error:', error);
+        if (error) {
+          console.warn('Comments fetch error:', JSON.stringify(error));
+          // Fallback: try without profile join
+          const { data: fallback } = await supabase
+            .from('comments')
+            .select('id, content, created_at, user_id')
+            .eq('track_id', trackId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          return JSON.stringify((fallback || []).map(c => ({
+            id: c.id, content: c.content, created_at: c.created_at,
+            username: 'User', avatar_url: '',
+          })));
+        }
         return JSON.stringify((data || []).map(c => ({
           id: c.id,
           content: c.content,
           created_at: c.created_at,
-          username: c.profiles?.username || 'User',
+          username: c.profiles?.display_name || 'User',
           avatar_url: c.profiles?.avatar_url || '',
         })));
       } catch (err) { console.warn('Comments error:', err); return '[]'; }
@@ -570,14 +583,14 @@ export function PlayerProvider({ children }) {
         // Fetch the profile separately to avoid join issues
         const { data: profile } = await supabase
           .from('profiles')
-          .select('username, avatar_url')
+          .select('display_name, avatar_url')
           .eq('id', user.id)
           .single();
         return JSON.stringify({
           id: data?.id || '',
           content: data?.content || content,
           created_at: data?.created_at || new Date().toISOString(),
-          username: profile?.username || 'You',
+          username: profile?.display_name || 'You',
           avatar_url: profile?.avatar_url || '',
         });
       } catch (err) { console.warn('Comment post error:', err); return JSON.stringify({ error: String(err) }); }
