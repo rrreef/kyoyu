@@ -592,10 +592,10 @@ export function PlayerProvider({ children }) {
       try {
         const key = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key || window.__kyoyuInfoCache[key]) return; // Already cached
-        const res = await fetch('/api/track-info', {
+        const res = await fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, artist, album, provider, trackId })
+          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId })
         });
         if (res.ok) {
           const data = await res.json();
@@ -613,10 +613,10 @@ export function PlayerProvider({ children }) {
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
         // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
-        const res = await fetch('/api/track-info', {
+        const res = await fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, artist, album, provider, trackId })
+          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId })
         });
         if (res.ok) {
           const data = await res.json();
