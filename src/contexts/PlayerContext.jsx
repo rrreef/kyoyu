@@ -556,22 +556,29 @@ export function PlayerProvider({ children }) {
     window.__kyoyuPostComment = async (trackId, content) => {
       try {
         const { supabase } = await import('../lib/supabase');
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return '{}';
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+        if (authErr) { console.warn('Comment auth error:', authErr); return JSON.stringify({ error: 'auth_error' }); }
+        if (!user) { console.warn('Comment: no user session'); return JSON.stringify({ error: 'not_logged_in' }); }
         const { data, error } = await supabase
           .from('comments')
           .insert({ track_id: trackId, user_id: user.id, content })
-          .select('id, content, created_at, user_id, profiles(username, avatar_url)')
+          .select('id, content, created_at')
           .single();
-        if (error) console.warn('Comment post error:', error);
+        if (error) { console.warn('Comment insert error:', JSON.stringify(error)); return JSON.stringify({ error: error.message }); }
+        // Fetch the profile separately to avoid join issues
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, avatar_url')
+          .eq('id', user.id)
+          .single();
         return JSON.stringify({
           id: data?.id || '',
           content: data?.content || content,
           created_at: data?.created_at || new Date().toISOString(),
-          username: data?.profiles?.username || 'You',
-          avatar_url: data?.profiles?.avatar_url || '',
+          username: profile?.username || 'You',
+          avatar_url: profile?.avatar_url || '',
         });
-      } catch (err) { console.warn('Comment post error:', err); return '{}'; }
+      } catch (err) { console.warn('Comment post error:', err); return JSON.stringify({ error: String(err) }); }
     };
 
     // ── Track Info bridge ── pre-fetch on track change, return from cache

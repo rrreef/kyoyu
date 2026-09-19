@@ -67,10 +67,14 @@ ALTER TABLE public.tracks       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.track_credits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.track_stats   ENABLE ROW LEVEL SECURITY;
 
--- Profiles: each user owns their own row
+-- Profiles: each user can update their own row; all profiles readable for comment joins
 CREATE POLICY "users_own_profile"
   ON public.profiles FOR ALL
   USING (auth.uid() = id);
+
+CREATE POLICY "profiles_public_read"
+  ON public.profiles FOR SELECT
+  USING (true);
 
 -- Tracks: creators manage their own; listeners see public+live only
 CREATE POLICY "creator_own_tracks"
