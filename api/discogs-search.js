@@ -46,12 +46,14 @@ async function fetchDiscogsRelease(query) {
     const releaseArtists = (detail?.artists || []).map(a => ({
       name: a.name?.replace(/\s\(\d+\)$/, '') || '', id: a.id,
     }));
-    const labels = (detail?.labels || []).map(l => ({ name: l.name || '', catno: l.catno || '', id: l.id }));
+    const labels = (detail?.labels || []).map(l => ({ name: l.name?.replace(/\s\(\d+\)$/, '') || '', catno: l.catno || '', id: l.id }));
+    // Series = sub-imprints (e.g., "Mantis" under "Delsin")
+    const series = (detail?.series || []).map(s => ({ name: s.name?.replace(/\s\(\d+\)$/, '') || '', catno: s.catno || '', id: s.id }));
     return {
       title: detail?.title || best.title || '',
       year: detail?.year || best.year || '',
       genre: [...(detail?.genres || best.genre || []), ...(detail?.styles || best.style || [])].join(', '),
-      labels, country: detail?.country || '',
+      labels, series, country: detail?.country || '',
       description: (detail?.notes || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, ''),
       formats: (detail?.formats || []).map(f => {
         const parts = [f.name];
@@ -182,14 +184,27 @@ async function handleTrackInfo(body, res) {
 
   // Build result
   const links = [];
+
+  // Label display: combine label + series (sub-imprint) properly
   let labelDisplay = '';
-  if (labelInfo) {
+  const mainLabelName = discogs?.labels?.[0]?.name || labelInfo?.name || mb?.label || '';
+  const seriesName = discogs?.series?.[0]?.name || '';
+
+  if (seriesName && seriesName.toLowerCase() !== mainLabelName.toLowerCase()) {
+    // Series exists and is different from main label (e.g., Mantis under Delsin)
+    labelDisplay = `${mainLabelName} — ${seriesName}`;
+  } else if (labelInfo) {
     labelDisplay = labelInfo.name;
-    if (labelInfo.parentLabel && labelInfo.parentLabel.toLowerCase() !== labelInfo.name.toLowerCase()) {
-      labelDisplay += ` (sub-label of ${labelInfo.parentLabel})`;
+    // Only show sub-label if parent is genuinely different (not just "Records" suffix)
+    if (labelInfo.parentLabel) {
+      const parentClean = labelInfo.parentLabel.replace(/\s*(Records|Music|Label|Recordings)$/i, '').trim().toLowerCase();
+      const labelClean = labelInfo.name.replace(/\s*(Records|Music|Label|Recordings)$/i, '').trim().toLowerCase();
+      if (parentClean !== labelClean && !parentClean.includes(labelClean) && !labelClean.includes(parentClean)) {
+        labelDisplay += ` (sub-label of ${labelInfo.parentLabel})`;
+      }
     }
   } else {
-    labelDisplay = discogs?.labels?.[0]?.name || mb?.label || '';
+    labelDisplay = mainLabelName;
   }
   const catno = discogs?.labels?.[0]?.catno || mb?.catno || '';
   if (catno) labelDisplay += ` [${catno}]`;

@@ -534,53 +534,77 @@ export function PlayerProvider({ children }) {
     };
 
     // ── Comments bridge (Supabase) ──
-    // Swift uses callAsyncJavaScript which natively resolves Promises
     window.__kyoyuGetComments = async (trackId) => {
       try {
-        // supabase imported at top
+        const { data: { user } } = await supabase.auth.getUser();
+        const uid = user?.id || '';
+
+        // Fetch all comments for the track (top-level + replies)
         const { data, error } = await supabase
           .from('comments')
-          .select('id, content, created_at, user_id, profiles(display_name, avatar_url)')
+          .select('id, content, created_at, user_id, parent_id, profiles(display_name, avatar_url)')
           .eq('track_id', trackId)
-          .order('created_at', { ascending: false })
-          .limit(50);
+          .order('created_at', { ascending: true })
+          .limit(200);
         if (error) {
           console.warn('Comments fetch error:', JSON.stringify(error));
-          // Fallback: try without profile join
-          const { data: fallback } = await supabase
-            .from('comments')
-            .select('id, content, created_at, user_id')
-            .eq('track_id', trackId)
-            .order('created_at', { ascending: false })
-            .limit(50);
-          return JSON.stringify((fallback || []).map(c => ({
-            id: c.id, content: c.content, created_at: c.created_at,
-            username: 'User', avatar_url: '',
-          })));
+          return '[]';
         }
-        return JSON.stringify((data || []).map(c => ({
+
+        // Fetch all likes for these comments in one query
+        const commentIds = (data || []).map(c => c.id);
+        let likesMap = {}; // commentId -> { count, userLiked }
+        if (commentIds.length > 0) {
+          const { data: likes } = await supabase
+            .from('comment_likes')
+            .select('comment_id, user_id')
+            .in('comment_id', commentIds);
+          (likes || []).forEach(l => {
+            if (!likesMap[l.comment_id]) likesMap[l.comment_id] = { count: 0, userLiked: false };
+            likesMap[l.comment_id].count++;
+            if (l.user_id === uid) likesMap[l.comment_id].userLiked = true;
+          });
+        }
+
+        // Build comment tree: top-level comments with nested replies
+        const allComments = (data || []).map(c => ({
           id: c.id,
           content: c.content,
           created_at: c.created_at,
+          parent_id: c.parent_id || '',
           username: c.profiles?.display_name || 'User',
           avatar_url: c.profiles?.avatar_url || '',
-        })));
+          is_mine: c.user_id === uid,
+          like_count: likesMap[c.id]?.count || 0,
+          user_liked: likesMap[c.id]?.userLiked || false,
+        }));
+
+        // Separate into top-level and replies
+        const topLevel = allComments.filter(c => !c.parent_id);
+        const replies = allComments.filter(c => c.parent_id);
+        // Attach replies to their parent
+        const result = topLevel.map(c => ({
+          ...c,
+          replies: replies.filter(r => r.parent_id === c.id),
+        }));
+        // Reverse so newest first
+        result.reverse();
+        return JSON.stringify(result);
       } catch (err) { console.warn('Comments error:', err); return '[]'; }
     };
 
-    window.__kyoyuPostComment = async (trackId, content) => {
+    window.__kyoyuPostComment = async (trackId, content, parentId) => {
       try {
-        // supabase imported at top
         const { data: { user }, error: authErr } = await supabase.auth.getUser();
-        if (authErr) { console.warn('Comment auth error:', authErr); return JSON.stringify({ error: 'auth_error' }); }
-        if (!user) { console.warn('Comment: no user session'); return JSON.stringify({ error: 'not_logged_in' }); }
+        if (authErr || !user) return JSON.stringify({ error: 'not_logged_in' });
+        const insertObj = { track_id: trackId, user_id: user.id, content };
+        if (parentId) insertObj.parent_id = parentId;
         const { data, error } = await supabase
           .from('comments')
-          .insert({ track_id: trackId, user_id: user.id, content })
-          .select('id, content, created_at')
+          .insert(insertObj)
+          .select('id, content, created_at, parent_id')
           .single();
-        if (error) { console.warn('Comment insert error:', JSON.stringify(error)); return JSON.stringify({ error: error.message }); }
-        // Fetch the profile separately to avoid join issues
+        if (error) return JSON.stringify({ error: error.message });
         const { data: profile } = await supabase
           .from('profiles')
           .select('display_name, avatar_url')
@@ -590,10 +614,45 @@ export function PlayerProvider({ children }) {
           id: data?.id || '',
           content: data?.content || content,
           created_at: data?.created_at || new Date().toISOString(),
+          parent_id: data?.parent_id || '',
           username: profile?.display_name || 'You',
           avatar_url: profile?.avatar_url || '',
+          is_mine: true,
+          like_count: 0,
+          user_liked: false,
+          replies: [],
         });
-      } catch (err) { console.warn('Comment post error:', err); return JSON.stringify({ error: String(err) }); }
+      } catch (err) { return JSON.stringify({ error: String(err) }); }
+    };
+
+    window.__kyoyuDeleteComment = async (commentId) => {
+      try {
+        const { error } = await supabase
+          .from('comments')
+          .delete()
+          .eq('id', commentId);
+        return error ? 'error' : 'ok';
+      } catch (e) { return 'error'; }
+    };
+
+    window.__kyoyuLikeComment = async (commentId) => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return JSON.stringify({ error: 'not_logged_in' });
+        const { error } = await supabase
+          .from('comment_likes')
+          .insert({ comment_id: commentId, user_id: user.id });
+        if (error && error.code === '23505') {
+          // Already liked → unlike
+          await supabase
+            .from('comment_likes')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+          return JSON.stringify({ liked: false });
+        }
+        return JSON.stringify({ liked: !error });
+      } catch (e) { return JSON.stringify({ error: String(e) }); }
     };
 
     // ── Track Info bridge ── pre-fetch on track change, return from cache

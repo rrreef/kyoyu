@@ -154,16 +154,32 @@ CREATE TABLE IF NOT EXISTS public.comments (
   track_id    TEXT NOT NULL,
   user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content     TEXT NOT NULL,
+  parent_id   UUID REFERENCES public.comments(id) ON DELETE CASCADE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_comments_track ON public.comments(track_id);
 CREATE INDEX IF NOT EXISTS idx_comments_created ON public.comments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON public.comments(parent_id);
 
--- RLS: anyone can read, authenticated users can insert their own
+-- RLS: anyone can read, authenticated users can insert/delete their own
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY comments_select ON public.comments FOR SELECT USING (true);
 CREATE POLICY comments_insert ON public.comments FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY comments_delete ON public.comments FOR DELETE USING (auth.uid() = user_id);
+
+-- Comment likes — one like per user per comment
+CREATE TABLE IF NOT EXISTS public.comment_likes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  comment_id  UUID NOT NULL REFERENCES public.comments(id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(comment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_comment_likes_comment ON public.comment_likes(comment_id);
+ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY comment_likes_select ON public.comment_likes FOR SELECT USING (true);
+CREATE POLICY comment_likes_insert ON public.comment_likes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY comment_likes_delete ON public.comment_likes FOR DELETE USING (auth.uid() = user_id);
 
 -- ── Track Info Cache ────────────────────────────────────────
 -- Caches aggregated track/album/artist info from Discogs + MusicBrainz.
