@@ -1,5 +1,7 @@
 import { createContext, useContext, useReducer, useRef, useEffect, useCallback } from 'react';
 import { releases, djSets } from '../data/mockData';
+import { supabase } from '../lib/supabase';
+import { resolveBandcamp } from '../lib/unifiedSearch';
 
 const PlayerContext = createContext(null);
 
@@ -426,7 +428,7 @@ export function PlayerProvider({ children }) {
     } else if (item.provider === 'bandcamp') {
       // Bandcamp needs async resolve
       try {
-        const { resolveBandcamp } = await import('../lib/unifiedSearch');
+        // resolveBandcamp imported at top
         const resolved = await resolveBandcamp(item.providerItemId);
         if (resolved && resolved.streamUrl) {
           playTrack({
@@ -535,7 +537,7 @@ export function PlayerProvider({ children }) {
     // Swift uses callAsyncJavaScript which natively resolves Promises
     window.__kyoyuGetComments = async (trackId) => {
       try {
-        const { supabase } = await import('../lib/supabase');
+        // supabase imported at top
         const { data, error } = await supabase
           .from('comments')
           .select('id, content, created_at, user_id, profiles(username, avatar_url)')
@@ -555,7 +557,7 @@ export function PlayerProvider({ children }) {
 
     window.__kyoyuPostComment = async (trackId, content) => {
       try {
-        const { supabase } = await import('../lib/supabase');
+        // supabase imported at top
         const { data: { user }, error: authErr } = await supabase.auth.getUser();
         if (authErr) { console.warn('Comment auth error:', authErr); return JSON.stringify({ error: 'auth_error' }); }
         if (!user) { console.warn('Comment: no user session'); return JSON.stringify({ error: 'not_logged_in' }); }
@@ -631,7 +633,7 @@ export function PlayerProvider({ children }) {
     // Report info errors
     window.__kyoyuReportInfo = async (trackId, title, artist, message) => {
       try {
-        const { supabase } = await import('../lib/supabase');
+        // supabase imported at top
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return 'not_logged_in';
         const lookupKey = [artist, title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
