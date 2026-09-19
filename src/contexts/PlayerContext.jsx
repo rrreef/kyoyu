@@ -574,79 +574,71 @@ export function PlayerProvider({ children }) {
       } catch (err) { console.warn('Comment post error:', err); return '{}'; }
     };
 
-    // ── Track Info bridge ── uses server-side Discogs API + MusicBrainz
+    // ── Track Info bridge ── pre-fetch on track change, return from cache
+    // In-memory cache for current session (keyed by lookup key)
+    if (!window.__kyoyuInfoCache) window.__kyoyuInfoCache = {};
+
+    // Prefetch: called by Swift on track change — warms the cache
+    window.__kyoyuPrefetchTrackInfo = async (trackId, title, artist, album, provider) => {
+      try {
+        const key = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+        if (!key || window.__kyoyuInfoCache[key]) return; // Already cached
+        const res = await fetch('/api/track-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, artist, album, provider, trackId })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          window.__kyoyuInfoCache[key] = data;
+        }
+      } catch (e) { console.warn('Prefetch info error:', e); }
+    };
+
+    // Get cached info: called when user opens info panel — returns instantly
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
-        const query = [artist, album || title].filter(Boolean).join(' ');
-        if (!query.trim()) return JSON.stringify({ description: 'No information available.', genre: '', label: '', year: '', links: [] });
-
-        let description = '', genre = '', label = '', year = '';
-        const links = [];
-        let discogsFound = false;
-
-        // Discogs via server-side API (avoids CORS)
-        try {
-          const discogsRes = await fetch('/api/discogs-search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, type: 'release', perPage: 3 })
-          });
-          if (discogsRes.ok) {
-            const discogsData = await discogsRes.json();
-            const results = discogsData.results || [];
-            if (results.length > 0) {
-              discogsFound = true;
-              const best = results[0];
-              genre = (best.genre || []).join(', ');
-              if (best.style) genre += (genre ? ' · ' : '') + (best.style || []).join(', ');
-              label = (best.label || []).join(', ');
-              year = best.year || '';
-              if (best.uri) links.push({ name: 'View on Discogs', url: `https://www.discogs.com${best.uri}` });
-              description = best.title || '';
-              if (best.format) description += ' [' + (best.format || []).join(', ') + ']';
-            }
-          }
-        } catch (e) { console.warn('Discogs search error:', e); }
-
-        // MusicBrainz (CORS-friendly)
-        try {
-          const mbQuery = encodeURIComponent(`${title} AND artist:${artist}`);
-          const mbRes = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${mbQuery}&fmt=json&limit=3`, {
-            headers: { 'User-Agent': 'Kyoyu/1.0 (https://ree.fm)' }
-          });
-          if (mbRes.ok) {
-            const mbData = await mbRes.json();
-            const rec = mbData.recordings?.[0];
-            if (rec) {
-              links.push({ name: 'View on MusicBrainz', url: `https://musicbrainz.org/recording/${rec.id}` });
-              const release = rec.releases?.[0];
-              if (release) {
-                if (!year && release.date) year = release.date.substring(0, 4);
-                if (!label) {
-                  const lbl = release['label-info']?.[0]?.label;
-                  if (lbl) label = lbl.name + (release['label-info'][0]['catalog-number'] ? ` (${release['label-info'][0]['catalog-number']})` : '');
-                }
-                links.push({ name: 'View Release on MusicBrainz', url: `https://musicbrainz.org/release/${release.id}` });
-              }
-              if (!genre && rec.tags?.length) {
-                genre = rec.tags.sort((a, b) => b.count - a.count).slice(0, 5).map(t => t.name).join(', ');
-              }
-            }
-          }
-        } catch (e) { console.warn('MusicBrainz error:', e); }
-
-        if (!description) {
-          const parts = [];
-          if (title) parts.push(`"${title}"`);
-          if (artist) parts.push(`by ${artist}`);
-          if (album && album !== title) parts.push(`from the album "${album}"`);
-          if (year) parts.push(`(${year})`);
-          if (label) parts.push(`on ${label}`);
-          description = parts.join(' ') + '.';
+        const key = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+        // Return from cache if available
+        if (window.__kyoyuInfoCache[key]) {
+          return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
+        // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
+        const res = await fetch('/api/track-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, artist, album, provider, trackId })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          window.__kyoyuInfoCache[key] = data;
+          return JSON.stringify(data);
+        }
+        return JSON.stringify({ description: 'Could not fetch info.', genre: '', label: '', year: '', links: [] });
+      } catch (err) {
+        console.warn('Track info error:', err);
+        return JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] });
+      }
+    };
 
-        return JSON.stringify({ description, genre, label, year, links });
-      } catch (err) { console.warn('Track info error:', err); return JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] }); }
+    // Report info errors
+    window.__kyoyuReportInfo = async (trackId, title, artist, message) => {
+      try {
+        const { supabase } = await import('../lib/supabase');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return 'not_logged_in';
+        const lookupKey = [artist, title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+        const { error } = await supabase.from('info_reports').insert({
+          lookup_key: lookupKey,
+          track_id: trackId,
+          title,
+          artist,
+          user_id: user.id,
+          message,
+        });
+        if (error) { console.warn('Report error:', error); return 'error'; }
+        return 'ok';
+      } catch (e) { console.warn('Report error:', e); return 'error'; }
     };
 
     return () => {
@@ -656,6 +648,8 @@ export function PlayerProvider({ children }) {
       delete window.__kyoyuGetComments;
       delete window.__kyoyuPostComment;
       delete window.__kyoyuGetTrackInfo;
+      delete window.__kyoyuPrefetchTrackInfo;
+      delete window.__kyoyuReportInfo;
     };
   }); // No deps — always re-bind so closures see latest state
 

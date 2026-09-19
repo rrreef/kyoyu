@@ -160,3 +160,40 @@ ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY comments_select ON public.comments FOR SELECT USING (true);
 CREATE POLICY comments_insert ON public.comments FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY comments_delete ON public.comments FOR DELETE USING (auth.uid() = user_id);
+
+-- ── Track Info Cache ────────────────────────────────────────
+-- Caches aggregated track/album/artist info from Discogs + MusicBrainz.
+-- Refreshed every 30 days by the /api/track-info endpoint.
+CREATE TABLE IF NOT EXISTS public.track_info_cache (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lookup_key  TEXT NOT NULL UNIQUE,
+  title       TEXT,
+  artist      TEXT,
+  album       TEXT,
+  data        JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_track_info_lookup ON public.track_info_cache(lookup_key);
+
+ALTER TABLE public.track_info_cache ENABLE ROW LEVEL SECURITY;
+CREATE POLICY track_info_cache_select ON public.track_info_cache FOR SELECT USING (true);
+CREATE POLICY track_info_cache_insert ON public.track_info_cache FOR INSERT WITH CHECK (true);
+CREATE POLICY track_info_cache_update ON public.track_info_cache FOR UPDATE USING (true);
+
+-- ── Info Reports ────────────────────────────────────────────
+-- Users can report mistakes in the info section for admin review.
+CREATE TABLE IF NOT EXISTS public.info_reports (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lookup_key  TEXT NOT NULL,
+  track_id    TEXT NOT NULL,
+  title       TEXT,
+  artist      TEXT,
+  user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  message     TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.info_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY info_reports_select ON public.info_reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY info_reports_insert ON public.info_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
