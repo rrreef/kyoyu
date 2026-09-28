@@ -225,14 +225,17 @@ export default async function handler(req, res) {
   try {
     const token = await getAccessToken();
 
+    const clientId = process.env.SOUNDCLOUD_CLIENT_ID;
     const params = new URLSearchParams({
       q: query,
       limit: limit.toString(),
       offset: offset.toString(),
       linked_partitioning: '1',
+      client_id: clientId,
     });
 
-    const scRes = await fetch(`https://api.soundcloud.com/tracks?${params.toString()}`, {
+    // Use v2 search endpoint — searches across artist names, tags, descriptions (not just titles)
+    const scRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?${params.toString()}`, {
       headers: {
         'Accept': 'application/json; charset=utf-8',
         'Authorization': `OAuth ${token}`,
