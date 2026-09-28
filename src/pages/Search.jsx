@@ -502,6 +502,7 @@ export default function Search() {
     // Check if there's more to load
     if (providerKey === 'youtube' && !cursor.nextPageToken) return;
     if (providerKey === 'soundcloud' && !cursor.hasMore) return;
+    if (providerKey === 'bandcamp' && !cursor.hasMore) return;
 
     setLoadingMore(prev => ({ ...prev, [providerKey]: true }));
     try {
@@ -1065,6 +1066,16 @@ export default function Search() {
               );
             })}
           </div>
+
+          {paginationCursors.bandcamp?.hasMore && (
+            <button 
+              className="search-load-more-btn"
+              onClick={() => loadMoreResults('bandcamp')}
+              disabled={loadingMore.bandcamp}
+            >
+              {loadingMore.bandcamp ? 'Loading...' : 'Load More Bandcamp'}
+            </button>
+          )}
 
           {/* Recommendations / Fans Also Bought */}
           {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 

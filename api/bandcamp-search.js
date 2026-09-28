@@ -42,17 +42,20 @@ export default async function handler(req, res) {
   }
 
   const query = body?.query;
+  const offset = parseInt(body?.offset) || 0;
+  const page = Math.floor(offset / 33) + 1;
+
   if (!query || typeof query !== 'string' || query.length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
   }
 
-  const cacheKey = query.trim().toLowerCase();
+  const cacheKey = `${query.trim().toLowerCase()}_${page}`;
 
   // Check cache
   if (searchCache.has(cacheKey)) {
     const cached = searchCache.get(cacheKey);
     if (now - cached.timestamp < CACHE_TTL) {
-      return res.status(200).json({ results: cached.results });
+      return res.status(200).json({ results: cached.results, hasMore: cached.hasMore, nextOffset: cached.nextOffset });
     }
     searchCache.delete(cacheKey);
   }
@@ -71,12 +74,14 @@ export default async function handler(req, res) {
         search_filter: 'b,a,t', // bands/labels, albums, tracks
         full_page: true,
         fan_id: 0,
+        page: page,
+        size: 33
       }),
     });
 
     if (!bcRes.ok) {
       console.error('Bandcamp search API error:', bcRes.status);
-      return res.status(200).json({ results: [] });
+      return res.status(200).json({ results: [], hasMore: false, nextOffset: offset });
     }
 
     const data = await bcRes.json();
@@ -105,8 +110,11 @@ export default async function handler(req, res) {
         };
       });
 
+    const hasMore = results.length >= 10;
+    const nextOffset = offset + results.length;
+
     // Cache results
-    searchCache.set(cacheKey, { results, timestamp: now });
+    searchCache.set(cacheKey, { results, hasMore, nextOffset, timestamp: now });
 
     // Evict old cache entries
     if (searchCache.size > 200) {
@@ -116,7 +124,7 @@ export default async function handler(req, res) {
       oldest.forEach(([key]) => searchCache.delete(key));
     }
 
-    return res.status(200).json({ results });
+    return res.status(200).json({ results, hasMore, nextOffset });
   } catch (err) {
     console.error('Bandcamp search error:', err);
     return res.status(200).json({ results: [] });
