@@ -765,25 +765,25 @@ export default function Search() {
   const providerMatch = (key) => activeProvider === 'all' || activeProvider.split(',').includes(key);
 
   // ── Rank external results within each provider ──
-  const rankedYoutube = slicePage(rankResults(query, (externalResults.youtube || []).map(yt => ({
+  // External providers already return relevance-sorted results — just map fields and slice per page
+  const rankedYoutube = slicePage((externalResults.youtube || []).map(yt => ({
     ...yt, artistName: yt.channelTitle, entityType: 'track',
-  }))));
-  const rankedSoundcloud = slicePage(rankResults(query, (externalResults.soundcloud || []).map(sc => ({
+  })));
+  const rankedSoundcloud = slicePage((externalResults.soundcloud || []).map(sc => ({
     ...sc, entityType: 'track',
-  }))));
-  const rankedBandcamp = slicePage(rankResults(query, (externalResults.bandcamp || []).map(bc => ({
+  })));
+  const rankedBandcamp = slicePage((externalResults.bandcamp || []).map(bc => ({
     ...bc, entityType: bc.entityType || 'track',
-  }))));
-  // Rank Discogs artists, releases, labels
-  const rankedDiscogsArtists = slicePage(rankResults(query, (externalResults.artists || []).map(a => ({
+  })));
+  const rankedDiscogsArtists = slicePage((externalResults.artists || []).map(a => ({
     ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
-  }))));
-  const rankedDiscogsReleases = slicePage(rankResults(query, (externalResults.releases || []).map(r => ({
+  })));
+  const rankedDiscogsReleases = slicePage((externalResults.releases || []).map(r => ({
     ...r, title: r.releaseName || r.title, entityType: 'release', provider: 'discogs',
-  }))));
-  const rankedDiscogsLabels = slicePage(rankResults(query, (externalResults.labels || []).map(l => ({
+  })));
+  const rankedDiscogsLabels = slicePage((externalResults.labels || []).map(l => ({
     ...l, title: l.name || l.title, artistName: l.name || l.title, entityType: 'label', provider: 'discogs',
-  }))));
+  })));
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
