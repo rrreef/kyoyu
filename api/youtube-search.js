@@ -51,10 +51,10 @@ async function scrapeYouTube(query) {
     return items.filter(i => i.videoRenderer).map(i => {
       const v = i.videoRenderer;
       return {
-        trackId: v.videoId,
+        videoId: v.videoId,
         title: v.title?.runs?.[0]?.text || '',
         channelTitle: v.ownerText?.runs?.[0]?.text || '',
-        artworkUrl: v.thumbnail?.thumbnails?.[0]?.url || '',
+        thumbnail: v.thumbnail?.thumbnails?.[0]?.url || '',
         duration: v.lengthText?.simpleText || '0:00'
       };
     }).slice(0, 33);
@@ -132,9 +132,9 @@ export default async function handler(req, res) {
     const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${searchParams.toString()}`);
     
     if (!searchRes.ok) {
-      const errorData = await searchRes.json().catch(() => ({}));
-      console.error('YouTube Search API error:', errorData);
-      return res.status(searchRes.status).json({ error: 'Failed to fetch from YouTube' });
+      console.error('YouTube Search API error:', searchRes.status, '- attempting scraper fallback');
+      const fallbackResults = await scrapeYouTube(query);
+      return res.status(200).json({ results: fallbackResults, hasMore: false, nextPageToken: null });
     }
 
     const searchData = await searchRes.json();
