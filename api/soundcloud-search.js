@@ -16,6 +16,45 @@ const RATE_WINDOW = 60000;
 let cachedToken = null;
 let tokenExpiresAt = 0;
 
+// Cached web client_id (extracted from soundcloud.com JS bundles for v2 API)
+let cachedWebClientId = null;
+let webClientIdExpiresAt = 0;
+
+/**
+ * Extract the internal web client_id from SoundCloud's JS bundles.
+ * This is the same client_id the website uses with api-v2.
+ * Cached for 1 hour.
+ */
+async function getWebClientId() {
+  const now = Date.now();
+  if (cachedWebClientId && now < webClientIdExpiresAt) {
+    return cachedWebClientId;
+  }
+  try {
+    const pageRes = await fetch('https://soundcloud.com', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' }
+    });
+    if (!pageRes.ok) return null;
+    const html = await pageRes.text();
+    const scriptUrls = [...html.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
+    // client_id is in one of the last JS bundles
+    for (const url of scriptUrls.slice(-5)) {
+      const jsRes = await fetch(url);
+      if (!jsRes.ok) continue;
+      const js = await jsRes.text();
+      const cidMatch = js.match(/client_id:"([a-zA-Z0-9]+)"/);
+      if (cidMatch) {
+        cachedWebClientId = cidMatch[1];
+        webClientIdExpiresAt = now + 3600000; // 1 hour
+        return cachedWebClientId;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to extract SC web client_id:', e.message);
+  }
+  return null;
+}
+
 /**
  * Get an OAuth2 access token using client_credentials grant.
  * Caches the token until it expires.
@@ -224,51 +263,69 @@ export default async function handler(req, res) {
 
   try {
     const token = await getAccessToken();
-
     const clientId = process.env.SOUNDCLOUD_CLIENT_ID;
-    const params = new URLSearchParams({
-      q: query,
-      limit: limit.toString(),
-      offset: offset.toString(),
-      linked_partitioning: '1',
-      client_id: clientId,
-    });
 
-    // Use v2 search endpoint — searches across artist names, tags, descriptions (not just titles)
-    const scRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json; charset=utf-8',
-        'Authorization': `OAuth ${token}`,
-      },
-    });
+    // Strategy: try v2 first, fall back to website scraping, then v1
+    let collection = [];
 
-    if (!scRes.ok) {
-      const errText = await scRes.text();
-      console.error('SoundCloud API error:', scRes.status, errText);
-      if (scRes.status === 401) {
-        cachedToken = null;
-        tokenExpiresAt = 0;
+    // ── Attempt 1: v2 search with web client_id (broadest results) ──
+    try {
+      const webClientId = await getWebClientId();
+      if (webClientId) {
+        const v2Params = new URLSearchParams({
+          q: query,
+          limit: limit.toString(),
+          offset: offset.toString(),
+          linked_partitioning: '1',
+          client_id: webClientId,
+        });
+        const v2Res = await fetch(`https://api-v2.soundcloud.com/search/tracks?${v2Params.toString()}`, {
+          headers: { 'Accept': 'application/json; charset=utf-8' },
+        });
+        if (v2Res.ok) {
+          const v2Data = await v2Res.json();
+          collection = Array.isArray(v2Data) ? v2Data : (v2Data.collection || []);
+        } else {
+          console.warn('SC v2 returned', v2Res.status, '- falling back');
+        }
       }
-      return res.status(200).json({ results: [] });
+    } catch (e) {
+      console.warn('SC v2 error:', e.message);
     }
 
-    const data = await scRes.json();
-    // v1 API returns array directly for /tracks, or collection for search
-    const collection = Array.isArray(data) ? data : (data.collection || []);
+    // ── Attempt 2: v1 /tracks (title-only, last resort) ──
+    if (collection.length === 0) {
+      const v1Params = new URLSearchParams({
+        q: query,
+        limit: limit.toString(),
+        offset: offset.toString(),
+        linked_partitioning: '1',
+      });
+      const v1Res = await fetch(`https://api.soundcloud.com/tracks?${v1Params.toString()}`, {
+        headers: {
+          'Accept': 'application/json; charset=utf-8',
+          'Authorization': `OAuth ${token}`,
+        },
+      });
+      if (v1Res.ok) {
+        const v1Data = await v1Res.json();
+        collection = Array.isArray(v1Data) ? v1Data : (v1Data.collection || []);
+      }
+    }
 
     const results = collection.map(track => ({
       trackId: track.id,
       title: track.title || '',
       artistName: track.user?.username || '',
       artworkUrl: (track.artwork_url || track.user?.avatar_url || '').replace('-large', '-t500x500'),
-      duration: Math.round((track.duration || 0) / 1000), // ms → seconds
+      duration: Math.round((track.duration || 0) / 1000),
       permalinkUrl: track.permalink_url || '',
       waveformUrl: track.waveform_url || '',
       playbackCount: track.playback_count || 0,
       genre: track.genre || '',
     }));
 
-    const hasMore = !!data.next_href || collection.length >= limit;
+    const hasMore = collection.length >= limit;
     return res.status(200).json({ results, hasMore, nextOffset: offset + collection.length });
   } catch (err) {
     console.error('SoundCloud search error:', err);
