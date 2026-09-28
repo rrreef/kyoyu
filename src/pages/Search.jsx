@@ -502,6 +502,7 @@ export default function Search() {
     // Check if there's more to load
     if (providerKey === 'youtube' && !cursor.nextPageToken) return;
     if (providerKey === 'soundcloud' && !cursor.hasMore) return;
+    if (providerKey === 'discogs' && !cursor.hasMore) return;
 
     setLoadingMore(prev => ({ ...prev, [providerKey]: true }));
     try {
@@ -509,10 +510,34 @@ export default function Search() {
       if (moreResults && moreResults.length > 0) {
         setExternalResults(prev => {
           const next = { ...prev };
-          // Deduplicate by ID before appending
-          const existingIds = new Set((next[providerKey] || []).map(r => r.id));
-          const fresh = moreResults.filter(r => !existingIds.has(r.id));
-          next[providerKey] = [...(next[providerKey] || []), ...fresh];
+          if (providerKey === 'discogs') {
+            next.artists = [...(next.artists || [])];
+            next.labels = [...(next.labels || [])];
+            next.releases = [...(next.releases || [])];
+            moreResults.forEach(r => {
+              if (r.type === 'artist') {
+                if (!next.artists.find(a => a.id === r.id)) next.artists.push({ ...r, name: r.title, entityType: 'artist' });
+              } else if (r.type === 'label') {
+                if (!next.labels.find(a => a.id === r.id)) next.labels.push({ ...r, name: r.title, entityType: 'label' });
+              } else {
+                if (!next.releases.find(a => a.id === r.id)) {
+                  let artist = '';
+                  let release = r.title;
+                  const parts = r.title.split(' - ');
+                  if (parts.length >= 2) {
+                    artist = parts[0].trim();
+                    release = parts.slice(1).join(' - ').trim();
+                  }
+                  next.releases.push({ ...r, releaseName: release, artistName: artist, entityType: 'release' });
+                }
+              }
+            });
+          } else {
+            // Deduplicate by ID before appending
+            const existingIds = new Set((next[providerKey] || []).map(r => r.id));
+            const fresh = moreResults.filter(r => !existingIds.has(r.id));
+            next[providerKey] = [...(next[providerKey] || []), ...fresh];
+          }
           return next;
         });
       }
@@ -524,6 +549,14 @@ export default function Search() {
     } finally {
       setLoadingMore(prev => ({ ...prev, [providerKey]: false }));
     }
+  }
+
+  
+  async function loadMoreAll() {
+    const providersToLoad = activeProvider === 'all' 
+      ? ['bandcamp', 'soundcloud', 'youtube', 'discogs']
+      : [activeProvider];
+    await Promise.all(providersToLoad.map(p => loadMoreResults(p)));
   }
 
   function syncNativeSearch(text) {
@@ -1054,11 +1087,7 @@ export default function Search() {
                   </div>
                 </div>
               ))}
-              {paginationCursors.soundcloud?.hasMore && (
-                <button className="search-load-more-btn" onClick={() => loadMoreResults('soundcloud')} disabled={loadingMore.soundcloud}>
-                  {loadingMore.soundcloud ? 'Loading…' : 'Load More SoundCloud Results'}
-                </button>
-              )}
+              
             </div>
           )}
         </div>
@@ -1098,11 +1127,7 @@ export default function Search() {
                   </div>
                 </div>
               ))}
-              {paginationCursors.youtube?.nextPageToken && (
-                <button className="search-load-more-btn" onClick={() => loadMoreResults('youtube')} disabled={loadingMore.youtube}>
-                  {loadingMore.youtube ? 'Loading…' : 'Load More YouTube Results'}
-                </button>
-              )}
+              
             </div>
           )}
         </div>
@@ -1195,6 +1220,21 @@ export default function Search() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+
+      {/* ── Global Load More Button ── */}
+      {!isQueryEmpty && (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <button 
+            className="search-load-more-btn" 
+            onClick={loadMoreAll} 
+            disabled={Object.values(loadingMore).some(Boolean)}
+            style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', fontSize: '16px', fontWeight: '600' }}
+          >
+            {Object.values(loadingMore).some(Boolean) ? 'Loading...' : 'Load More Results'}
+          </button>
         </div>
       )}
 

@@ -8,22 +8,23 @@ import { fetchPublicTracks } from './uploadPipeline';
  * Search Discogs via our proxy API endpoint.
  * Returns normalized results that can be merged with native results.
  */
-async function searchDiscogs(query) {
+async function searchDiscogs(query, offset = 0) {
   try {
+    const page = Math.floor(offset / 33) + 1;
     const res = await fetch('/api/discogs-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, perPage: 33 }),
+      body: JSON.stringify({ query, perPage: 33, page }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
     const data = await res.json();
-    return (data.results || []).map(r => ({
-      id: `discogs-${r.type}-${r.discogsId}`,
-      discogsId: r.discogsId,
+    const results = (data.results || []).map(r => ({
+      id: `discogs-${offset}-${r.type}-${r.id || r.discogsId}`,
+      discogsId: r.id || r.discogsId,
       type: r.type, // 'artist', 'release', 'master', 'label'
       title: r.title,
       thumb: r.thumb || null,
-      coverImage: r.coverImage || null,
+      coverImage: r.cover_image || r.coverImage || null,
       year: r.year,
       genres: r.genre || [],
       styles: r.style || [],
@@ -34,9 +35,12 @@ async function searchDiscogs(query) {
       isExternal: true,
       nativeAvailable: false,
     }));
+    const hasMore = (data.pagination?.pages > page) || (results.length === 33);
+    const nextOffset = offset + results.length;
+    return { results, hasMore, nextOffset };
   } catch (err) {
     console.warn('Discogs search failed:', err);
-    return [];
+    return { results: [], hasMore: false, nextOffset: offset };
   }
 }
 
@@ -255,7 +259,10 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
     }
     case 'bandcamp': return { results: await searchBandcamp(q), pagination: {} };
-    case 'discogs': return { results: await searchDiscogs(q), pagination: {} };
+    case 'discogs': {
+      const data = await searchDiscogs(q, paginationCursor?.nextOffset || 0);
+      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
+    }
     default: return { results: [], pagination: {} };
   }
 }
@@ -299,7 +306,7 @@ export async function unifiedSearch(query) {
   }
   
   // Run all searches in parallel using the (potentially corrected) query
-  const [nativeTracks, discogsResults, ytData, scData, bcData] = await Promise.all([
+  const [nativeTracks, discogsData, ytData, scData, bcData] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
@@ -308,7 +315,7 @@ export async function unifiedSearch(query) {
   ]);
   
   // Categorize and deduplicate Discogs results
-  const external = categorizeDiscogsResults(discogsResults, nativeTracks);
+  const external = categorizeDiscogsResults(discogsData.results || [], nativeTracks);
   
   // Inject Aliases as synthetic Artist results
   if (aliases.length > 0) {
@@ -333,6 +340,7 @@ export async function unifiedSearch(query) {
   const pagination = {
     youtube: { nextPageToken: ytData.nextPageToken },
     soundcloud: { hasMore: scData.hasMore, nextOffset: scData.nextOffset },
+    discogs: { hasMore: discogsData.hasMore, nextOffset: discogsData.nextOffset }
   };
   
   return { nativeTracks, external, pagination };
