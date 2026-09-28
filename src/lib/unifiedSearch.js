@@ -187,17 +187,17 @@ async function searchSoundCloud(query, offset = 0) {
 /**
  * Search Bandcamp via our scraping proxy endpoint.
  */
-async function searchBandcamp(query, offset = 0) {
+async function searchBandcamp(query) {
   try {
     const res = await fetch('/api/bandcamp-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, offset }),
+      body: JSON.stringify({ query }),
     });
-    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
+    if (!res.ok) return [];
     const data = await res.json();
-    const results = (data.results || []).map((r, i) => ({
-      id: `bc-${offset}-${i}-${Date.now()}`,
+    return (data.results || []).map((r, i) => ({
+      id: `bc-${i}-${Date.now()}`,
       entityType: r.type,
       title: r.title,
       artistName: r.artistName,
@@ -209,10 +209,9 @@ async function searchBandcamp(query, offset = 0) {
       isExternal: true,
       provider: 'bandcamp',
     }));
-    return { results, hasMore: data.hasMore || false, nextOffset: data.nextOffset || offset };
   } catch (err) {
     console.warn('Bandcamp search failed:', err);
-    return { results: [], hasMore: false, nextOffset: offset };
+    return [];
   }
 }
 
@@ -255,10 +254,7 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
       const data = await searchSoundCloud(q, paginationCursor?.nextOffset || 0);
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
     }
-    case 'bandcamp': {
-      const data = await searchBandcamp(q, paginationCursor?.nextOffset || 0);
-      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
-    }
+    case 'bandcamp': return { results: await searchBandcamp(q), pagination: {} };
     case 'discogs': return { results: await searchDiscogs(q), pagination: {} };
     default: return { results: [], pagination: {} };
   }
@@ -331,13 +327,12 @@ export async function unifiedSearch(query) {
   
   external.youtube = ytData.results || [];
   external.soundcloud = scData.results || [];
-  external.bandcamp = bcData.results || [];
+  external.bandcamp = bcData;
   
   // Pagination cursors for "Load More" per provider
   const pagination = {
     youtube: { nextPageToken: ytData.nextPageToken },
     soundcloud: { hasMore: scData.hasMore, nextOffset: scData.nextOffset },
-    bandcamp: { hasMore: bcData.hasMore, nextOffset: bcData.nextOffset },
   };
   
   return { nativeTracks, external, pagination };

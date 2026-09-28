@@ -73,9 +73,7 @@ export default async function handler(req, res) {
         search_text: query,
         search_filter: 'b,a,t', // bands/labels, albums, tracks
         full_page: true,
-        fan_id: 0,
-        page: page,
-        size: 33
+        fan_id: 0
       }),
     });
 
