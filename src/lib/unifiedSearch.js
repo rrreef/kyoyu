@@ -294,7 +294,7 @@ export async function unifiedSearch(query) {
   let aliases = [];
   let canonical = trimmed;
   
-  // Resolve typos and aliases
+  // Resolve typos and aliases — used ONLY for Discogs, never overwrites the user's query for other providers
   try {
     const res = await fetch('/api/discogs-search', {
       method: 'POST',
@@ -305,7 +305,7 @@ export async function unifiedSearch(query) {
       const data = await res.json();
       if (data.canonical && data.canonical.toLowerCase() !== trimmed.toLowerCase()) {
         canonical = data.canonical;
-        trimmed = data.canonical; // Use corrected typo for backend searches
+        // Do NOT overwrite trimmed — other providers should use the user's original query
       }
       if (data.aliases) {
         aliases = data.aliases.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
@@ -315,10 +315,10 @@ export async function unifiedSearch(query) {
     console.warn('Alias resolution failed:', err);
   }
   
-  // Run all searches in parallel using the (potentially corrected) query
+  // Run all searches in parallel — Discogs uses canonical, everyone else uses user's original query
   const [nativeTracks, discogsData, ytData, scData, bcData] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
-    searchDiscogs(trimmed),
+    searchDiscogs(canonical),
     searchYouTube(trimmed),
     searchSoundCloud(trimmed),
     searchBandcamp(trimmed),
