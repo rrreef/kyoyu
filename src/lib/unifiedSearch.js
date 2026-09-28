@@ -291,34 +291,11 @@ export async function unifiedSearch(query) {
   }
   
   let trimmed = query.trim();
-  let aliases = [];
-  let canonical = trimmed;
   
-  // Resolve typos and aliases — used ONLY for Discogs, never overwrites the user's query for other providers
-  try {
-    const res = await fetch('/api/discogs-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'resolve-aliases', query: trimmed })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.canonical && data.canonical.toLowerCase() !== trimmed.toLowerCase()) {
-        canonical = data.canonical;
-        // Do NOT overwrite trimmed — other providers should use the user's original query
-      }
-      if (data.aliases) {
-        aliases = data.aliases.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
-      }
-    }
-  } catch (err) {
-    console.warn('Alias resolution failed:', err);
-  }
-  
-  // Run all searches in parallel — Discogs uses canonical, everyone else uses user's original query
+  // Run all searches in parallel with the user's exact query
   const [nativeTracks, discogsData, ytData, scData, bcData] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
-    searchDiscogs(canonical),
+    searchDiscogs(trimmed),
     searchYouTube(trimmed),
     searchSoundCloud(trimmed),
     searchBandcamp(trimmed),
@@ -326,21 +303,6 @@ export async function unifiedSearch(query) {
   
   // Categorize and deduplicate Discogs results
   const external = categorizeDiscogsResults(discogsData.results || [], nativeTracks);
-  
-  // Inject Aliases as synthetic Artist results
-  if (aliases.length > 0) {
-    const aliasArtists = aliases.map(a => ({
-      discogsId: `alias-${a}`,
-      entityType: 'artist',
-      name: a,
-      title: a,
-      thumb: null,
-      isExternal: true,
-      isAlias: true,
-      canonicalLabel: `Alias of ${canonical}`
-    }));
-    external.artists = [...aliasArtists, ...external.artists];
-  }
   
   external.youtube = ytData.results || [];
   external.soundcloud = scData.results || [];
