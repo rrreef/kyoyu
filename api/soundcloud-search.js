@@ -215,7 +215,8 @@ export default async function handler(req, res) {
 
   // ── Mode 2: Search for tracks ──
   const query = body?.query;
-  const limit = Math.min(parseInt(body?.limit) || 50, 50);
+  const limit = Math.min(parseInt(body?.limit) || 33, 200);
+  const offset = parseInt(body?.offset) || 0;
 
   if (!query || typeof query !== 'string' || query.length < 2) {
     return res.status(400).json({ error: 'Query must be at least 2 characters' });
@@ -227,7 +228,7 @@ export default async function handler(req, res) {
     const params = new URLSearchParams({
       q: query,
       limit: limit.toString(),
-      offset: '0',
+      offset: offset.toString(),
       linked_partitioning: '1',
     });
 
@@ -264,7 +265,8 @@ export default async function handler(req, res) {
       genre: track.genre || '',
     }));
 
-    return res.status(200).json({ results });
+    const hasMore = !!data.next_href || collection.length >= limit;
+    return res.status(200).json({ results, hasMore, nextOffset: offset + collection.length });
   } catch (err) {
     console.error('SoundCloud search error:', err);
     return res.status(200).json({ results: [] });

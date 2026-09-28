@@ -272,7 +272,7 @@ export default function UploadShelf({ uploads }) {
 
 /* ── Named export: vertical track list reused in Home & Library ── */
 export function UploadExpandedList({ uploads }) {
-  const { playTrack } = usePlayer();
+  const { playTrack, playSearchItem } = usePlayer();
   const { user } = useAuth();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const [activeId,     setActiveId]     = useState(null);
@@ -281,6 +281,23 @@ export function UploadExpandedList({ uploads }) {
   const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
+    // Check if this is a YouTube or SoundCloud track
+    const provider = t.provider || (String(t.id).startsWith('yt-') ? 'youtube' : String(t.id).startsWith('sc-') ? 'soundcloud' : null);
+    if (provider === 'youtube' || provider === 'soundcloud') {
+      const item = {
+        id: t.id,
+        title: t.title || 'Untitled',
+        artistName: t.artist || t.artistName || '',
+        artworkUrl: t.artworkUrl || t.cover || t.releaseCover || '',
+        duration: t.duration || 0,
+        provider,
+        providerItemId: t.providerItemId || (provider === 'youtube' ? String(t.id).replace('yt-', '') : undefined),
+        scTrackId: t.scTrackId || (provider === 'soundcloud' ? String(t.id).replace(/^sc-/, '').replace(/-\d+$/, '') : undefined),
+      };
+      playSearchItem(item);
+      setActiveId(t.id);
+      return;
+    }
     const queue = sorted.map(u => ({
       id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
       releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
@@ -362,11 +379,27 @@ export function UploadExpandedList({ uploads }) {
 
 /* ── Named export: grid view for configurable N-column layout ── */
 export function UploadGridView({ uploads, cols = 2 }) {
-  const { playTrack, state } = usePlayer();
+  const { playTrack, playSearchItem, state } = usePlayer();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
+    // Check if this is a YouTube or SoundCloud track
+    const provider = t.provider || (String(t.id).startsWith('yt-') ? 'youtube' : String(t.id).startsWith('sc-') ? 'soundcloud' : null);
+    if (provider === 'youtube' || provider === 'soundcloud') {
+      const item = {
+        id: t.id,
+        title: t.title || 'Untitled',
+        artistName: t.artist || t.artistName || '',
+        artworkUrl: t.artworkUrl || t.cover || t.releaseCover || '',
+        duration: t.duration || 0,
+        provider,
+        providerItemId: t.providerItemId || (provider === 'youtube' ? String(t.id).replace('yt-', '') : undefined),
+        scTrackId: t.scTrackId || (provider === 'soundcloud' ? String(t.id).replace(/^sc-/, '').replace(/-\d+$/, '') : undefined),
+      };
+      playSearchItem(item);
+      return;
+    }
     const queue = sorted.map(u => ({
       id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
       releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',

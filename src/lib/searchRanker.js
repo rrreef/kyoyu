@@ -81,29 +81,49 @@ function scoreField(fieldNorm, queryNorm) {
   // Stage 1: Exact match
   if (fieldNorm === queryNorm) return 100;
 
-  // Stage 2: Prefix match
-  if (fieldNorm.startsWith(queryNorm)) return 70;
+  // Calculate length difference penalty. 
+  // The more extra characters there are, the lower the score.
+  // 0.25 points deducted per extra character, capped at 30 points.
+  const lenDiff = Math.max(0, fieldNorm.length - queryNorm.length);
+  const lenPenalty = Math.min(30, lenDiff * 0.25);
 
-  // Stage 3: Token set match — all query tokens found in field
+  // Stage 2: Prefix word match ("A B" starts with "A ")
+  if (fieldNorm.startsWith(queryNorm + ' ')) {
+    return 90 - lenPenalty;
+  }
+
+  // Stage 3: Prefix substring match ("Alice" starts with "Al")
+  if (fieldNorm.startsWith(queryNorm)) {
+    return 85 - lenPenalty;
+  }
+
+  // Stage 4: Token set match — all query tokens found as distinct words in field
   const qTokens = queryNorm.split(' ').filter(Boolean);
-  const fTokens = new Set(fieldNorm.split(' ').filter(Boolean));
-  if (qTokens.length > 0 && qTokens.every(t => fTokens.has(t))) return 65;
+  const fTokens = fieldNorm.split(' ').filter(Boolean);
+  const fTokenSet = new Set(fTokens);
+  if (qTokens.length > 0 && qTokens.every(t => fTokenSet.has(t))) {
+    return 75 - lenPenalty;
+  }
 
-  // Stage 4: Close typo match
+  // Stage 5: Substring match (contiguous, somewhere in the middle)
+  if (fieldNorm.includes(queryNorm)) {
+    return 65 - lenPenalty;
+  }
+
+  // Stage 6: Close typo match
   if (queryNorm.length <= 20 && fieldNorm.length <= 30) {
     const dist = levenshtein(fieldNorm, queryNorm);
     const threshold = queryNorm.length <= 5 ? 1 : queryNorm.length <= 10 ? 2 : 3;
-    if (dist <= threshold) return 60;
+    if (dist <= threshold) {
+      return 55 - (dist * 2) - lenPenalty;
+    }
   }
 
-  // Stage 5: Substring match
-  if (fieldNorm.includes(queryNorm)) return 30;
-
-  // Stage 6: Partial token overlap
+  // Stage 7: Partial token overlap
   if (qTokens.length > 1) {
     const matchCount = qTokens.filter(t => fieldNorm.includes(t)).length;
     const ratio = matchCount / qTokens.length;
-    if (ratio >= 0.5) return Math.round(20 * ratio);
+    if (ratio >= 0.5) return Math.round(40 * ratio) - (lenPenalty * 0.5);
   }
 
   return 0;
@@ -111,8 +131,9 @@ function scoreField(fieldNorm, queryNorm) {
 
 function noisePenalty(fieldNorm, queryNorm) {
   if (!fieldNorm || !queryNorm) return 0;
+  // Extra noise penalty for very short queries buried in very long text
   if (fieldNorm.includes(queryNorm) && fieldNorm.length > queryNorm.length * 4 && queryNorm.length < 6) {
-    return -20;
+    return -15;
   }
   return 0;
 }
@@ -196,7 +217,14 @@ export function rankResults(query, results) {
     _score: scoreResult(r, fullQueryNorm, artistQueryNorm, titleQueryNorm),
   }));
 
-  scored.sort((a, b) => b._score - a._score);
+  scored.sort((a, b) => {
+    if (b._score !== a._score) {
+      return b._score - a._score;
+    }
+    const aTitle = a.title || '';
+    const bTitle = b.title || '';
+    return aTitle.localeCompare(bTitle);
+  });
 
   if (scored.length > 5 && scored[0]._score >= 150) {
     const gap = scored[0]._score - (scored[4]?._score || 0);

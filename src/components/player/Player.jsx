@@ -502,7 +502,11 @@ export default function Player({ hideMini = false }) {
         e.detail.handled = true;
         const trackObj = {
           ...currentTrack,
-          cover: currentTrack.releaseCover || currentTrack.artworkUrl || ''
+          cover: currentTrack.releaseCover || currentTrack.artworkUrl || '',
+          // Preserve provider metadata for YouTube/SoundCloud playback from library
+          provider: currentTrack.provider || provider,
+          providerItemId: currentTrack.providerItemId || undefined,
+          scTrackId: currentTrack.scTrackId || undefined,
         };
         try { toggleLikeUpload(trackObj); } catch(err) {}
       }

@@ -286,6 +286,8 @@ export default function Search() {
   const [providerRetrying, setProviderRetrying] = useState(false);
   const [expandedAlbums, setExpandedAlbums] = useState({});  // { albumId: tracksArray | true }
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [paginationCursors, setPaginationCursors] = useState({ youtube: {}, soundcloud: {} });
+  const [loadingMore, setLoadingMore] = useState({ youtube: false, soundcloud: false });
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
@@ -421,15 +423,17 @@ export default function Search() {
     setLoading(true);
     debounceRef.current = setTimeout(() => {
       unifiedSearch(query.trim())
-        .then(({ nativeTracks, external }) => {
+        .then(({ nativeTracks, external, pagination }) => {
           if (ignore) return;
           setResults(nativeTracks);
           setExternalResults(external);
+          setPaginationCursors(pagination || { youtube: {}, soundcloud: {} });
         })
         .catch(() => {
           if (ignore) return;
           setResults([]);
           setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
+          setPaginationCursors({ youtube: {}, soundcloud: {} });
         })
         .finally(() => {
           if (!ignore) setLoading(false);
@@ -460,7 +464,7 @@ export default function Search() {
     setProviderRetrying(true);
     
     searchSingleProvider(providerKey, query.trim())
-      .then(freshResults => {
+      .then(({ results: freshResults, pagination }) => {
         if (ignore || !freshResults || freshResults.length === 0) return;
         
         setExternalResults(prev => {
@@ -479,6 +483,9 @@ export default function Search() {
           }
           return next;
         });
+        if (pagination) {
+          setPaginationCursors(prev => ({ ...prev, [providerKey]: pagination }));
+        }
       })
       .catch(() => {})
       .finally(() => { if (!ignore) setProviderRetrying(false); });
@@ -487,6 +494,37 @@ export default function Search() {
   }, [activeProvider]);
 
 
+  // ── Load More: fetch next 33 results for a specific provider ──
+  async function loadMoreResults(providerKey) {
+    if (!query || query.trim().length === 0) return;
+    const cursor = paginationCursors[providerKey];
+    if (!cursor) return;
+    // Check if there's more to load
+    if (providerKey === 'youtube' && !cursor.nextPageToken) return;
+    if (providerKey === 'soundcloud' && !cursor.hasMore) return;
+
+    setLoadingMore(prev => ({ ...prev, [providerKey]: true }));
+    try {
+      const { results: moreResults, pagination } = await searchSingleProvider(providerKey, query.trim(), cursor);
+      if (moreResults && moreResults.length > 0) {
+        setExternalResults(prev => {
+          const next = { ...prev };
+          // Deduplicate by ID before appending
+          const existingIds = new Set((next[providerKey] || []).map(r => r.id));
+          const fresh = moreResults.filter(r => !existingIds.has(r.id));
+          next[providerKey] = [...(next[providerKey] || []), ...fresh];
+          return next;
+        });
+      }
+      if (pagination) {
+        setPaginationCursors(prev => ({ ...prev, [providerKey]: pagination }));
+      }
+    } catch (err) {
+      console.warn(`Load more ${providerKey} failed:`, err);
+    } finally {
+      setLoadingMore(prev => ({ ...prev, [providerKey]: false }));
+    }
+  }
 
   function syncNativeSearch(text) {
     setQuery(text);
@@ -1077,6 +1115,11 @@ export default function Search() {
                 </div>
               </div>
             ))}
+            {paginationCursors.soundcloud?.hasMore && (
+              <button className="search-load-more-btn" onClick={() => loadMoreResults('soundcloud')} disabled={loadingMore.soundcloud}>
+                {loadingMore.soundcloud ? 'Loading…' : 'Load More SoundCloud Results'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1112,6 +1155,11 @@ export default function Search() {
                 </div>
               </div>
             ))}
+            {paginationCursors.youtube?.nextPageToken && (
+              <button className="search-load-more-btn" onClick={() => loadMoreResults('youtube')} disabled={loadingMore.youtube}>
+                {loadingMore.youtube ? 'Loading…' : 'Load More YouTube Results'}
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -300,7 +300,7 @@ export function PlayerProvider({ children }) {
       artistName: track.artistName || track.artist || '',
       releaseCover: track.releaseCover || track.cover || '',
     };
-    dispatch({ type:'PLAY_TRACK', track: normTrack });
+    dispatch({ type:'PLAY_TRACK', track: normTrack }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
     const normQueue = queue.map(t => ({
       ...t,
       src: t.src || t.fileUrl || t.audioUrl || '',
@@ -333,8 +333,10 @@ export function PlayerProvider({ children }) {
       releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
       duration: metadata.duration || 0,
       src: '', // No native audio
+      provider: 'youtube',
+      providerItemId: videoId,
     };
-    dispatch({ type: 'PLAY_YOUTUBE', videoId, track });
+    dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
   }
 
   async function playSoundCloud(trackUrl, metadata = {}) {
@@ -360,8 +362,11 @@ export function PlayerProvider({ children }) {
       releaseCover: metadata.artworkUrl || '',
       duration: metadata.duration || 0,
       src: '',
+      provider: 'soundcloud',
+      providerItemId: trackUrl,
+      scTrackId: trackId,
     };
-    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track: placeholderTrack });
+    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track: placeholderTrack }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: placeholderTrack.title || placeholderTrack.name || '', artwork: placeholderTrack.releaseCover || placeholderTrack.cover || placeholderTrack.artworkUrl || '' }); } catch(e){} 
 
     // Resolve the actual stream URL from our serverless API
     try {
@@ -504,10 +509,20 @@ export function PlayerProvider({ children }) {
     window.__kyoyuGetQueue = () => {
       const q = state.queue || [];
       const searchQ = searchQueueRef.current || [];
-      const activeQueue = q.length > 0 ? q : searchQ;
+      let activeQueue = q.length > 0 ? q : searchQ;
+      
+      // Ensure the currently playing track is always included in the queue list
+      const cur = stateRef.current.currentTrack || state.currentTrack;
+      if (cur) {
+        const hasCurrent = activeQueue.some(t => String(t.id || '') === String(cur.id || ''));
+        if (!hasCurrent) {
+          activeQueue = [cur, ...activeQueue];
+        }
+      }
+
       return JSON.stringify(activeQueue.map(t => ({
-        id: t.id || '',
-        title: t.title || t.name || 'Unknown',
+        id: String(t.id || ''),
+        title: String(t.title || t.name || 'Unknown'),
         artist: t.artistName || t.artist || '',
         cover: t.releaseCover || t.cover || t.artworkUrl || '',
         url: t.src || t.audioUrl || t.fileUrl || '',

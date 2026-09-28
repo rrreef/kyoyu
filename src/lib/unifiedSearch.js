@@ -13,7 +13,7 @@ async function searchDiscogs(query) {
     const res = await fetch('/api/discogs-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, perPage: 100 }),
+      body: JSON.stringify({ query, perPage: 33 }),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -122,17 +122,18 @@ function categorizeDiscogsResults(discogsResults, nativeResults) {
  * Search YouTube via our proxy API endpoint.
  * Returns normalized video results for display.
  */
-async function searchYouTube(query) {
+async function searchYouTube(query, pageToken = null) {
   try {
-    // Page 1
+    const body = { query: `${query} music`, maxResults: 33 };
+    if (pageToken) body.pageToken = pageToken;
     const res = await fetch('/api/youtube-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `${query} music`, maxResults: 50 }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { results: [], nextPageToken: null };
     const data = await res.json();
-    const page1 = (data.results || []).map(r => ({
+    const results = (data.results || []).map(r => ({
       id: `yt-${r.videoId}`,
       videoId: r.videoId,
       title: r.title,
@@ -143,36 +144,10 @@ async function searchYouTube(query) {
       isExternal: true,
       provider: 'youtube',
     }));
-
-    // Page 2 if there's a nextPageToken
-    if (data.nextPageToken) {
-      try {
-        const res2 = await fetch('/api/youtube-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: `${query} music`, maxResults: 50, pageToken: data.nextPageToken }),
-        });
-        if (res2.ok) {
-          const data2 = await res2.json();
-          const page2 = (data2.results || []).map(r => ({
-            id: `yt-${r.videoId}`,
-            videoId: r.videoId,
-            title: r.title,
-            channelTitle: r.channelTitle,
-            thumbnail: r.thumbnail,
-            duration: r.duration,
-            publishedAt: r.publishedAt,
-            isExternal: true,
-            provider: 'youtube',
-          }));
-          return [...page1, ...page2];
-        }
-      } catch {}
-    }
-    return page1;
+    return { results, nextPageToken: data.nextPageToken || null };
   } catch (err) {
     console.warn('YouTube search failed:', err);
-    return [];
+    return { results: [], nextPageToken: null };
   }
 }
 
@@ -180,16 +155,16 @@ async function searchYouTube(query) {
  * Search SoundCloud via our proxy API endpoint.
  * Returns normalized track results for display and playback.
  */
-async function searchSoundCloud(query) {
+async function searchSoundCloud(query, offset = 0) {
   try {
     const res = await fetch('/api/soundcloud-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit: 50 }),
+      body: JSON.stringify({ query, limit: 33, offset }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { results: [], hasMore: false, nextOffset: 0 };
     const data = await res.json();
-    return (data.results || []).map(r => ({
+    const results = (data.results || []).map(r => ({
       id: `sc-${r.trackId}`,
       trackId: r.trackId,
       title: r.title,
@@ -202,9 +177,10 @@ async function searchSoundCloud(query) {
       isExternal: true,
       provider: 'soundcloud',
     }));
+    return { results, hasMore: !!data.hasMore, nextOffset: data.nextOffset || offset + results.length };
   } catch (err) {
     console.warn('SoundCloud search failed:', err);
-    return [];
+    return { results: [], hasMore: false, nextOffset: 0 };
   }
 }
 
@@ -266,15 +242,21 @@ export async function resolveBandcamp(trackUrl) {
  * @param {string} query
  * @returns {Promise<Array>}
  */
-export async function searchSingleProvider(provider, query) {
-  if (!query || query.trim().length === 0) return [];
+export async function searchSingleProvider(provider, query, paginationCursor = null) {
+  if (!query || query.trim().length === 0) return { results: [], pagination: {} };
   const q = query.trim();
   switch (provider) {
-    case 'youtube': return searchYouTube(q);
-    case 'soundcloud': return searchSoundCloud(q);
-    case 'bandcamp': return searchBandcamp(q);
-    case 'discogs': return searchDiscogs(q);
-    default: return [];
+    case 'youtube': {
+      const data = await searchYouTube(q, paginationCursor?.nextPageToken || null);
+      return { results: data.results, pagination: { nextPageToken: data.nextPageToken } };
+    }
+    case 'soundcloud': {
+      const data = await searchSoundCloud(q, paginationCursor?.nextOffset || 0);
+      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
+    }
+    case 'bandcamp': return { results: await searchBandcamp(q), pagination: {} };
+    case 'discogs': return { results: await searchDiscogs(q), pagination: {} };
+    default: return { results: [], pagination: {} };
   }
 }
 
@@ -317,7 +299,7 @@ export async function unifiedSearch(query) {
   }
   
   // Run all searches in parallel using the (potentially corrected) query
-  const [nativeTracks, discogsResults, youtubeResults, soundcloudResults, bandcampResults] = await Promise.all([
+  const [nativeTracks, discogsResults, ytData, scData, bandcampResults] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
@@ -343,11 +325,17 @@ export async function unifiedSearch(query) {
     external.artists = [...aliasArtists, ...external.artists];
   }
   
-  external.youtube = youtubeResults;
-  external.soundcloud = soundcloudResults;
+  external.youtube = ytData.results || [];
+  external.soundcloud = scData.results || [];
   external.bandcamp = bandcampResults;
   
-  return { nativeTracks, external };
+  // Pagination cursors for "Load More" per provider
+  const pagination = {
+    youtube: { nextPageToken: ytData.nextPageToken },
+    soundcloud: { hasMore: scData.hasMore, nextOffset: scData.nextOffset },
+  };
+  
+  return { nativeTracks, external, pagination };
 }
 
 export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud, searchBandcamp };

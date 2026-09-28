@@ -382,3 +382,30 @@
 body.kyoyu-search-active .search-page {
     padding-top: 100px !important;
 }
+
+/* ── Load More Button ── */
+.search-load-more-btn {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.search-load-more-btn:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.1);
+}
+.search-load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
