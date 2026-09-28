@@ -126,7 +126,7 @@ function categorizeDiscogsResults(discogsResults, nativeResults) {
  * Search YouTube via our proxy API endpoint.
  * Returns normalized video results for display.
  */
-async function searchYouTube(query, pageToken = null) {
+async function searchYouTube(query, pageToken = null, retries = 2) {
   try {
     const body = { query: `${query} music`, maxResults: 33 };
     if (pageToken) body.pageToken = pageToken;
@@ -135,23 +135,29 @@ async function searchYouTube(query, pageToken = null) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { results: [], nextPageToken: null };
+    if (!res.ok) {
+      if (retries > 0) return await searchYouTube(query, pageToken, retries - 1);
+      return { results: [] };
+    }
     const data = await res.json();
-    const results = (data.results || []).map(r => ({
-      id: `yt-${r.videoId}`,
-      videoId: r.videoId,
-      title: r.title,
-      channelTitle: r.channelTitle,
-      thumbnail: r.thumbnail,
-      duration: r.duration,
-      publishedAt: r.publishedAt,
-      isExternal: true,
-      provider: 'youtube',
-    }));
-    return { results, nextPageToken: data.nextPageToken || null };
+    return {
+      results: (data.results || []).map(yt => ({
+        id: `yt-${yt.videoId}`,
+        videoId: yt.videoId,
+        title: yt.title,
+        channelTitle: yt.channelTitle,
+        thumbnail: yt.thumbnail,
+        duration: yt.duration,
+        entityType: 'track',
+        isExternal: true,
+        nativeAvailable: false,
+      })),
+      nextPageToken: data.nextPageToken || null
+    };
   } catch (err) {
     console.warn('YouTube search failed:', err);
-    return { results: [], nextPageToken: null };
+    if (retries > 0) return await searchYouTube(query, pageToken, retries - 1);
+    return { results: [] };
   }
 }
 
