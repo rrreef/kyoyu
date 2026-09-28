@@ -35,6 +35,35 @@ function parseISO8601Duration(iso) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
+
+async function scrapeYouTube(query) {
+  try {
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36' }
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const match = html.match(/var ytInitialData = (\{.*?\});/);
+    if (!match) return [];
+    const data = JSON.parse(match[1]);
+    const items = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+    
+    return items.filter(i => i.videoRenderer).map(i => {
+      const v = i.videoRenderer;
+      return {
+        trackId: v.videoId,
+        title: v.title?.runs?.[0]?.text || '',
+        channelTitle: v.ownerText?.runs?.[0]?.text || '',
+        artworkUrl: v.thumbnail?.thumbnails?.[0]?.url || '',
+        duration: v.lengthText?.simpleText || '0:00'
+      };
+    }).slice(0, 33);
+  } catch (err) {
+    console.error("Scraper fallback failed:", err);
+    return [];
+  }
+}
+
 export default async function handler(req, res) {
   // CORS configuration
   const origin = req.headers.origin;

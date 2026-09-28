@@ -15,6 +15,18 @@ const RATE_WINDOW = 60000;
 const searchCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+
+async function fallbackFuzzySearch(query) {
+  try {
+    const res = await fetch(`https://bandcamp.com/api/fuzzysearch/1/autocomplete?q=${encodeURIComponent(query)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.auto?.results || [];
+  } catch (e) { return []; }
+}
+
 export default async function handler(req, res) {
   const origin = req.headers.origin;
   if (ALLOWED_ORIGINS.includes(origin)) {
@@ -77,13 +89,17 @@ export default async function handler(req, res) {
       }),
     });
 
+    let items = [];
     if (!bcRes.ok) {
       console.error('Bandcamp search API error:', bcRes.status);
-      return res.status(200).json({ results: [], hasMore: false, nextOffset: offset });
+      items = await fallbackFuzzySearch(query);
+    } else {
+      const data = await bcRes.json();
+      items = data?.auto?.results || [];
+      if (items.length === 0) {
+        items = await fallbackFuzzySearch(query);
+      }
     }
-
-    const data = await bcRes.json();
-    const items = data?.auto?.results || [];
 
     const results = items
       .map(item => {

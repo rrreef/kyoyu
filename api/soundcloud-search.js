@@ -232,7 +232,7 @@ export default async function handler(req, res) {
       linked_partitioning: '1',
     });
 
-    const scRes = await fetch(`https://api.soundcloud.com/tracks?${params.toString()}`, {
+    const scRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?${params.toString()}`, {
       headers: {
         'Accept': 'application/json; charset=utf-8',
         'Authorization': `OAuth ${token}`,
