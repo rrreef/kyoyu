@@ -427,6 +427,7 @@ export default function Search() {
           if (ignore) return;
           setResults(nativeTracks);
           setExternalResults(external);
+          setCurrentPage(1);
           setPaginationCursors(pagination || { youtube: {}, soundcloud: {} });
         })
         .catch(() => {
@@ -675,6 +676,84 @@ export default function Search() {
 
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0);
+
+  const ITEMS_PER_PAGE = 11;
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const slicePage = (arr) => arr.slice(startIndex, endIndex);
+
+  const maxLoadedItems = Math.max(
+    (externalResults.bandcamp || []).length,
+    (externalResults.soundcloud || []).length,
+    (externalResults.youtube || []).length,
+    (externalResults.releases || []).length,
+    (externalResults.artists || []).length,
+    (externalResults.labels || []).length
+  );
+  
+  const loadedPages = Math.ceil(maxLoadedItems / ITEMS_PER_PAGE) || 1;
+  const canFetchMore = Object.values(paginationCursors).some(c => c.hasMore || c.nextPageToken);
+  const totalPages = canFetchMore ? loadedPages + 1 : loadedPages;
+
+  const handlePageClick = async (p) => {
+    if (p > loadedPages && canFetchMore) {
+      await loadMoreAll();
+    }
+    setCurrentPage(p);
+    const scrollContainer = document.querySelector('.main-content');
+    if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderPaginationBar = () => {
+    if (totalPages <= 1 && !canFetchMore) return null;
+    
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + 4);
+    if (end - start < 4) start = Math.max(1, end - 4);
+    
+    const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    
+    return (
+      <div className="search-pagination-bar" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', padding: '16px 0', margin: '8px 0' }}>
+        <button 
+          onClick={() => handlePageClick(currentPage - 1)}
+          disabled={currentPage === 1}
+          style={{ width: '40px', height: '40px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: currentPage === 1 ? 'rgba(255,255,255,0.2)' : '#fff', border: 'none', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        
+        {pages.map(p => (
+          <button 
+            key={p}
+            onClick={() => handlePageClick(p)}
+            style={{
+              width: '40px', height: '40px', borderRadius: '20px',
+              border: currentPage === p ? '1px solid rgba(255,255,255,0.2)' : 'none',
+              background: currentPage === p ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+              color: currentPage === p ? '#fff' : 'rgba(255,255,255,0.6)',
+              fontWeight: currentPage === p ? '700' : '500',
+              backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+              boxShadow: currentPage === p ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
+              transition: 'all 0.2s ease',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
+            {p > loadedPages ? (Object.values(loadingMore).some(Boolean) ? '...' : p) : p}
+          </button>
+        ))}
+
+        <button 
+          onClick={() => handlePageClick(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          style={{ width: '40px', height: '40px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: currentPage >= totalPages ? 'rgba(255,255,255,0.2)' : '#fff', border: 'none', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+    );
+  };
+
   const isQueryEmpty = query.trim().length === 0;
   const showHistory = isQueryEmpty;
 
@@ -683,25 +762,25 @@ export default function Search() {
   const providerMatch = (key) => activeProvider === 'all' || activeProvider.split(',').includes(key);
 
   // ── Rank external results within each provider ──
-  const rankedYoutube = rankResults(query, (externalResults.youtube || []).map(yt => ({
+  const rankedYoutube = slicePage(rankResults(query, (externalResults.youtube || []).map(yt => ({
     ...yt, artistName: yt.channelTitle, entityType: 'track',
-  })));
-  const rankedSoundcloud = rankResults(query, (externalResults.soundcloud || []).map(sc => ({
+  }))));
+  const rankedSoundcloud = slicePage(rankResults(query, (externalResults.soundcloud || []).map(sc => ({
     ...sc, entityType: 'track',
-  })));
-  const rankedBandcamp = rankResults(query, (externalResults.bandcamp || []).map(bc => ({
+  }))));
+  const rankedBandcamp = slicePage(rankResults(query, (externalResults.bandcamp || []).map(bc => ({
     ...bc, entityType: bc.entityType || 'track',
-  })));
+  }))));
   // Rank Discogs artists, releases, labels
-  const rankedDiscogsArtists = rankResults(query, (externalResults.artists || []).map(a => ({
+  const rankedDiscogsArtists = slicePage(rankResults(query, (externalResults.artists || []).map(a => ({
     ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
-  })));
-  const rankedDiscogsReleases = rankResults(query, (externalResults.releases || []).map(r => ({
+  }))));
+  const rankedDiscogsReleases = slicePage(rankResults(query, (externalResults.releases || []).map(r => ({
     ...r, title: r.releaseName || r.title, entityType: 'release', provider: 'discogs',
-  })));
-  const rankedDiscogsLabels = rankResults(query, (externalResults.labels || []).map(l => ({
+  }))));
+  const rankedDiscogsLabels = slicePage(rankResults(query, (externalResults.labels || []).map(l => ({
     ...l, title: l.name || l.title, artistName: l.name || l.title, entityType: 'label', provider: 'discogs',
-  })));
+  }))));
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -901,6 +980,8 @@ export default function Search() {
       {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && (
         <div className="search-empty">No results found</div>
       )}
+
+      {!isQueryEmpty && renderPaginationBar()}
 
       {/* ── Bandcamp Results ── */}
       {!isQueryEmpty && providerMatch('bandcamp') && rankedBandcamp.length > 0 && (
@@ -1224,19 +1305,7 @@ export default function Search() {
       )}
 
 
-      {/* ── Global Load More Button ── */}
-      {!isQueryEmpty && (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <button 
-            className="search-load-more-btn" 
-            onClick={loadMoreAll} 
-            disabled={Object.values(loadingMore).some(Boolean)}
-            style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', fontSize: '16px', fontWeight: '600' }}
-          >
-            {Object.values(loadingMore).some(Boolean) ? 'Loading...' : 'Load More Results'}
-          </button>
-        </div>
-      )}
+      {!isQueryEmpty && renderPaginationBar()}
 
     </div>
   );
