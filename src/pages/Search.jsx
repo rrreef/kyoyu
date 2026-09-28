@@ -288,6 +288,7 @@ export default function Search() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [paginationCursors, setPaginationCursors] = useState({ youtube: {}, soundcloud: {} });
   const [loadingMore, setLoadingMore] = useState({ youtube: false, soundcloud: false });
+  const [currentPage, setCurrentPage] = useState(1);
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
@@ -416,6 +417,7 @@ export default function Search() {
     if (query.trim().length === 0) {
       setResults([]);
       setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
+          setCurrentPage(1);
       setLoading(false);
       return () => { ignore = true; };
     }
@@ -434,6 +436,7 @@ export default function Search() {
           if (ignore) return;
           setResults([]);
           setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
+          setCurrentPage(1);
           setPaginationCursors({ youtube: {}, soundcloud: {} });
         })
         .finally(() => {
