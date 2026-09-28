@@ -172,8 +172,12 @@ async function searchSoundCloud(query, offset = 0) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, limit: 33, offset }),
     });
-    if (!res.ok) return { results: [], hasMore: false, nextOffset: 0 };
+    if (!res.ok) {
+      console.warn('[SC DEBUG] API returned', res.status);
+      return { results: [], hasMore: false, nextOffset: 0 };
+    }
     const data = await res.json();
+    console.log('[SC DEBUG] Raw API returned', data.results?.length, 'results for query:', query);
     const results = (data.results || []).map(r => ({
       id: `sc-${r.trackId}`,
       trackId: r.trackId,

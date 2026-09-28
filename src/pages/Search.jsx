@@ -427,6 +427,10 @@ export default function Search() {
       unifiedSearch(query.trim())
         .then(({ nativeTracks, external, pagination }) => {
           if (ignore) return;
+          console.log('[SEARCH DEBUG] query:', query.trim(), 'SC results:', external.soundcloud?.length, 'YT results:', external.youtube?.length, 'BC results:', external.bandcamp?.length);
+          if (external.soundcloud?.length > 0) {
+            console.log('[SEARCH DEBUG] SC first 3:', external.soundcloud.slice(0,3).map(r => r.title));
+          }
           setResults(nativeTracks);
           setExternalResults(external);
           setCurrentPage(1);
