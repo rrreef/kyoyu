@@ -289,6 +289,7 @@ export default function Search() {
   const [paginationCursors, setPaginationCursors] = useState({ youtube: {}, soundcloud: {} });
   const [loadingMore, setLoadingMore] = useState({ youtube: false, soundcloud: false });
   const [currentPage, setCurrentPage] = useState(1);
+  const [playlistSheet, setPlaylistSheet] = useState(null); // { title, artistName, artworkUrl, tracks: [] }
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
@@ -416,8 +417,8 @@ export default function Search() {
 
     if (query.trim().length === 0) {
       setResults([]);
-      setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
-          setCurrentPage(1);
+      setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
+      setCurrentPage(1);
       setLoading(false);
       return () => { ignore = true; };
     }
@@ -439,7 +440,7 @@ export default function Search() {
         .catch(() => {
           if (ignore) return;
           setResults([]);
-          setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
+          setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
           setCurrentPage(1);
           setPaginationCursors({ youtube: {}, soundcloud: {} });
         })
@@ -776,6 +777,9 @@ export default function Search() {
   const rankedSoundcloud = slicePage((externalResults.soundcloud || []).map(sc => ({
     ...sc, entityType: 'track',
   })));
+  const rankedSoundcloudPlaylists = slicePage((externalResults.soundcloudPlaylists || []).map(pl => ({
+    ...pl, entityType: 'playlist',
+  })));
   const rankedBandcamp = slicePage((externalResults.bandcamp || []).map(bc => ({
     ...bc, entityType: bc.entityType || 'track',
   })));
@@ -997,78 +1001,6 @@ export default function Search() {
             Bandcamp
           </div>
           
-          {filterMatch('titles') && rankedBandcamp.filter(x => x.entityType === 'track').length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Titles</div>
-              {rankedBandcamp.filter(x => x.entityType === 'track').map(bc => (
-                <div key={bc.id} className="search-result-row search-external-row"
-                  style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
-                  onClick={() => {
-                    if (bandcampLoading) return;
-                    setBandcampLoading(bc.trackUrl);
-                    handleSearchPlay({
-                      id: bc.id || `bc-${bc.trackId}`,
-                      title: bc.title,
-                      artistName: bc.artistName,
-                      artworkUrl: bc.artworkUrl,
-                      duration: 0,
-                      provider: 'bandcamp',
-                      providerItemId: bc.trackUrl,
-                    });
-                    setTimeout(() => setBandcampLoading(null), 3000);
-                  }}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                    <span className="search-result-artist">{bc.artistName}{bc.albumName ? ` · ${bc.albumName}` : ''}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {filterMatch('albums') && rankedBandcamp.filter(x => x.entityType === 'album').length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Albums</div>
-              {rankedBandcamp.filter(x => x.entityType === 'album').map(bc => (
-                <div key={bc.id} className="search-result-row search-external-row"
-                  style={{ opacity: bandcampLoading === bc.trackUrl ? 0.5 : 1 }}
-                  onClick={() => {
-                    if (bandcampLoading) return;
-                    setBandcampLoading(bc.trackUrl || bc.id);
-                    handleSearchPlay({
-                      id: bc.id || `bc-${bc.trackId}`,
-                      title: bc.title,
-                      artistName: bc.artistName,
-                      artworkUrl: bc.artworkUrl,
-                      duration: 0,
-                      provider: 'bandcamp',
-                      providerItemId: bc.trackUrl || bc.id,
-                    });
-                    setTimeout(() => setBandcampLoading(null), 3000);
-                  }}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                    <span className="search-result-artist">{bc.artistName}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {filterMatch('artists') && rankedBandcamp.filter(x => x.entityType === 'artist').length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Artists</div>
@@ -1124,6 +1056,42 @@ export default function Search() {
               ))}
             </div>
           )}
+
+          {filterMatch('albums') && rankedBandcamp.filter(x => x.entityType === 'track' || x.entityType === 'album').length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Releases</div>
+              {rankedBandcamp.filter(x => x.entityType === 'track' || x.entityType === 'album').map(bc => (
+                <div key={bc.id} className="search-result-row search-external-row"
+                  style={{ opacity: bandcampLoading === (bc.trackUrl || bc.id) ? 0.5 : 1 }}
+                  onClick={() => {
+                    if (bandcampLoading) return;
+                    setBandcampLoading(bc.trackUrl || bc.id);
+                    handleSearchPlay({
+                      id: bc.id || `bc-${bc.trackId}`,
+                      title: bc.title,
+                      artistName: bc.artistName,
+                      artworkUrl: bc.artworkUrl,
+                      duration: 0,
+                      provider: 'bandcamp',
+                      providerItemId: bc.trackUrl || bc.id,
+                    });
+                    setTimeout(() => setBandcampLoading(null), 3000);
+                  }}>
+                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                    {bc.artworkUrl ? (
+                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={bc.title} type="release" />
+                    )}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{bc.title}</span>
+                    <span className="search-result-artist">{bc.artistName}{bc.entityType === 'track' && bc.albumName ? ` · ${bc.albumName}` : ''}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           
           {/* Recommendations / Fans Also Bought */}
           {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 
@@ -1141,13 +1109,13 @@ export default function Search() {
       )}
 
       {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && providerMatch('soundcloud') && rankedSoundcloud.length > 0 && (
+      {!isQueryEmpty && providerMatch('soundcloud') && (rankedSoundcloud.length > 0 || rankedSoundcloudPlaylists.length > 0) && (
         <div className="search-results-list search-external-section">
           <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
             SoundCloud
           </div>
           
-          {filterMatch('titles') && (
+          {filterMatch('titles') && rankedSoundcloud.length > 0 && (
             <div className="search-section">
               <div className="search-section-subtitle">Titles</div>
               {rankedSoundcloud.map(sc => (
@@ -1176,6 +1144,28 @@ export default function Search() {
                 </div>
               ))}
               
+            </div>
+          )}
+
+          {filterMatch('albums') && rankedSoundcloudPlaylists.length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Playlists</div>
+              {rankedSoundcloudPlaylists.map(pl => (
+                <div key={pl.id} className="search-result-row search-external-row"
+                  onClick={() => setPlaylistSheet(pl)}>
+                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                    {pl.artworkUrl ? (
+                      <img src={pl.artworkUrl} alt={pl.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={pl.title} type="release" />
+                    )}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{pl.title}</span>
+                    <span className="search-result-artist">{pl.artistName} · {pl.trackCount} tracks</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1227,31 +1217,6 @@ export default function Search() {
           {((filterMatch('artists') && rankedDiscogsArtists.length > 0) || (filterMatch('labels') && rankedDiscogsLabels.length > 0) || (filterMatch('albums') && rankedDiscogsReleases.length > 0)) && (
             <div className="search-section-title search-external-header">
               Discogs
-            </div>
-          )}
-
-          {filterMatch('albums') && rankedDiscogsReleases.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Albums</div>
-              {rankedDiscogsReleases.map(release => (
-                <div key={release.id} className="search-result-row search-external-row"
-                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
-                  <div className="search-result-art discogs-art">
-                    {release.thumb ? (
-                      <img src={release.thumb} alt={release.releaseName || release.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={release.releaseName || release.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{release.releaseName}</span>
-                    <span className="search-result-artist">
-                      {release.artistName}
-                      {release.year ? ` · ${release.year}` : ''}
-                    </span>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
 
@@ -1308,12 +1273,89 @@ export default function Search() {
               ))}
             </div>
           )}
+
+          {filterMatch('albums') && rankedDiscogsReleases.length > 0 && (
+            <div className="search-section">
+              <div className="search-section-subtitle">Albums</div>
+              {rankedDiscogsReleases.map(release => (
+                <div key={release.id} className="search-result-row search-external-row"
+                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
+                  <div className="search-result-art discogs-art">
+                    {release.thumb ? (
+                      <img src={release.thumb} alt={release.releaseName || release.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    ) : (
+                      <EntityPlaceholder name={release.releaseName || release.title} type="release" />
+                    )}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{release.releaseName}</span>
+                    <span className="search-result-artist">
+                      {release.artistName}
+                      {release.year ? ` · ${release.year}` : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
 
       {!isQueryEmpty && renderPaginationBar()}
 
+      {playlistSheet && (
+        <div className="search-playlist-sheet" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          display: 'flex', flexDirection: 'column', padding: '60px 16px 20px',
+          overflowY: 'auto',
+        }}>
+          <button onClick={() => setPlaylistSheet(null)} style={{
+            position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)',
+            border: 'none', borderRadius: '50%', width: 36, height: 36, color: '#fff',
+            fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            {playlistSheet.artworkUrl && (
+              <img src={playlistSheet.artworkUrl} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />
+            )}
+            <div>
+              <div style={{ color: '#fff', fontSize: 18, fontWeight: 600 }}>{playlistSheet.title}</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>{playlistSheet.artistName} · {playlistSheet.trackCount} tracks</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {(playlistSheet.tracks || []).map((t, i) => (
+              <div key={t.trackId || i} className="search-result-row search-external-row"
+                onClick={() => {
+                  handleSearchPlay({
+                    id: `sc-${t.trackId}`,
+                    title: t.title,
+                    artistName: t.artistName,
+                    artworkUrl: t.artworkUrl,
+                    duration: t.duration || 0,
+                    provider: 'soundcloud',
+                    providerItemId: t.permalinkUrl,
+                    scTrackId: t.trackId,
+                  });
+                }}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                  {t.artworkUrl ? (
+                    <img src={t.artworkUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 'inherit' }} />
+                  )}
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{t.title}</span>
+                  <span className="search-result-artist">{t.artistName}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

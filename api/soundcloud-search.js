@@ -326,10 +326,46 @@ export default async function handler(req, res) {
       genre: track.genre || '',
     }));
 
+    // Also search playlists via v2
+    let playlists = [];
+    try {
+      const webCid = await getWebClientId();
+      if (webCid) {
+        const plParams = new URLSearchParams({
+          q: query, limit: '11', client_id: webCid,
+        });
+        const plRes = await fetch(`https://api-v2.soundcloud.com/search/playlists?${plParams.toString()}`, {
+          headers: { 'Accept': 'application/json; charset=utf-8' },
+        });
+        if (plRes.ok) {
+          const plData = await plRes.json();
+          playlists = (plData.collection || []).map(pl => ({
+            playlistId: pl.id,
+            title: pl.title || '',
+            artistName: pl.user?.username || '',
+            artworkUrl: (pl.artwork_url || pl.user?.avatar_url || '').replace('-large', '-t500x500'),
+            trackCount: pl.track_count || 0,
+            permalinkUrl: pl.permalink_url || '',
+            duration: Math.round((pl.duration || 0) / 1000),
+            tracks: (pl.tracks || []).map(t => ({
+              trackId: t.id,
+              title: t.title || '',
+              artistName: t.user?.username || '',
+              artworkUrl: (t.artwork_url || t.user?.avatar_url || '').replace('-large', '-t500x500'),
+              duration: Math.round((t.duration || 0) / 1000),
+              permalinkUrl: t.permalink_url || '',
+            })),
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('SC playlist search error:', e.message);
+    }
+
     const hasMore = collection.length >= limit;
-    return res.status(200).json({ results, hasMore, nextOffset: offset + collection.length });
+    return res.status(200).json({ results, playlists, hasMore, nextOffset: offset + collection.length });
   } catch (err) {
     console.error('SoundCloud search error:', err);
-    return res.status(200).json({ results: [] });
+    return res.status(200).json({ results: [], playlists: [] });
   }
 }

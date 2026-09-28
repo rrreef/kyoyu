@@ -173,11 +173,9 @@ async function searchSoundCloud(query, offset = 0) {
       body: JSON.stringify({ query, limit: 33, offset }),
     });
     if (!res.ok) {
-      console.warn('[SC DEBUG] API returned', res.status);
-      return { results: [], hasMore: false, nextOffset: 0 };
+      return { results: [], playlists: [], hasMore: false, nextOffset: 0 };
     }
     const data = await res.json();
-    console.log('[SC DEBUG] Raw API returned', data.results?.length, 'results for query:', query);
     const results = (data.results || []).map(r => ({
       id: `sc-${r.trackId}`,
       trackId: r.trackId,
@@ -191,10 +189,24 @@ async function searchSoundCloud(query, offset = 0) {
       isExternal: true,
       provider: 'soundcloud',
     }));
-    return { results, hasMore: !!data.hasMore, nextOffset: data.nextOffset || offset + results.length };
+    const playlists = (data.playlists || []).map(pl => ({
+      id: `sc-pl-${pl.playlistId}`,
+      playlistId: pl.playlistId,
+      title: pl.title,
+      artistName: pl.artistName,
+      artworkUrl: pl.artworkUrl,
+      trackCount: pl.trackCount,
+      permalinkUrl: pl.permalinkUrl,
+      duration: pl.duration,
+      tracks: pl.tracks || [],
+      isExternal: true,
+      provider: 'soundcloud',
+      entityType: 'playlist',
+    }));
+    return { results, playlists, hasMore: !!data.hasMore, nextOffset: data.nextOffset || offset + results.length };
   } catch (err) {
     console.warn('SoundCloud search failed:', err);
-    return { results: [], hasMore: false, nextOffset: 0 };
+    return { results: [], playlists: [], hasMore: false, nextOffset: 0 };
   }
 }
 
@@ -306,6 +318,7 @@ export async function unifiedSearch(query) {
   
   external.youtube = ytData.results || [];
   external.soundcloud = scData.results || [];
+  external.soundcloudPlaylists = scData.playlists || [];
   external.bandcamp = bcData;
   
   // Pagination cursors for "Load More" per provider
