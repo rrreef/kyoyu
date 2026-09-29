@@ -24,6 +24,11 @@ export function openNativeAlbumFast(album) {
     const target = queue[Math.max(idx, 0)];
 
     if (target.url && target.url.startsWith('resolve:')) {
+      // Immediately dispatch placeholder track so Web Player updates UI and stops sending old track ID to Swift
+      if (window.__kyoyuGlobalPlayTrack) {
+         window.__kyoyuGlobalPlayTrack({ ...target, src: '' }, queue);
+      }
+
       const resolveQuery = target.url.replace('resolve:', '');
       const wantsYouTube = target.provider === 'youtube';
       try {
@@ -50,10 +55,15 @@ export function openNativeAlbumFast(album) {
                     }
                   }
                 } catch(e) {}
-                window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
+                // If bandcamp resolve failed (e.g. 404), fall through to YouTube below
+              } else {
+                return; // If there was no global play track, just abort
               }
-              return;
+            } else {
+                // No bandcamp track found, fall through to YouTube
             }
+          } else {
+              // wantsYouTube is true, fall through to YouTube
           }
         }
         let ytRes = await fetch('/api/youtube-search', {

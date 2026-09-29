@@ -435,6 +435,17 @@ export function PlayerProvider({ children }) {
       });
     } else if (item.provider === 'bandcamp') {
       // Bandcamp needs async resolve
+      dispatch({ type: 'PLAY_TRACK', track: {
+        id: item.id,
+        title: item.title || 'Loading...',
+        artistName: item.artistName || '',
+        releaseCover: item.artworkUrl || '',
+        src: '',
+        duration: item.duration || 0,
+        provider: 'bandcamp',
+        providerItemId: item.providerItemId,
+        providerUrl: item.providerUrl,
+      }});
       try {
         // resolveBandcamp imported at top
         const resolved = await resolveBandcamp(item.providerItemId);
