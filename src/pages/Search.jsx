@@ -771,6 +771,17 @@ export default function Search() {
 
   // ── Build unified result list across all providers ──
   // Tag every item with its provider and normalize fields
+  // For Bandcamp: show albums when filter is 'all', tracks only when filter is 'titles'
+  const bcItems = (externalResults.bandcamp || []).filter(bc => {
+    const et = bc.entityType || bc.type || 'track';
+    if (activeFilter === 'all') return et !== 'track'; // albums, artists, labels — no individual tracks
+    if (filterMatch('titles')) return et === 'track';
+    if (filterMatch('albums')) return et === 'album';
+    if (filterMatch('artists')) return et === 'artist';
+    if (filterMatch('labels')) return et === 'label';
+    return true;
+  });
+
   const allExternal = [
     ...(providerMatch('youtube') ? (externalResults.youtube || []).map(yt => ({
       ...yt, artistName: yt.channelTitle || yt.artistName, entityType: 'track', provider: 'youtube',
@@ -781,8 +792,8 @@ export default function Search() {
     ...(providerMatch('soundcloud') ? (externalResults.soundcloudPlaylists || []).map(pl => ({
       ...pl, entityType: 'playlist', provider: 'soundcloud',
     })) : []),
-    ...(providerMatch('bandcamp') ? (externalResults.bandcamp || []).map(bc => ({
-      ...bc, entityType: bc.entityType || 'track', provider: bc.provider || 'bandcamp',
+    ...(providerMatch('bandcamp') ? bcItems.map(bc => ({
+      ...bc, entityType: bc.entityType || bc.type || 'track', provider: bc.provider || 'bandcamp',
     })) : []),
     ...(providerMatch('discogs') ? (externalResults.artists || []).map(a => ({
       ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
@@ -1055,9 +1066,23 @@ export default function Search() {
             return (
               <div key={item.id || `${item.provider}-${item.title}-${Math.random()}`}
                 className="search-result-row search-external-row"
-                onClick={() => {
+                onClick={async () => {
                   if (isPlaylist && item.tracks) {
                     setPlaylistSheet(item);
+                  } else if (item.provider === 'bandcamp' && (item.entityType === 'album' || item.entityType === 'release') && item.trackUrl) {
+                    // Fetch album tracks and open sheet
+                    setPlaylistSheet({ ...item, tracks: [], trackCount: '...' });
+                    try {
+                      const r = await fetch('/api/bandcamp-search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'fetch-album', albumUrl: item.trackUrl }),
+                      });
+                      if (r.ok) {
+                        const data = await r.json();
+                        setPlaylistSheet(prev => prev ? { ...prev, tracks: data.tracks || [], trackCount: (data.tracks || []).length } : null);
+                      }
+                    } catch (e) { /* ignore */ }
                   } else if (!isArtist && !isLabel) {
                     handleSearchPlay({
                       id: item.id || `${item.provider}-${item.trackId || item.videoId}`,

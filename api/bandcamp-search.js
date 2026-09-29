@@ -53,6 +53,65 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
   }
 
+  // ── Action: fetch album tracks ──
+  if (body?.action === 'fetch-album' && body?.albumUrl) {
+    try {
+      const albumRes = await fetch(body.albumUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+      });
+      if (!albumRes.ok) return res.status(200).json({ tracks: [] });
+      const html = await albumRes.text();
+      
+      // Extract track data from the page's LD+JSON or data-tralbum attribute
+      const tracks = [];
+      
+      // Try data-tralbum JSON (most reliable)
+      const tralbumMatch = html.match(/data-tralbum="([^"]+)"/);
+      if (tralbumMatch) {
+        try {
+          const tralbum = JSON.parse(tralbumMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'"));
+          const albumArt = (html.match(/<a class="popupImage"[^>]*href="([^"]+)"/) || [])[1] || '';
+          for (const t of (tralbum.trackinfo || [])) {
+            tracks.push({
+              trackId: t.track_id || t.id,
+              title: t.title || '',
+              duration: Math.round((t.duration || 0)),
+              streamUrl: t.file?.['mp3-128'] || '',
+              artworkUrl: albumArt,
+              artistName: tralbum.artist || '',
+            });
+          }
+        } catch (e) { /* parse error, fall through */ }
+      }
+      
+      // Fallback: try LD+JSON
+      if (tracks.length === 0) {
+        const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+        if (ldMatch) {
+          try {
+            const ld = JSON.parse(ldMatch[1]);
+            const albumArt = ld.image || '';
+            for (const t of (ld.track?.itemListElement || [])) {
+              const item = t.item || t;
+              tracks.push({
+                trackId: item['@id'] || t.position,
+                title: item.name || '',
+                duration: 0,
+                artworkUrl: albumArt,
+                artistName: ld.byArtist?.name || '',
+              });
+            }
+          } catch (e) { /* parse error */ }
+        }
+      }
+      
+      return res.status(200).json({ tracks });
+    } catch (err) {
+      console.error('Bandcamp album fetch error:', err);
+      return res.status(200).json({ tracks: [] });
+    }
+  }
+
   const query = body?.query;
   const offset = parseInt(body?.offset) || 0;
   const page = Math.floor(offset / 33) + 1;

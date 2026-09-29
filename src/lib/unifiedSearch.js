@@ -148,6 +148,7 @@ async function searchYouTube(query, pageToken = null, retries = 2) {
         channelTitle: yt.channelTitle,
         thumbnail: yt.thumbnail,
         duration: yt.duration,
+        year: yt.publishedAt ? yt.publishedAt.slice(0, 4) : null,
         entityType: 'track',
         isExternal: true,
         nativeAvailable: false,
@@ -186,6 +187,7 @@ async function searchSoundCloud(query, offset = 0) {
       permalinkUrl: r.permalinkUrl,
       playbackCount: r.playbackCount,
       genre: r.genre,
+      year: r.year || null,
       isExternal: true,
       provider: 'soundcloud',
     }));

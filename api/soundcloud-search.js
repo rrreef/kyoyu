@@ -324,6 +324,7 @@ export default async function handler(req, res) {
       waveformUrl: track.waveform_url || '',
       playbackCount: track.playback_count || 0,
       genre: track.genre || '',
+      year: (track.release_date || track.created_at || '').slice(0, 4) || null,
     }));
 
     // Also search playlists via v2
