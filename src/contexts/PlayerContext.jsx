@@ -28,8 +28,15 @@ function playerReducer(state, action) {
       return { ...state, currentTrack: null, isPlaying: false, progress: 0, duration: 0, queue: [],
                provider: 'native', providerItemId: null, providerUrl: null };
     }
-    case 'PLAY_TRACK':   return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0,
-                                   provider: 'native', providerItemId: null, providerUrl: null };
+    case 'PLAY_TRACK':
+      if (action.track.provider && action.track.provider !== 'native') {
+        if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
+          window.__kyoyuAudioRef.pause();
+          window.__kyoyuAudioRef.src = '';
+        }
+      }
+      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0,
+               provider: action.track.provider || 'native', providerItemId: action.track.providerItemId || null, providerUrl: action.track.providerUrl || null };
     case 'PLAY_YOUTUBE': {
       // Pause native audio when switching to YouTube
       if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {

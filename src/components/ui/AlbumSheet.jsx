@@ -36,7 +36,22 @@ export function openNativeAlbumFast(album) {
             const bcData = await bcRes.json();
             const bcTrack = (bcData.results || []).find(r => r.type === 'track');
             if (bcTrack) {
-              if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
+              if (window.__kyoyuGlobalPlayTrack) {
+                try {
+                  let resRes = await fetch('/api/bandcamp-resolve', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: bcTrack.trackUrl }),
+                  });
+                  if (resRes.ok) {
+                    const resData = await resRes.json();
+                    if (resData.streamUrl) {
+                      window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: resData.streamUrl, audioUrl: resData.streamUrl, url: resData.streamUrl, releaseCover: resData.artworkUrl || target.releaseCover }, queue);
+                      return;
+                    }
+                  }
+                } catch(e) {}
+                window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
+              }
               return;
             }
           }
