@@ -1038,7 +1038,6 @@ export default function Search() {
         <div className="search-results-list search-external-section">
           {rankedAll.map(item => {
             const pColor = providerColors[item.provider] || '#fff';
-            const pLabel = providerLabels[item.provider] || item.provider;
             const isPlaylist = item.entityType === 'playlist';
             const isArtist = item.entityType === 'artist';
             const isLabel = item.entityType === 'label';
