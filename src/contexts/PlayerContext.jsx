@@ -175,15 +175,23 @@ export function PlayerProvider({ children }) {
     if (!audio || !state.currentTrack) return;
     // Skip native audio loading for external providers
     if (state.provider !== 'native') return;
+    
+    // Stop current playback cleanly before switching or if src is empty (placeholder)
+    audio.pause();
+    audio.currentTime = 0;
+    
     const src = state.currentTrack.src || state.currentTrack.fileUrl || state.currentTrack.audioUrl || '';
-    if (!src) return;
+    if (!src) {
+      // If no src (e.g. placeholder track while resolving), tell native iOS to clear player
+      try {
+        const mh = window.webkit?.messageHandlers;
+        if (mh?.audioFallback) mh.audioFallback.postMessage({ url: '' });
+      } catch(e) {}
+      return;
+    }
 
     // Increment play ID to cancel any pending play from previous track
     const myPlayId = ++playIdRef.current;
-
-    // Stop current playback cleanly before switching
-    audio.pause();
-    audio.currentTime = 0;
 
     // ── Send URL directly to native AVPlayer (iOS) ──
     // Don't rely on the play() JS override to read currentSrc — it's racy.
