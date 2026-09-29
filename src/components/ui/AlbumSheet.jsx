@@ -8,6 +8,8 @@ export function openNativeAlbumFast(album) {
   window.__lastFastOpenTs = ts;
 
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
+    window.__kyoyuPlayNativeTrackCounter = (window.__kyoyuPlayNativeTrackCounter || 0) + 1;
+    const myCounter = window.__kyoyuPlayNativeTrackCounter;
     const queue = (album.tracks || []).map(t => ({
        id: t.id,
        title: t.title || t.name,
@@ -50,6 +52,7 @@ export function openNativeAlbumFast(album) {
                   if (resRes.ok) {
                     const resData = await resRes.json();
                     if (resData.streamUrl) {
+                      if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
                       window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: resData.streamUrl, audioUrl: resData.streamUrl, url: resData.streamUrl, releaseCover: resData.artworkUrl || target.releaseCover }, queue);
                       return;
                     }
@@ -74,6 +77,7 @@ export function openNativeAlbumFast(album) {
           const ytData = await ytRes.json();
           const ytTrack = (ytData.results || [])[0];
           if (ytTrack) {
+            if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
             if (window.__kyoyuGlobalPlayYouTube) {
               window.__kyoyuGlobalSetQueue(queue);
               window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
@@ -83,6 +87,7 @@ export function openNativeAlbumFast(album) {
         }
       } catch (e) { console.warn('Resolve play error:', e); }
     }
+    if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
     if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
   };
 

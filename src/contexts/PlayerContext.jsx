@@ -350,7 +350,10 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
   }
 
+  const playSoundCloudCounterRef = useRef(0);
   async function playSoundCloud(trackUrl, metadata = {}) {
+    playSoundCloudCounterRef.current += 1;
+    const myCounter = playSoundCloudCounterRef.current;
     // Extract numeric track ID from metadata or the item id (e.g. "sc-88335161")
     let trackId = metadata.trackId;
     if (!trackId && metadata.id) {
@@ -394,6 +397,7 @@ export function PlayerProvider({ children }) {
       }
 
       const data = await res.json();
+      if (myCounter !== playSoundCloudCounterRef.current) return;
       if (!data.streamUrl) {
         console.warn('[Player] SoundCloud: no stream URL returned');
         dispatch({ type: 'SET_PLAYING', value: false });
@@ -423,8 +427,11 @@ export function PlayerProvider({ children }) {
   const searchQueueIdxRef = useRef(-1);
 
   // Play a single item from the search queue based on its provider
+  const playSearchItemCounterRef = useRef(0);
   async function playSearchItem(item) {
     if (!item) return;
+    playSearchItemCounterRef.current += 1;
+    const myCounter = playSearchItemCounterRef.current;
     if (item.provider === 'youtube') {
       playYouTube(item.providerItemId, {
         title: item.title,
@@ -457,6 +464,7 @@ export function PlayerProvider({ children }) {
       try {
         // resolveBandcamp imported at top
         const resolved = await resolveBandcamp(item.providerItemId);
+        if (myCounter !== playSearchItemCounterRef.current) return;
         if (resolved && resolved.streamUrl) {
           playTrack({
             id: item.id,
