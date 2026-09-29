@@ -29,14 +29,10 @@ function playerReducer(state, action) {
                provider: 'native', providerItemId: null, providerUrl: null };
     }
     case 'PLAY_TRACK':
-      if (action.track.provider && action.track.provider !== 'native') {
-        if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
-          window.__kyoyuAudioRef.pause();
-          window.__kyoyuAudioRef.src = '';
-        }
-      }
+      // We ALWAYS set provider to 'native' because PLAY_TRACK handles actual mp3 streams.
+      // (YouTube has its own PLAY_YOUTUBE action).
       return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0,
-               provider: action.track.provider || 'native', providerItemId: action.track.providerItemId || null, providerUrl: action.track.providerUrl || null };
+               provider: 'native', providerItemId: null, providerUrl: null };
     case 'PLAY_YOUTUBE': {
       // Pause native audio when switching to YouTube
       if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
@@ -514,6 +510,8 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     // ── Queue bridge ──
     window.__kyoyuGlobalPlayTrack = (track, queue) => playTrack(track, queue);
+    window.__kyoyuGlobalPlayYouTube = (videoId, metadata) => playYouTube(videoId, metadata);
+    window.__kyoyuGlobalSetQueue = (queue) => dispatch({ type: 'SET_QUEUE', queue });
     window.__kyoyuGetQueue = () => {
       const q = state.queue || [];
       const searchQ = searchQueueRef.current || [];

@@ -64,7 +64,10 @@ export function openNativeAlbumFast(album) {
           const ytData = await ytRes.json();
           const ytTrack = (ytData.results || [])[0];
           if (ytTrack) {
-            if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack({ ...target, provider: 'youtube', videoId: ytTrack.videoId, providerItemId: ytTrack.videoId }, queue);
+            if (window.__kyoyuGlobalPlayYouTube) {
+              window.__kyoyuGlobalSetQueue(queue);
+              window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
+            }
             return;
           }
         }
