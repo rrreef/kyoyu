@@ -22,15 +22,21 @@ function makeLookupKey(artist, album, title) {
   return [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
 }
 
-async function fetchDiscogsRelease(query) {
+async function fetchDiscogsRelease(query, explicitReleaseId = null) {
   try {
-    const searchRes = await fetch(
-      `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=5`,
-      { headers: DISCOGS_HEADERS }
-    );
-    if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
-    const best = searchData.results?.[0];
+    let best = null;
+    if (explicitReleaseId) {
+      best = { id: explicitReleaseId };
+    } else {
+      const searchRes = await fetch(
+        `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=5`,
+        { headers: DISCOGS_HEADERS }
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        best = searchData.results?.[0];
+      }
+    }
     if (!best) return null;
     let detail = null;
     if (best.id) {
@@ -54,7 +60,7 @@ async function fetchDiscogsRelease(query) {
       year: detail?.year || best.year || '',
       genre: [...(detail?.genres || best.genre || []), ...(detail?.styles || best.style || [])].join(', '),
       labels, series, country: detail?.country || '',
-      description: (detail?.notes || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, ''),
+      description: (detail?.notes || '').replace(/Track durations and BPM are not provided on the record\.?/gi, '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, ''),
       formats: (detail?.formats || []).map(f => {
         const parts = [f.name];
         if (f.descriptions) parts.push(...f.descriptions);
@@ -124,7 +130,12 @@ async function fetchDiscogsArtistFull(artistId) {
              const json = await res.json();
              const name = json.name || json.title || '';
              if (name) {
-               cleanBio = cleanBio.replace(new RegExp(`\\[${tag.type}${tag.id}\\]`, 'gi'), name);
+               let mdLink = name;
+               if (tag.type === 'l') mdLink = `[${name}](https://www.discogs.com/label/${tag.id})`;
+               else if (tag.type === 'a') mdLink = `[${name}](https://www.discogs.com/artist/${tag.id})`;
+               else if (tag.type === 'r') mdLink = `[${name}](https://www.discogs.com/release/${tag.id})`;
+               else if (tag.type === 'm') mdLink = `[${name}](https://www.discogs.com/master/${tag.id})`;
+               cleanBio = cleanBio.replace(new RegExp(`\\[${tag.type}${tag.id}\\]`, 'gi'), mdLink);
              }
            }
          } catch(e){}
@@ -208,7 +219,7 @@ async function fetchMusicBrainzArtist(mbid) {
 
 async function handleTrackInfo(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-  const { title, artist, album, provider, trackId } = body || {};
+  const { title, artist, album, provider, trackId, discogsReleaseId } = body || {};
   if (!title && !artist) return res.status(400).json({ error: 'Missing title or artist' });
 
   const lookupKey = makeLookupKey(artist || '', album || '', title || '');
@@ -224,7 +235,7 @@ async function handleTrackInfo(body, res) {
 
   // Fetch sources
   const searchQuery = [artist, album || title].filter(Boolean).join(' ');
-  const [discogs, mb] = await Promise.all([fetchDiscogsRelease(searchQuery), fetchMusicBrainz(title || '', artist || '')]);
+  const [discogs, mb] = await Promise.all([fetchDiscogsRelease(searchQuery, discogsReleaseId), fetchMusicBrainz(title || '', artist || '')]);
   const [discogsArtist, mbArtist, labelInfo] = await Promise.all([
     fetchDiscogsArtistFull(discogs?.primaryArtistId),
     fetchMusicBrainzArtist(mb?.artistMbid),
@@ -298,7 +309,7 @@ async function handleTrackInfo(body, res) {
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
   
   const result = {
-    _v: 3,
+    _v: 6,
     album: discogs?.title || album || '', artist: artist || '',
     year: String(discogs?.year || mb?.year || ''),
     label: labelDisplay, labelProfile: labelInfo?.profile || '',

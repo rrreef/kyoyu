@@ -1101,7 +1101,7 @@ export default function Search() {
                       const r = await fetch('/api/discogs-search', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title }),
+                        body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title, discogsReleaseId: item.id }),
                       });
                       if (r.ok) {
                         const info = await r.json();
