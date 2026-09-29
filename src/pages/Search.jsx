@@ -1095,6 +1095,43 @@ export default function Search() {
                         });
                       }
                     } catch (e) { /* ignore */ }
+                  } else if (item.provider === 'discogs') {
+                    // Fetch Discogs release info and open native album sheet
+                    try {
+                      const r = await fetch('/api/discogs-search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title }),
+                      });
+                      if (r.ok) {
+                        const info = await r.json();
+                        openNativeAlbumFast({
+                          id: item.id || `discogs-${item.title}`,
+                          title: info.album || item.title || '',
+                          artist: info.artist || item.artistName || '',
+                          cover: item.artworkUrl || item.thumb || '',
+                          year: info.year || item.year || null,
+                          genre: info.genre || '',
+                          label: info.label || '',
+                          description: [
+                            info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
+                            info.country ? `Country: ${info.country}` : '',
+                            info.description || '',
+                            info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
+                            info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
+                            info.artistBio ? `\nAbout the artist:\n${info.artistBio}` : '',
+                            info.links?.length ? `\nLinks:\n${info.links.map(l => `${l.name}: ${l.url}`).join('\n')}` : '',
+                          ].filter(Boolean).join('\n'),
+                          tracks: (info.tracklist || []).map((t, i) => ({
+                            id: `discogs-track-${i}`,
+                            title: `${t.position ? t.position + '. ' : ''}${t.title}${t.duration ? ' (' + t.duration + ')' : ''}`,
+                            artist: t.artists?.join(', ') || info.artist || item.artistName || '',
+                            url: '',
+                            cover: item.artworkUrl || item.thumb || '',
+                          })),
+                        });
+                      }
+                    } catch (e) { /* ignore */ }
                   } else if (!isArtist && !isLabel) {
                     handleSearchPlay({
                       id: item.id || `${item.provider}-${item.trackId || item.videoId}`,
@@ -1109,7 +1146,7 @@ export default function Search() {
                     });
                   }
                 }}
-                style={{ cursor: (isArtist || isLabel) ? 'default' : 'pointer' }}
+                style={{ cursor: 'pointer' }}
               >
                 <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '6px' }}>
                   {(item.artworkUrl || item.thumbnail || item.thumb) ? (
