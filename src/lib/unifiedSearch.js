@@ -249,6 +249,36 @@ async function searchBandcamp(query) {
  */
 export async function resolveBandcamp(trackUrl) {
   try {
+    // If we are inside the native iOS app, use the BandcampBridge to bypass IP blocks
+    if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bandcamp) {
+      return new Promise((resolve) => {
+        const callbackId = Math.random().toString(36).substring(7);
+        window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
+          if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
+            window.__kyoyuBandcampCallbacks[id](data);
+            delete window.__kyoyuBandcampCallbacks[id];
+          }
+        });
+        window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
+        
+        // Timeout just in case
+        const timeout = setTimeout(() => {
+           if (window.__kyoyuBandcampCallbacks[callbackId]) {
+              window.__kyoyuBandcampCallbacks[callbackId]({ error: "Timeout" });
+              delete window.__kyoyuBandcampCallbacks[callbackId];
+           }
+        }, 10000);
+        
+        window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
+          clearTimeout(timeout);
+          if (data && data.streamUrl) resolve(data);
+          else resolve(null);
+        };
+        
+        window.webkit.messageHandlers.bandcamp.postMessage({ url: trackUrl, callbackId });
+      });
+    }
+
     const res = await fetch('/api/bandcamp-resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

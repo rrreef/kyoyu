@@ -45,17 +45,47 @@ export function openNativeAlbumFast(album) {
             if (bcTrack) {
               if (window.__kyoyuGlobalPlayTrack) {
                 try {
-                  let resRes = await fetch('/api/bandcamp-resolve', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: bcTrack.trackUrl }),
-                  });
-                  if (resRes.ok) {
-                    const resData = await resRes.json();
-                    if (resData.streamUrl) {
-                      if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
-                      window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: resData.streamUrl, audioUrl: resData.streamUrl, url: resData.streamUrl, releaseCover: resData.artworkUrl || target.releaseCover }, queue);
-                      return;
+                  // resolveBandcamp is imported dynamically or we can just use the global fetch pattern if not imported
+                  // But since we patched unifiedSearch.js, let's use the same logic here for native bridge
+                  let streamUrl = null;
+                  if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bandcamp) {
+                    streamUrl = await new Promise((resolve) => {
+                      const callbackId = Math.random().toString(36).substring(7);
+                      window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
+                        if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
+                          window.__kyoyuBandcampCallbacks[id](data);
+                          delete window.__kyoyuBandcampCallbacks[id];
+                        }
+                      });
+                      window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
+                      const timeout = setTimeout(() => {
+                         if (window.__kyoyuBandcampCallbacks[callbackId]) {
+                            window.__kyoyuBandcampCallbacks[callbackId]({ error: "Timeout" });
+                            delete window.__kyoyuBandcampCallbacks[callbackId];
+                         }
+                      }, 10000);
+                      window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
+                        clearTimeout(timeout);
+                        if (data && data.streamUrl) resolve(data.streamUrl);
+                        else resolve(null);
+                      };
+                      window.webkit.messageHandlers.bandcamp.postMessage({ url: bcTrack.trackUrl, callbackId });
+                    });
+                  } else {
+                    let resRes = await fetch('/api/bandcamp-resolve', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: bcTrack.trackUrl }),
+                    });
+                    if (resRes.ok) {
+                      const resData = await resRes.json();
+                      if (resData.streamUrl) streamUrl = resData.streamUrl;
                     }
+                  }
+                  
+                  if (streamUrl) {
+                    if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
+                    window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: streamUrl, audioUrl: streamUrl, url: streamUrl, releaseCover: target.releaseCover }, queue);
+                    return;
                   }
                 } catch(e) {}
                 // If bandcamp resolve failed (e.g. 404), fall through to YouTube below
