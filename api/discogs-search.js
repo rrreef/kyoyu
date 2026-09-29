@@ -216,7 +216,7 @@ async function handleTrackInfo(body, res) {
   // Check cache
   try {
     const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data) {
+    if (cached?.data && cached.data._v === 2) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) return res.status(200).json(cached.data);
     }
@@ -271,7 +271,26 @@ async function handleTrackInfo(body, res) {
   if (labelInfo?.discogsUrl) links.push({ name: 'Label on Discogs', url: labelInfo.discogsUrl });
   if (discogsArtist?.discogsUrl) links.push({ name: 'Artist on Discogs', url: discogsArtist.discogsUrl });
   if (mb?.recordingId) links.push({ name: 'MusicBrainz', url: `https://musicbrainz.org/recording/${mb.recordingId}` });
-  if (mb?.releaseId) links.push({ name: 'Release on MusicBrainz', url: `https://musicbrainz.org/release/${mb.releaseId}` });
+  // Bandcamp fallback if missing
+  if (!links.some(l => l.url.includes('bandcamp.com'))) {
+    try {
+      const bcq = `${artist} ${album || title}`.trim();
+      const bcRes = await fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Kyoyu/1.0' },
+        body: JSON.stringify({ search_text: bcq, search_filter: 'a,t', full_page: false, fan_id: 0 })
+      });
+      if (bcRes.ok) {
+        const bcData = await bcRes.json();
+        const first = bcData.auto?.results?.[0];
+        if (first && first.item_url_path) {
+          links.push({ name: 'Bandcamp', url: first.item_url_path });
+        }
+      }
+    } catch(e){}
+  }
+
+  if (mb?.releaseId)
   if (mb?.releaseUrls) mb.releaseUrls.forEach(u => { if (u.url) links.push({ name: u.type || 'Link', url: u.url }); });
   if (mbArtist?.urls) mbArtist.urls.forEach(u => { if (u.url) links.push({ name: u.type === 'official homepage' ? 'Official Website' : u.type, url: u.url }); });
 
@@ -279,6 +298,7 @@ async function handleTrackInfo(body, res) {
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
   
   const result = {
+    _v: 3,
     album: discogs?.title || album || '', artist: artist || '',
     year: String(discogs?.year || mb?.year || ''),
     label: labelDisplay, labelProfile: labelInfo?.profile || '',
