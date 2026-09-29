@@ -685,21 +685,21 @@ export default function Search() {
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0);
 
-  const ITEMS_PER_PAGE = 11;
+  const ITEMS_PER_PAGE = 50;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const slicePage = (arr) => arr.slice(startIndex, endIndex);
 
-  const maxLoadedItems = Math.max(
-    (externalResults.bandcamp || []).length,
-    (externalResults.soundcloud || []).length,
-    (externalResults.youtube || []).length,
-    (externalResults.releases || []).length,
-    (externalResults.artists || []).length,
-    (externalResults.labels || []).length
-  );
+  const totalLoadedItems = 
+    (externalResults.bandcamp || []).length +
+    (externalResults.soundcloud || []).length +
+    (externalResults.soundcloudPlaylists || []).length +
+    (externalResults.youtube || []).length +
+    (externalResults.releases || []).length +
+    (externalResults.artists || []).length +
+    (externalResults.labels || []).length;
   
-  const loadedPages = Math.ceil(maxLoadedItems / ITEMS_PER_PAGE) || 1;
+  const loadedPages = Math.ceil(totalLoadedItems / ITEMS_PER_PAGE) || 1;
   const canFetchMore = Object.values(paginationCursors).some(c => c.hasMore || c.nextPageToken);
   const totalPages = canFetchMore ? loadedPages + 1 : loadedPages;
 
@@ -769,29 +769,41 @@ export default function Search() {
   const filterMatch = (key) => activeFilter === 'all' || activeFilter.split(',').includes(key);
   const providerMatch = (key) => activeProvider === 'all' || activeProvider.split(',').includes(key);
 
-  // ── Rank external results within each provider ──
-  // External providers already return relevance-sorted results — just map fields and slice per page
-  const rankedYoutube = slicePage((externalResults.youtube || []).map(yt => ({
-    ...yt, artistName: yt.channelTitle, entityType: 'track',
-  })));
-  const rankedSoundcloud = slicePage((externalResults.soundcloud || []).map(sc => ({
-    ...sc, entityType: 'track',
-  })));
-  const rankedSoundcloudPlaylists = slicePage((externalResults.soundcloudPlaylists || []).map(pl => ({
-    ...pl, entityType: 'playlist',
-  })));
-  const rankedBandcamp = slicePage((externalResults.bandcamp || []).map(bc => ({
-    ...bc, entityType: bc.entityType || 'track',
-  })));
-  const rankedDiscogsArtists = slicePage((externalResults.artists || []).map(a => ({
-    ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
-  })));
-  const rankedDiscogsReleases = slicePage((externalResults.releases || []).map(r => ({
-    ...r, title: r.releaseName || r.title, entityType: 'release', provider: 'discogs',
-  })));
-  const rankedDiscogsLabels = slicePage((externalResults.labels || []).map(l => ({
-    ...l, title: l.name || l.title, artistName: l.name || l.title, entityType: 'label', provider: 'discogs',
-  })));
+  // ── Build unified result list across all providers ──
+  // Tag every item with its provider and normalize fields
+  const allExternal = [
+    ...(providerMatch('youtube') ? (externalResults.youtube || []).map(yt => ({
+      ...yt, artistName: yt.channelTitle || yt.artistName, entityType: 'track', provider: 'youtube',
+    })) : []),
+    ...(providerMatch('soundcloud') ? (externalResults.soundcloud || []).map(sc => ({
+      ...sc, entityType: 'track', provider: sc.provider || 'soundcloud',
+    })) : []),
+    ...(providerMatch('soundcloud') ? (externalResults.soundcloudPlaylists || []).map(pl => ({
+      ...pl, entityType: 'playlist', provider: 'soundcloud',
+    })) : []),
+    ...(providerMatch('bandcamp') ? (externalResults.bandcamp || []).map(bc => ({
+      ...bc, entityType: bc.entityType || 'track', provider: bc.provider || 'bandcamp',
+    })) : []),
+    ...(providerMatch('discogs') ? (externalResults.artists || []).map(a => ({
+      ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
+    })) : []),
+    ...(providerMatch('discogs') ? (externalResults.releases || []).map(r => ({
+      ...r, title: r.releaseName || r.title, entityType: 'release', provider: 'discogs',
+    })) : []),
+    ...(providerMatch('discogs') ? (externalResults.labels || []).map(l => ({
+      ...l, title: l.name || l.title, artistName: l.name || l.title, entityType: 'label', provider: 'discogs',
+    })) : []),
+  ];
+
+  // Rank all external results by relevance and paginate
+  const rankedAll = slicePage(rankResults(query, allExternal));
+
+  // Provider icon colors
+  const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };
+  const providerLabels = { bandcamp: 'Bandcamp', soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs' };
+
+  // Check if a single provider is selected
+  const singleProvider = activeProvider !== 'all' && !activeProvider.includes(',') ? activeProvider : null;
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
@@ -994,310 +1006,65 @@ export default function Search() {
 
       {!isQueryEmpty && renderPaginationBar()}
 
-      {/* ── Bandcamp Results ── */}
-      {!isQueryEmpty && providerMatch('bandcamp') && rankedBandcamp.length > 0 && (
+      {/* ── Unified Results (all providers merged by relevance) ── */}
+      {!isQueryEmpty && rankedAll.length > 0 && (
         <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#629aa9' }}>
-            Bandcamp
-          </div>
-          
-          {filterMatch('artists') && rankedBandcamp.filter(x => x.entityType === 'artist').length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Artists</div>
-              {rankedBandcamp.filter(x => x.entityType === 'artist').map(bc => (
-                <div key={bc.id} className="search-result-row search-external-row search-artist-row"
-                  onClick={() => {
-                    openNativeArtistFast({
-                      id: bc.id || `bc-artist-${Date.now()}`,
-                      name: bc.title || bc.artistName,
-                      cover: bc.artworkUrl || null,
-                      description: '',
-                    });
-                  }}>
-                  <div className="search-result-art artist-avatar discogs-art">
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="artist" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {rankedAll.map(item => {
+            const pColor = providerColors[item.provider] || '#fff';
+            const pLabel = providerLabels[item.provider] || item.provider;
+            const isPlaylist = item.entityType === 'playlist';
+            const isArtist = item.entityType === 'artist';
+            const isLabel = item.entityType === 'label';
+            const isRelease = item.entityType === 'release' || item.entityType === 'album';
 
-          {filterMatch('labels') && rankedBandcamp.filter(x => x.entityType === 'label').length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Labels</div>
-              {rankedBandcamp.filter(x => x.entityType === 'label').map(bc => (
-                <div key={bc.id} className="search-result-row search-external-row search-artist-row"
-                  onClick={() => {
-                    openNativeArtistFast({
-                      id: bc.id || `bc-label-${Date.now()}`,
-                      name: bc.title || bc.artistName,
-                      cover: bc.artworkUrl || null,
-                      description: '',
-                    });
-                  }}>
-                  <div className="search-result-art artist-avatar discogs-art">
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="label" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {filterMatch('albums') && rankedBandcamp.filter(x => x.entityType === 'track' || x.entityType === 'album').length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Releases</div>
-              {rankedBandcamp.filter(x => x.entityType === 'track' || x.entityType === 'album').map(bc => (
-                <div key={bc.id} className="search-result-row search-external-row"
-                  style={{ opacity: bandcampLoading === (bc.trackUrl || bc.id) ? 0.5 : 1 }}
-                  onClick={() => {
-                    if (bandcampLoading) return;
-                    setBandcampLoading(bc.trackUrl || bc.id);
+            return (
+              <div key={item.id || `${item.provider}-${item.title}-${Math.random()}`}
+                className="search-result-row search-external-row"
+                onClick={() => {
+                  if (isPlaylist && item.tracks) {
+                    setPlaylistSheet(item);
+                  } else if (!isArtist && !isLabel) {
                     handleSearchPlay({
-                      id: bc.id || `bc-${bc.trackId}`,
-                      title: bc.title,
-                      artistName: bc.artistName,
-                      artworkUrl: bc.artworkUrl,
-                      duration: 0,
-                      provider: 'bandcamp',
-                      providerItemId: bc.trackUrl || bc.id,
+                      id: item.id || `${item.provider}-${item.trackId || item.videoId}`,
+                      title: item.title,
+                      artistName: item.artistName,
+                      artworkUrl: item.artworkUrl || item.thumbnail,
+                      duration: item.duration || 0,
+                      provider: item.provider,
+                      providerItemId: item.permalinkUrl || item.trackUrl,
+                      scTrackId: item.trackId,
+                      videoId: item.videoId,
                     });
-                    setTimeout(() => setBandcampLoading(null), 3000);
-                  }}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {bc.artworkUrl ? (
-                      <img src={bc.artworkUrl} alt={bc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={bc.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{bc.title}</span>
-                    <span className="search-result-artist">{bc.artistName}{bc.entityType === 'track' && bc.albumName ? ` · ${bc.albumName}` : ''}</span>
-                  </div>
+                  }
+                }}
+                style={{ cursor: (isArtist || isLabel) ? 'default' : 'pointer' }}
+              >
+                <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '6px' }}>
+                  {(item.artworkUrl || item.thumbnail || item.thumb) ? (
+                    <img src={item.artworkUrl || item.thumbnail || item.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  ) : (
+                    <EntityPlaceholder name={item.title} type={isArtist ? 'artist' : isLabel ? 'label' : 'release'} />
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-          
-          {/* Recommendations / Fans Also Bought */}
-          {activeProvider === 'bandcamp' && externalResults.bandcamp[0] && 
-           (externalResults.bandcamp[0].entityType === 'album' || externalResults.bandcamp[0].entityType === 'track') && (
-            <BandcampRecommendations 
-              trackUrl={externalResults.bandcamp[0].trackUrl} 
-              onPlay={(item) => {
-                setBandcampLoading(item.providerItemId);
-                handleSearchPlay(item);
-                setTimeout(() => setBandcampLoading(null), 3000);
-              }} 
-            />
-          )}
-        </div>
-      )}
-
-      {/* ── SoundCloud Results ── */}
-      {!isQueryEmpty && providerMatch('soundcloud') && (rankedSoundcloud.length > 0 || rankedSoundcloudPlaylists.length > 0) && (
-        <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#FF5500' }}>
-            SoundCloud
-          </div>
-          
-          {filterMatch('titles') && rankedSoundcloud.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Titles</div>
-              {rankedSoundcloud.map(sc => (
-                <div key={sc.id} className="search-result-row search-external-row"
-                  onClick={() => handleSearchPlay({
-                    id: sc.id || `sc-${sc.trackId}`,
-                    title: sc.title,
-                    artistName: sc.artistName,
-                    artworkUrl: sc.artworkUrl,
-                    duration: sc.duration || 0,
-                    provider: 'soundcloud',
-                    providerItemId: sc.permalinkUrl,
-                    scTrackId: sc.trackId,
-                  })}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {sc.artworkUrl ? (
-                      <img src={sc.artworkUrl} alt={sc.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={sc.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{sc.title}</span>
-                    <span className="search-result-artist">{sc.artistName}</span>
-                  </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{item.title}</span>
+                  <span className="search-result-artist">
+                    {item.artistName || ''}
+                    {isPlaylist ? ` · ${item.trackCount || 0} tracks` : ''}
+                    {isRelease && item.year ? ` · ${item.year}` : ''}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, color: pColor, opacity: 0.8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: pColor, display: 'inline-block', flexShrink: 0 }} />
+                    {pLabel}
+                    {isPlaylist && ' · Playlist'}
+                    {isArtist && ' · Artist'}
+                    {isLabel && ' · Label'}
+                    {isRelease && ' · Release'}
+                  </span>
                 </div>
-              ))}
-              
-            </div>
-          )}
-
-          {filterMatch('albums') && rankedSoundcloudPlaylists.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Playlists</div>
-              {rankedSoundcloudPlaylists.map(pl => (
-                <div key={pl.id} className="search-result-row search-external-row"
-                  onClick={() => setPlaylistSheet(pl)}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {pl.artworkUrl ? (
-                      <img src={pl.artworkUrl} alt={pl.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={pl.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{pl.title}</span>
-                    <span className="search-result-artist">{pl.artistName} · {pl.trackCount} tracks</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── YouTube Results ── */}
-      {!isQueryEmpty && providerMatch('youtube') && rankedYoutube.length > 0 && (
-        <div className="search-results-list search-external-section">
-          <div className="search-section-title search-external-header" style={{ color: '#FF0000' }}>
-            YouTube
-          </div>
-          
-          {filterMatch('titles') && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Titles</div>
-              {rankedYoutube.map(yt => (
-                <div key={yt.id} className="search-result-row search-external-row"
-                  onClick={() => handleSearchPlay({
-                    id: yt.id || `yt-${yt.videoId}`,
-                    title: yt.title,
-                    artistName: yt.channelTitle,
-                    artworkUrl: yt.thumbnail,
-                    duration: yt.duration || 0,
-                    provider: 'youtube',
-                    providerItemId: yt.videoId,
-                  })}>
-                  <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
-                    {yt.thumbnail ? (
-                      <img src={yt.thumbnail} alt={yt.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={yt.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{yt.title}</span>
-                    <span className="search-result-artist">{yt.channelTitle}</span>
-                  </div>
-                </div>
-              ))}
-              
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Discogs Results ── */}
-      {!isQueryEmpty && providerMatch('discogs') && (rankedDiscogsArtists.length > 0 || rankedDiscogsReleases.length > 0 || rankedDiscogsLabels.length > 0) && (
-        <div className="search-results-list search-external-section">
-          {((filterMatch('artists') && rankedDiscogsArtists.length > 0) || (filterMatch('labels') && rankedDiscogsLabels.length > 0) || (filterMatch('albums') && rankedDiscogsReleases.length > 0)) && (
-            <div className="search-section-title search-external-header">
-              Discogs
-            </div>
-          )}
-
-          {filterMatch('artists') && rankedDiscogsArtists.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Artists</div>
-              {rankedDiscogsArtists.map(artist => (
-                <div key={artist.id || artist.discogsId} className="search-result-row search-artist-row search-external-row"
-                  onClick={() => {
-                    if (artist.isAlias) {
-                      if (window.__kyoyuSetSearch) window.__kyoyuSetSearch(artist.name);
-                      else syncNativeSearch(artist.name);
-                    } else {
-                      window.__kyoyuGo && window.__kyoyuGo(`/artist/discogs-${artist.discogsId}`);
-                    }
-                  }}>
-                  <div className="search-result-art artist-avatar discogs-art">
-                    {artist.thumb ? (
-                      <img src={artist.thumb} alt={artist.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={artist.name} type="artist" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{artist.name}</span>
-                    {artist.canonicalLabel && (
-                      <span className="search-result-artist" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '2px' }}>
-                        {artist.canonicalLabel}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {filterMatch('labels') && rankedDiscogsLabels.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Labels</div>
-              {rankedDiscogsLabels.map(label => (
-                <div key={label.id} className="search-result-row search-artist-row search-external-row"
-                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/label/discogs-${label.discogsId}`)}>
-                  <div className="search-result-art artist-avatar discogs-art">
-                    {label.thumb ? (
-                      <img src={label.thumb} alt={label.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={label.name} type="label" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{label.name}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {filterMatch('albums') && rankedDiscogsReleases.length > 0 && (
-            <div className="search-section">
-              <div className="search-section-subtitle">Albums</div>
-              {rankedDiscogsReleases.map(release => (
-                <div key={release.id} className="search-result-row search-external-row"
-                  onClick={() => window.__kyoyuGo && window.__kyoyuGo(`/release/discogs-${release.discogsId}`)}>
-                  <div className="search-result-art discogs-art">
-                    {release.thumb ? (
-                      <img src={release.thumb} alt={release.releaseName || release.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                    ) : (
-                      <EntityPlaceholder name={release.releaseName || release.title} type="release" />
-                    )}
-                  </div>
-                  <div className="search-result-info">
-                    <span className="search-result-title">{release.releaseName}</span>
-                    <span className="search-result-artist">
-                      {release.artistName}
-                      {release.year ? ` · ${release.year}` : ''}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })}
         </div>
       )}
 
