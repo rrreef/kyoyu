@@ -801,10 +801,10 @@ export default function Search() {
   // Provider icon colors
   const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };
 
-  // Inline provider logo SVGs at 14px
+  // Inline provider logo SVGs
   const providerIcons = {
     soundcloud: (
-      <svg width="14" height="14" viewBox="0 0 148 142" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <svg width="18" height="18" viewBox="0 0 148 142" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
         <path d="M0 0C5.74 3.42 10.8 9.01 12.62 15.5c.57 0 1.14.01 1.73.01 5.7.28 8.77 1.56 12.96 5.42 2.94 3.51 2.65 7.71 2.6 12.06-.52 4.62-2.8 7.32-6.33 10.15-4.21 1.94-7.98 1.77-12.56 1.72-1.38 0-1.38 0-2.79 0-1.94 0-3.88-.01-5.82-.02-2.97-.03-5.95-.02-8.92-.02-1.89 0-3.77-.01-5.66-.02-.89 0-1.78 0-2.7 0-.83-.01-1.65-.02-2.5-.03-.73 0-1.46 0-2.2-.01-1.81-.26-1.81-.26-3.81-2.26-.18-2.91-.25-5.72-.23-8.62 0-.86.01-1.71.01-2.59 0-1.82.01-3.63.02-5.44.02-2.77.02-5.55.02-8.32 0-1.76.01-3.52.02-5.28 0-.83 0-1.66 0-2.52.03-3.32.11-6.05 1.16-9.23C-15.94-2.96-6.66-2.94 0 0z" fill="#FF5500" transform="translate(96.375,50.5)"/>
         <path d="M0 0c.99.33 1.98.66 3 1 1.36 13.58 1.83 26.45 0 39-1.98.5-1.98.5-4 1-1.45-6.24-1.18-12.5-1.19-18.88-.01-1.25-.02-2.5-.03-3.8C-2.23 11.18-2.18 5.78 0 0z" fill="#FF5500" transform="translate(59,55)"/>
         <path d="M0 0c.99.33 1.98.66 3 1 1.3 5.95 1.15 12.88 1.12 18.94.01 1.06.01 2.12.02 3.21-.01 5.39-.19 10.54-1.14 15.85-1.32 0-2.64 0-4 0-.81-6.39-1.15-12.62-1.12-19.06-.01-.85-.01-1.7-.02-2.57.03-14.26.03-14.26 2.14-16.37z" fill="#FF5500" transform="translate(67,57)"/>
@@ -827,6 +827,15 @@ export default function Search() {
     discogs: (
       <img src="/icons/discogs.png" alt="Discogs" width="14" height="14" style={{ flexShrink: 0, borderRadius: 2, filter: 'invert(1)', opacity: 0.7 }} />
     ),
+  };
+
+  // Entity type display labels
+  const entityLabel = (item) => {
+    if (item.entityType === 'playlist') return 'Playlist';
+    if (item.entityType === 'artist') return 'Artist';
+    if (item.entityType === 'label') return 'Label';
+    if (item.entityType === 'release' || item.entityType === 'album') return 'Release';
+    return 'Title';
   };
 
   // Check if a single provider is selected
@@ -1077,14 +1086,11 @@ export default function Search() {
                   <span className="search-result-artist">
                     {item.artistName || ''}
                     {isPlaylist ? ` · ${item.trackCount || 0} tracks` : ''}
-                    {isRelease && item.year ? ` · ${item.year}` : ''}
+                    {(item.year || item.released) ? ` · ${item.year || item.released}` : ''}
                   </span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, color: pColor, opacity: 0.85 }}>
                     {providerIcons[item.provider] || null}
-                    {isPlaylist && ' Playlist'}
-                    {isArtist && ' Artist'}
-                    {isLabel && ' Label'}
-                    {isRelease && ' Release'}
+                    <span style={{ opacity: 0.7 }}>{entityLabel(item)}</span>
                   </span>
                 </div>
               </div>
