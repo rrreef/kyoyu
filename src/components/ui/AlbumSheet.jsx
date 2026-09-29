@@ -82,7 +82,7 @@ export default function AlbumSheet({ album, onClose }) {
     };
 
     // Expose play handler so Swift can trigger it
-    window.__kyoyuPlayNativeTrack = (albumId, trackObj) => {
+    window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
       const queue = album.tracks.map(t => ({
          id: t.id,
          title: t.title || t.name,
@@ -96,7 +96,42 @@ export default function AlbumSheet({ album, onClose }) {
       }));
 
       const idx = queue.findIndex(q => q.id === trackObj.id);
-      playTrackRef.current(queue[Math.max(idx, 0)], queue);
+      const target = queue[Math.max(idx, 0)];
+
+      // If URL starts with 'resolve:', search Bandcamp then YouTube for the track
+      if (target.url && target.url.startsWith('resolve:')) {
+        const resolveQuery = target.url.replace('resolve:', '');
+        try {
+          // Try Bandcamp first
+          let bcRes = await fetch('/api/bandcamp-search', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: resolveQuery }),
+          });
+          if (bcRes.ok) {
+            const bcData = await bcRes.json();
+            const bcTrack = (bcData.results || []).find(r => r.type === 'track');
+            if (bcTrack) {
+              playTrackRef.current({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
+              return;
+            }
+          }
+          // Fallback: YouTube
+          let ytRes = await fetch('/api/youtube-search', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: resolveQuery }),
+          });
+          if (ytRes.ok) {
+            const ytData = await ytRes.json();
+            const ytTrack = (ytData.results || [])[0];
+            if (ytTrack) {
+              playTrackRef.current({ ...target, provider: 'youtube', videoId: ytTrack.videoId, providerItemId: ytTrack.videoId }, queue);
+              return;
+            }
+          }
+        } catch (e) { console.warn('Resolve play error:', e); }
+      }
+
+      playTrackRef.current(target, queue);
     };
 
     const handleNativeLike = (e) => {

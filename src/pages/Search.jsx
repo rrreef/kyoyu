@@ -1122,13 +1122,17 @@ export default function Search() {
                             info.artistBio ? `\nAbout the artist:\n${info.artistBio}` : '',
                             info.links?.length ? `\nLinks:\n${info.links.map(l => `${l.name}: ${l.url}`).join('\n')}` : '',
                           ].filter(Boolean).join('\n'),
-                          tracks: (info.tracklist || []).map((t, i) => ({
-                            id: `discogs-track-${i}`,
-                            title: `${t.position ? t.position + '. ' : ''}${t.title}${t.duration ? ' (' + t.duration + ')' : ''}`,
-                            artist: t.artists?.join(', ') || info.artist || item.artistName || '',
-                            url: '',
-                            cover: item.artworkUrl || item.thumb || '',
-                          })),
+                          tracks: (info.tracklist || []).map((t, i) => {
+                            const trackArtist = t.artists?.join(', ') || info.artist || item.artistName || '';
+                            const trackTitle = t.title || '';
+                            return {
+                              id: `discogs-track-${i}`,
+                              title: `${t.position ? t.position + '. ' : ''}${trackTitle}${t.duration ? ' (' + t.duration + ')' : ''}`,
+                              artist: trackArtist,
+                              url: `resolve:${trackArtist} ${trackTitle}`,
+                              cover: item.artworkUrl || item.thumb || '',
+                            };
+                          }),
                         });
                       }
                     } catch (e) { /* ignore */ }
