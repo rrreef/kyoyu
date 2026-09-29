@@ -1085,6 +1085,7 @@ export default function Search() {
                           artist: item.artistName || '',
                           cover: item.artworkUrl || '',
                           year: item.year || null,
+                          provider: 'bandcamp',
                           tracks: (data.tracks || []).map(t => ({
                             id: `bc-${t.trackId}`,
                             title: t.title || '',
@@ -1113,6 +1114,7 @@ export default function Search() {
                           year: info.year || item.year || null,
                           genre: info.genre || '',
                           label: info.label || '',
+                          provider: item.provider || 'discogs',
                           description: (() => {
                             const formatLinks = (links) => {
                               if (!links || !links.length) return '';

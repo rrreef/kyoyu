@@ -24,7 +24,8 @@ export function openNativeAlbumFast(album) {
           title: t.title || t.name || 'Unknown Track',
           artist: t.artist || '',
           url: t.url || t.streamUrl || t.audioUrl || '',
-          cover: t.cover || null
+          cover: t.cover || null,
+          provider: t.provider || album.provider || null
         }))
       }
     });
@@ -245,7 +246,8 @@ export default function AlbumSheet({ album, onClose }) {
                 id: t.id || String(Date.now() + Math.random()),
                 title: t.title || t.name || 'Unknown Track',
                 artist: t.artist || '',
-                url: t.url || t.streamUrl || t.audioUrl || ''
+                url: t.url || t.streamUrl || t.audioUrl || '',
+                provider: t.provider || album.provider || null
               }))
             }
           });
