@@ -506,6 +506,7 @@ export function PlayerProvider({ children }) {
 
   useEffect(() => {
     // ── Queue bridge ──
+    window.__kyoyuGlobalPlayTrack = (track, queue) => playTrack(track, queue);
     window.__kyoyuGetQueue = () => {
       const q = state.queue || [];
       const searchQ = searchQueueRef.current || [];

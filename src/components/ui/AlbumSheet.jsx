@@ -6,138 +6,9 @@ export function openNativeAlbumFast(album) {
   if (!album) return null;
   const ts = Date.now();
   window.__lastFastOpenTs = ts;
-  try {
-    window.webkit?.messageHandlers?.player?.postMessage({
-      albumOpen: true,
-      nativeAlbum: {
-        _ts: String(ts),
-        id: album.id || String(Date.now()),
-        title: album.title || '',
-        artist: album.artist || '',
-        cover: album.cover || album.artworkUrl || null,
-        genre: album.genre || null,
-        year: album.year ? String(album.year) : null,
-        label: album.label || null,
-        description: album.description || null,
-        tracks: (album.tracks || []).map(t => ({
-          id: t.id || String(Date.now() + Math.random()),
-          title: t.title || t.name || 'Unknown Track',
-          artist: t.artist || '',
-          url: t.url || t.streamUrl || t.audioUrl || '',
-          cover: t.cover || null,
-          provider: t.provider || album.provider || null
-        }))
-      }
-    });
-  } catch(e) {}
-  return { ...album, _ts: ts };
-}
-
-export default function AlbumSheet({ album, onClose }) {
-  const { playTrack } = usePlayer();
-  const {
-    toggleLikeUpload, isLikedUpload, toggleDownload, isDownloaded,
-    addToPlaylist, createPlaylist, getPlaylists, updatePlaylistCover,
-    deletePlaylist, removeFromPlaylist, reorderPlaylist, togglePlaylistPublic,
-    getPlaylistPublic, toggleLike
-  } = useLibrary();
-
-  const playTrackRef = useRef(playTrack);
-  playTrackRef.current = playTrack;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const toggleLikeRef = useRef(toggleLikeUpload);
-  toggleLikeRef.current = toggleLikeUpload;
-  const isLikedUploadRef = useRef(isLikedUpload);
-  isLikedUploadRef.current = isLikedUpload;
-  const toggleDownloadRef = useRef(toggleDownload);
-  toggleDownloadRef.current = toggleDownload;
-  const isDownloadedRef = useRef(isDownloaded);
-  isDownloadedRef.current = isDownloaded;
-  const addToPlaylistRef = useRef(addToPlaylist);
-  addToPlaylistRef.current = addToPlaylist;
-  const createPlaylistRef = useRef(createPlaylist);
-  createPlaylistRef.current = createPlaylist;
-  const getPlaylistsRef = useRef(getPlaylists);
-  getPlaylistsRef.current = getPlaylists;
-  const updatePlaylistCoverRef = useRef(updatePlaylistCover);
-  updatePlaylistCoverRef.current = updatePlaylistCover;
-  const deletePlaylistRef = useRef(deletePlaylist);
-  deletePlaylistRef.current = deletePlaylist;
-  const removeFromPlaylistRef = useRef(removeFromPlaylist);
-  removeFromPlaylistRef.current = removeFromPlaylist;
-  const reorderPlaylistRef = useRef(reorderPlaylist);
-  reorderPlaylistRef.current = reorderPlaylist;
-  const togglePlaylistPublicRef = useRef(togglePlaylistPublic);
-  togglePlaylistPublicRef.current = togglePlaylistPublic;
-
-  useLayoutEffect(() => {
-    if (!album) return;
-
-    // Expose close handler so Swift can trigger it
-    window.__kyoyuCloseNativeAlbum = (incomingTs) => {
-      if (incomingTs && window.__lastFastOpenTs && String(incomingTs) !== String(window.__lastFastOpenTs)) {
-         return;
-      }
-      onCloseRef.current();
-    };
-
-    // Expose play handler so Swift can trigger it
-    window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
-      const queue = album.tracks.map(t => ({
-         id: t.id,
-         title: t.title || t.name,
-         artist: t.artist || album.artist,
-         releaseCover: album.cover || album.artworkUrl,
-         releaseTitle: album.title,
-         src: t.url || t.streamUrl || t.audioUrl || t.src || '',
-         audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
-         url: t.url || t.streamUrl || t.audioUrl || t.src || '',
-         duration: t.duration || ''
-      }));
-
-      const idx = queue.findIndex(q => q.id === trackObj.id);
-      const target = queue[Math.max(idx, 0)];
-
-      // If URL starts with 'resolve:', search Bandcamp then YouTube for the track
-      if (target.url && target.url.startsWith('resolve:')) {
-        const resolveQuery = target.url.replace('resolve:', '');
-        const wantsYouTube = target.provider === 'youtube';
-        try {
-          // Try Bandcamp first if not explicitly marked for YouTube
-          if (!wantsYouTube) {
-            let bcRes = await fetch('/api/bandcamp-search', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query: resolveQuery }),
-            });
-            if (bcRes.ok) {
-              const bcData = await bcRes.json();
-              const bcTrack = (bcData.results || []).find(r => r.type === 'track');
-              if (bcTrack) {
-                playTrackRef.current({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
-                return;
-              }
-            }
-          }
-          // Fallback: YouTube
-          let ytRes = await fetch('/api/youtube-search', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: resolveQuery }),
-          });
-          if (ytRes.ok) {
-            const ytData = await ytRes.json();
-            const ytTrack = (ytData.results || [])[0];
-            if (ytTrack) {
-              playTrackRef.current({ ...target, provider: 'youtube', videoId: ytTrack.videoId, providerItemId: ytTrack.videoId }, queue);
-              return;
-            }
-          }
-        } catch (e) { console.warn('Resolve play error:', e); }
-      }
-
-      playTrackRef.current(target, queue);
-    };
-
+  
+  // Register global native play handler so it works even if AlbumSheet is unmounted (e.g. from Search page)
+  
     const handleNativeLike = (e) => {
       if (e.detail.handled) return;
       const trackId = String(e.detail.trackId).split('?ts=')[0];
@@ -262,8 +133,7 @@ export default function AlbumSheet({ album, onClose }) {
     return () => {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuCloseNativeAlbum;
-      delete window.__kyoyuPlayNativeTrack;
-      delete window.__kyoyuDownloadTrack;
+            delete window.__kyoyuDownloadTrack;
       delete window.__kyoyuGetPlaylists;
       delete window.__kyoyuAddToPlaylist;
       delete window.__kyoyuCreatePlaylist;
