@@ -800,7 +800,34 @@ export default function Search() {
 
   // Provider icon colors
   const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };
-  const providerLabels = { bandcamp: 'Bandcamp', soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs' };
+
+  // Inline provider logo SVGs at 14px
+  const providerIcons = {
+    soundcloud: (
+      <svg width="14" height="14" viewBox="0 0 148 142" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+        <path d="M0 0C5.74 3.42 10.8 9.01 12.62 15.5c.57 0 1.14.01 1.73.01 5.7.28 8.77 1.56 12.96 5.42 2.94 3.51 2.65 7.71 2.6 12.06-.52 4.62-2.8 7.32-6.33 10.15-4.21 1.94-7.98 1.77-12.56 1.72-1.38 0-1.38 0-2.79 0-1.94 0-3.88-.01-5.82-.02-2.97-.03-5.95-.02-8.92-.02-1.89 0-3.77-.01-5.66-.02-.89 0-1.78 0-2.7 0-.83-.01-1.65-.02-2.5-.03-.73 0-1.46 0-2.2-.01-1.81-.26-1.81-.26-3.81-2.26-.18-2.91-.25-5.72-.23-8.62 0-.86.01-1.71.01-2.59 0-1.82.01-3.63.02-5.44.02-2.77.02-5.55.02-8.32 0-1.76.01-3.52.02-5.28 0-.83 0-1.66 0-2.52.03-3.32.11-6.05 1.16-9.23C-15.94-2.96-6.66-2.94 0 0z" fill="#FF5500" transform="translate(96.375,50.5)"/>
+        <path d="M0 0c.99.33 1.98.66 3 1 1.36 13.58 1.83 26.45 0 39-1.98.5-1.98.5-4 1-1.45-6.24-1.18-12.5-1.19-18.88-.01-1.25-.02-2.5-.03-3.8C-2.23 11.18-2.18 5.78 0 0z" fill="#FF5500" transform="translate(59,55)"/>
+        <path d="M0 0c.99.33 1.98.66 3 1 1.3 5.95 1.15 12.88 1.12 18.94.01 1.06.01 2.12.02 3.21-.01 5.39-.19 10.54-1.14 15.85-1.32 0-2.64 0-4 0-.81-6.39-1.15-12.62-1.12-19.06-.01-.85-.01-1.7-.02-2.57.03-14.26.03-14.26 2.14-16.37z" fill="#FF5500" transform="translate(67,57)"/>
+        <path d="M0 0c.99 0 1.98 0 3 0 1.15 3.44 1.13 6.12 1.13 9.75 0 .65 0 1.31.01 1.98 0 1.39-.01 2.77-.01 4.15 0 2.11 0 4.23.01 6.34 0 1.34-.01 2.69-.01 4.03 0 1.22 0 2.44 0 3.7C4 33 4 33 3 36c-.99 0-1.98 0-3 0-1.54-3.08-1.43-6.36-1.62-9.75-.05-.76-.09-1.51-.14-2.29C-2.15 16.08-2.51 7.54 0 0z" fill="#FF5500" transform="translate(50,59)"/>
+        <path d="M0 0c.99 0 1.98 0 3 0 .78 2.77 1.13 5.24 1.13 8.12 0 .77.01 1.54.01 2.34-.01.79-.01 1.59-.02 2.42.01.79.01 1.58.02 2.39C4.13 19.63 3.87 23.71 3 28c-1.32-.33-2.64-.66-4-1C-2.42 17.95-3.3 8.69 0 0z" fill="#FF5500" transform="translate(42,67)"/>
+        <path d="M0 0c1.98.5 1.98.5 4 1 1.89 8.51 1.32 17.44 0 26-1.32.33-2.64.66-4 1-1.25-4.84-1.15-9.6-1.12-14.56-.01-.85-.01-1.7-.02-2.58 0-.82.01-1.64.01-2.49 0-.74 0-1.49 0-2.25C-1 3.97-.59 2.07 0 0z" fill="#FF5500" transform="translate(33,67)"/>
+        <path d="M0 0c.99.33 1.98.66 3 1 2.95 6.31 1.75 12.54 0 19-1.99 0-1.98 0-3 0-1.58-3.16-1.14-6.54-1.12-10 0-.74 0-1.47-.01-2.23C-1.13 2.25-1.13 2.25 0 0z" fill="#FF5500" transform="translate(25,71)"/>
+      </svg>
+    ),
+    bandcamp: (
+      <svg width="14" height="14" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+        <path d="M354.27,407.291H0.5l157.231-302.582H511.5L354.27,407.291z" fill="#1da0c3"/>
+      </svg>
+    ),
+    youtube: (
+      <svg width="14" height="14" viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+        <path d="M88.119 23.338c-1.035-3.872-4.085-6.922-7.957-7.957C73.144 13.5 45 13.5 45 13.5s-28.144 0-35.162 1.881c-3.872 1.035-6.922 4.085-7.957 7.957C0 30.356 0 45 0 45s0 14.644 1.881 21.662c1.035 3.872 4.085 6.922 7.957 7.957C16.856 76.5 45 76.5 45 76.5s28.144 0 35.162-1.881c3.872-1.035 6.922-4.085 7.957-7.957C90 59.644 90 45 90 45s0-14.644-1.881-21.662zM36 58.5v-27L59.382 45 36 58.5z" fill="#FF0000"/>
+      </svg>
+    ),
+    discogs: (
+      <img src="/icons/discogs.png" alt="Discogs" width="14" height="14" style={{ flexShrink: 0, borderRadius: 2, filter: 'invert(1)', opacity: 0.7 }} />
+    ),
+  };
 
   // Check if a single provider is selected
   const singleProvider = activeProvider !== 'all' && !activeProvider.includes(',') ? activeProvider : null;
@@ -1053,13 +1080,12 @@ export default function Search() {
                     {isPlaylist ? ` · ${item.trackCount || 0} tracks` : ''}
                     {isRelease && item.year ? ` · ${item.year}` : ''}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, color: pColor, opacity: 0.8 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: pColor, display: 'inline-block', flexShrink: 0 }} />
-                    {pLabel}
-                    {isPlaylist && ' · Playlist'}
-                    {isArtist && ' · Artist'}
-                    {isLabel && ' · Label'}
-                    {isRelease && ' · Release'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, color: pColor, opacity: 0.85 }}>
+                    {providerIcons[item.provider] || null}
+                    {isPlaylist && ' Playlist'}
+                    {isArtist && ' Artist'}
+                    {isLabel && ' Label'}
+                    {isRelease && ' Release'}
                   </span>
                 </div>
               </div>
