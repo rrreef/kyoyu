@@ -25,8 +25,20 @@ function makeLookupKey(artist, album, title) {
 async function fetchDiscogsRelease(query, explicitReleaseId = null) {
   try {
     let best = null;
+    let explicitType = 'release';
+    
     if (explicitReleaseId) {
-      best = { id: explicitReleaseId };
+      let idToUse = explicitReleaseId;
+      if (typeof idToUse === 'string' && idToUse.startsWith('discogs-')) {
+        const parts = idToUse.split('-');
+        if (parts.length >= 4) {
+          explicitType = parts[2];
+          idToUse = parts[3];
+        } else if (parts.length >= 2) {
+          idToUse = parts[1];
+        }
+      }
+      best = { id: idToUse, type: explicitType };
     } else {
       const searchRes = await fetch(
         `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=5`,
@@ -41,8 +53,15 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null) {
     let detail = null;
     if (best.id) {
       try {
-        const r = await fetch(`https://api.discogs.com/releases/${best.id}`, { headers: DISCOGS_HEADERS });
+        const endpoint = best.type === 'master' ? `masters/${best.id}` : `releases/${best.id}`;
+        const r = await fetch(`https://api.discogs.com/${endpoint}`, { headers: DISCOGS_HEADERS });
         if (r.ok) detail = await r.json();
+        
+        // If it was a master, Discogs uses 'main_release' or we can still extract year/title
+        if (best.type === 'master' && detail && detail.main_release) {
+           const mr = await fetch(`https://api.discogs.com/releases/${detail.main_release}`, { headers: DISCOGS_HEADERS });
+           if (mr.ok) detail = await mr.json();
+        }
       } catch (e) {}
     }
     const credits = [];
@@ -309,7 +328,7 @@ async function handleTrackInfo(body, res) {
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
   
   const result = {
-    _v: 6,
+    _v: 7,
     album: discogs?.title || album || '', artist: artist || '',
     year: String(discogs?.year || mb?.year || ''),
     label: labelDisplay, labelProfile: labelInfo?.profile || '',
