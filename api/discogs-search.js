@@ -66,7 +66,7 @@ async function fetchDiscogsRelease(query) {
         artists: (t.artists || []).map(a => a.name?.replace(/\s\(\d+\)$/, '') || ''),
       })),
       credits, releaseArtists,
-      discogsUrl: detail?.uri ? `https://www.discogs.com${detail.uri}` : (best.uri ? `https://www.discogs.com${best.uri}` : ''),
+      discogsUrl: detail?.uri ? (detail.uri.startsWith('http') ? detail.uri : `https://www.discogs.com${detail.uri}`) : (best?.uri ? (best.uri.startsWith('http') ? best.uri : `https://www.discogs.com${best.uri}`) : ''),
       primaryArtistId: detail?.artists?.[0]?.id || null,
     };
   } catch (e) { return null; }
@@ -136,7 +136,7 @@ async function fetchDiscogsArtistFull(artistId) {
       bio: cleanBio, realName: data.realname || '',
       aliases: (data.aliases || []).map(a => a.name?.replace(/\s\(\d+\)$/, '') || ''),
       members: (data.members || []).map(m => m.name?.replace(/\s\(\d+\)$/, '') || '').slice(0, 10),
-      discogsUrl: data.uri ? `https://www.discogs.com/artist/${data.id}` : '',
+      discogsUrl: data.uri ? (data.uri.startsWith('http') ? data.uri : `https://www.discogs.com${data.uri}`) : `https://www.discogs.com/artist/${data.id}`,
       topReleases, latestReleases,
     };
   } catch (e) { return null; }
@@ -154,7 +154,7 @@ async function fetchDiscogsLabel(labelId) {
         name: data.name || '', parentLabel: data.parent_label?.name || '',
         sublabels: (data.sublabels || []).map(s => s.name).slice(0, 5),
         profile: rawProfile,
-      discogsUrl: data.uri ? `https://www.discogs.com/label/${data.id}` : '',
+      discogsUrl: data.uri ? (data.uri.startsWith('http') ? data.uri : `https://www.discogs.com${data.uri}`) : `https://www.discogs.com/label/${data.id}`,
     };
   } catch (e) { return null; }
 }
@@ -168,13 +168,25 @@ async function fetchMusicBrainz(title, artist) {
     if (!rec) return null;
     const release = rec.releases?.[0];
     const lbl = release?.['label-info']?.[0]?.label;
-    return {
+    const resObj = {
       recordingId: rec.id, releaseId: release?.id || '',
       year: release?.date?.substring(0, 4) || '', label: lbl?.name || '',
       catno: release?.['label-info']?.[0]?.['catalog-number'] || '',
       tags: (rec.tags || []).sort((a, b) => b.count - a.count).slice(0, 8).map(t => t.name),
       artistMbid: rec['artist-credit']?.[0]?.artist?.id || '',
+      releaseUrls: [],
     };
+    if (release?.id) {
+      try {
+        const relRes = await fetch(`https://musicbrainz.org/ws/2/release/${release.id}?inc=url-rels&fmt=json`, { headers: MB_HEADERS });
+        if (relRes.ok) {
+           const relData = await relRes.json();
+           const urls = relData.relations?.filter(r => r.url?.resource) || [];
+           resObj.releaseUrls = urls.map(u => ({ type: u.type, url: u.url?.resource }));
+        }
+      } catch(e){}
+    }
+    return resObj;
   } catch (e) { return null; }
 }
 
@@ -260,6 +272,7 @@ async function handleTrackInfo(body, res) {
   if (discogsArtist?.discogsUrl) links.push({ name: 'Artist on Discogs', url: discogsArtist.discogsUrl });
   if (mb?.recordingId) links.push({ name: 'MusicBrainz', url: `https://musicbrainz.org/recording/${mb.recordingId}` });
   if (mb?.releaseId) links.push({ name: 'Release on MusicBrainz', url: `https://musicbrainz.org/release/${mb.releaseId}` });
+  if (mb?.releaseUrls) mb.releaseUrls.forEach(u => { if (u.url) links.push({ name: u.type || 'Link', url: u.url }); });
   if (mbArtist?.urls) mbArtist.urls.forEach(u => { if (u.url) links.push({ name: u.type === 'official homepage' ? 'Official Website' : u.type, url: u.url }); });
 
   const allAliases = [...(discogsArtist?.aliases || []), ...(mbArtist?.aliases || [])];
