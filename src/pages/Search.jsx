@@ -1157,12 +1157,15 @@ export default function Search() {
                           tracks: (info.tracklist || []).map((t, i) => {
                             const trackArtist = t.artists?.join(', ') || info.artist || item.artistName || '';
                             const trackTitle = t.title || '';
+                            const hasBC = info.links && info.links.some(l => l.url.includes('bandcamp.com'));
+                            const explicitProvider = hasBC ? 'bandcamp' : 'youtube';
                             return {
                               id: `discogs-track-${i}`,
-                              title: `${t.position ? t.position + '. ' : ''}${trackTitle}${t.duration ? ' (' + t.duration + ')' : ''}`,
+                              title: `${t.position ? t.position + '. ' : ''}${trackTitle}`,
                               artist: trackArtist,
                               url: `resolve:${trackArtist} ${trackTitle}`,
                               cover: item.artworkUrl || item.thumb || '',
+                              provider: explicitProvider,
                             };
                           }),
                         });

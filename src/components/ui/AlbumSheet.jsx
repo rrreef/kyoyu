@@ -102,18 +102,21 @@ export default function AlbumSheet({ album, onClose }) {
       // If URL starts with 'resolve:', search Bandcamp then YouTube for the track
       if (target.url && target.url.startsWith('resolve:')) {
         const resolveQuery = target.url.replace('resolve:', '');
+        const wantsYouTube = target.provider === 'youtube';
         try {
-          // Try Bandcamp first
-          let bcRes = await fetch('/api/bandcamp-search', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: resolveQuery }),
-          });
-          if (bcRes.ok) {
-            const bcData = await bcRes.json();
-            const bcTrack = (bcData.results || []).find(r => r.type === 'track');
-            if (bcTrack) {
-              playTrackRef.current({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
-              return;
+          // Try Bandcamp first if not explicitly marked for YouTube
+          if (!wantsYouTube) {
+            let bcRes = await fetch('/api/bandcamp-search', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: resolveQuery }),
+            });
+            if (bcRes.ok) {
+              const bcData = await bcRes.json();
+              const bcTrack = (bcData.results || []).find(r => r.type === 'track');
+              if (bcTrack) {
+                playTrackRef.current({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: bcTrack.trackUrl, audioUrl: bcTrack.trackUrl, url: bcTrack.trackUrl }, queue);
+                return;
+              }
             }
           }
           // Fallback: YouTube
