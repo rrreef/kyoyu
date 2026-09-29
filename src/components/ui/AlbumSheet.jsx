@@ -80,7 +80,7 @@ export function openNativeAlbumFast(album) {
             if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
             if (window.__kyoyuGlobalPlayYouTube) {
               window.__kyoyuGlobalSetQueue(queue);
-              window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
+              window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
             }
             return;
           }
