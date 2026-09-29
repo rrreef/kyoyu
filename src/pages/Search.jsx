@@ -1113,15 +1113,45 @@ export default function Search() {
                           year: info.year || item.year || null,
                           genre: info.genre || '',
                           label: info.label || '',
-                          description: [
-                            info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
-                            info.country ? `Country: ${info.country}` : '',
-                            info.description || '',
-                            info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
-                            info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
-                            info.artistBio ? `\nAbout the artist:\n${info.artistBio}` : '',
-                            info.links?.length ? `\nLinks:\n${info.links.map(l => `${l.name}: ${l.url}`).join('\n')}` : '',
-                          ].filter(Boolean).join('\n'),
+                          description: (() => {
+                            const formatLinks = (links) => {
+                              if (!links || !links.length) return '';
+                              const md = links.map(l => {
+                                 let name = l.name.toLowerCase();
+                                 let url = l.url.toLowerCase();
+                                 let label = l.name;
+                                 if (url.includes('discogs.com') || name.includes('discogs')) label = 'Discogs';
+                                 else if (url.includes('musicbrainz.org') || name.includes('musicbrainz')) label = 'MusicBrainz';
+                                 else if (url.includes('bandcamp.com') || name.includes('bandcamp')) label = 'Bandcamp';
+                                 else if (url.includes('instagram.com') || name.includes('instagram')) label = 'Instagram';
+                                 else if (url.includes('soundcloud.com') || name.includes('soundcloud')) label = 'SoundCloud';
+                                 else if (url.includes('youtube.com') || name.includes('youtube')) label = 'YouTube';
+                                 else label = 'Website';
+                                 return `[${label}](${l.url})`;
+                              });
+                              const uniqueMd = [];
+                              const seen = new Set();
+                              for (const m of md) {
+                                const label = m.match(/\[(.*?)\]/)[1];
+                                if (!seen.has(label)) {
+                                  seen.add(label);
+                                  uniqueMd.push(m);
+                                }
+                              }
+                              return `\nLinks:\n${uniqueMd.join('  •  ')}`;
+                            };
+                            const aliases = info.artistAliases?.length ? `Aliases: ${info.artistAliases.join(', ')}` : '';
+                            const bioText = info.artistBio ? `\nAbout the artist:\n${info.artistBio}${aliases ? '\n' + aliases : ''}` : (aliases ? `\nAbout the artist:\n${aliases}` : '');
+                            return [
+                              info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
+                              info.country ? `Country: ${info.country}` : '',
+                              info.description || '',
+                              info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
+                              info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
+                              bioText,
+                              formatLinks(info.links)
+                            ].filter(Boolean).join('\n');
+                          })(),
                           tracks: (info.tracklist || []).map((t, i) => {
                             const trackArtist = t.artists?.join(', ') || info.artist || item.artistName || '';
                             const trackTitle = t.title || '';

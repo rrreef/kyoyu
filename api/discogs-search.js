@@ -95,9 +95,46 @@ async function fetchDiscogsArtistFull(artistId) {
         topReleases = mainReleases.slice(0, 3).map(r => ({ title: r.title || '', year: r.year || 0, label: r.label || '' }));
       }
     } catch (e) {}
-    const cleanBio = (data.profile || '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, '');
+    let cleanBio = (data.profile || '')
+      .replace(/\[a=([^\]]+)\]/gi, '$1')
+      .replace(/\[l=([^\]]+)\]/gi, '$1')
+      .replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/gi, '$1')
+      .replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/gi, '');
+      
+    // Fetch numeric tags [l12345], [a12345]
+    const tagRegex = /\[([alrm])(\d+)\]/gi;
+    let match;
+    const toFetch = [];
+    while ((match = tagRegex.exec(cleanBio)) !== null) {
+      toFetch.push({ full: match[0], type: match[1].toLowerCase(), id: match[2] });
+    }
+    
+    if (toFetch.length > 0) {
+      const uniqueTags = [...new Map(toFetch.map(item => [item.full, item])).values()];
+      await Promise.all(uniqueTags.slice(0, 8).map(async (tag) => {
+         try {
+           let endpoint = '';
+           if (tag.type === 'l') endpoint = `labels/${tag.id}`;
+           else if (tag.type === 'a') endpoint = `artists/${tag.id}`;
+           else if (tag.type === 'r') endpoint = `releases/${tag.id}`;
+           else if (tag.type === 'm') endpoint = `masters/${tag.id}`;
+           if (!endpoint) return;
+           const res = await fetch(`https://api.discogs.com/${endpoint}`, { headers: DISCOGS_HEADERS });
+           if (res.ok) {
+             const json = await res.json();
+             const name = json.name || json.title || '';
+             if (name) {
+               cleanBio = cleanBio.replace(new RegExp(`\\[${tag.type}${tag.id}\\]`, 'gi'), name);
+             }
+           }
+         } catch(e){}
+      }));
+    }
+    cleanBio = cleanBio.replace(/\[[alrm]\d+\]/gi, '');
+
     return {
       bio: cleanBio, realName: data.realname || '',
+      aliases: (data.aliases || []).map(a => a.name?.replace(/\s\(\d+\)$/, '') || ''),
       members: (data.members || []).map(m => m.name?.replace(/\s\(\d+\)$/, '') || '').slice(0, 10),
       discogsUrl: data.uri ? `https://www.discogs.com/artist/${data.id}` : '',
       topReleases, latestReleases,
@@ -144,11 +181,11 @@ async function fetchMusicBrainz(title, artist) {
 async function fetchMusicBrainzArtist(mbid) {
   if (!mbid) return null;
   try {
-    const res = await fetch(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`, { headers: MB_HEADERS });
+    const res = await fetch(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels+aliases&fmt=json`, { headers: MB_HEADERS });
     if (!res.ok) return null;
     const data = await res.json();
     return {
-      type: data.type || '', area: data.area?.name || '',
+      type: data.type || '', area: data.area?.name || '', aliases: (data.aliases || []).map(a => a.name),
       beginDate: data['life-span']?.begin || '', disambiguation: data.disambiguation || '',
       urls: (data.relations || [])
         .filter(r => ['official homepage', 'bandcamp', 'soundcloud', 'social network'].includes(r.type))
@@ -225,6 +262,9 @@ async function handleTrackInfo(body, res) {
   if (mb?.releaseId) links.push({ name: 'Release on MusicBrainz', url: `https://musicbrainz.org/release/${mb.releaseId}` });
   if (mbArtist?.urls) mbArtist.urls.forEach(u => { if (u.url) links.push({ name: u.type === 'official homepage' ? 'Official Website' : u.type, url: u.url }); });
 
+  const allAliases = [...(discogsArtist?.aliases || []), ...(mbArtist?.aliases || [])];
+  const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
+  
   const result = {
     album: discogs?.title || album || '', artist: artist || '',
     year: String(discogs?.year || mb?.year || ''),
@@ -234,7 +274,7 @@ async function handleTrackInfo(body, res) {
     description: discogs?.description || '', tracklist: discogs?.tracklist || [],
     credits: { mixing: credits.filter(c => /mix/i.test(c.role)).map(c => c.name), mastering: credits.filter(c => /master/i.test(c.role)).map(c => c.name), other: credits.filter(c => !/mix|master/i.test(c.role)) },
     releaseArtists: (discogs?.releaseArtists || []).map(a => a.name),
-    artistBio, artistMembers: discogsArtist?.members || [],
+    artistBio, artistMembers: discogsArtist?.members || [], artistAliases: uniqueAliases,
     topReleases: discogsArtist?.topReleases || [], latestReleases: discogsArtist?.latestReleases || [],
     links,
   };
