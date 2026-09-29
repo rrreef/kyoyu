@@ -1070,8 +1070,7 @@ export default function Search() {
                   if (isPlaylist && item.tracks) {
                     setPlaylistSheet(item);
                   } else if (item.provider === 'bandcamp' && (item.entityType === 'album' || item.entityType === 'release') && item.trackUrl) {
-                    // Fetch album tracks and open sheet
-                    setPlaylistSheet({ ...item, tracks: [], trackCount: '...' });
+                    // Fetch album tracks and open native album sheet
                     try {
                       const r = await fetch('/api/bandcamp-search', {
                         method: 'POST',
@@ -1080,7 +1079,20 @@ export default function Search() {
                       });
                       if (r.ok) {
                         const data = await r.json();
-                        setPlaylistSheet(prev => prev ? { ...prev, tracks: data.tracks || [], trackCount: (data.tracks || []).length } : null);
+                        openNativeAlbumFast({
+                          id: item.id || `bc-album-${item.trackId}`,
+                          title: item.title || item.albumName || '',
+                          artist: item.artistName || '',
+                          cover: item.artworkUrl || '',
+                          year: item.year || null,
+                          tracks: (data.tracks || []).map(t => ({
+                            id: `bc-${t.trackId}`,
+                            title: t.title || '',
+                            artist: t.artistName || item.artistName || '',
+                            url: t.streamUrl || '',
+                            cover: t.artworkUrl || item.artworkUrl || '',
+                          })),
+                        });
                       }
                     } catch (e) { /* ignore */ }
                   } else if (!isArtist && !isLabel) {
