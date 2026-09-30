@@ -428,6 +428,15 @@ export default function Player({ hideMini = false }) {
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
+    window.__kyoyuSetProgress = (prog) => {
+      dispatch({ type: 'SET_PROGRESS', value: prog });
+    };
+    window.__kyoyuSetDuration = (dur) => {
+      // Small optimization: avoid re-rendering if unchanged
+      // (PlayerContext state is passed directly to Audio fallback UI usually, but doing it safely here)
+      dispatch({ type: 'SET_DURATION', value: dur });
+    };
+    
     window.__kyoyuPlayerCmd = (cmd, val)=>{
       if(cmd==='toggle') {
         // Directly control external players for instant response
