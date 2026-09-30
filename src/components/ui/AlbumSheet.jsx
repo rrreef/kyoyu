@@ -41,7 +41,10 @@ export function openNativeAlbumFast(album) {
           });
           if (bcRes.ok) {
             const bcData = await bcRes.json();
-            const bcTrack = (bcData.results || []).find(r => r.type === 'track');
+            const clean = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const targetTitle = clean(target.title);
+            let bcTrack = (bcData.results || []).find(r => r.type === 'track' && clean(r.title).includes(targetTitle));
+            if (!bcTrack) bcTrack = (bcData.results || []).find(r => r.type === 'track');
             if (bcTrack) {
               if (window.__kyoyuGlobalPlayTrack) {
                 try {
