@@ -1158,14 +1158,13 @@ export default function Search() {
                             const trackArtist = t.artists?.join(', ') || info.artist || item.artistName || '';
                             const trackTitle = t.title || '';
                             const hasBC = info.links && info.links.some(l => l.url.includes('bandcamp.com'));
-                            const explicitProvider = hasBC ? 'bandcamp' : 'youtube';
                             return {
                               id: `discogs-track-${i}`,
                               title: `${t.position ? t.position + '. ' : ''}${trackTitle}`,
                               artist: trackArtist,
                               url: `resolve:${trackArtist} ${trackTitle}`,
-                              cover: item.artworkUrl || item.thumb || '',
-                              provider: explicitProvider,
+                              cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
+                              provider: 'discogs',
                             };
                           }),
                         });
