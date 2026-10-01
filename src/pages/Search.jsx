@@ -1164,7 +1164,7 @@ export default function Search() {
                               artist: trackArtist,
                               url: `resolve:${trackArtist} ${trackTitle}`,
                               cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
-                              provider: 'discogs',
+                              provider: '',
                             };
                           }),
                         });
