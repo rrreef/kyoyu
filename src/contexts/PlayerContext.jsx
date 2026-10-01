@@ -463,7 +463,7 @@ export function PlayerProvider({ children }) {
       }});
       try {
         // resolveBandcamp imported at top
-        const resolved = await resolveBandcamp(item.providerItemId);
+        const resolved = await resolveBandcamp(item.providerItemId, item.title);
         if (myCounter !== playSearchItemCounterRef.current) return;
         if (resolved && resolved.streamUrl) {
           playTrack({

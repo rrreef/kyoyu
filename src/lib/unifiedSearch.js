@@ -247,7 +247,7 @@ async function searchBandcamp(query) {
  * Resolve a Bandcamp track URL to get the audio stream URL.
  * Called when user clicks play on a Bandcamp result.
  */
-export async function resolveBandcamp(trackUrl) {
+export async function resolveBandcamp(trackUrl, targetTitle = "") {
   try {
     // If we are inside the native iOS app, use the BandcampBridge to bypass IP blocks
     if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bandcamp) {
@@ -275,7 +275,7 @@ export async function resolveBandcamp(trackUrl) {
           else resolve(null);
         };
         
-        window.webkit.messageHandlers.bandcamp.postMessage({ url: trackUrl, callbackId });
+        window.webkit.messageHandlers.bandcamp.postMessage({ url: trackUrl, callbackId, title: targetTitle });
       });
     }
 
