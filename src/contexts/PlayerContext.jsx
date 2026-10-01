@@ -225,9 +225,13 @@ export function PlayerProvider({ children }) {
     try {
       const mh = window.webkit?.messageHandlers;
       if (mh?.audioFallback) {
-        // Update lastSentUrl so the play() override doesn't re-send a stale URL
-        if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
-        mh.audioFallback.postMessage({ url: src });
+        if (state.currentTrack?.provider === 'youtube') {
+          // If switching to YouTube, explicitly kill the native AVPlayer so old audio stops!
+          mh.audioFallback.postMessage({ url: '' });
+        } else {
+          if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
+          mh.audioFallback.postMessage({ url: src });
+        }
       }
       if (mh?.audioSession) mh.audioSession.postMessage('play');
     } catch (e) { /* not in WKWebView */ }
@@ -241,9 +245,19 @@ export function PlayerProvider({ children }) {
       }
     }
 
-    // Load web audio (muted) for scrubber/duration UI
-    audio.src = src;
-    audio.load();
+    // Load web audio (muted) for scrubber/duration UI ONLY if it's not a native provider
+    // Native providers (iOS) handle their own playback. Assigning native streams to the web audio tag
+    // causes CORS errors or 0-duration immediate 'ended' events that cause rapid phantom skipping!
+    const isNativeProvider = state.currentTrack.provider === 'native' || state.currentTrack.provider === 'bandcamp' || state.currentTrack.provider === 'soundcloud';
+    const isNativeIOS = !!window.webkit?.messageHandlers?.audioFallback;
+    
+    if (isNativeIOS && isNativeProvider) {
+      audio.removeAttribute('src');
+      audio.load();
+    } else {
+      audio.src = src;
+      audio.load();
+    }
 
     // Play muted web audio when ready (for scrubber tracking)
     const onCanPlay = () => {
