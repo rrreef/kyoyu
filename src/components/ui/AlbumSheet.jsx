@@ -20,7 +20,7 @@ export function openNativeAlbumFast(album) {
        audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
        url: t.url || t.streamUrl || t.audioUrl || t.src || '',
        duration: t.duration || '',
-       provider: t.provider || album.provider || null
+       provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null)
     }));
     const idx = queue.findIndex(q => q.id === trackObj.id);
     const target = queue[Math.max(idx, 0)];
