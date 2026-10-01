@@ -51,6 +51,8 @@ function playerReducer(state, action) {
       return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
                provider: 'soundcloud', providerItemId: action.trackUrl, providerUrl: action.trackUrl };
     }
+    case 'NATIVE_ERROR':
+      return { ...state, nativeErrorCount: (state.nativeErrorCount || 0) + 1 };
     case 'TOGGLE_PLAY':  return { ...state, isPlaying: !state.isPlaying };
     case 'SET_PLAYING':  return { ...state, isPlaying: action.value };
     case 'SET_VOLUME':   return { ...state, volume: action.value };
@@ -96,6 +98,30 @@ export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
   const audioRef = useRef(null);
   const playIdRef = useRef(0); // increments on each track change to cancel stale plays
+
+  // ── Native Error Fallback ──
+  useEffect(() => {
+    if (state.nativeErrorCount > 0 && state.currentTrack && (state.currentTrack.provider === 'bandcamp' || state.currentTrack.provider === 'native')) {
+      const fallback = async () => {
+        try {
+          const res = await fetch('/api/youtube-search', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: state.currentTrack.artistName + ' ' + state.currentTrack.title })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.videoId) {
+              const updatedTrack = { ...state.currentTrack, provider: 'youtube', providerItemId: data.videoId, videoId: data.videoId, src: data.videoId };
+              dispatch({ type: 'PLAY_TRACK', track: updatedTrack, queue: state.queue });
+            } else {
+              dispatch({ type: 'NEXT_TRACK' });
+            }
+          }
+        } catch(e) {}
+      };
+      fallback();
+    }
+  }, [state.nativeErrorCount]);
 
   // ── Create audio element on mount ──
   useEffect(() => {

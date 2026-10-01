@@ -91,7 +91,7 @@ const YouTubePlayer = forwardRef(({
           height: '100%',
           videoId: videoId,
           playerVars: {
-            autoplay: 0,
+            autoplay: 1,
             controls: audioOnly ? 0 : 1,
             modestbranding: 1,
             rel: 0,

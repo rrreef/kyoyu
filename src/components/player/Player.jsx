@@ -438,6 +438,10 @@ export default function Player({ hideMini = false }) {
     };
     
     window.__kyoyuPlayerCmd = (cmd, val)=>{
+      if (cmd === 'nativeError') {
+        dispatch({ type: 'NATIVE_ERROR' });
+        return;
+      }
       if(cmd==='toggle') {
         // Directly control external players for instant response
         const willPlay = !isPlaying; // state BEFORE toggle
