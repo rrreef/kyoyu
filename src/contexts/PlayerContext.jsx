@@ -106,7 +106,7 @@ export function PlayerProvider({ children }) {
         try {
           const res = await fetch('/api/youtube-search', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: state.currentTrack.artistName + ' ' + state.currentTrack.title })
+            body: JSON.stringify({ query: state.currentTrack.artistName + ' ' + state.currentTrack.title + ' Audio' })
           });
           if (res.ok) {
             const data = await res.json();

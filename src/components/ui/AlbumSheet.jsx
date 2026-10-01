@@ -37,7 +37,7 @@ export function openNativeAlbumFast(album) {
         if (!wantsYouTube) {
           let bcRes = await fetch('/api/bandcamp-search', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: resolveQuery }),
+            body: JSON.stringify({ query: resolveQuery + ' Audio' }),
           });
           if (bcRes.ok) {
             const bcData = await bcRes.json();
@@ -72,7 +72,7 @@ export function openNativeAlbumFast(album) {
                         if (data && data.streamUrl) resolve(data.streamUrl);
                         else resolve(null);
                       };
-                      window.webkit.messageHandlers.bandcamp.postMessage({ url: bcTrack.trackUrl, callbackId });
+                      window.webkit.messageHandlers.bandcamp.postMessage({ url: bcTrack.trackUrl, callbackId, title: target.title });
                     });
                   } else {
                     let resRes = await fetch('/api/bandcamp-resolve', {

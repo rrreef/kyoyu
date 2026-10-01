@@ -1110,7 +1110,7 @@ export default function Search() {
                           id: item.id || `discogs-${item.title}`,
                           title: info.album || item.title || '',
                           artist: info.artist || item.artistName || '',
-                          cover: item.artworkUrl || item.thumb || '',
+                          cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
                           year: info.year || item.year || null,
                           genre: info.genre || '',
                           label: info.label || '',
@@ -1188,8 +1188,8 @@ export default function Search() {
                 style={{ cursor: 'pointer' }}
               >
                 <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '6px' }}>
-                  {(item.artworkUrl || item.thumbnail || item.thumb) ? (
-                    <img src={item.artworkUrl || item.thumbnail || item.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  {(item.coverImage || item.artworkUrl || item.thumbnail || item.thumb) ? (
+                    <img src={item.coverImage || item.artworkUrl || item.thumbnail || item.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                   ) : (
                     <EntityPlaceholder name={item.title} type={isArtist ? 'artist' : isLabel ? 'label' : 'release'} />
                   )}
