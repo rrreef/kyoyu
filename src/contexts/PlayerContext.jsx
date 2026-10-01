@@ -238,11 +238,15 @@ export function PlayerProvider({ children }) {
 
     // Set pre-computed duration from DB if available (show instantly)
     if (state.currentTrack.duration) {
-      const parts = String(state.currentTrack.duration).split(':');
-      if (parts.length === 2) {
-        const dbDuration = parseInt(parts[0]) * 60 + parseInt(parts[1]);
-        if (dbDuration > 0) dispatch({ type:'SET_DURATION', value: dbDuration });
+      const d = String(state.currentTrack.duration);
+      let dbDuration = 0;
+      if (d.includes(':')) {
+        const parts = d.split(':');
+        if (parts.length === 2) dbDuration = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      } else {
+        dbDuration = parseInt(d) || 0;
       }
+      if (dbDuration > 0) dispatch({ type:'SET_DURATION', value: dbDuration });
     }
 
     // Load web audio (muted) for scrubber/duration UI ONLY if it's not a native provider
