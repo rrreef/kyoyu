@@ -7,9 +7,9 @@ export function openNativeAlbumFast(album) {
   const ts = Date.now();
   window.__lastFastOpenTs = ts;
 
-  // Sanitize Discogs tracks to fix old cached localStorage history
-  if (album.provider === 'discogs' && album.tracks) {
-    album.tracks = album.tracks.map(t => ({ ...t, provider: '' }));
+  // Sanitize Discogs tracks unconditionally (covers groupByAlbum which drops album.provider)
+  if (album.tracks) {
+    album.tracks = album.tracks.map(t => (t.provider === 'discogs' ? { ...t, provider: '' } : t));
   }
 
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
