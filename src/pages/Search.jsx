@@ -775,7 +775,7 @@ export default function Search() {
   // For Bandcamp: show albums when filter is 'all', tracks only when filter is 'titles'
   const bcItems = (externalResults.bandcamp || []).filter(bc => {
     const et = bc.entityType || bc.type || 'track';
-    if (activeFilter === 'all') return et !== 'track'; // albums, artists, labels — no individual tracks
+    if (activeFilter === 'all') return true; // include all — dedup handles duplicates
     if (filterMatch('titles')) return et === 'track';
     if (filterMatch('albums')) return et === 'album';
     if (filterMatch('artists')) return et === 'artist';
