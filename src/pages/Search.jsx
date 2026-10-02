@@ -3,6 +3,7 @@ import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, Externa
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
+import { deduplicateResults } from '../lib/searchDedup';
 import { openNativeAlbumFast } from '../components/ui/AlbumSheet';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -807,7 +808,7 @@ export default function Search() {
   ];
 
   // Rank all external results by relevance and paginate
-  const rankedAll = slicePage(rankResults(query, allExternal));
+  const rankedAll = slicePage(rankResults(query, deduplicateResults(allExternal)));
 
   // Provider icon colors
   const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };

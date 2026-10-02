@@ -156,6 +156,99 @@ export function openNativeAlbumFast(album) {
   return { ...album, _ts: ts };
 }
 
+// ── "Go to Album" bridge — called from Swift NativePlayerView ──
+// Searches Discogs for the album, opens a full Discogs album sheet.
+if (typeof window !== 'undefined') {
+  window.__kyoyuGoToAlbum = async (artist, albumOrTitle) => {
+    if (!artist && !albumOrTitle) return;
+    const query = `${artist} ${albumOrTitle}`.trim();
+    try {
+      // First try Discogs track-info (gets full tracklist + metadata)
+      const r = await fetch('/api/discogs-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'track-info', title: albumOrTitle, artist, album: albumOrTitle }),
+      });
+      if (r.ok) {
+        const info = await r.json();
+        if (info.tracklist && info.tracklist.length > 0) {
+          openNativeAlbumFast({
+            id: info.discogsId || `discogs-${albumOrTitle}`,
+            title: info.album || albumOrTitle || '',
+            artist: info.artist || artist || '',
+            cover: info.coverImage || info.thumb || '',
+            year: info.year || null,
+            genre: info.genre || '',
+            label: info.label || '',
+            provider: 'discogs',
+            description: [
+              info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
+              info.country ? `Country: ${info.country}` : '',
+              info.description || '',
+              info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
+              info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
+            ].filter(Boolean).join('\n'),
+            tracks: (info.tracklist || []).map((t, i) => ({
+              id: `discogs-track-${i}`,
+              title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+              artist: t.artists?.join(', ') || info.artist || artist || '',
+              url: `resolve:${t.artists?.join(', ') || info.artist || artist} ${t.title || ''}`,
+              cover: info.coverImage || info.thumb || '',
+              provider: '',
+            })),
+          });
+          return;
+        }
+      }
+
+      // Fallback: search Discogs for the release
+      const sr = await fetch('/api/discogs-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, perPage: 5, page: 1 }),
+      });
+      if (sr.ok) {
+        const sd = await sr.json();
+        const release = (sd.results || []).find(r => r.type === 'release' || r.type === 'master');
+        if (release) {
+          // Fetch full track info for this release
+          const tr = await fetch('/api/discogs-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'track-info', discogsReleaseId: release.id || release.discogsId }),
+          });
+          if (tr.ok) {
+            const tinfo = await tr.json();
+            const parsed = (release.title || '').split(' - ');
+            const releaseArtist = parsed.length >= 2 ? parsed[0].trim() : artist;
+            const releaseTitle = parsed.length >= 2 ? parsed.slice(1).join(' - ').trim() : release.title;
+            openNativeAlbumFast({
+              id: `discogs-${release.id || release.discogsId}`,
+              title: tinfo.album || releaseTitle || albumOrTitle || '',
+              artist: tinfo.artist || releaseArtist || artist || '',
+              cover: release.cover_image || release.coverImage || release.thumb || '',
+              year: tinfo.year || release.year || null,
+              genre: tinfo.genre || '',
+              label: tinfo.label || '',
+              provider: 'discogs',
+              tracks: (tinfo.tracklist || []).map((t, i) => ({
+                id: `discogs-track-${i}`,
+                title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+                artist: t.artists?.join(', ') || tinfo.artist || releaseArtist || '',
+                url: `resolve:${t.artists?.join(', ') || tinfo.artist || releaseArtist} ${t.title || ''}`,
+                cover: release.cover_image || release.coverImage || release.thumb || '',
+                provider: '',
+              })),
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GoToAlbum] Error:', e);
+    }
+  };
+}
+
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
   const {
