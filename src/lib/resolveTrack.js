@@ -14,10 +14,9 @@ export async function postJson(url, body) {
   } catch (e) { return null; }
 }
 
-/** Resolve a Bandcamp track page to an mp3 stream (cached, native bridge first, server fallback). */
 export async function resolveBandcampStream(trackUrl, title) {
   const data = await resolveBandcamp(trackUrl, title);
-  return data?.streamUrl || null;
+  return data ? { streamUrl: data.streamUrl, duration: data.duration } : null;
 }
 
 /**
@@ -39,9 +38,9 @@ export async function findTrackSource({ artist, title }, isCurrent = () => true)
     if (!isCurrent()) return null;
     const bcTrack = (bc?.results || []).find(r => r.type === 'track' && isSameTitle(parseEntity(r.title, r.artistName), want));
     if (bcTrack) {
-      const streamUrl = await resolveBandcampStream(bcTrack.trackUrl, cleanTitle);
+      const resolved = await resolveBandcampStream(bcTrack.trackUrl, cleanTitle);
       if (!isCurrent()) return null;
-      if (streamUrl) return { provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: streamUrl };
+      if (resolved?.streamUrl) return { provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: resolved.streamUrl, duration: resolved.duration };
     }
 
     // 2. SoundCloud
@@ -52,7 +51,7 @@ export async function findTrackSource({ artist, title }, isCurrent = () => true)
       const scStream = await postJson('/api/soundcloud-search', { resolveTrackId: scTrack.trackId });
       if (!isCurrent()) return null;
       if (scStream?.streamUrl) {
-        return { provider: 'soundcloud', providerItemId: scTrack.permalinkUrl, scTrackId: String(scTrack.trackId), src: scStream.streamUrl };
+        return { provider: 'soundcloud', providerItemId: scTrack.permalinkUrl, scTrackId: String(scTrack.trackId), src: scStream.streamUrl, duration: scTrack.duration };
       }
     }
 
@@ -67,7 +66,7 @@ export async function findTrackSource({ artist, title }, isCurrent = () => true)
       return need.length > 0 && need.every(w => all.has(w));
     };
     const ytTrack = ytResults.find(r => isSameTitle(ytEnt(r), want)) || ytResults.find(looseYt);
-    if (ytTrack?.videoId) return { provider: 'youtube', videoId: ytTrack.videoId };
+    if (ytTrack?.videoId) return { provider: 'youtube', videoId: ytTrack.videoId, duration: ytTrack.duration };
   } catch (e) {
     console.warn('[resolveTrack] error:', e);
   }

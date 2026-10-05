@@ -598,7 +598,7 @@ export function PlayerProvider({ children }) {
     playTrack({
       id: meta.id, title, artistName: artist, releaseCover: cover, src: found.src,
       releaseTitle: meta.releaseTitle || '',
-      duration: meta.duration || 0, providerUrl: found.providerItemId,
+      duration: found.duration || meta.duration || 0, providerUrl: found.providerItemId,
       ...(isBc ? { provider: 'bandcamp', providerItemId: found.providerItemId } : { scTrackId: found.scTrackId }),
       origin: isBc
         ? { provider: 'bandcamp', url: found.providerItemId }
