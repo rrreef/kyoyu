@@ -5,6 +5,7 @@
  * Priority: Bandcamp → SoundCloud → YouTube. Each source must actually be this song.
  */
 import { cleanText, parseEntity, isSameTitle, stripTrackPosition, tokens } from './musicMatch';
+import { resolveBandcamp } from './unifiedSearch';
 
 export async function postJson(url, body) {
   try {
@@ -13,34 +14,10 @@ export async function postJson(url, body) {
   } catch (e) { return null; }
 }
 
-/** Resolve a Bandcamp track page to an mp3 stream (native bridge in the iOS app, serverless API on web). */
+/** Resolve a Bandcamp track page to an mp3 stream (cached, native bridge first, server fallback). */
 export async function resolveBandcampStream(trackUrl, title) {
-  const bridge = typeof window !== 'undefined' && window.webkit?.messageHandlers?.bandcamp;
-  if (!bridge) {
-    const data = await postJson('/api/bandcamp-resolve', { url: trackUrl });
-    return data?.streamUrl || null;
-  }
-  return new Promise((resolve) => {
-    const callbackId = Math.random().toString(36).substring(7);
-    window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
-      if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
-        window.__kyoyuBandcampCallbacks[id](data);
-        delete window.__kyoyuBandcampCallbacks[id];
-      }
-    });
-    window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
-    const timeout = setTimeout(() => {
-      if (window.__kyoyuBandcampCallbacks[callbackId]) {
-        window.__kyoyuBandcampCallbacks[callbackId]({ error: 'Timeout' });
-        delete window.__kyoyuBandcampCallbacks[callbackId];
-      }
-    }, 10000);
-    window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
-      clearTimeout(timeout);
-      resolve(data && data.streamUrl ? data.streamUrl : null);
-    };
-    bridge.postMessage({ url: trackUrl, callbackId, title });
-  });
+  const data = await resolveBandcamp(trackUrl, title);
+  return data?.streamUrl || null;
 }
 
 /**

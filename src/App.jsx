@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { PlayerProvider, usePlayer } from './contexts/PlayerContext';
+import { PlayerProvider, usePlayer, trackIdentity } from './contexts/PlayerContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DisplayProvider } from './contexts/DisplayContext';
@@ -278,6 +278,8 @@ function PlaylistBridge() {
         album: cur?.releaseTitle || cur?.albumTitle || cur?.album || '',
         cover: cur?.releaseCover || cur?.cover || cur?.artworkUrl || '',
         audioUrl: cur?.src || cur?.audioUrl || cur?.fileUrl || '',
+        // Same provider + item as what is playing, so the playlist replays it exactly
+        ...(cur && (!trackId || String(cur.id) === String(trackId)) ? trackIdentity(cur) : {}),
       };
       addRef.current(playlistId, trackObj);
     };

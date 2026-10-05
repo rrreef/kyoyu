@@ -257,41 +257,41 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
 }
 
 /**
- * Resolve a Bandcamp track URL to get the audio stream URL.
- * Called when user clicks play on a Bandcamp result.
+ * Resolve a Bandcamp track page URL to its audio stream ({ streamUrl, duration, ... }).
+ * - Native iOS bridge first (bypasses Bandcamp IP blocks), server API as fallback.
+ * - Results are cached for 10 min and concurrent calls share one request, so a result
+ *   that was prefetched (visible in search, or touched) starts instantly when tapped.
  */
-export async function resolveBandcamp(trackUrl, targetTitle = "") {
-  try {
-    // If we are inside the native iOS app, use the BandcampBridge to bypass IP blocks
-    if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bandcamp) {
-      return new Promise((resolve) => {
-        const callbackId = Math.random().toString(36).substring(7);
-        window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
-          if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
-            window.__kyoyuBandcampCallbacks[id](data);
-            delete window.__kyoyuBandcampCallbacks[id];
-          }
-        });
-        window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
-        
-        // Timeout just in case
-        const timeout = setTimeout(() => {
-           if (window.__kyoyuBandcampCallbacks[callbackId]) {
-              window.__kyoyuBandcampCallbacks[callbackId]({ error: "Timeout" });
-              delete window.__kyoyuBandcampCallbacks[callbackId];
-           }
-        }, 10000);
-        
-        window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
-          clearTimeout(timeout);
-          if (data && data.streamUrl) resolve(data);
-          else resolve(null);
-        };
-        
-        window.webkit.messageHandlers.bandcamp.postMessage({ url: trackUrl, callbackId, title: targetTitle });
-      });
-    }
+const bcResolveCache = new Map(); // trackUrl -> { ts, value } | { promise }
+const BC_RESOLVE_TTL = 10 * 60 * 1000;
 
+function resolveViaBridge(trackUrl, targetTitle, timeoutMs) {
+  const bridge = typeof window !== 'undefined' && window.webkit?.messageHandlers?.bandcamp;
+  if (!bridge) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const callbackId = Math.random().toString(36).substring(2, 10);
+    window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
+    window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
+      const cb = window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id];
+      if (cb) { delete window.__kyoyuBandcampCallbacks[id]; cb(data); }
+    });
+    const timeout = setTimeout(() => {
+      if (window.__kyoyuBandcampCallbacks[callbackId]) {
+        delete window.__kyoyuBandcampCallbacks[callbackId];
+        resolve(null);
+      }
+    }, timeoutMs);
+    window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
+      clearTimeout(timeout);
+      resolve(data && data.streamUrl ? data : null);
+    };
+    try { bridge.postMessage({ url: trackUrl, callbackId, title: targetTitle }); }
+    catch (e) { clearTimeout(timeout); delete window.__kyoyuBandcampCallbacks[callbackId]; resolve(null); }
+  });
+}
+
+async function resolveViaServer(trackUrl) {
+  try {
     const res = await fetch('/api/bandcamp-resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -299,12 +299,45 @@ export async function resolveBandcamp(trackUrl, targetTitle = "") {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (data.error || !data.streamUrl) return null;
-    return data;
-  } catch (err) {
-    console.warn('Bandcamp resolve failed:', err);
-    return null;
+    return data && !data.error && data.streamUrl ? data : null;
+  } catch (e) { return null; }
+}
+
+async function resolveBandcampUncached(trackUrl, targetTitle) {
+  const viaBridge = await resolveViaBridge(trackUrl, targetTitle, 6000);
+  if (viaBridge) return viaBridge;
+  return resolveViaServer(trackUrl);
+}
+
+export async function resolveBandcamp(trackUrl, targetTitle = "") {
+  if (!trackUrl) return null;
+  const hit = bcResolveCache.get(trackUrl);
+  if (hit) {
+    if (hit.promise) return hit.promise;
+    if (Date.now() - hit.ts < BC_RESOLVE_TTL) return hit.value;
+    bcResolveCache.delete(trackUrl);
   }
+  const promise = resolveBandcampUncached(trackUrl, targetTitle)
+    .catch((err) => { console.warn('Bandcamp resolve failed:', err); return null; })
+    .then((value) => {
+      if (value?.streamUrl) bcResolveCache.set(trackUrl, { ts: Date.now(), value });
+      else bcResolveCache.delete(trackUrl);
+      return value;
+    });
+  bcResolveCache.set(trackUrl, { promise });
+  if (bcResolveCache.size > 200) bcResolveCache.delete(bcResolveCache.keys().next().value);
+  return promise;
+}
+
+/** Warm the resolve cache (fire and forget). */
+export function prefetchBandcamp(trackUrl, targetTitle = "") {
+  if (!trackUrl || !/^https?:\/\//.test(trackUrl)) return;
+  resolveBandcamp(trackUrl, targetTitle).catch(() => {});
+}
+
+/** Forget a cached stream (e.g. the player reported it could not load it). */
+export function invalidateBandcampResolve(trackUrl) {
+  if (trackUrl) bcResolveCache.delete(trackUrl);
 }
 
 /**

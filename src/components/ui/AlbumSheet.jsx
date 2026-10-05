@@ -1,7 +1,49 @@
 import { useLayoutEffect, useRef } from 'react';
-import { usePlayer } from '../../contexts/PlayerContext';
+import { usePlayer, historyReplayInfo, trackIdentity } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { findTrackSource } from '../../lib/resolveTrack';
+
+const FRESH_STREAM_MS = 10 * 60 * 1000;
+
+/**
+ * Register the handler Swift calls when a track is tapped in the native album / playlist sheet.
+ * - Real uploads and freshly fetched streams play directly.
+ * - Everything else (Discogs "resolve:" tracks, saved Bandcamp/SoundCloud/YouTube items whose
+ *   stream URL has expired) goes through playSaved, so it plays exactly like History / Likes.
+ */
+export function registerAlbumPlayback(album) {
+  window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
+    const queue = (album.tracks || []).map(t => {
+      const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
+      return {
+        id: t.id,
+        title: t.title || t.name,
+        artist: t.artist || album.artist,
+        releaseCover: album.cover || album.artworkUrl || t.cover,
+        releaseTitle: album.title,
+        src, audioUrl: src, url: src,
+        duration: t.duration || '',
+        provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null),
+        providerItemId: t.providerItemId || t.trackUrl || undefined,
+        scTrackId: t.scTrackId || undefined,
+        origin: t.origin || undefined,
+        replay: t.replay || undefined,
+        streamFetchedAt: t.streamFetchedAt || undefined,
+      };
+    });
+    const idx = queue.findIndex(q => String(q.id) === String(trackObj.id));
+    const target = queue[Math.max(idx, 0)];
+    if (!target) return;
+
+    const isResolve = target.src.startsWith('resolve:');
+    const fresh = target.streamFetchedAt && Date.now() - target.streamFetchedAt < FRESH_STREAM_MS;
+    const needsResolve = isResolve || !target.src || (!fresh && historyReplayInfo(target).provider !== 'native');
+    if (needsResolve && window.__kyoyuPlaySaved) {
+      window.__kyoyuPlaySaved({ ...target, src: '', audioUrl: '', url: isResolve ? target.src : target.url }, queue);
+      return;
+    }
+    if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
+  };
+}
 
 export function openNativeAlbumFast(album) {
   if (!album) return null;
@@ -20,56 +62,7 @@ export function openNativeAlbumFast(album) {
     });
   }
 
-  window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
-    window.__kyoyuPlayNativeTrackCounter = (window.__kyoyuPlayNativeTrackCounter || 0) + 1;
-    const myCounter = window.__kyoyuPlayNativeTrackCounter;
-    const queue = (album.tracks || []).map(t => ({
-       id: t.id,
-       title: t.title || t.name,
-       artist: t.artist || album.artist,
-       releaseCover: album.cover || album.artworkUrl,
-       releaseTitle: album.title,
-       src: t.url || t.streamUrl || t.audioUrl || t.src || '',
-       audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
-       url: t.url || t.streamUrl || t.audioUrl || t.src || '',
-       duration: t.duration || '',
-       provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null),
-       providerItemId: t.providerItemId || t.trackUrl || undefined,
-    }));
-    const idx = queue.findIndex(q => q.id === trackObj.id);
-    const target = queue[Math.max(idx, 0)];
-
-    if (target.url && target.url.startsWith('resolve:')) {
-      // Immediately dispatch placeholder track so Web Player updates UI and stops sending old track ID to Swift
-      if (window.__kyoyuGlobalPlayTrack) {
-         window.__kyoyuGlobalPlayTrack({ ...target, src: '' }, queue);
-      }
-      const isCurrent = () => myCounter === window.__kyoyuPlayNativeTrackCounter;
-      const play = (extra) => {
-        if (!isCurrent() || !window.__kyoyuGlobalPlayTrack) return;
-        window.__kyoyuGlobalPlayTrack({ ...target, ...extra, audioUrl: extra.src, url: extra.src, releaseCover: target.releaseCover }, queue);
-      };
-
-      // Playback priority: Bandcamp → SoundCloud → YouTube. Each source must actually be this song.
-      try {
-        const found = await findTrackSource({ artist: target.artist, title: target.title }, isCurrent);
-        if (!isCurrent()) return;
-        if (!found) { console.warn('[AlbumSheet] No matching source found for', target.artist, target.title); return; }
-        if (found.provider === 'youtube') {
-          if (window.__kyoyuGlobalPlayYouTube) {
-            window.__kyoyuGlobalSetQueue(queue);
-            window.__kyoyuGlobalPlayYouTube(found.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
-          }
-          return;
-        }
-        // Keep the provider identity on the played track so History can replay the exact same source
-        play({ provider: found.provider, providerItemId: found.providerItemId, scTrackId: found.scTrackId, src: found.src });
-        return;
-      } catch (e) { console.warn('Resolve play error:', e); return; }
-    }
-    if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
-    if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
-  };
+  registerAlbumPlayback(album);
 
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
@@ -191,6 +184,18 @@ if (typeof window !== 'undefined') {
   };
 }
 
+/**
+ * Identity to store with a saved album track: if it is the track playing right now, use the
+ * exact source it plays from (e.g. the Bandcamp page a Discogs track resolved to).
+ */
+function savedIdentity(t) {
+  const cur = typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack ? window.__kyoyuGetCurrentTrack() : null;
+  if (cur && String(cur.id) === String(t.id) && (cur.src || cur.provider === 'youtube')) return trackIdentity(cur);
+  const own = { ...t, src: t.src || t.url || t.streamUrl || t.audioUrl || '' };
+  if (t.trackUrl && !own.providerItemId) own.providerItemId = t.trackUrl;
+  return trackIdentity(own);
+}
+
 export default function AlbumSheet({ album, onClose }) {
   const { playTrack } = usePlayer();
   const {
@@ -253,7 +258,8 @@ export default function AlbumSheet({ album, onClose }) {
         ...t,
         cover: album.cover || album.artworkUrl || '',
         album: album.title || '',
-        storageKey: t.storageKey || ''
+        storageKey: t.storageKey || '',
+        ...savedIdentity(t),
       };
 
       try { toggleLikeRef.current(trackObj); } catch(err) { console.warn('toggleLikeUpload error:', err); }
@@ -281,6 +287,7 @@ export default function AlbumSheet({ album, onClose }) {
         album: album.title || '',
         cover: album.cover || album.artworkUrl || '',
         audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+        ...savedIdentity(t),
       };
       toggleDownloadRef.current(trackObj);
       return !isDownloadedRef.current(trackId);
@@ -301,6 +308,7 @@ export default function AlbumSheet({ album, onClose }) {
         album: album.title || '',
         cover: album.cover || album.artworkUrl || '',
         audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+        ...savedIdentity(t),
       };
       addToPlaylistRef.current(playlistId, trackObj);
     };

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check, Heart } from 'lucide-react';
-import { usePlayer } from '../../contexts/PlayerContext';
+import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import './UploadShelf.css';
@@ -272,7 +272,7 @@ export default function UploadShelf({ uploads }) {
 
 /* ── Named export: vertical track list reused in Home & Library ── */
 export function UploadExpandedList({ uploads }) {
-  const { playTrack, playSearchItem } = usePlayer();
+  const { playTrack, playSaved } = usePlayer();
   const { user } = useAuth();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const [activeId,     setActiveId]     = useState(null);
@@ -281,20 +281,10 @@ export function UploadExpandedList({ uploads }) {
   const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
-    // Check if this is a YouTube or SoundCloud track
-    const provider = t.provider || (String(t.id).startsWith('yt-') ? 'youtube' : String(t.id).startsWith('sc-') ? 'soundcloud' : null);
-    if (provider === 'youtube' || provider === 'soundcloud') {
-      const item = {
-        id: t.id,
-        title: t.title || 'Untitled',
-        artistName: t.artist || t.artistName || '',
-        artworkUrl: t.artworkUrl || t.cover || t.releaseCover || '',
-        duration: t.duration || 0,
-        provider,
-        providerItemId: t.providerItemId || (provider === 'youtube' ? String(t.id).replace('yt-', '') : undefined),
-        scTrackId: t.scTrackId || (provider === 'soundcloud' ? String(t.id).replace(/^sc-/, '').replace(/-\d+$/, '') : undefined),
-      };
-      playSearchItem(item);
+    // Liked tracks from Bandcamp / SoundCloud / YouTube / Discogs play exactly like History
+    // (same provider + item, fresh stream). Only real uploads play their stored file directly.
+    if (historyReplayInfo(t).provider !== 'native') {
+      playSaved(t);
       setActiveId(t.id);
       return;
     }
@@ -379,25 +369,15 @@ export function UploadExpandedList({ uploads }) {
 
 /* ── Named export: grid view for configurable N-column layout ── */
 export function UploadGridView({ uploads, cols = 2 }) {
-  const { playTrack, playSearchItem, state } = usePlayer();
+  const { playTrack, playSaved, state } = usePlayer();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
   const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
-    // Check if this is a YouTube or SoundCloud track
-    const provider = t.provider || (String(t.id).startsWith('yt-') ? 'youtube' : String(t.id).startsWith('sc-') ? 'soundcloud' : null);
-    if (provider === 'youtube' || provider === 'soundcloud') {
-      const item = {
-        id: t.id,
-        title: t.title || 'Untitled',
-        artistName: t.artist || t.artistName || '',
-        artworkUrl: t.artworkUrl || t.cover || t.releaseCover || '',
-        duration: t.duration || 0,
-        provider,
-        providerItemId: t.providerItemId || (provider === 'youtube' ? String(t.id).replace('yt-', '') : undefined),
-        scTrackId: t.scTrackId || (provider === 'soundcloud' ? String(t.id).replace(/^sc-/, '').replace(/-\d+$/, '') : undefined),
-      };
-      playSearchItem(item);
+    // Liked tracks from Bandcamp / SoundCloud / YouTube / Discogs play exactly like History
+    // (same provider + item, fresh stream). Only real uploads play their stored file directly.
+    if (historyReplayInfo(t).provider !== 'native') {
+      playSaved(t);
       return;
     }
     const queue = sorted.map(u => ({

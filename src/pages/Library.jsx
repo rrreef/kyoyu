@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDisplay, useLibraryLayoutLive } from '../contexts/DisplayContext';
 import { releases, playlists as mockPlaylists, savedPlaylists, djSets, artistRadios } from '../data/mockData';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
 import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
@@ -288,6 +288,8 @@ export default function Library() {
                       _ts: ts,
                     };
                     setSelectedAlbum(albumObj);
+                    // Tapping a playlist track in the native sheet plays it like History / Likes
+                    registerAlbumPlayback(albumObj);
                     try {
                       window.webkit?.messageHandlers?.player?.postMessage({
                         playlistOpen: true,

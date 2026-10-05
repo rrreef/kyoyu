@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
-import { usePlayer } from '../../contexts/PlayerContext';
+import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
@@ -520,6 +520,8 @@ export default function Player({ hideMini = false }) {
           provider: currentTrack.provider || provider,
           providerItemId: currentTrack.providerItemId || undefined,
           scTrackId: currentTrack.scTrackId || undefined,
+          // exact source for replay from Library (Bandcamp page / SoundCloud id / YouTube id)
+          replay: historyReplayInfo(currentTrack),
         };
         try { toggleLikeUpload(trackObj); } catch(err) {}
       }

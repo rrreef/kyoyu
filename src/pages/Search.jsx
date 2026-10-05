@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult } from '../lib/unifiedSearch';
+import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult, prefetchBandcamp } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
 import { openNativeAlbumFast } from '../components/ui/AlbumSheet';
@@ -794,6 +794,15 @@ export default function Search() {
     ];
   }
   const rankedAll = displayAll.slice(0, visibleCount);
+
+  // Warm the Bandcamp stream for the top Bandcamp titles on screen, so tapping one starts instantly
+  const isBcTrack = (i) => i.provider === 'bandcamp' && (i.entityType || 'track') === 'track' && /^https?:\/\//.test(i.trackUrl || '');
+  const bcPrefetchKey = rankedAll.filter(isBcTrack).slice(0, 4).map(i => i.trackUrl).join('|');
+  useEffect(() => {
+    if (!bcPrefetchKey) return;
+    const t = setTimeout(() => bcPrefetchKey.split('|').forEach(u => prefetchBandcamp(u)), 250);
+    return () => clearTimeout(t);
+  }, [bcPrefetchKey]);
   const hasMoreToShow = visibleCount < displayAll.length || canFetchMore;
 
   // Infinite scroll: reveal 20 more rows when the user nears the bottom; when everything
@@ -1119,6 +1128,7 @@ export default function Search() {
             return (
               <div key={item.id || `${item.provider}-${item.title}-${Math.random()}`}
                 className="search-result-row search-external-row"
+                onPointerDown={() => { if (isBcTrack(item)) prefetchBandcamp(item.trackUrl, item.title); }}
                 onClick={async () => {
                   if (isPlaylist && item.tracks) {
                     setPlaylistSheet(item);
@@ -1145,6 +1155,8 @@ export default function Search() {
                             artist: t.artistName || item.artistName || '',
                             url: t.streamUrl || '',
                             trackUrl: t.trackUrl || '',
+                            providerItemId: t.trackUrl || undefined,
+                            streamFetchedAt: t.streamUrl ? Date.now() : undefined,
                             cover: t.artworkUrl || item.artworkUrl || '',
                           })),
                         });

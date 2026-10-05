@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useRef, useEffect, useCallback } from 'react';
 import { releases, djSets } from '../data/mockData';
 import { supabase } from '../lib/supabase';
-import { resolveBandcamp } from '../lib/unifiedSearch';
+import { resolveBandcamp, invalidateBandcampResolve } from '../lib/unifiedSearch';
 import { findTrackSource } from '../lib/resolveTrack';
 
 const PlayerContext = createContext(null);
@@ -27,6 +27,17 @@ export function historyReplayInfo(t) {
   if (src && !src.startsWith('resolve:') && !EXPIRING_SRC.test(src)) return { provider: 'native' };
   // No identity (old entries / unresolved placeholders): find it again by artist + title
   return { provider: 'lookup' };
+}
+
+/** Provider identity of a track, so a saved copy (like, playlist, download) replays the exact same source. */
+export function trackIdentity(t) {
+  if (!t) return {};
+  const out = {};
+  for (const k of ['provider', 'providerItemId', 'providerUrl', 'scTrackId', 'videoId', 'origin']) {
+    if (t[k]) out[k] = t[k];
+  }
+  out.replay = historyReplayInfo(t);
+  return out;
 }
 
 function historyKey(t, r = historyReplayInfo(t)) {
@@ -133,28 +144,34 @@ export function PlayerProvider({ children }) {
   stateRef.current = state;
 
   // ── Native Error Fallback ──
+  // AVPlayer could not load the stream: try a fresh Bandcamp stream once, then the same song elsewhere.
+  const nativeRetryRef = useRef('');
   useEffect(() => {
-    if (state.nativeErrorCount > 0 && state.currentTrack && (state.currentTrack.provider === 'bandcamp' || state.currentTrack.provider === 'native')) {
-      const fallback = async () => {
-        try {
-          const res = await fetch('/api/youtube-search', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: state.currentTrack.artistName + ' ' + state.currentTrack.title + ' Audio' })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.videoId) {
-              const updatedTrack = { ...state.currentTrack, provider: 'youtube', providerItemId: data.videoId, videoId: data.videoId, src: data.videoId };
-              dispatch({ type: 'PLAY_TRACK', track: updatedTrack, queue: state.queue });
-            } else {
-              dispatch({ type: 'NEXT_TRACK' });
-            }
-          }
-        } catch(e) {}
-      };
-      fallback();
-    }
-  }, [state.nativeErrorCount]);
+    const cur = state.currentTrack;
+    if (!(state.nativeErrorCount > 0) || !cur) return;
+    if (cur.provider === 'youtube' || !(cur.src || cur.audioUrl || cur.fileUrl)) return;
+    const id = cur.id;
+    const stillCurrent = () => stateRef.current.currentTrack?.id === id;
+    (async () => {
+      const r = historyReplayInfo(cur);
+      if (r.provider === 'bandcamp' && nativeRetryRef.current !== `${id}|bc`) {
+        nativeRetryRef.current = `${id}|bc`;
+        invalidateBandcampResolve(r.url);
+        const fresh = await resolveBandcamp(r.url, cur.title);
+        if (!stillCurrent()) return;
+        if (fresh?.streamUrl && fresh.streamUrl !== cur.src) {
+          playTrack({ ...cur, src: fresh.streamUrl, audioUrl: fresh.streamUrl, url: fresh.streamUrl, _restart: Date.now() });
+          return;
+        }
+      }
+      if (nativeRetryRef.current === `${id}|alt`) return;
+      nativeRetryRef.current = `${id}|alt`;
+      const found = await findTrackSource({ artist: cur.artistName || cur.artist || '', title: cur.title || '' }, stillCurrent);
+      if (!stillCurrent()) return;
+      if (found && !(found.provider === 'bandcamp' && found.providerItemId === r.url)) playFoundSource(found, cur);
+      else dispatch({ type: 'NEXT_TRACK' });
+    })();
+  }, [state.nativeErrorCount]); // eslint-disable-line
 
   // ── Create audio element on mount ──
   useEffect(() => {
@@ -243,6 +260,12 @@ export function PlayerProvider({ children }) {
     audio.currentTime = 0;
     
     const src = state.currentTrack.src || state.currentTrack.fileUrl || state.currentTrack.audioUrl || '';
+    if (src.startsWith('resolve:')) {
+      // e.g. next track in a Discogs tracklist — find its real source instead of sending "resolve:" to AVPlayer
+      const t = state.currentTrack;
+      setTimeout(() => playSaved({ ...t, src: '', audioUrl: '', url: t.url }), 0);
+      return;
+    }
     if (!src) {
       // If no src (e.g. placeholder track while resolving), tell native iOS to clear player
       try {
@@ -319,7 +342,9 @@ export function PlayerProvider({ children }) {
       audio.removeEventListener('canplay', onCanPlay);
       clearTimeout(fallbackTimer);
     };
-  }, [state.currentTrack?.id, state.currentTrack?._restart]); // eslint-disable-line
+    // src is a dependency: a resolving track keeps its id (placeholder → real stream), and the
+    // audio must load as soon as the stream URL arrives.
+  }, [state.currentTrack?.id, state.currentTrack?._restart, state.currentTrack?.src || state.currentTrack?.fileUrl || state.currentTrack?.audioUrl || '']); // eslint-disable-line
 
   // ── Play / pause sync ──
   useEffect(() => {
@@ -532,109 +557,117 @@ export function PlayerProvider({ children }) {
         duration: item.duration,
       });
     } else if (item.provider === 'bandcamp') {
-      // Bandcamp needs async resolve
-      dispatch({ type: 'PLAY_TRACK', track: {
-        id: item.id,
-        title: item.title || 'Loading...',
-        artistName: item.artistName || '',
-        releaseCover: item.artworkUrl || '',
-        src: '',
-        duration: item.duration || 0,
-        provider: 'bandcamp',
-        providerItemId: item.providerItemId,
-        providerUrl: item.providerUrl,
-      }});
-      try {
-        // resolveBandcamp imported at top
-        const resolved = await resolveBandcamp(item.providerItemId, item.title);
-        if (myCounter !== playSearchItemCounterRef.current) return;
-        if (resolved && resolved.streamUrl) {
-          playTrack({
-            id: item.id,
-            title: resolved.title || item.title,
-            artistName: resolved.artist || item.artistName,
-            releaseCover: resolved.artworkUrl || item.artworkUrl,
-            src: resolved.streamUrl,
-            duration: resolved.duration || 0,
-            providerUrl: item.providerUrl || item.providerItemId,
-            origin: { provider: 'bandcamp', url: item.providerItemId },
-          });
-        }
-      } catch (err) {
-        console.warn('Bandcamp resolve failed in queue:', err);
-        // Skip to next
-        playNextSearch();
-      }
+      const meta = {
+        id: item.id, title: item.title || '', artistName: item.artistName || '',
+        releaseCover: item.artworkUrl || '', url: item.providerItemId, duration: item.duration || 0,
+      };
+      showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: meta.url, providerUrl: item.providerUrl || meta.url });
+      const isCurrent = () => myCounter === playSearchItemCounterRef.current && stateRef.current.currentTrack?.id === item.id;
+      await playBandcampOrFallback(meta, isCurrent);
     } else {
       // native track
       playTrack(item);
     }
   }
 
-  // ── History replay: play the exact same provider/item that was played before ──
-  const historyPlayCounterRef = useRef(0);
-  async function playFromHistory(item) {
+  // ── Shared helpers for resolving plays ──
+
+  /** Show a track in the player immediately (no stream yet). */
+  function showPlaceholder(meta) {
+    const track = { ...meta, src: '', title: meta.title || 'Loading...' };
+    dispatch({ type: 'PLAY_TRACK', track });
+    try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artwork: track.releaseCover || '' }); } catch(e){}
+    // Keep the ref in sync right away: a cached resolve can finish before React re-renders
+    stateRef.current = { ...stateRef.current, currentTrack: track };
+  }
+
+  /** Play a source found by findTrackSource, keeping the visible metadata of `meta`. */
+  function playFoundSource(found, meta) {
+    const title = meta.title || '';
+    const artist = meta.artistName || meta.artist || '';
+    const cover = meta.releaseCover || meta.cover || meta.artworkUrl || '';
+    if (found.provider === 'youtube') {
+      playYouTube(found.videoId, { title, artist, thumbnail: cover, duration: meta.duration });
+      return;
+    }
+    const isBc = found.provider === 'bandcamp';
+    playTrack({
+      id: meta.id, title, artistName: artist, releaseCover: cover, src: found.src,
+      releaseTitle: meta.releaseTitle || '',
+      duration: meta.duration || 0, providerUrl: found.providerItemId,
+      ...(isBc ? { provider: 'bandcamp', providerItemId: found.providerItemId } : { scTrackId: found.scTrackId }),
+      origin: isBc
+        ? { provider: 'bandcamp', url: found.providerItemId }
+        : { provider: 'soundcloud', scTrackId: found.scTrackId, url: found.providerItemId || '' },
+    });
+  }
+
+  /** Bandcamp track page → stream → play. If Bandcamp fails, the same song from SoundCloud/YouTube. */
+  async function playBandcampOrFallback(meta, isCurrent) {
+    let resolved = null;
+    try { resolved = await resolveBandcamp(meta.url, meta.title); } catch (e) { resolved = null; }
+    if (!isCurrent()) return;
+    if (resolved?.streamUrl) {
+      playTrack({
+        id: meta.id,
+        title: meta.title || resolved.title,
+        artistName: meta.artistName || resolved.artist || '',
+        releaseCover: meta.releaseCover || resolved.artworkUrl || '',
+        releaseTitle: meta.releaseTitle || '',
+        src: resolved.streamUrl,
+        duration: resolved.duration || meta.duration || 0,
+        provider: 'bandcamp',
+        providerItemId: meta.url,
+        providerUrl: meta.url,
+        origin: { provider: 'bandcamp', url: meta.url },
+      });
+      return;
+    }
+    console.warn('[Player] Bandcamp stream unavailable, looking for the same song elsewhere:', meta.url);
+    const found = await findTrackSource({ artist: meta.artistName || '', title: meta.title || '' }, isCurrent);
+    if (!isCurrent()) return;
+    if (found) playFoundSource(found, meta);
+    else dispatch({ type: 'SET_PLAYING', value: false });
+  }
+
+  // ── Saved items (History, Library likes, playlists): play the exact same provider/item ──
+  const savedPlayCounterRef = useRef(0);
+  async function playSaved(item, queue) {
     if (!item) return;
-    historyPlayCounterRef.current += 1;
-    const myCounter = historyPlayCounterRef.current;
-    // A history tap is a standalone play, not part of a search-results queue
+    savedPlayCounterRef.current += 1;
+    const myCounter = savedPlayCounterRef.current;
+    // A saved-item tap is a standalone play, not part of a search-results queue
     searchQueueRef.current = [];
     searchQueueIdxRef.current = -1;
+    if (Array.isArray(queue) && queue.length) dispatch({ type: 'SET_QUEUE', queue });
 
     const r = historyReplayInfo(item);
-    const title = item.title || '';
+    const title = item.title || item.name || '';
     const artist = item.artist || item.artistName || '';
     const cover = item.cover || item.releaseCover || item.artworkUrl || '';
-    const id = item.id || `hist-${artist}-${title}`;
-    const isCurrent = () => myCounter === historyPlayCounterRef.current && stateRef.current.currentTrack?.id === id;
-    const showPlaceholder = () => {
-      dispatch({ type: 'PLAY_TRACK', track: { id, title: title || 'Loading...', artistName: artist, releaseCover: cover, src: '', duration: item.duration || 0, replay: r } });
-      try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title, artwork: cover }); } catch(e){}
-      stateRef.current = { ...stateRef.current, currentTrack: { id } };
-    };
-    const playFound = (found) => {
-      if (found.provider === 'youtube') {
-        playYouTube(found.videoId, { title, artist, thumbnail: cover, duration: item.duration });
-        return;
-      }
-      const origin = found.provider === 'soundcloud'
-        ? { provider: 'soundcloud', scTrackId: found.scTrackId, url: found.providerItemId || '' }
-        : { provider: 'bandcamp', url: found.providerItemId };
-      playTrack({ id, title, artistName: artist, releaseCover: cover, src: found.src, duration: item.duration || 0, providerUrl: found.providerItemId, origin });
-    };
-    const lookup = async () => {
-      const found = await findTrackSource({ artist, title }, isCurrent);
-      if (!isCurrent()) return;
-      if (found) playFound(found);
-      else dispatch({ type: 'SET_PLAYING', value: false });
-    };
+    const id = item.id || `saved-${artist}-${title}`;
+    const meta = { id, title, artistName: artist, releaseCover: cover, duration: item.duration || 0, releaseTitle: item.releaseTitle || item.album || '' };
+    const isCurrent = () => myCounter === savedPlayCounterRef.current && stateRef.current.currentTrack?.id === id;
 
     if (r.provider === 'youtube') {
       playYouTube(r.videoId, { title, artist, thumbnail: cover, duration: item.duration });
     } else if (r.provider === 'soundcloud') {
       playSoundCloud(r.url || '', { trackId: r.scTrackId, title, artistName: artist, artworkUrl: cover, duration: item.duration });
     } else if (r.provider === 'bandcamp') {
-      showPlaceholder();
-      let resolved = null;
-      try { resolved = await resolveBandcamp(r.url, title); } catch (e) { resolved = null; }
-      if (!isCurrent()) return;
-      if (resolved?.streamUrl) {
-        playTrack({
-          id, title: title || resolved.title, artistName: artist || resolved.artist,
-          releaseCover: cover || resolved.artworkUrl, src: resolved.streamUrl,
-          duration: resolved.duration || item.duration || 0, providerUrl: r.url,
-          origin: { provider: 'bandcamp', url: r.url },
-        });
-      } else {
-        await lookup(); // track page gone / resolve failed → find the song again
-      }
+      showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
+      await playBandcampOrFallback({ ...meta, url: r.url }, isCurrent);
     } else if (r.provider === 'native') {
       playTrack({ ...item, id, artistName: artist, releaseCover: cover });
     } else {
-      showPlaceholder();
-      await lookup();
+      // No identity saved (older entries): find the song again by artist + title
+      showPlaceholder({ ...meta, replay: r });
+      const found = await findTrackSource({ artist, title }, isCurrent);
+      if (!isCurrent()) return;
+      if (found) playFoundSource(found, meta);
+      else dispatch({ type: 'SET_PLAYING', value: false });
     }
   }
+  const playFromHistory = playSaved;
 
   function setSearchQueue(queue, startIndex) {
     searchQueueRef.current = queue;
@@ -689,6 +722,8 @@ export function PlayerProvider({ children }) {
     window.__kyoyuGlobalPlayTrack = (track, queue) => playTrack(track, queue);
     window.__kyoyuGlobalPlayYouTube = (videoId, metadata) => playYouTube(videoId, metadata);
     window.__kyoyuGlobalSetQueue = (queue) => dispatch({ type: 'SET_QUEUE', queue });
+    window.__kyoyuPlaySaved = (item, queue) => playSaved(item, queue);
+    window.__kyoyuGetCurrentTrack = () => stateRef.current.currentTrack;
     window.__kyoyuGetQueue = () => {
       const q = state.queue || [];
       const searchQ = searchQueueRef.current || [];
@@ -937,7 +972,7 @@ export function PlayerProvider({ children }) {
       state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,
       seekTo, setVolume, setAudioVolumeDirect, allTracks,
       setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue,
-      playFromHistory
+      playFromHistory, playSaved
     }}>
       {children}
     </PlayerContext.Provider>
