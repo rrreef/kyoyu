@@ -605,8 +605,18 @@ export default function Player({ hideMini = false }) {
   useEffect(() => {
     if (isNative() && currentTrack) {
       postNative({ progress, dur: duration });
+      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+        try {
+          // Keep WKWebView's lock screen scrubber in sync with iframe
+          navigator.mediaSession.setPositionState({
+            duration: duration || 1,
+            playbackRate: isPlaying ? 1 : 0,
+            position: progress || 0
+          });
+        } catch (e) {}
+      }
     }
-  }, [progress, duration]);
+  }, [progress, duration, isPlaying]);
 
   // Handle _restart for external providers (PREV_TRACK → seek to 0)
   useEffect(() => {
