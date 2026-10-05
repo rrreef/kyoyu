@@ -175,24 +175,29 @@ const YouTubePlayer = forwardRef(({
 
   // Handle isPlaying changes
   useEffect(() => {
-    if (playerRef.current && typeof playerRef.current.getPlayerState === 'function') {
-      const YT = window.YT;
-      const state = playerRef.current.getPlayerState();
-      
-      if (isPlaying && state !== YT.PlayerState.PLAYING) {
-        playerRef.current.playVideo();
-      } else if (!isPlaying && state === YT.PlayerState.PLAYING) {
-        playerRef.current.pauseVideo();
-      }
-    } else if (isPlaying) {
-      // Player not ready yet — retry after short delay
-      const retryTimer = setTimeout(() => {
-        if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
+    let retryInterval = null;
+    
+    const tryPlay = () => {
+      if (playerRef.current && typeof playerRef.current.getPlayerState === 'function') {
+        const YT = window.YT;
+        const state = playerRef.current.getPlayerState();
+        if (isPlaying && state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) {
           playerRef.current.playVideo();
+        } else if (!isPlaying && state === YT.PlayerState.PLAYING) {
+          playerRef.current.pauseVideo();
         }
-      }, 500);
-      return () => clearTimeout(retryTimer);
+      }
+    };
+
+    tryPlay();
+    
+    if (isPlaying) {
+      retryInterval = setInterval(tryPlay, 1000);
     }
+    
+    return () => {
+      if (retryInterval) clearInterval(retryInterval);
+    };
   }, [isPlaying]);
 
   // Handle Volume changes
