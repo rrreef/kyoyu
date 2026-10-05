@@ -382,10 +382,14 @@ export function PlayerProvider({ children }) {
   // ── Helpers (stable — safe in drag handlers) ──
 
   const seekTo = useCallback((seconds) => {
+    if (!isFinite(seconds)) return;
+    let t = Math.max(0, seconds);
+    
     const audio = audioRef.current;
-    if (!audio || !isFinite(seconds)) return;
-    const t = Math.max(0, Math.min(seconds, audio.duration || 0));
-    audio.currentTime = t;
+    if (audio && isFinite(audio.duration) && audio.duration > 0) {
+      t = Math.min(t, audio.duration);
+      audio.currentTime = t;
+    }
     
     try {
       const mh = window.webkit?.messageHandlers?.audioFallback;
