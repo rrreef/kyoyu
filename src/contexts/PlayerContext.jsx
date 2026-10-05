@@ -545,7 +545,13 @@ export function PlayerProvider({ children }) {
     playSearchItemCounterRef.current += 1;
     const myCounter = playSearchItemCounterRef.current;
     if (item.provider === 'youtube') {
-      playYouTube(item.providerItemId, {
+      let vid = item.providerItemId || item.videoId;
+      if (!vid && item.id && item.id.startsWith('yt-')) vid = item.id.replace('yt-', '');
+      if (item.url && !vid) {
+        const m = item.url.match(/(?:v=|youtu\.be\/|embed\/)([^&?]+)/);
+        if (m) vid = m[1];
+      }
+      playYouTube(vid, {
         title: item.title,
         channelTitle: item.artistName,
         thumbnail: item.artworkUrl,
@@ -553,17 +559,18 @@ export function PlayerProvider({ children }) {
       });
     } else if (item.provider === 'soundcloud') {
       // Resolve stream URL via API and play natively (same as native tracks)
-      playSoundCloud(item.providerItemId, {
-        trackId: item.scTrackId || item.id,
+      playSoundCloud(item.providerItemId || item.permalinkUrl || item.url, {
+        trackId: item.scTrackId || item.trackId || (item.id && item.id.replace('sc-', '')),
         title: item.title,
         artistName: item.artistName,
         artworkUrl: item.artworkUrl,
         duration: item.duration,
       });
     } else if (item.provider === 'bandcamp') {
+      const bcUrl = item.providerItemId || item.trackUrl || item.url;
       const meta = {
         id: item.id, title: item.title || '', artistName: item.artistName || '',
-        releaseCover: item.artworkUrl || '', url: item.providerItemId, duration: item.duration || 0,
+        releaseCover: item.artworkUrl || '', url: bcUrl, duration: item.duration || 0,
       };
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: meta.url, providerUrl: item.providerUrl || meta.url });
       const isCurrent = () => myCounter === playSearchItemCounterRef.current && stateRef.current.currentTrack?.id === item.id;

@@ -639,12 +639,11 @@ export default function Player({ hideMini = false }) {
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
       )}
-      {/* VISIBLE YOUTUBE DEBUG BLOCK */}
+      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
+           Kept at 250x250 and opacity 0.1 to pass YouTube/iOS autoplay requirements, 
+           but centered so it hides strictly behind the Native UI's solid album artwork! */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '320px', height: '320px', opacity: 1, zIndex: 999999, backgroundColor: 'red', border: '5px solid yellow', display: 'flex', flexDirection: 'column', pointerEvents: 'auto' }}>
-          <div style={{ color: 'white', fontWeight: 'bold', textAlign: 'center', padding: '10px' }}>
-            TAP THE VIDEO BELOW TO FORCE PLAY
-          </div>
+        <div style={{ position: 'fixed', top: '15%', left: '50%', transform: 'translate(-50%, -50%)', width: '250px', height: '250px', opacity: 0.1, zIndex: -9999, pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
