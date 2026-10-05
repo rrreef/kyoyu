@@ -653,19 +653,24 @@ export default function Player({ hideMini = false }) {
            Kept at 200x200 and opacity 0.1 to pass YouTube/iOS autoplay requirements, 
            but centered so it hides behind the Native UI's solid album artwork! */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)', width: '250px', height: '250px', opacity: 1, zIndex: 99999, border: '5px solid red', backgroundColor: 'black' }}>
+        <div style={{ position: 'fixed', top: '15%', left: '50%', transform: 'translate(-50%, -50%)', width: '250px', height: '250px', opacity: 1, zIndex: 99999, border: '5px solid red', backgroundColor: 'black', color: 'lime', fontSize: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div>YT Debug</div>
+          <div>State: {isPlaying ? 'PLAYING' : 'PAUSED'}</div>
+          <div>Prog: {progress}</div>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
             isPlaying={isPlaying}
             volume={volume}
-            audioOnly={true}
-            onStateChange={({ progress: ytProg, duration: ytDur }) => {
+            audioOnly={false}
+            onStateChange={({ progress: ytProg, duration: ytDur, state: ytState }) => {
+              window.__kyoyuYTState = ytState;
               dispatch({ type: 'SET_PROGRESS', value: ytProg });
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
             }}
             onEnded={() => handleNext()}
           />
+          <div style={{ position: 'absolute', bottom: 10, left: 10 }}>YT API: {window.__kyoyuYTState}</div>
         </div>
       )}
       {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI. */}
