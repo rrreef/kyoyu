@@ -77,6 +77,8 @@ export default async function handler(req, res) {
               title: t.title || '',
               duration: Math.round((t.duration || 0)),
               streamUrl: t.file?.['mp3-128'] || '',
+              // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
+              trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, body.albumUrl).href : ''; } catch (e) { return ''; } })(),
               artworkUrl: albumArt,
               artistName: tralbum.artist || '',
             });
@@ -95,6 +97,7 @@ export default async function handler(req, res) {
               const item = t.item || t;
               tracks.push({
                 trackId: item['@id'] || t.position,
+                trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : '',
                 title: item.name || '',
                 duration: 0,
                 artworkUrl: albumArt,

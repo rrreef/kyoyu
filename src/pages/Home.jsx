@@ -51,7 +51,7 @@ function groupByAlbum(tracks) {
 }
 
 export default function Home() {
-  const { playRelease, playTrack, playYouTube, playSoundCloud } = usePlayer();
+  const { playRelease, playTrack, playFromHistory } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads } = useLibrary();
   const homeLayout = useHomeLayoutLive();
@@ -254,18 +254,10 @@ export default function Home() {
           <div className="scroll-row">
             {playHistory.map(item => (
               <button 
-                key={item.id} 
+                key={item._hkey || item.id} 
                 className="shelf-card" 
                 style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                onClick={() => {
-                  if (item.provider === 'youtube') {
-                    playYouTube(item.videoId || item.id.replace('yt-', ''), item);
-                  } else if (item.provider === 'soundcloud') {
-                    playSoundCloud(item.permalinkUrl || item.src || item.id, item);
-                  } else {
-                    playTrack(item);
-                  }
-                }}
+                onClick={() => playFromHistory(item)}
               >
                 <div className="shelf-card-art">
                   {item.cover ? (

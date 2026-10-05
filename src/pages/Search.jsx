@@ -1118,6 +1118,7 @@ export default function Search() {
                             title: t.title || '',
                             artist: t.artistName || item.artistName || '',
                             url: t.streamUrl || '',
+                            trackUrl: t.trackUrl || '',
                             cover: t.artworkUrl || item.artworkUrl || '',
                           })),
                         });

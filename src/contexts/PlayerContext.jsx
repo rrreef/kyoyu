@@ -2,8 +2,39 @@ import { createContext, useContext, useReducer, useRef, useEffect, useCallback }
 import { releases, djSets } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { resolveBandcamp } from '../lib/unifiedSearch';
+import { findTrackSource } from '../lib/resolveTrack';
 
 const PlayerContext = createContext(null);
+
+// ── History replay identity ──
+// Stream URLs from these hosts are signed/expiring, so they can never be replayed later.
+const EXPIRING_SRC = /bcbits\.com|sndcdn\.com|googlevideo\.com/i;
+
+/** Work out how a played track can be replayed later (exact same provider + item). */
+export function historyReplayInfo(t) {
+  if (!t) return { provider: 'lookup' };
+  if (t.replay?.provider) return t.replay;
+  if (t.origin?.provider) return t.origin;
+  const id = String(t.id || '');
+  if (t.provider === 'youtube' && (t.videoId || t.providerItemId)) return { provider: 'youtube', videoId: t.videoId || t.providerItemId };
+  if (/^yt-/.test(id)) return { provider: 'youtube', videoId: id.slice(3) };
+  if (t.provider === 'soundcloud' || /^sc-\d+/.test(id)) {
+    const scId = t.scTrackId || (id.match(/^sc-(\d+)/) || [])[1];
+    if (scId) return { provider: 'soundcloud', scTrackId: String(scId), url: t.providerUrl || t.providerItemId || '' };
+  }
+  if (t.provider === 'bandcamp' && /^https?:\/\//.test(t.providerItemId || '')) return { provider: 'bandcamp', url: t.providerItemId };
+  const src = t.src || t.fileUrl || t.audioUrl || '';
+  if (src && !src.startsWith('resolve:') && !EXPIRING_SRC.test(src)) return { provider: 'native' };
+  // No identity (old entries / unresolved placeholders): find it again by artist + title
+  return { provider: 'lookup' };
+}
+
+function historyKey(t, r = historyReplayInfo(t)) {
+  if (r.provider === 'youtube')    return `yt:${r.videoId}`;
+  if (r.provider === 'soundcloud') return `sc:${r.scTrackId}`;
+  if (r.provider === 'bandcamp')   return `bc:${r.url}`;
+  return `id:${t.id}`;
+}
 
 const allTracks = [
   ...releases.flatMap(r => r.tracks.map(t => ({ ...t, releaseId: r.id, releaseCover: r.cover, releaseTitle: r.title, artistName: r.artist }))),
@@ -98,6 +129,8 @@ export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
   const audioRef = useRef(null);
   const playIdRef = useRef(0); // increments on each track change to cancel stale plays
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // ── Native Error Fallback ──
   useEffect(() => {
@@ -180,9 +213,12 @@ export function PlayerProvider({ children }) {
     try {
       const historyStr = localStorage.getItem('kyoyu-play-history') || '[]';
       let history = JSON.parse(historyStr);
-      history = history.filter(t => t.id !== state.currentTrack.id);
+      const replay = historyReplayInfo(state.currentTrack);
+      const key = historyKey(state.currentTrack, replay);
+      history = history.filter(t => t.id !== state.currentTrack.id && (t._hkey || historyKey(t)) !== key);
       
-      const trackToSave = { ...state.currentTrack };
+      const trackToSave = { ...state.currentTrack, replay, _hkey: key };
+      delete trackToSave._restart;
       trackToSave.title = trackToSave.title || trackToSave.artistName || 'Unknown Track';
       trackToSave.artist = trackToSave.artistName || trackToSave.artist || '';
       trackToSave.cover = trackToSave.releaseCover || trackToSave.cover || trackToSave.artworkUrl;
@@ -451,7 +487,10 @@ export function PlayerProvider({ children }) {
       // Play the resolved stream as a native track — dispatches PLAY_TRACK
       // which changes provider to 'native' and triggers the audio useEffect
       const resolvedTrack = {
-        id: `sc-${trackId}-${Date.now()}`, // Unique ID ensures useEffect re-fires
+        id: `sc-${trackId}`,
+        _restart: Date.now(), // re-fires the audio useEffect (same id as the placeholder)
+        scTrackId: String(trackId),
+        origin: { provider: 'soundcloud', scTrackId: String(trackId), url: trackUrl || '' },
         title: data.title || metadata.title || 'SoundCloud Track',
         artistName: data.artistName || metadata.artistName || metadata.artist || '',
         releaseCover: data.artworkUrl || metadata.artworkUrl || '',
@@ -517,6 +556,8 @@ export function PlayerProvider({ children }) {
             releaseCover: resolved.artworkUrl || item.artworkUrl,
             src: resolved.streamUrl,
             duration: resolved.duration || 0,
+            providerUrl: item.providerUrl || item.providerItemId,
+            origin: { provider: 'bandcamp', url: item.providerItemId },
           });
         }
       } catch (err) {
@@ -527,6 +568,71 @@ export function PlayerProvider({ children }) {
     } else {
       // native track
       playTrack(item);
+    }
+  }
+
+  // ── History replay: play the exact same provider/item that was played before ──
+  const historyPlayCounterRef = useRef(0);
+  async function playFromHistory(item) {
+    if (!item) return;
+    historyPlayCounterRef.current += 1;
+    const myCounter = historyPlayCounterRef.current;
+    // A history tap is a standalone play, not part of a search-results queue
+    searchQueueRef.current = [];
+    searchQueueIdxRef.current = -1;
+
+    const r = historyReplayInfo(item);
+    const title = item.title || '';
+    const artist = item.artist || item.artistName || '';
+    const cover = item.cover || item.releaseCover || item.artworkUrl || '';
+    const id = item.id || `hist-${artist}-${title}`;
+    const isCurrent = () => myCounter === historyPlayCounterRef.current && stateRef.current.currentTrack?.id === id;
+    const showPlaceholder = () => {
+      dispatch({ type: 'PLAY_TRACK', track: { id, title: title || 'Loading...', artistName: artist, releaseCover: cover, src: '', duration: item.duration || 0, replay: r } });
+      try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title, artwork: cover }); } catch(e){}
+      stateRef.current = { ...stateRef.current, currentTrack: { id } };
+    };
+    const playFound = (found) => {
+      if (found.provider === 'youtube') {
+        playYouTube(found.videoId, { title, artist, thumbnail: cover, duration: item.duration });
+        return;
+      }
+      const origin = found.provider === 'soundcloud'
+        ? { provider: 'soundcloud', scTrackId: found.scTrackId, url: found.providerItemId || '' }
+        : { provider: 'bandcamp', url: found.providerItemId };
+      playTrack({ id, title, artistName: artist, releaseCover: cover, src: found.src, duration: item.duration || 0, providerUrl: found.providerItemId, origin });
+    };
+    const lookup = async () => {
+      const found = await findTrackSource({ artist, title }, isCurrent);
+      if (!isCurrent()) return;
+      if (found) playFound(found);
+      else dispatch({ type: 'SET_PLAYING', value: false });
+    };
+
+    if (r.provider === 'youtube') {
+      playYouTube(r.videoId, { title, artist, thumbnail: cover, duration: item.duration });
+    } else if (r.provider === 'soundcloud') {
+      playSoundCloud(r.url || '', { trackId: r.scTrackId, title, artistName: artist, artworkUrl: cover, duration: item.duration });
+    } else if (r.provider === 'bandcamp') {
+      showPlaceholder();
+      let resolved = null;
+      try { resolved = await resolveBandcamp(r.url, title); } catch (e) { resolved = null; }
+      if (!isCurrent()) return;
+      if (resolved?.streamUrl) {
+        playTrack({
+          id, title: title || resolved.title, artistName: artist || resolved.artist,
+          releaseCover: cover || resolved.artworkUrl, src: resolved.streamUrl,
+          duration: resolved.duration || item.duration || 0, providerUrl: r.url,
+          origin: { provider: 'bandcamp', url: r.url },
+        });
+      } else {
+        await lookup(); // track page gone / resolve failed → find the song again
+      }
+    } else if (r.provider === 'native') {
+      playTrack({ ...item, id, artistName: artist, releaseCover: cover });
+    } else {
+      showPlaceholder();
+      await lookup();
     }
   }
 
@@ -830,7 +936,8 @@ export function PlayerProvider({ children }) {
     <PlayerContext.Provider value={{
       state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,
       seekTo, setVolume, setAudioVolumeDirect, allTracks,
-      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue
+      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue,
+      playFromHistory
     }}>
       {children}
     </PlayerContext.Provider>

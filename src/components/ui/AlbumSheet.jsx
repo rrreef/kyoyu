@@ -1,44 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { cleanText, parseEntity, isSameTitle, stripTrackPosition, tokens } from '../../lib/musicMatch';
-
-async function postJson(url, body) {
-  try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return r.ok ? await r.json() : null;
-  } catch (e) { return null; }
-}
-
-/** Resolve a Bandcamp track page to an mp3 stream (native bridge in the iOS app, serverless API on web). */
-async function resolveBandcampStream(trackUrl, title) {
-  const bridge = typeof window !== 'undefined' && window.webkit?.messageHandlers?.bandcamp;
-  if (!bridge) {
-    const data = await postJson('/api/bandcamp-resolve', { url: trackUrl });
-    return data?.streamUrl || null;
-  }
-  return new Promise((resolve) => {
-    const callbackId = Math.random().toString(36).substring(7);
-    window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
-      if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
-        window.__kyoyuBandcampCallbacks[id](data);
-        delete window.__kyoyuBandcampCallbacks[id];
-      }
-    });
-    window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
-    const timeout = setTimeout(() => {
-      if (window.__kyoyuBandcampCallbacks[callbackId]) {
-        window.__kyoyuBandcampCallbacks[callbackId]({ error: 'Timeout' });
-        delete window.__kyoyuBandcampCallbacks[callbackId];
-      }
-    }, 10000);
-    window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
-      clearTimeout(timeout);
-      resolve(data && data.streamUrl ? data.streamUrl : null);
-    };
-    bridge.postMessage({ url: trackUrl, callbackId, title });
-  });
-}
+import { findTrackSource } from '../../lib/resolveTrack';
 
 export function openNativeAlbumFast(album) {
   if (!album) return null;
@@ -46,8 +9,15 @@ export function openNativeAlbumFast(album) {
   window.__lastFastOpenTs = ts;
 
   // Sanitize Discogs tracks unconditionally (covers groupByAlbum which drops album.provider)
+  // Also make generic Discogs track ids ("discogs-track-0") unique per album, otherwise
+  // the same id is shared by every album and History entries overwrite each other.
   if (album.tracks) {
-    album.tracks = album.tracks.map(t => (t.provider === 'discogs' ? { ...t, provider: '' } : t));
+    const albumKey = String(album.id || `${album.artist || ''}-${album.title || ''}`).replace(/\s+/g, '_');
+    album.tracks = album.tracks.map(t => {
+      let nt = t.provider === 'discogs' ? { ...t, provider: '' } : t;
+      if (/^discogs-track-\d+$/.test(String(nt.id || ''))) nt = { ...nt, id: `${albumKey}::${nt.id}` };
+      return nt;
+    });
   }
 
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
@@ -63,7 +33,8 @@ export function openNativeAlbumFast(album) {
        audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
        url: t.url || t.streamUrl || t.audioUrl || t.src || '',
        duration: t.duration || '',
-       provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null)
+       provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null),
+       providerItemId: t.providerItemId || t.trackUrl || undefined,
     }));
     const idx = queue.findIndex(q => q.id === trackObj.id);
     const target = queue[Math.max(idx, 0)];
@@ -80,45 +51,19 @@ export function openNativeAlbumFast(album) {
       };
 
       // Playback priority: Bandcamp → SoundCloud → YouTube. Each source must actually be this song.
-      const want = { artist: cleanText(target.artist), title: cleanText(stripTrackPosition(target.title)), uploader: '' };
-      const searchText = `${target.artist || ''} ${stripTrackPosition(target.title)}`.trim();
       try {
-        // 1. Bandcamp
-        const bc = await postJson('/api/bandcamp-search', { query: searchText });
-        const bcTrack = (bc?.results || []).find(r => r.type === 'track' && isSameTitle(parseEntity(r.title, r.artistName), want));
-        if (bcTrack) {
-          const streamUrl = await resolveBandcampStream(bcTrack.trackUrl, target.title);
-          if (!isCurrent()) return;
-          if (streamUrl) { play({ provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: streamUrl }); return; }
-        }
-
-        // 2. SoundCloud
+        const found = await findTrackSource({ artist: target.artist, title: target.title }, isCurrent);
         if (!isCurrent()) return;
-        const sc = await postJson('/api/soundcloud-search', { query: searchText, limit: 15, offset: 0 });
-        const scTrack = (sc?.results || []).find(r => isSameTitle(parseEntity(r.title, r.artistName), want));
-        if (scTrack) {
-          const scStream = await postJson('/api/soundcloud-search', { resolveTrackId: scTrack.trackId });
-          if (!isCurrent()) return;
-          if (scStream?.streamUrl) { play({ provider: 'soundcloud', providerItemId: scTrack.permalinkUrl, src: scStream.streamUrl }); return; }
-        }
-
-        // 3. YouTube (titles are messy: accept an exact match, else every title word + the artist present)
-        if (!isCurrent()) return;
-        const yt = await postJson('/api/youtube-search', { query: `${searchText} audio` });
-        const ytResults = yt?.results || [];
-        const ytEnt = (r) => parseEntity(r.title, r.channelTitle);
-        const looseYt = (r) => {
-          const all = tokens(`${r.title} ${r.channelTitle}`);
-          const need = [...tokens(want.title), ...tokens(want.artist)];
-          return need.length > 0 && need.every(w => all.has(w));
-        };
-        const ytTrack = ytResults.find(r => isSameTitle(ytEnt(r), want)) || ytResults.find(looseYt);
-        if (ytTrack && isCurrent() && window.__kyoyuGlobalPlayYouTube) {
-          window.__kyoyuGlobalSetQueue(queue);
-          window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
+        if (!found) { console.warn('[AlbumSheet] No matching source found for', target.artist, target.title); return; }
+        if (found.provider === 'youtube') {
+          if (window.__kyoyuGlobalPlayYouTube) {
+            window.__kyoyuGlobalSetQueue(queue);
+            window.__kyoyuGlobalPlayYouTube(found.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
+          }
           return;
         }
-        console.warn('[AlbumSheet] No matching source found for', searchText);
+        // Keep the provider identity on the played track so History can replay the exact same source
+        play({ provider: found.provider, providerItemId: found.providerItemId, scTrackId: found.scTrackId, src: found.src });
         return;
       } catch (e) { console.warn('Resolve play error:', e); return; }
     }
