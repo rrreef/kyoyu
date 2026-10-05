@@ -7,8 +7,9 @@
 
 const ALLOWED_ORIGINS = ['https://ree.fm', 'https://www.ree.fm'];
 
+// Abuse guard only (was 40/min, which normal typing + album sheets exceeded → Bandcamp results missing)
 let requestLog = [];
-const RATE_LIMIT = 40;
+const RATE_LIMIT = 600;
 const RATE_WINDOW = 60000;
 
 // Result cache: query → { results, timestamp }
@@ -189,8 +190,8 @@ export default async function handler(req, res) {
     const hasMore = results.length >= 10;
     const nextOffset = offset + results.length;
 
-    // Cache results
-    searchCache.set(cacheKey, { results, hasMore, nextOffset, timestamp: now });
+    // Cache results (never cache an empty answer — it's usually a temporary Bandcamp hiccup)
+    if (results.length > 0) searchCache.set(cacheKey, { results, hasMore, nextOffset, timestamp: now });
 
     // Evict old cache entries
     if (searchCache.size > 200) {

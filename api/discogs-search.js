@@ -8,9 +8,18 @@ const DISCOGS_TOKEN = process.env.DISCOGS_TOKEN || '';
 const DISCOGS_HEADERS = { 'User-Agent': 'Kyoyu/1.0 +https://ree.fm', 'Authorization': `Discogs token=${DISCOGS_TOKEN}` };
 const MB_HEADERS = { 'User-Agent': 'Kyoyu/1.0 (https://ree.fm)' };
 
+// Abuse guard only. Discogs' own quota (60/min per token) is handled by caching + retry below;
+// a low cap here used to make normal typing return 429 → Discogs results silently missing.
 let requestLog = [];
-const RATE_LIMIT = 55;
+const RATE_LIMIT = 600;
 const RATE_WINDOW = 60000;
+
+// Search result cache (memory per instance + Supabase shared across instances)
+const searchMemCache = new Map();
+const SEARCH_MEM_TTL = 15 * 60 * 1000;
+const SEARCH_DB_TTL = 24 * 60 * 60 * 1000;
+const SEARCH_CACHE_VERSION = 1;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Cache for alias resolution
 const aliasCache = new Map();
@@ -642,12 +651,51 @@ export default async function handler(req, res) {
   let url = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&page=${p}&per_page=${pp}`;
   if (type) url += `&type=${encodeURIComponent(type)}`;
 
+  const cacheKey = `search|${String(query).trim().toLowerCase()}|${p}|${pp}|${type || ''}`;
+  const mem = searchMemCache.get(cacheKey);
+  if (mem && now - mem.ts < SEARCH_MEM_TTL) return res.status(200).json(mem.data);
+
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  let stale = null;
   try {
-    const discogsRes = await fetch(url, { headers: { 'User-Agent': 'Kyoyu/1.0', 'Authorization': `Discogs token=${DISCOGS_TOKEN}` } });
-    if (!discogsRes.ok) return res.status(discogsRes.status).json({ error: 'Discogs API error' });
+    const { data: row } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', cacheKey).single();
+    if (row?.data && row.data._v === SEARCH_CACHE_VERSION) {
+      const { _v, ...cachedData } = row.data;
+      if (Date.now() - new Date(row.updated_at).getTime() < SEARCH_DB_TTL) {
+        searchMemCache.set(cacheKey, { data: cachedData, ts: now });
+        return res.status(200).json(cachedData);
+      }
+      stale = cachedData;
+    }
+  } catch (e) { /* cache miss */ }
+
+  try {
+    // Discogs answers 429 when the per-minute quota is used up — wait and retry instead of returning nothing
+    let discogsRes = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      discogsRes = await fetch(url, { headers: { 'User-Agent': 'Kyoyu/1.0', 'Authorization': `Discogs token=${DISCOGS_TOKEN}` } });
+      if (discogsRes.status !== 429 && discogsRes.status < 500) break;
+      if (attempt === 0) await sleep(900);
+    }
+    if (!discogsRes.ok) {
+      if (stale) return res.status(200).json(stale);
+      return res.status(discogsRes.status).json({ error: 'Discogs API error' });
+    }
     const data = await discogsRes.json();
+    searchMemCache.set(cacheKey, { data, ts: now });
+    if (searchMemCache.size > 300) {
+      [...searchMemCache.entries()].sort((a, b) => a[1].ts - b[1].ts).slice(0, 100).forEach(([k]) => searchMemCache.delete(k));
+    }
+    if ((data.results || []).length > 0) {
+      try {
+        await supabase.from('track_info_cache').upsert({
+          lookup_key: cacheKey, title: '', artist: '', album: '', data: { ...data, _v: SEARCH_CACHE_VERSION }, updated_at: new Date().toISOString(),
+        }, { onConflict: 'lookup_key' });
+      } catch (e) { /* non-fatal */ }
+    }
     return res.status(200).json(data);
   } catch (e) {
+    if (stale) return res.status(200).json(stale);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

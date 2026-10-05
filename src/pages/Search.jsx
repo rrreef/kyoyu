@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import { unifiedSearch, resolveBandcamp, searchSingleProvider } from '../lib/unifiedSearch';
+import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
 import { openNativeAlbumFast } from '../components/ui/AlbumSheet';
@@ -428,18 +428,46 @@ export default function Search() {
     }
 
     setLoading(true);
-    debounceRef.current = setTimeout(() => {
-      unifiedSearch(query.trim())
-        .then(({ nativeTracks, external, pagination }) => {
+    const q = query.trim();
+
+    // Discogs / Bandcamp decide the result order. If either failed (rate limit, timeout…),
+    // keep retrying it in the background and merge it in — the ordering re-applies automatically.
+    const RETRY_DELAYS = [1200, 3000, 6000];
+    const retryMissing = async (failed, snapshot, attempt = 0) => {
+      if (ignore || !failed.length || attempt >= RETRY_DELAYS.length) return;
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+      if (ignore) return;
+      const stillFailed = [];
+      await Promise.all(failed.map(async (prov) => {
+        try {
+          const { results: fresh, pagination } = await searchSingleProvider(prov, q);
           if (ignore) return;
-          console.log('[SEARCH DEBUG] query:', query.trim(), 'SC results:', external.soundcloud?.length, 'YT results:', external.youtube?.length, 'BC results:', external.bandcamp?.length);
-          if (external.soundcloud?.length > 0) {
-            console.log('[SEARCH DEBUG] SC first 3:', external.soundcloud.slice(0,3).map(r => r.title));
-          }
+          if (!fresh || fresh.length === 0) { stillFailed.push(prov); return; }
+          const patch = prov === 'bandcamp' ? { bandcamp: fresh } : categorizeDiscogs(fresh);
+          snapshot.external = { ...snapshot.external, ...patch };
+          if (prov === 'discogs' && pagination) snapshot.pagination = { ...snapshot.pagination, discogs: pagination };
+          frozenOrderRef.current = { key: '', ids: [] };
+          setExternalResults(prev => ({ ...prev, ...patch }));
+          if (prov === 'discogs' && pagination) setPaginationCursors(prev => ({ ...prev, discogs: pagination }));
+        } catch (e) { stillFailed.push(prov); }
+      }));
+      if (ignore) return;
+      if (stillFailed.length) retryMissing(stillFailed, snapshot, attempt + 1);
+      else cacheUnifiedResult(q, { ...snapshot, failed: [] });
+    };
+
+    debounceRef.current = setTimeout(() => {
+      unifiedSearch(q)
+        .then(({ nativeTracks, external, pagination, failed }) => {
+          if (ignore) return;
           setResults(nativeTracks);
           setExternalResults(external);
           setVisibleCount(10);
           setPaginationCursors(pagination || { youtube: {}, soundcloud: {} });
+          if (failed?.length) {
+            console.warn('[Search] retrying providers that failed:', failed);
+            retryMissing(failed, { nativeTracks, external, pagination });
+          }
         })
         .catch(() => {
           if (ignore) return;
@@ -451,7 +479,7 @@ export default function Search() {
         .finally(() => {
           if (!ignore) setLoading(false);
         });
-    }, 100);
+    }, 250); // wait for a short typing pause so every keystroke doesn't fire 4 provider searches
 
     return () => {
       ignore = true;
@@ -486,10 +514,8 @@ export default function Search() {
           else if (providerKey === 'soundcloud') next.soundcloud = freshResults;
           else if (providerKey === 'bandcamp') next.bandcamp = freshResults;
           else if (providerKey === 'discogs') {
-            // Discogs results need categorization — put them all in releases for now
-            const artists = freshResults.filter(r => r.type === 'artist').map(r => ({ ...r, entityType: 'artist', name: r.title }));
-            const labels = freshResults.filter(r => r.type === 'label').map(r => ({ ...r, entityType: 'label', name: r.title }));
-            const releases = freshResults.filter(r => r.type === 'release' || r.type === 'master').map(r => ({ ...r, entityType: 'release', releaseName: r.title }));
+            // Same categorization as the main search (artist / release title split, entity types)
+            const { artists, releases, labels } = categorizeDiscogs(freshResults);
             if (artists.length > 0) next.artists = [...next.artists, ...artists];
             if (labels.length > 0) next.labels = [...next.labels, ...labels];
             if (releases.length > 0) next.releases = [...next.releases, ...releases];

@@ -4,6 +4,21 @@
  */
 import { fetchPublicTracks } from './uploadPipeline';
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/** POST with a retry on rate-limit / server errors, so a busy moment doesn't silently drop a provider. */
+async function postWithRetry(url, body, retries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (res.ok || attempt >= retries || (res.status !== 429 && res.status < 500)) return res;
+    } catch (e) {
+      if (attempt >= retries) throw e;
+    }
+    await sleep(600 * (attempt + 1));
+  }
+}
+
 /**
  * Search Discogs via our proxy API endpoint.
  * Returns normalized results that can be merged with native results.
@@ -11,12 +26,8 @@ import { fetchPublicTracks } from './uploadPipeline';
 async function searchDiscogs(query, offset = 0) {
   try {
     const page = Math.floor(offset / 33) + 1;
-    const res = await fetch('/api/discogs-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, perPage: 33, page }),
-    });
-    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
+    const res = await postWithRetry('/api/discogs-search', { query, perPage: 33, page }, 0); // server already retries; Search page retries in background
+    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset, failed: true };
     const data = await res.json();
     const results = (data.results || []).map(r => ({
       id: `discogs-${offset}-${r.type}-${r.id || r.discogsId}`,
@@ -43,7 +54,7 @@ async function searchDiscogs(query, offset = 0) {
     return { results, hasMore, nextOffset };
   } catch (err) {
     console.warn('Discogs search failed:', err);
-    return { results: [], hasMore: false, nextOffset: offset };
+    return { results: [], hasMore: false, nextOffset: offset, failed: true };
   }
 }
 
@@ -218,17 +229,16 @@ async function searchSoundCloud(query, offset = 0) {
 /**
  * Search Bandcamp via our scraping proxy endpoint.
  */
-async function searchBandcamp(query) {
+async function searchBandcamp(query, { reportFailure = false } = {}) {
+  const fail = () => { const out = []; if (reportFailure) out.failed = true; return out; };
   try {
-    const res = await fetch('/api/bandcamp-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-    });
-    if (!res.ok) return [];
+    const res = await postWithRetry('/api/bandcamp-search', { query }, 1);
+    if (!res.ok) return fail();
     const data = await res.json();
+    // An empty Bandcamp answer for a real query is almost always a temporary hiccup — flag it for a retry
+    if (reportFailure && !(data.results || []).length) return fail();
     return (data.results || []).map((r, i) => ({
-      id: `bc-${i}-${Date.now()}`,
+      id: `bc-${i}-${r.trackId || ''}-${r.type || ''}`,
       entityType: r.type,
       title: r.title,
       artistName: r.artistName,
@@ -242,7 +252,7 @@ async function searchBandcamp(query) {
     }));
   } catch (err) {
     console.warn('Bandcamp search failed:', err);
-    return [];
+    return fail();
   }
 }
 
@@ -332,12 +342,24 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
  * @param {string} query - Search query (min 2 chars)
  * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array, bandcamp: Array } }}
  */
+// Recent complete answers, so re-running the same search is instant and identical
+const unifiedCache = new Map();
+const UNIFIED_CACHE_TTL = 10 * 60 * 1000;
+
+/** Discogs results → { artists, releases, labels } (same shape unifiedSearch returns). */
+export function categorizeDiscogs(discogsResults) {
+  return categorizeDiscogsResults(discogsResults || [], []);
+}
+
 export async function unifiedSearch(query) {
   if (!query || query.trim().length === 0) {
     return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] } };
   }
   
   let trimmed = query.trim();
+  const cacheKey = trimmed.toLowerCase();
+  const hit = unifiedCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < UNIFIED_CACHE_TTL) return hit.value;
   
   // Run all searches in parallel with the user's exact query
   const [nativeTracks, discogsData, ytData, scData, bcData] = await Promise.all([
@@ -345,7 +367,7 @@ export async function unifiedSearch(query) {
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
     searchSoundCloud(trimmed),
-    searchBandcamp(trimmed),
+    searchBandcamp(trimmed, { reportFailure: true }),
   ]);
   
   // Categorize and deduplicate Discogs results
@@ -362,8 +384,24 @@ export async function unifiedSearch(query) {
     soundcloud: { hasMore: scData.hasMore, nextOffset: scData.nextOffset },
     discogs: { hasMore: discogsData.hasMore, nextOffset: discogsData.nextOffset }
   };
-  
-  return { nativeTracks, external, pagination };
+
+  // Providers that failed (not "no results") — the Search page retries these in the background
+  const failed = [];
+  if (discogsData.failed) failed.push('discogs');
+  if (bcData.failed) failed.push('bandcamp');
+
+  const value = { nativeTracks, external, pagination, failed };
+  if (failed.length === 0) {
+    unifiedCache.set(cacheKey, { value, ts: Date.now() });
+    if (unifiedCache.size > 50) unifiedCache.delete(unifiedCache.keys().next().value);
+  }
+  return value;
+}
+
+/** Remember a search answer once the background retry has filled in the missing providers. */
+export function cacheUnifiedResult(query, value) {
+  if (!query) return;
+  unifiedCache.set(query.trim().toLowerCase(), { value, ts: Date.now() });
 }
 
 export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud, searchBandcamp };
