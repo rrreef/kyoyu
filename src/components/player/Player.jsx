@@ -587,6 +587,21 @@ export default function Player({ hideMini = false }) {
   const scHiddenRef = useRef(null);
   const silentSessionLockRef = useRef(null);
 
+  // Play silent audio to lock the WKWebView MediaSession to our parent window
+  // This guarantees that navigator.mediaSession.metadata overrides any iframe's metadata
+  useEffect(() => {
+    if (isNative() && silentSessionLockRef.current) {
+      if (isPlaying) {
+        // Delay slightly to ensure it starts AFTER the iframe starts playing, making it the "active" audio session
+        setTimeout(() => {
+          silentSessionLockRef.current?.play()?.catch(() => {});
+        }, 100);
+      } else {
+        silentSessionLockRef.current?.pause();
+      }
+    }
+  }, [isPlaying]);
+
 
   // Push progress + duration to Swift on every update (replaces old polling approach)
   useEffect(() => {
@@ -614,7 +629,14 @@ export default function Player({ hideMini = false }) {
 
   return (
     <>
-
+      {/* Silent HTML5 audio to force WKWebView to bind MediaSession to the top window */}
+      {isNative() && (
+        <audio 
+          ref={silentSessionLockRef} 
+          loop 
+          src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAWVhpbmcAAAABAAAAAQAAACcAAQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ//OEAA/wAAAAAAAABnUAAAgAAA0gAAAEAAAABAAAABAAAAAQAAAAEAAAA=" 
+        />
+      )}
       {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
@@ -622,7 +644,7 @@ export default function Player({ hideMini = false }) {
       {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
            Kept small and behind content to avoid bleeding through the SwiftUI overlay. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '1px', height: '1px', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '300px', height: '300px', transform: 'scale(0.001)', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
@@ -640,7 +662,7 @@ export default function Player({ hideMini = false }) {
       {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
            Uses same trick as YouTube to ensure WKWebView fully loads the iframe. */}
       {isNativeSC && (
-        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '1px', height: '1px', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '300px', height: '300px', transform: 'scale(0.001)', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <SoundCloudPlayer
             ref={scHiddenRef}
             trackUrl={providerItemId}
