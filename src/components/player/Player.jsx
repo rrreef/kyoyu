@@ -653,7 +653,7 @@ export default function Player({ hideMini = false }) {
            Kept at 200x200 and opacity 0.1 to pass YouTube/iOS autoplay requirements, 
            but centered so it hides behind the Native UI's solid album artwork! */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)', width: '200px', height: '200px', opacity: 0.1, zIndex: -9999 }}>
+        <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)', width: '250px', height: '250px', opacity: 1, zIndex: 99999, border: '5px solid red', backgroundColor: 'black' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
