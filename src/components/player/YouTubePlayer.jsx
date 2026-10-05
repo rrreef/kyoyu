@@ -77,13 +77,22 @@ const YouTubePlayer = forwardRef(({
     }
   }, []);
 
+  const log = (m) => {
+    window.__kyoyuYTLogs = window.__kyoyuYTLogs || [];
+    window.__kyoyuYTLogs.push(m);
+    if (window.__kyoyuYTLogs.length > 5) window.__kyoyuYTLogs.shift();
+  };
+
   // Initialize Player
   useEffect(() => {
     let isMounted = true;
+    log('initPlayer called');
 
     const initPlayer = async () => {
       try {
+        log('loading api...');
         const YT = await loadYouTubeApi();
+        log('api loaded! ' + !!containerRef.current);
         if (!isMounted || !containerRef.current) return;
 
         playerRef.current = new YT.Player(containerRef.current, {
@@ -100,10 +109,10 @@ const YouTubePlayer = forwardRef(({
           },
           events: {
             onReady: (event) => {
+              log('onReady fired!');
               if (volume !== undefined) {
                 event.target.setVolume(volume * 100);
               }
-              // Ensure the iframe allows PiP for background playback on iOS
               try {
                 const iframe = event.target.getIframe();
                 if (iframe) {
@@ -112,12 +121,13 @@ const YouTubePlayer = forwardRef(({
                 }
               } catch(e) {}
               if (onReady) onReady();
-              // If it should be playing right away
               if (isPlaying) {
                 event.target.playVideo();
+                log('called playVideo()');
               }
             },
             onStateChange: (event) => {
+              log('stateChange: ' + event.data);
               const currentIsPlaying = event.data === YT.PlayerState.PLAYING;
               
               if (currentIsPlaying) {
@@ -137,12 +147,15 @@ const YouTubePlayer = forwardRef(({
               }
             },
             onError: (event) => {
+              log('ERROR: ' + event.data);
               console.error('YouTube Player Error:', event.data);
               setError('Error loading video.');
             }
           }
         });
+        log('Player constructed for ' + videoId);
       } catch (err) {
+        log('CATCH ERR: ' + err.message);
         console.error(err);
         if (isMounted) setError('Failed to initialize player');
       }
@@ -223,8 +236,6 @@ const YouTubePlayer = forwardRef(({
     seekTo: (seconds) => {
       if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
         playerRef.current.seekTo(seconds, true);
-        
-        // Optimistically report state
         if (onStateChange) {
            const duration = playerRef.current.getDuration() || 0;
            onStateChange({
@@ -238,11 +249,15 @@ const YouTubePlayer = forwardRef(({
   }));
 
   return (
-    <div className="youtube-player-container">
+    <div className="youtube-player-container" style={{ position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.8)', color: 'lime', fontSize: '12px', padding: '5px', zIndex: 10, pointerEvents: 'none', maxHeight: '100px', overflowY: 'auto' }}>
+        <strong>YT Debug:</strong>
+        {window.__kyoyuYTLogs?.map((l, i) => <div key={i}>{l}</div>)}
+      </div>
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
-        <div ref={containerRef}></div>
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>
       )}
     </div>
   );
