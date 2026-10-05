@@ -289,10 +289,12 @@ export default function Search() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [paginationCursors, setPaginationCursors] = useState({ youtube: {}, soundcloud: {} });
   const [loadingMore, setLoadingMore] = useState({ youtube: false, soundcloud: false });
-  const [currentPage, setCurrentPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(10); // results rendered so far (first 10 immediately, more on scroll)
   const [playlistSheet, setPlaylistSheet] = useState(null); // { title, artistName, artworkUrl, tracks: [] }
   const [searchExtras, setSearchExtras] = useState({ key: '', artistReleases: null, trackRelease: null }); // intent follow-up data (artist releases by rating, release containing a title)
   const debounceRef = useRef(null);
+  const frozenOrderRef = useRef({ key: '', ids: [] });
+  const fetchingMoreRef = useRef(false);
   const { isFollowing, toggleFollow } = useLibrary();
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
 
@@ -420,7 +422,7 @@ export default function Search() {
     if (query.trim().length === 0) {
       setResults([]);
       setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
-      setCurrentPage(1);
+      setVisibleCount(10);
       setLoading(false);
       return () => { ignore = true; };
     }
@@ -436,14 +438,14 @@ export default function Search() {
           }
           setResults(nativeTracks);
           setExternalResults(external);
-          setCurrentPage(1);
+          setVisibleCount(10);
           setPaginationCursors(pagination || { youtube: {}, soundcloud: {} });
         })
         .catch(() => {
           if (ignore) return;
           setResults([]);
           setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
-          setCurrentPage(1);
+          setVisibleCount(10);
           setPaginationCursors({ youtube: {}, soundcloud: {} });
         })
         .finally(() => {
@@ -687,82 +689,8 @@ export default function Search() {
   const hasResults = results.length > 0;
   const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0);
 
-  const ITEMS_PER_PAGE = 50;
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const slicePage = (arr) => arr.slice(startIndex, endIndex);
-
-  const totalLoadedItems = 
-    (externalResults.bandcamp || []).length +
-    (externalResults.soundcloud || []).length +
-    (externalResults.soundcloudPlaylists || []).length +
-    (externalResults.youtube || []).length +
-    (externalResults.releases || []).length +
-    (externalResults.artists || []).length +
-    (externalResults.labels || []).length;
-  
-  const loadedPages = Math.ceil(totalLoadedItems / ITEMS_PER_PAGE) || 1;
   const canFetchMore = Object.values(paginationCursors).some(c => c.hasMore || c.nextPageToken);
-  const totalPages = canFetchMore ? loadedPages + 1 : loadedPages;
-
-  const handlePageClick = async (p) => {
-    if (p > loadedPages && canFetchMore) {
-      await loadMoreAll();
-    }
-    setCurrentPage(p);
-    const scrollContainer = document.querySelector('.main-content');
-    if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const renderPaginationBar = () => {
-    if (totalPages <= 1 && !canFetchMore) return null;
-    
-    let start = Math.max(1, currentPage - 2);
-    let end = Math.min(totalPages, start + 4);
-    if (end - start < 4) start = Math.max(1, end - 4);
-    
-    const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
-    
-    return (
-      <div className="search-pagination-bar" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', padding: '16px 0', margin: '8px 0' }}>
-        <button 
-          onClick={() => handlePageClick(currentPage - 1)}
-          disabled={currentPage === 1}
-          style={{ width: '40px', height: '40px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: currentPage === 1 ? 'rgba(255,255,255,0.2)' : '#fff', border: 'none', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        </button>
-        
-        {pages.map(p => (
-          <button 
-            key={p}
-            onClick={() => handlePageClick(p)}
-            style={{
-              width: '40px', height: '40px', borderRadius: '20px',
-              border: currentPage === p ? '1px solid rgba(255,255,255,0.2)' : 'none',
-              background: currentPage === p ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: currentPage === p ? '#fff' : 'rgba(255,255,255,0.6)',
-              fontWeight: currentPage === p ? '700' : '500',
-              backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-              boxShadow: currentPage === p ? '0 4px 12px rgba(0,0,0,0.2)' : 'none',
-              transition: 'all 0.2s ease',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}
-          >
-            {p > loadedPages ? (Object.values(loadingMore).some(Boolean) ? '...' : p) : p}
-          </button>
-        ))}
-
-        <button 
-          onClick={() => handlePageClick(currentPage + 1)}
-          disabled={currentPage >= totalPages}
-          style={{ width: '40px', height: '40px', borderRadius: '20px', background: 'rgba(255,255,255,0.05)', color: currentPage >= totalPages ? 'rgba(255,255,255,0.2)' : '#fff', border: 'none', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </button>
-      </div>
-    );
-  };
+  const isLoadingMore = Object.values(loadingMore).some(Boolean);
 
   const isQueryEmpty = query.trim().length === 0;
   const showHistory = isQueryEmpty;
@@ -827,7 +755,63 @@ export default function Search() {
   const orderedAll = stripInternal(buildResults(query, searchAnalysis, activeExtras))
     .filter(item => activeFilter === 'all' || filterMatch(categoryOf(item)));
 
-  const rankedAll = slicePage(orderedAll);
+  // Keep the order of already-loaded results stable when more provider pages arrive
+  // (otherwise rows would jump around above the user while they scroll).
+  const orderKey = `${query}|${activeFilter}|${activeProvider}|${searchExtras.key}`;
+  let displayAll = orderedAll;
+  if (frozenOrderRef.current.key === orderKey && frozenOrderRef.current.ids.length > 0) {
+    const byId = new Map(orderedAll.map(i => [i.id, i]));
+    const frozenIds = new Set(frozenOrderRef.current.ids);
+    displayAll = [
+      ...frozenOrderRef.current.ids.map(id => byId.get(id)).filter(Boolean),
+      ...orderedAll.filter(i => !frozenIds.has(i.id)),
+    ];
+  }
+  const rankedAll = displayAll.slice(0, visibleCount);
+  const hasMoreToShow = visibleCount < displayAll.length || canFetchMore;
+
+  // Infinite scroll: reveal 20 more rows when the user nears the bottom; when everything
+  // loaded is shown, fetch the next page from the providers.
+  const scrollStateRef = useRef({});
+  scrollStateRef.current = { visibleCount, total: displayAll.length, canFetchMore, isLoadingMore, orderKey, ids: displayAll.map(i => i.id) };
+  useEffect(() => {
+    const container = document.querySelector('.main-content');
+    if (!container) return;
+    const check = () => {
+      const st = scrollStateRef.current;
+      const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 500;
+      if (!nearBottom || !st.total) return;
+      if (st.visibleCount < st.total) {
+        setVisibleCount(c => c + 20);
+      } else if (st.canFetchMore && !st.isLoadingMore && !fetchingMoreRef.current) {
+        fetchingMoreRef.current = true;
+        frozenOrderRef.current = { key: st.orderKey, ids: st.ids };
+        loadMoreAll().finally(() => {
+          fetchingMoreRef.current = false;
+          setVisibleCount(c => c + 20); // show the newly fetched results right away
+        });
+      }
+    };
+    container.addEventListener('scroll', check, { passive: true });
+    return () => container.removeEventListener('scroll', check);
+  }, [query, activeProvider, paginationCursors]);
+
+  // If the first rows don't fill the screen (nothing to scroll), reveal more until they do
+  useEffect(() => {
+    const container = document.querySelector('.main-content');
+    if (!container) return;
+    if (container.scrollHeight <= container.clientHeight + 40 && visibleCount < displayAll.length) {
+      setVisibleCount(c => c + 20);
+    }
+  }, [rankedAll.length, displayAll.length]);
+
+  // Reset to the first 10 results whenever the result set itself changes
+  useEffect(() => {
+    setVisibleCount(10);
+    frozenOrderRef.current = { key: '', ids: [] };
+    const container = document.querySelector('.main-content');
+    if (container) container.scrollTop = 0;
+  }, [query, activeFilter, activeProvider]);
 
   useEffect(() => {
     if (!extrasKey) return;
@@ -1096,8 +1080,6 @@ export default function Search() {
         <div className="search-empty">No results found</div>
       )}
 
-      {!isQueryEmpty && renderPaginationBar()}
-
       {/* ── Unified Results (all providers merged by relevance) ── */}
       {!isQueryEmpty && rankedAll.length > 0 && (
         <div className="search-results-list search-external-section">
@@ -1233,7 +1215,7 @@ export default function Search() {
               >
                 <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '6px' }}>
                   {(item.coverImage || item.artworkUrl || item.thumbnail || item.thumb) ? (
-                    <img src={item.coverImage || item.artworkUrl || item.thumbnail || item.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                    <img src={item.coverImage || item.artworkUrl || item.thumbnail || item.thumb} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                   ) : (
                     <EntityPlaceholder name={item.title} type={isArtist ? 'artist' : isLabel ? 'label' : 'release'} />
                   )}
@@ -1257,7 +1239,11 @@ export default function Search() {
       )}
 
 
-      {!isQueryEmpty && renderPaginationBar()}
+      {!isQueryEmpty && rankedAll.length > 0 && hasMoreToShow && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 0', color: 'rgba(255,255,255,0.4)' }}>
+          {isLoadingMore ? <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : null}
+        </div>
+      )}
 
       {playlistSheet && (
         <div className="search-playlist-sheet" style={{
