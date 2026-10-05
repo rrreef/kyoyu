@@ -1,6 +1,44 @@
 import { useLayoutEffect, useRef } from 'react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { cleanText, parseEntity, isSameTitle, stripTrackPosition, tokens } from '../../lib/musicMatch';
+
+async function postJson(url, body) {
+  try {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+
+/** Resolve a Bandcamp track page to an mp3 stream (native bridge in the iOS app, serverless API on web). */
+async function resolveBandcampStream(trackUrl, title) {
+  const bridge = typeof window !== 'undefined' && window.webkit?.messageHandlers?.bandcamp;
+  if (!bridge) {
+    const data = await postJson('/api/bandcamp-resolve', { url: trackUrl });
+    return data?.streamUrl || null;
+  }
+  return new Promise((resolve) => {
+    const callbackId = Math.random().toString(36).substring(7);
+    window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
+      if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
+        window.__kyoyuBandcampCallbacks[id](data);
+        delete window.__kyoyuBandcampCallbacks[id];
+      }
+    });
+    window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
+    const timeout = setTimeout(() => {
+      if (window.__kyoyuBandcampCallbacks[callbackId]) {
+        window.__kyoyuBandcampCallbacks[callbackId]({ error: 'Timeout' });
+        delete window.__kyoyuBandcampCallbacks[callbackId];
+      }
+    }, 10000);
+    window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
+      clearTimeout(timeout);
+      resolve(data && data.streamUrl ? data.streamUrl : null);
+    };
+    bridge.postMessage({ url: trackUrl, callbackId, title });
+  });
+}
 
 export function openNativeAlbumFast(album) {
   if (!album) return null;
@@ -35,95 +73,54 @@ export function openNativeAlbumFast(album) {
       if (window.__kyoyuGlobalPlayTrack) {
          window.__kyoyuGlobalPlayTrack({ ...target, src: '' }, queue);
       }
+      const isCurrent = () => myCounter === window.__kyoyuPlayNativeTrackCounter;
+      const play = (extra) => {
+        if (!isCurrent() || !window.__kyoyuGlobalPlayTrack) return;
+        window.__kyoyuGlobalPlayTrack({ ...target, ...extra, audioUrl: extra.src, url: extra.src, releaseCover: target.releaseCover }, queue);
+      };
 
-      const resolveQuery = target.url.replace('resolve:', '');
-      const wantsYouTube = target.provider === 'youtube';
+      // Playback priority: Bandcamp → SoundCloud → YouTube. Each source must actually be this song.
+      const want = { artist: cleanText(target.artist), title: cleanText(stripTrackPosition(target.title)), uploader: '' };
+      const searchText = `${target.artist || ''} ${stripTrackPosition(target.title)}`.trim();
       try {
-        if (!wantsYouTube) {
-          let bcRes = await fetch('/api/bandcamp-search', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: resolveQuery + ' Audio' }),
-          });
-          if (bcRes.ok) {
-            const bcData = await bcRes.json();
-            const clean = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g, '');
-            const targetTitle = clean(target.title);
-            let bcTrack = (bcData.results || []).find(r => r.type === 'track' && clean(r.title).includes(targetTitle));
-            if (!bcTrack) bcTrack = (bcData.results || []).find(r => r.type === 'track');
-            if (bcTrack) {
-              if (window.__kyoyuGlobalPlayTrack) {
-                try {
-                  // resolveBandcamp is imported dynamically or we can just use the global fetch pattern if not imported
-                  // But since we patched unifiedSearch.js, let's use the same logic here for native bridge
-                  let streamUrl = null;
-                  if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bandcamp) {
-                    streamUrl = await new Promise((resolve) => {
-                      const callbackId = Math.random().toString(36).substring(7);
-                      window.__kyoyuBandcampCallback = window.__kyoyuBandcampCallback || ((id, data) => {
-                        if (window.__kyoyuBandcampCallbacks && window.__kyoyuBandcampCallbacks[id]) {
-                          window.__kyoyuBandcampCallbacks[id](data);
-                          delete window.__kyoyuBandcampCallbacks[id];
-                        }
-                      });
-                      window.__kyoyuBandcampCallbacks = window.__kyoyuBandcampCallbacks || {};
-                      const timeout = setTimeout(() => {
-                         if (window.__kyoyuBandcampCallbacks[callbackId]) {
-                            window.__kyoyuBandcampCallbacks[callbackId]({ error: "Timeout" });
-                            delete window.__kyoyuBandcampCallbacks[callbackId];
-                         }
-                      }, 10000);
-                      window.__kyoyuBandcampCallbacks[callbackId] = (data) => {
-                        clearTimeout(timeout);
-                        if (data && data.streamUrl) resolve(data.streamUrl);
-                        else resolve(null);
-                      };
-                      window.webkit.messageHandlers.bandcamp.postMessage({ url: bcTrack.trackUrl, callbackId, title: target.title });
-                    });
-                  } else {
-                    let resRes = await fetch('/api/bandcamp-resolve', {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ url: bcTrack.trackUrl }),
-                    });
-                    if (resRes.ok) {
-                      const resData = await resRes.json();
-                      if (resData.streamUrl) streamUrl = resData.streamUrl;
-                    }
-                  }
-                  
-                  if (streamUrl) {
-                    if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
-                    window.__kyoyuGlobalPlayTrack({ ...target, provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: streamUrl, audioUrl: streamUrl, url: streamUrl, releaseCover: target.releaseCover }, queue);
-                    return;
-                  }
-                } catch(e) {}
-                // If bandcamp resolve failed (e.g. 404), fall through to YouTube below
-              } else {
-                return; // If there was no global play track, just abort
-              }
-            } else {
-                // No bandcamp track found, fall through to YouTube
-            }
-          } else {
-              // wantsYouTube is true, fall through to YouTube
-          }
+        // 1. Bandcamp
+        const bc = await postJson('/api/bandcamp-search', { query: searchText });
+        const bcTrack = (bc?.results || []).find(r => r.type === 'track' && isSameTitle(parseEntity(r.title, r.artistName), want));
+        if (bcTrack) {
+          const streamUrl = await resolveBandcampStream(bcTrack.trackUrl, target.title);
+          if (!isCurrent()) return;
+          if (streamUrl) { play({ provider: 'bandcamp', providerItemId: bcTrack.trackUrl, src: streamUrl }); return; }
         }
-        let ytRes = await fetch('/api/youtube-search', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: resolveQuery }),
-        });
-        if (ytRes.ok) {
-          const ytData = await ytRes.json();
-          const ytTrack = (ytData.results || [])[0];
-          if (ytTrack) {
-            if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
-            if (window.__kyoyuGlobalPlayYouTube) {
-              window.__kyoyuGlobalSetQueue(queue);
-              window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
-            }
-            return;
-          }
+
+        // 2. SoundCloud
+        if (!isCurrent()) return;
+        const sc = await postJson('/api/soundcloud-search', { query: searchText, limit: 15, offset: 0 });
+        const scTrack = (sc?.results || []).find(r => isSameTitle(parseEntity(r.title, r.artistName), want));
+        if (scTrack) {
+          const scStream = await postJson('/api/soundcloud-search', { resolveTrackId: scTrack.trackId });
+          if (!isCurrent()) return;
+          if (scStream?.streamUrl) { play({ provider: 'soundcloud', providerItemId: scTrack.permalinkUrl, src: scStream.streamUrl }); return; }
         }
-      } catch (e) { console.warn('Resolve play error:', e); }
+
+        // 3. YouTube (titles are messy: accept an exact match, else every title word + the artist present)
+        if (!isCurrent()) return;
+        const yt = await postJson('/api/youtube-search', { query: `${searchText} audio` });
+        const ytResults = yt?.results || [];
+        const ytEnt = (r) => parseEntity(r.title, r.channelTitle);
+        const looseYt = (r) => {
+          const all = tokens(`${r.title} ${r.channelTitle}`);
+          const need = [...tokens(want.title), ...tokens(want.artist)];
+          return need.length > 0 && need.every(w => all.has(w));
+        };
+        const ytTrack = ytResults.find(r => isSameTitle(ytEnt(r), want)) || ytResults.find(looseYt);
+        if (ytTrack && isCurrent() && window.__kyoyuGlobalPlayYouTube) {
+          window.__kyoyuGlobalSetQueue(queue);
+          window.__kyoyuGlobalPlayYouTube(ytTrack.videoId, { ...target, id: target.id, title: target.title, channelTitle: target.artist, thumbnail: target.releaseCover });
+          return;
+        }
+        console.warn('[AlbumSheet] No matching source found for', searchText);
+        return;
+      } catch (e) { console.warn('Resolve play error:', e); return; }
     }
     if (myCounter !== window.__kyoyuPlayNativeTrackCounter) return;
     if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);

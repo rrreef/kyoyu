@@ -3,7 +3,7 @@ import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, Externa
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
-import { deduplicateResults } from '../lib/searchDedup';
+import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
 import { openNativeAlbumFast } from '../components/ui/AlbumSheet';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -291,6 +291,7 @@ export default function Search() {
   const [loadingMore, setLoadingMore] = useState({ youtube: false, soundcloud: false });
   const [currentPage, setCurrentPage] = useState(1);
   const [playlistSheet, setPlaylistSheet] = useState(null); // { title, artistName, artworkUrl, tracks: [] }
+  const [searchExtras, setSearchExtras] = useState({ key: '', artistReleases: null, trackRelease: null }); // intent follow-up data (artist releases by rating, release containing a title)
   const debounceRef = useRef(null);
   const { isFollowing, toggleFollow } = useLibrary();
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
@@ -772,16 +773,8 @@ export default function Search() {
 
   // ── Build unified result list across all providers ──
   // Tag every item with its provider and normalize fields
-  // For Bandcamp: show albums when filter is 'all', tracks only when filter is 'titles'
-  const bcItems = (externalResults.bandcamp || []).filter(bc => {
-    const et = bc.entityType || bc.type || 'track';
-    if (activeFilter === 'all') return true; // include all — dedup handles duplicates
-    if (filterMatch('titles')) return et === 'track';
-    if (filterMatch('albums')) return et === 'album';
-    if (filterMatch('artists')) return et === 'artist';
-    if (filterMatch('labels')) return et === 'label';
-    return true;
-  });
+  // Category filtering is applied to the final ordered list (see orderedAll)
+  const bcItems = externalResults.bandcamp || [];
 
   const allExternal = [
     ...(providerMatch('youtube') ? (externalResults.youtube || []).map(yt => ({
@@ -807,8 +800,59 @@ export default function Search() {
     })) : []),
   ];
 
-  // Rank all external results by relevance and paginate
-  const rankedAll = slicePage(rankResults(query, deduplicateResults(allExternal)));
+  // ── Intent-aware ordering: one result per title / album / artist ──
+  // With all providers: detect artist / release / title intent and order accordingly.
+  // With a single provider selected: plain relevance order, deduped within that provider.
+  const searchAnalysis = (() => {
+    const a = analyzeSearch(query, allExternal);
+    return activeProvider === 'all' ? a : { ...a, intent: 'general' };
+  })();
+
+  // Follow-up fetch key: artist → releases sorted by rating; title → Discogs release containing it
+  let extrasKey = '';
+  if (searchAnalysis.intent === 'artist') {
+    extrasKey = `artist|${searchAnalysis.discogsArtist?.discogsId || ''}|${searchAnalysis.artistPick._ent.title}`;
+  } else if (searchAnalysis.intent === 'title' && searchAnalysis.bestTrack && !searchAnalysis.instantRelease) {
+    extrasKey = `title|${searchAnalysis.bestTrack._ent.artist}|${searchAnalysis.bestTrack._ent.title}`;
+  }
+  const activeExtras = searchExtras.key && searchExtras.key === extrasKey ? searchExtras : {};
+
+  const categoryOf = (item) => {
+    const et = (item.entityType || 'track').toLowerCase();
+    if (et === 'artist') return 'artists';
+    if (et === 'label') return 'labels';
+    if (et === 'release' || et === 'album' || et === 'playlist') return 'albums';
+    return 'titles';
+  };
+  const orderedAll = stripInternal(buildResults(query, searchAnalysis, activeExtras))
+    .filter(item => activeFilter === 'all' || filterMatch(categoryOf(item)));
+
+  const rankedAll = slicePage(orderedAll);
+
+  useEffect(() => {
+    if (!extrasKey) return;
+    let ignore = false;
+    const [kind, a, b] = extrasKey.split('|');
+    const timer = setTimeout(async () => {
+      try {
+        const body = kind === 'artist'
+          ? { action: 'artist-top-releases', artistId: a || null, artistName: b }
+          : { action: 'track-release', artist: a, title: b };
+        const r = await fetch('/api/discogs-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok || ignore) return;
+        const d = await r.json();
+        if (ignore) return;
+        setSearchExtras(kind === 'artist'
+          ? { key: extrasKey, artistReleases: d.releases || [], trackRelease: null }
+          : { key: extrasKey, artistReleases: null, trackRelease: d.release || null });
+      } catch (e) { /* keep interim results */ }
+    }, 350);
+    return () => { ignore = true; clearTimeout(timer); };
+  }, [extrasKey]);
 
   // Provider icon colors
   const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };

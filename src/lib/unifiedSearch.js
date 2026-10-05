@@ -32,6 +32,9 @@ async function searchDiscogs(query, offset = 0) {
       labels: r.label || [],
       country: r.country,
       catno: r.catno,
+      masterId: r.master_id || null,
+      have: r.community?.have || 0,
+      want: r.community?.want || 0,
       isExternal: true,
       nativeAvailable: false,
     }));

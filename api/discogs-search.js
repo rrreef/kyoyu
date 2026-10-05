@@ -353,6 +353,203 @@ async function handleTrackInfo(body, res) {
   return res.status(200).json(result);
 }
 
+// ── Search orchestration helpers (artist-top-releases, track-release) ──
+
+const stripArtistSuffix = (s) => (s || '').replace(/\s*\(\d+\)\s*$/, '').replace(/\*+$/, '').trim();
+const normName = (s) => stripArtistSuffix(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+async function cacheGet(supabase, key, maxAgeMs, version) {
+  try {
+    const { data } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', key).single();
+    if (data?.data && data.data._v === version && Date.now() - new Date(data.updated_at).getTime() < maxAgeMs) return data.data;
+  } catch (e) {}
+  return null;
+}
+
+async function cacheSet(supabase, key, value) {
+  try {
+    await supabase.from('track_info_cache').upsert({
+      lookup_key: key, title: '', artist: '', album: '', data: value, updated_at: new Date().toISOString(),
+    }, { onConflict: 'lookup_key' });
+  } catch (e) {}
+}
+
+/** Run async fn over items with limited concurrency. */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+const ARTIST_TOP_VERSION = 1;
+const ARTIST_TOP_TTL = 7 * 24 * 60 * 60 * 1000;
+const ARTIST_TOP_MAX_RATED = 24;
+
+/**
+ * Artist's own releases (role Main: albums, EPs, singles — no compilations or
+ * guest appearances), one per album, sorted by weighted community rating.
+ * Weighted rating = (v/(v+m))·R + (m/(v+m))·C  (C = artist's mean rating, m = vote threshold)
+ * so a 5.0 from 2 votes doesn't beat a 4.6 from 3,000 votes.
+ */
+async function handleArtistTopReleases(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  let { artistId, artistName } = body || {};
+
+  if (!artistId && artistName) {
+    try {
+      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(artistName)}&type=artist&per_page=5`, { headers: DISCOGS_HEADERS });
+      if (r.ok) {
+        const d = await r.json();
+        const want = normName(artistName);
+        const hit = (d.results || []).find(a => normName(a.title) === want) || (d.results || [])[0];
+        if (hit) artistId = hit.id;
+      }
+    } catch (e) {}
+  }
+  if (!artistId) return res.status(200).json({ releases: [] });
+
+  const cacheKey = `artist-top|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, ARTIST_TOP_TTL, ARTIST_TOP_VERSION);
+  if (cached) return res.status(200).json(cached);
+
+  // 1. Artist's releases (Discogs collapses versions under their master in this endpoint).
+  //    Prolific artists have hundreds of credits (mostly guest appearances): read up to 5 pages.
+  const pageUrl = (page) => `https://api.discogs.com/artists/${artistId}/releases?sort=year&sort_order=desc&per_page=100&page=${page}`;
+  let list = [];
+  try {
+    const first = await fetch(pageUrl(1), { headers: DISCOGS_HEADERS });
+    if (first.ok) {
+      const d = await first.json();
+      list = d.releases || [];
+      const pages = Math.min(d.pagination?.pages || 1, 5);
+      const more = await Promise.all(Array.from({ length: pages - 1 }, (_, i) =>
+        fetch(pageUrl(i + 2), { headers: DISCOGS_HEADERS }).then(r => (r.ok ? r.json() : null)).catch(() => null)));
+      for (const m of more) if (m?.releases) list = list.concat(m.releases);
+    }
+  } catch (e) {}
+  const own = list.filter(r => r.role === 'Main' && !(r.type === 'release' && /comp/i.test(r.format || '')));
+
+  // 2. Pre-select the most collected, then fetch their community ratings + hi-res artwork
+  const collected = (r) => r.stats?.community?.in_collection || 0;
+  const candidates = [...own].sort((a, b) => collected(b) - collected(a)).slice(0, ARTIST_TOP_MAX_RATED);
+  let rateLimited = false;
+  const details = await mapLimit(candidates, 4, async (r) => {
+    const releaseId = r.type === 'master' ? r.main_release : r.id;
+    if (!releaseId) return null;
+    try {
+      const dr = await fetch(`https://api.discogs.com/releases/${releaseId}`, { headers: DISCOGS_HEADERS });
+      if (dr.status === 429) { rateLimited = true; return null; }
+      if (!dr.ok) return null;
+      return await dr.json();
+    } catch (e) { return null; }
+  });
+
+  const rows = candidates.map((r, i) => {
+    const d = details[i];
+    const rating = d?.community?.rating || {};
+    const img = (d?.images || []).find(im => im.type === 'primary') || (d?.images || [])[0];
+    return {
+      r, avg: Number(rating.average) || 0, count: Number(rating.count) || 0,
+      cover: img?.uri || img?.uri150 || r.thumb || '',
+      label: d?.labels?.[0]?.name ? stripArtistSuffix(d.labels[0].name) : (r.label || ''),
+      formats: (d?.formats || []).map(f => [f.name, ...(f.descriptions || [])].join(', ')),
+    };
+  });
+
+  // 3. Weighted rating
+  const rated = rows.filter(x => x.count > 0);
+  const C = rated.length ? rated.reduce((s, x) => s + x.avg, 0) / rated.length : 0;
+  const counts = rated.map(x => x.count).sort((a, b) => a - b);
+  const m = Math.max(5, counts.length ? counts[Math.floor(counts.length / 2)] : 5);
+  for (const x of rows) x.wr = x.count > 0 ? (x.count / (x.count + m)) * x.avg + (m / (x.count + m)) * C : -1;
+  rows.sort((a, b) => (b.wr - a.wr) || (collected(b.r) - collected(a.r)) || ((b.r.year || 0) - (a.r.year || 0)));
+
+  const releases = rows.map(({ r, avg, count, cover, label, formats }) => ({
+    id: `discogs-a-${r.type}-${r.id}`,
+    discogsId: r.id,
+    type: r.type,
+    title: r.title || '',
+    releaseName: r.title || '',
+    artistName: stripArtistSuffix(r.artist || ''),
+    year: r.year || null,
+    thumb: r.thumb || '',
+    coverImage: cover,
+    labels: label ? [label] : [],
+    formats,
+    rating: count > 0 ? Math.round(avg * 100) / 100 : null,
+    ratingCount: count,
+    entityType: 'release',
+    provider: 'discogs',
+    isExternal: true,
+  }));
+
+  const result = { _v: ARTIST_TOP_VERSION, artistId, releases };
+  if (!rateLimited) await cacheSet(supabase, cacheKey, result); // don't cache partial ratings
+  return res.status(200).json(result);
+}
+
+const TRACK_RELEASE_VERSION = 1;
+const TRACK_RELEASE_TTL = 30 * 24 * 60 * 60 * 1000;
+
+/** Find the Discogs release (preferring non-compilations by the same artist) that contains a track. */
+async function handleTrackRelease(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  const { artist, title } = body || {};
+  if (!title) return res.status(200).json({ release: null });
+
+  const cacheKey = `track-release|${normName(artist)}|${normName(title)}`;
+  const cached = await cacheGet(supabase, cacheKey, TRACK_RELEASE_TTL, TRACK_RELEASE_VERSION);
+  if (cached) return res.status(200).json(cached);
+
+  const wantArtist = normName(artist);
+  let best = null;
+  for (const type of ['master', 'release']) {
+    try {
+      const qs = `track=${encodeURIComponent(title)}${artist ? `&artist=${encodeURIComponent(artist)}` : ''}&type=${type}&per_page=10`;
+      const r = await fetch(`https://api.discogs.com/database/search?${qs}`, { headers: DISCOGS_HEADERS });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const results = d.results || [];
+      const byArtist = (x) => !wantArtist || normName((x.title || '').split(' - ')[0]).includes(wantArtist) || wantArtist.includes(normName((x.title || '').split(' - ')[0]));
+      const notComp = (x) => !(x.format || []).some(f => /comp/i.test(f));
+      best = results.find(x => byArtist(x) && notComp(x)) || results.find(byArtist) || null;
+      if (best) { best._type = type; break; }
+    } catch (e) {}
+  }
+
+  let release = null;
+  if (best) {
+    const parts = (best.title || '').split(' - ');
+    release = {
+      id: `discogs-t-${best._type}-${best.id}`,
+      discogsId: best.id,
+      type: best._type,
+      title: parts.length >= 2 ? parts.slice(1).join(' - ').trim() : best.title,
+      releaseName: parts.length >= 2 ? parts.slice(1).join(' - ').trim() : best.title,
+      artistName: stripArtistSuffix(parts.length >= 2 ? parts[0] : (artist || '')),
+      year: best.year || null,
+      thumb: best.thumb || '',
+      coverImage: best.cover_image || best.thumb || '',
+      labels: best.label || [],
+      formats: best.format || [],
+      masterId: best.master_id || null,
+      entityType: 'release',
+      provider: 'discogs',
+      isExternal: true,
+    };
+  }
+  const result = { _v: TRACK_RELEASE_VERSION, release };
+  await cacheSet(supabase, cacheKey, result);
+  return res.status(200).json(result);
+}
+
 // ── Main handler ──
 
 export default async function handler(req, res) {
@@ -383,6 +580,16 @@ export default async function handler(req, res) {
   // ==== ACTION: track-info ====
   if (action === 'track-info') {
     return handleTrackInfo(body, res);
+  }
+
+  // ==== ACTION: artist-top-releases ====
+  if (action === 'artist-top-releases') {
+    return handleArtistTopReleases(body, res);
+  }
+
+  // ==== ACTION: track-release ====
+  if (action === 'track-release') {
+    return handleTrackRelease(body, res);
   }
 
   // ==== ACTION: resolve-aliases ====
