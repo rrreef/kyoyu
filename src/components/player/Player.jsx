@@ -592,10 +592,8 @@ export default function Player({ hideMini = false }) {
   useEffect(() => {
     if (isNative() && silentSessionLockRef.current) {
       if (isPlaying) {
-        // Delay slightly to ensure it starts AFTER the iframe starts playing, making it the "active" audio session
-        setTimeout(() => {
-          silentSessionLockRef.current?.play()?.catch(() => {});
-        }, 100);
+        // Start immediately to secure the background WebKit process
+        silentSessionLockRef.current?.play()?.catch(() => {});
       } else {
         silentSessionLockRef.current?.pause();
       }
