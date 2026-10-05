@@ -605,18 +605,8 @@ export default function Player({ hideMini = false }) {
   useEffect(() => {
     if (isNative() && currentTrack) {
       postNative({ progress, dur: duration });
-      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
-        try {
-          // Keep WKWebView's lock screen scrubber in sync with iframe
-          navigator.mediaSession.setPositionState({
-            duration: duration || 1,
-            playbackRate: isPlaying ? 1 : 0,
-            position: progress || 0
-          });
-        } catch (e) {}
-      }
     }
-  }, [progress, duration, isPlaying]);
+  }, [progress, duration]);
 
   // Handle _restart for external providers (PREV_TRACK → seek to 0)
   useEffect(() => {
@@ -650,10 +640,9 @@ export default function Player({ hideMini = false }) {
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
       )}
       {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI.
-           Kept at 200x200 and opacity 0.1 to pass YouTube/iOS autoplay requirements, 
-           but centered so it hides behind the Native UI's solid album artwork! */}
+           Kept small and behind content to avoid bleeding through the SwiftUI overlay. */}
       {isNativeYT && (
-        <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)', width: '200px', height: '200px', opacity: 0.1, zIndex: -9999 }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '100vw', height: '100vh', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <YouTubePlayer
             ref={ytHiddenRef}
             videoId={providerItemId}
@@ -668,9 +657,10 @@ export default function Player({ hideMini = false }) {
           />
         </div>
       )}
-      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI. */}
+      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
+           Uses same scale(0.001) trick as YouTube to ensure WKWebView fully loads the iframe. */}
       {isNativeSC && (
-        <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)', width: '200px', height: '200px', opacity: 0.1, zIndex: -9999 }}>
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '100vw', height: '100vh', opacity: 0.0001, zIndex: -9999, pointerEvents: 'none' }}>
           <SoundCloudPlayer
             ref={scHiddenRef}
             trackUrl={providerItemId}
