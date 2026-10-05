@@ -188,8 +188,6 @@ const YouTubePlayer = forwardRef(({
 
   // Handle isPlaying changes
   useEffect(() => {
-    let retryInterval = null;
-    
     const tryPlay = () => {
       if (playerRef.current && typeof playerRef.current.getPlayerState === 'function') {
         const YT = window.YT;
@@ -203,14 +201,6 @@ const YouTubePlayer = forwardRef(({
     };
 
     tryPlay();
-    
-    if (isPlaying) {
-      retryInterval = setInterval(tryPlay, 1000);
-    }
-    
-    return () => {
-      if (retryInterval) clearInterval(retryInterval);
-    };
   }, [isPlaying]);
 
   // Handle Volume changes
