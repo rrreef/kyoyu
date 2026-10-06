@@ -620,8 +620,8 @@ export default function Player({ hideMini = false }) {
 
   // On native iOS with YouTube, render a hidden YouTube player for audio only
   // The native sheet player handles the UI
-  const isNativeYT = isNative() && provider === 'youtube' && providerItemId;
-  const isNativeSC = isNative() && provider === 'soundcloud' && providerItemId;
+  const isNativeYT = false;
+  const isNativeSC = false;
 
   return (
     <>
@@ -636,41 +636,6 @@ export default function Player({ hideMini = false }) {
       {/* Mini bar — only when not suppressed by BottomDock and not in native iOS */}
       {!hideMini && !exp && !isNative() && (
         <MiniBar track={currentTrack} isPlaying={isPlaying} onExpand={expand} dispatch={dispatch} onNext={handleNext}/>
-      )}
-      {/* Hidden YouTube player for native iOS — provides audio while native sheet handles UI. */}
-      {isNativeYT && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100vw', height: '100vh', opacity: 1, zIndex: -9999, pointerEvents: 'none' }}>
-          <YouTubePlayer
-            ref={ytHiddenRef}
-            videoId={providerItemId}
-            isPlaying={isPlaying}
-            volume={volume}
-            audioOnly={true}
-            onStateChange={({ progress: ytProg, duration: ytDur }) => {
-              dispatch({ type: 'SET_PROGRESS', value: ytProg });
-              if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
-            }}
-            onEnded={() => handleNext()}
-          />
-        </div>
-      )}
-      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
-           Uses same scale(0.001) trick as YouTube to ensure WKWebView fully loads the iframe. */}
-      {isNativeSC && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100vw', height: '100vh', opacity: 1, zIndex: -9999, pointerEvents: 'none' }}>
-          <SoundCloudPlayer
-            ref={scHiddenRef}
-            trackUrl={providerItemId}
-            isPlaying={isPlaying}
-            volume={volume}
-            audioOnly={false}
-            onStateChange={({ progress: scProg, duration: scDur }) => {
-              dispatch({ type: 'SET_PROGRESS', value: scProg });
-              if (scDur > 0) dispatch({ type: 'SET_DURATION', value: scDur });
-            }}
-            onEnded={() => handleNext()}
-          />
-        </div>
       )}
       {/* Web FullPlayer — skip on native iOS since native sheet handles UI */}
       {!isNative() && (
