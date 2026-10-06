@@ -279,7 +279,7 @@ export default function Search() {
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [results, setResults] = useState([]);
-  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] });
+  const [externalResults, setExternalResults] = useState({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [], spotify: [], applemusic: [] });
   const [loading, setLoading] = useState(false);
   const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
@@ -421,7 +421,7 @@ export default function Search() {
 
     if (query.trim().length === 0) {
       setResults([]);
-      setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
+      setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [], spotify: [], applemusic: [] });
       setVisibleCount(10);
       setLoading(false);
       return () => { ignore = true; };
@@ -472,7 +472,7 @@ export default function Search() {
         .catch(() => {
           if (ignore) return;
           setResults([]);
-          setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [] });
+          setExternalResults({ artists: [], releases: [], labels: [], youtube: [], soundcloud: [], soundcloudPlaylists: [], bandcamp: [], spotify: [], applemusic: [] });
           setVisibleCount(10);
           setPaginationCursors({ youtube: {}, soundcloud: {} });
         })
@@ -497,6 +497,8 @@ export default function Search() {
     if (providerKey === 'youtube') hasResults = externalResults.youtube?.length > 0;
     else if (providerKey === 'soundcloud') hasResults = externalResults.soundcloud?.length > 0;
     else if (providerKey === 'bandcamp') hasResults = externalResults.bandcamp?.length > 0;
+    else if (providerKey === 'spotify') hasResults = externalResults.spotify?.length > 0;
+    else if (providerKey === 'applemusic') hasResults = externalResults.applemusic?.length > 0;
     else if (providerKey === 'discogs') hasResults = externalResults.artists?.length > 0 || externalResults.releases?.length > 0 || externalResults.labels?.length > 0;
     
     if (hasResults) return; // Already have results, no need to retry
@@ -513,6 +515,8 @@ export default function Search() {
           if (providerKey === 'youtube') next.youtube = freshResults;
           else if (providerKey === 'soundcloud') next.soundcloud = freshResults;
           else if (providerKey === 'bandcamp') next.bandcamp = freshResults;
+          else if (providerKey === 'spotify') next.spotify = freshResults;
+          else if (providerKey === 'applemusic') next.applemusic = freshResults;
           else if (providerKey === 'discogs') {
             // Same categorization as the main search (artist / release title split, entity types)
             const { artists, releases, labels } = categorizeDiscogs(freshResults);
@@ -593,7 +597,7 @@ export default function Search() {
   
   async function loadMoreAll() {
     const providersToLoad = activeProvider === 'all' 
-      ? ['bandcamp', 'soundcloud', 'youtube', 'discogs']
+      ? ['bandcamp', 'soundcloud', 'youtube', 'discogs', 'spotify', 'applemusic']
       : [activeProvider];
     await Promise.all(providersToLoad.map(p => loadMoreResults(p)));
   }
@@ -662,6 +666,34 @@ export default function Search() {
         });
       }
     }
+    // Spotify results
+    if (externalResults.spotify) {
+      for (const sp of externalResults.spotify) {
+        queue.push({
+          id: sp.id,
+          title: sp.title,
+          artistName: sp.artistName,
+          artworkUrl: sp.artworkUrl,
+          duration: sp.duration,
+          provider: 'spotify',
+          providerItemId: sp.spotifyId,
+        });
+      }
+    }
+    // Apple Music results
+    if (externalResults.applemusic) {
+      for (const am of externalResults.applemusic) {
+        queue.push({
+          id: am.id,
+          title: am.title,
+          artistName: am.artistName,
+          artworkUrl: am.artworkUrl,
+          duration: am.duration,
+          provider: 'applemusic',
+          providerItemId: am.trackId,
+        });
+      }
+    }
     return queue;
   }
 
@@ -713,7 +745,7 @@ export default function Search() {
   const labels = Array.from(labelMap.values());
 
   const hasResults = results.length > 0;
-  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0);
+  const hasExternal = externalResults.artists.length > 0 || externalResults.releases.length > 0 || externalResults.labels.length > 0 || (externalResults.youtube && externalResults.youtube.length > 0) || (externalResults.soundcloud && externalResults.soundcloud.length > 0) || (externalResults.bandcamp && externalResults.bandcamp.length > 0) || (externalResults.spotify && externalResults.spotify.length > 0) || (externalResults.applemusic && externalResults.applemusic.length > 0);
 
   const canFetchMore = Object.values(paginationCursors).some(c => c.hasMore || c.nextPageToken);
   const isLoadingMore = Object.values(loadingMore).some(Boolean);
@@ -742,6 +774,12 @@ export default function Search() {
     })) : []),
     ...(providerMatch('bandcamp') ? bcItems.map(bc => ({
       ...bc, entityType: bc.entityType || bc.type || 'track', provider: bc.provider || 'bandcamp',
+    })) : []),
+    ...(providerMatch('spotify') ? (externalResults.spotify || []).map(sp => ({
+      ...sp, entityType: sp.entityType || 'track', provider: sp.provider || 'spotify',
+    })) : []),
+    ...(providerMatch('applemusic') ? (externalResults.applemusic || []).map(am => ({
+      ...am, entityType: am.entityType || 'track', provider: am.provider || 'applemusic',
     })) : []),
     ...(providerMatch('discogs') ? (externalResults.artists || []).map(a => ({
       ...a, title: a.name || a.title, artistName: a.name || a.title, entityType: 'artist', provider: 'discogs',
@@ -874,7 +912,7 @@ export default function Search() {
   }, [extrasKey]);
 
   // Provider icon colors
-  const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)' };
+  const providerColors = { bandcamp: '#1da0c3', soundcloud: '#FF5500', youtube: '#FF0000', discogs: 'rgba(255,255,255,0.7)', spotify: '#1DB954', applemusic: '#FA243C' };
 
   // Inline provider logo SVGs
   const providerIcons = {
@@ -901,6 +939,16 @@ export default function Search() {
     ),
     discogs: (
       <img src="/icons/discogs.png" alt="Discogs" width="14" height="14" style={{ flexShrink: 0, borderRadius: 2, filter: 'invert(1)', opacity: 0.7 }} />
+    ),
+    spotify: (
+      <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, fill: '#1DB954' }}>
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.6.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+      </svg>
+    ),
+    applemusic: (
+      <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, fill: '#FA243C' }}>
+        <path d="M12 0a12 12 0 100 24 12 12 0 000-24zm6.65 17.29a2.53 2.53 0 01-1.42 1.38 4.25 4.25 0 01-3.14-.14 3.06 3.06 0 01-1.63-1.64 3.73 3.73 0 01-.13-1.4v-5.69c0-.49-.4-.7-.88-.56l-3.2 1a.58.58 0 00-.4.59v6.52a2.47 2.47 0 01-1.38 1.32 4.25 4.25 0 01-3.2-.17 3 3 0 01-1.57-1.67 3.51 3.51 0 01-.06-1.35 2.54 2.54 0 011.38-1.4 4.31 4.31 0 013.2.14 3 3 0 011.58 1.68 3.32 3.32 0 01.12.8v-8.8a1.59 1.59 0 011.08-1.5l5.52-1.53a1.44 1.44 0 011.83 1.32v7.6a2.63 2.63 0 01-1.37 1.41 4.14 4.14 0 01-3.23-.1 3 3 0 01-1.59-1.66 3.59 3.59 0 01-.07-1.36v.92h-.03v1.89h.03a1.72 1.72 0 001.37-1.4 4.09 4.09 0 003.22.1 3.12 3.12 0 001.62 1.65 3.51 3.51 0 00.08 1.36z"/>
+      </svg>
     ),
   };
 

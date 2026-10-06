@@ -257,6 +257,54 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
 }
 
 /**
+ * Search Spotify via our proxy API endpoint.
+ */
+async function searchSpotify(query, offset = 0) {
+  try {
+    const res = await fetch('/api/spotify-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit: 33, offset }),
+    });
+    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn('Spotify search failed:', err);
+    return { results: [], hasMore: false, nextOffset: offset };
+  }
+}
+
+/**
+ * Search Apple Music via the public iTunes Search API.
+ */
+async function searchAppleMusic(query, offset = 0) {
+  try {
+    const limit = 33;
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=${limit}&offset=${offset}`);
+    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
+    const data = await res.json();
+    const results = (data.results || []).map(t => ({
+      id: `am-${t.trackId}`,
+      trackId: t.trackId,
+      title: t.trackName,
+      artistName: t.artistName,
+      artworkUrl: t.artworkUrl100?.replace('100x100bb', '600x600bb'),
+      duration: Math.floor(t.trackTimeMillis / 1000),
+      albumName: t.collectionName,
+      provider: 'applemusic',
+      providerItemId: String(t.trackId),
+      entityType: 'track',
+      isExternal: true
+    }));
+    return { results, hasMore: results.length === limit, nextOffset: offset + results.length };
+  } catch (err) {
+    console.warn('Apple Music search failed:', err);
+    return { results: [], hasMore: false, nextOffset: offset };
+  }
+}
+
+/**
  * Resolve a Bandcamp track page URL to its audio stream ({ streamUrl, duration, ... }).
  * - Native iOS bridge first (bypasses Bandcamp IP blocks), server API as fallback.
  * - Results are cached for 10 min and concurrent calls share one request, so a result
@@ -363,6 +411,14 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
       const data = await searchDiscogs(q, paginationCursor?.nextOffset || 0);
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
     }
+    case 'spotify': {
+      const data = await searchSpotify(q, paginationCursor?.nextOffset || 0);
+      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
+    }
+    case 'applemusic': {
+      const data = await searchAppleMusic(q, paginationCursor?.nextOffset || 0);
+      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
+    }
     default: return { results: [], pagination: {} };
   }
 }
@@ -395,12 +451,14 @@ export async function unifiedSearch(query) {
   if (hit && Date.now() - hit.ts < UNIFIED_CACHE_TTL) return hit.value;
   
   // Run all searches in parallel with the user's exact query
-  const [nativeTracks, discogsData, ytData, scData, bcData] = await Promise.all([
+  const [nativeTracks, discogsData, ytData, scData, bcData, spData, amData] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
     searchSoundCloud(trimmed),
     searchBandcamp(trimmed, { reportFailure: true }),
+    searchSpotify(trimmed),
+    searchAppleMusic(trimmed),
   ]);
   
   // Categorize and deduplicate Discogs results
@@ -410,6 +468,8 @@ export async function unifiedSearch(query) {
   external.soundcloud = scData.results || [];
   external.soundcloudPlaylists = scData.playlists || [];
   external.bandcamp = bcData;
+  external.spotify = spData.results || [];
+  external.applemusic = amData.results || [];
   
   // Pagination cursors for "Load More" per provider
   const pagination = {
