@@ -255,25 +255,8 @@ const YouTubePlayer = forwardRef(({
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', transform: 'scale(10)' }}></div>
+        <div ref={containerRef} style={{ width: '100%', height: '100%', filter: 'brightness(0)', mixBlendMode: 'screen' }}></div>
       )}
-      {/* 
-        COMPOSITOR HACK:
-        WebKit culls elements hidden by solid colors (occlusion).
-        But it CANNOT cull elements hidden by `backdrop-filter: blur()` because the GPU compositor
-        MUST sample the video to calculate the blur effect!
-        We use 95% opacity to blend the background color, and a 50px blur for the remaining 5%.
-        This forces WebKit to keep the video 100% active, while making it completely invisible to the user!
-      */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'var(--bg-primary)',
-        opacity: 0.95,
-        backdropFilter: 'blur(50px)',
-        WebkitBackdropFilter: 'blur(50px)',
-        zIndex: 10,
-        pointerEvents: 'none'
-      }}></div>
     </div>
   );
 });
