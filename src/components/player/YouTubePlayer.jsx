@@ -251,13 +251,12 @@ const YouTubePlayer = forwardRef(({
   }));
 
   return (
-    <div className="youtube-player-container" style={{ position: 'relative', width: '100%', height: '100%', background: 'black' }}>
+    <div className="youtube-player-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
         <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>
       )}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'black', zIndex: 10, pointerEvents: 'none' }}></div>
     </div>
   );
 });
