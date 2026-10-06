@@ -4,13 +4,15 @@ import { useSearchParams } from 'react-router-dom';
 import {
   User, BarChart3, Bell, Globe, ShieldCheck, CreditCard,
   ChevronRight, RotateCcw, Check, Wifi, WifiOff, CheckCircle2,
-  Camera, Paintbrush2, LogOut,
+  Camera, Paintbrush2, LogOut, Headphones,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
 import { setVIState, useVIStore } from '../lib/visualIdentityStore';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { supabase } from '../lib/supabase';
+import { isStreamingAvailable } from '../lib/streaming';
+import StreamingServicesCard from '../components/settings/StreamingServicesCard';
 import './Settings.css';
 import '../components/nav/Sidebar.css'; // sidebar-logout class
 
@@ -99,6 +101,7 @@ async function saveAvatarUrlToProfile(userId, url) {
 const SECTIONS = [
   { id: 'account',      label: 'Account',      icon: User          },
   { id: 'appearance',   label: 'Appearance',   icon: Paintbrush2   },
+  { id: 'streaming',    label: 'Streaming',    icon: Headphones    },
   { id: 'dashboard',    label: 'Dashboard',    icon: BarChart3     },
   { id: 'notifications',label: 'Notifications',icon: Bell          },
   { id: 'distribution', label: 'Distribution', icon: Globe         },
@@ -346,6 +349,21 @@ function AccountPanel({ user }) {
           <Toggle value={false} onChange={() => {}} />
         </SettingRow>
       </div>
+
+      {/* In the iOS app, mobile creators land here — surface streaming connections */}
+      {isStreamingAvailable() && <StreamingServicesCard />}
+    </div>
+  );
+}
+
+function StreamingPanel() {
+  return (
+    <div className="s-panel">
+      <div className="s-panel-header">
+        <h2>Streaming</h2>
+        <p>Play YouTube songs through Apple Music or Spotify</p>
+      </div>
+      <StreamingServicesCard />
     </div>
   );
 }
@@ -757,6 +775,7 @@ export default function Settings() {
   const panels = {
     account:       <AccountPanel user={user} />,
     appearance:    <AppearancePanel />,
+    streaming:     <StreamingPanel />,
     dashboard:     <DashboardPanel />,
     notifications: <NotificationsPanel />,
     distribution:  <DistributionPanel />,

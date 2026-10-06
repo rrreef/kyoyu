@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Upload, Music, Settings, LogOut, Users, Palette,
          ChevronDown, Globe, Lock, User, Paintbrush2, Bell, ShieldCheck,
-         CreditCard } from 'lucide-react';
+         CreditCard, Headphones } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchMyTracks } from '../../lib/uploadPipeline';
 import './CreatorSidebar.css';
@@ -30,6 +30,7 @@ const RELEASE_SUB = [
 const SETTINGS_SUB = [
   { s: 'account',       label: 'Account',       icon: User        },
   { s: 'appearance',    label: 'Appearance',    icon: Paintbrush2 },
+  { s: 'streaming',     label: 'Streaming',     icon: Headphones  },
   { s: 'dashboard',     label: 'Dashboard',     icon: BarChart3   },
   { s: 'notifications', label: 'Notifications', icon: Bell        },
   { s: 'distribution',  label: 'Distribution',  icon: Globe       },
