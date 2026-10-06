@@ -284,8 +284,8 @@ export function PlayerProvider({ children }) {
     try {
       const mh = window.webkit?.messageHandlers;
       if (mh?.audioFallback) {
-        if (state.currentTrack?.provider === 'youtube' && !src) {
-          // If switching to YouTube without a stream, explicitly kill the native AVPlayer so old audio stops!
+        if (state.currentTrack?.provider === 'youtube') {
+          // If switching to YouTube, explicitly kill the native AVPlayer so old audio stops!
           mh.audioFallback.postMessage({ url: '' });
         } else {
           if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
@@ -445,60 +445,18 @@ export function PlayerProvider({ children }) {
     playTrack(tracks[0], tracks);
   }
 
-  const playYouTubeCounterRef = useRef(0);
-  async function playYouTube(videoId, metadata = {}) {
-    playYouTubeCounterRef.current += 1;
-    const myCounter = playYouTubeCounterRef.current;
-    
-    // Show the track in the player UI immediately while resolving
-    const placeholderTrack = {
+  function playYouTube(videoId, metadata = {}) {
+    const track = {
       id: `yt-${videoId}`,
       title: metadata.title || 'YouTube Video',
       artistName: metadata.channelTitle || metadata.artist || '',
       releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
       duration: metadata.duration || 0,
-      src: '',
+      src: '', // No native audio
       provider: 'youtube',
       providerItemId: videoId,
     };
-    dispatch({ type: 'PLAY_YOUTUBE', videoId, track: placeholderTrack }); 
-    try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: placeholderTrack.title || placeholderTrack.name || '', artwork: placeholderTrack.releaseCover || placeholderTrack.cover || placeholderTrack.artworkUrl || '' }); } catch(e){} 
-
-    // If native extraction fails, fall back to the hidden iframe player (has the background gap, but plays)
-    const fallbackToIframe = (reason) => {
-      if (myCounter !== playYouTubeCounterRef.current) return;
-      console.warn('[Player] YouTube native stream unavailable, using iframe fallback:', reason);
-      dispatch({ type: 'PLAY_YOUTUBE', videoId, track: { ...placeholderTrack, _ytFallback: true } });
-    };
-
-    // Resolve the actual stream URL from our serverless API
-    try {
-      const res = await fetch(`/api/youtube-search?streamId=${encodeURIComponent(videoId)}`);
-      if (!res.ok) return fallbackToIframe(res.status);
-
-      const data = await res.json();
-      if (myCounter !== playYouTubeCounterRef.current) return;
-      if (!data.streamUrl) return fallbackToIframe('no streamUrl');
-
-      // Play the resolved stream as a native track — dispatches PLAY_TRACK
-      // which changes provider to 'native' and triggers the audio useEffect (AVPlayer)
-      const resolvedTrack = {
-        id: `yt-${videoId}`,
-        _restart: Date.now(), 
-        title: metadata.title || data.title || 'YouTube Video',
-        artistName: metadata.channelTitle || metadata.artist || '',
-        releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
-        duration: metadata.duration || data.duration || 0,
-        src: data.streamUrl,
-        provider: 'youtube', // Keeps the YouTube icon
-        providerItemId: videoId,
-        providerUrl: `https://www.youtube.com/watch?v=${videoId}`
-      };
-
-      playTrack(resolvedTrack);
-    } catch (err) {
-      fallbackToIframe(err?.message || err);
-    }
+    dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
   }
 
   const playSoundCloudCounterRef = useRef(0);

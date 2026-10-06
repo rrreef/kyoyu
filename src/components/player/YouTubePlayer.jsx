@@ -77,22 +77,13 @@ const YouTubePlayer = forwardRef(({
     }
   }, []);
 
-  const log = (m) => {
-    window.__kyoyuYTLogs = window.__kyoyuYTLogs || [];
-    window.__kyoyuYTLogs.push(m);
-    if (window.__kyoyuYTLogs.length > 5) window.__kyoyuYTLogs.shift();
-  };
-
   // Initialize Player
   useEffect(() => {
     let isMounted = true;
-    log('initPlayer called');
 
     const initPlayer = async () => {
       try {
-        log('loading api...');
         const YT = await loadYouTubeApi();
-        log('api loaded! ' + !!containerRef.current);
         if (!isMounted || !containerRef.current) return;
 
         playerRef.current = new YT.Player(containerRef.current, {
@@ -109,7 +100,6 @@ const YouTubePlayer = forwardRef(({
           },
           events: {
             onReady: (event) => {
-              log('onReady fired!');
               if (volume !== undefined) {
                 event.target.setVolume(volume * 100);
               }
@@ -123,11 +113,9 @@ const YouTubePlayer = forwardRef(({
               if (onReady) onReady();
               if (isPlaying) {
                 event.target.playVideo();
-                log('called playVideo()');
               }
             },
             onStateChange: (event) => {
-              log('stateChange: ' + event.data);
               const currentIsPlaying = event.data === YT.PlayerState.PLAYING;
               
               if (currentIsPlaying) {
@@ -147,15 +135,12 @@ const YouTubePlayer = forwardRef(({
               }
             },
             onError: (event) => {
-              log('ERROR: ' + event.data);
               console.error('YouTube Player Error:', event.data);
               setError('Error loading video.');
             }
           }
         });
-        log('Player constructed for ' + videoId);
       } catch (err) {
-        log('CATCH ERR: ' + err.message);
         console.error(err);
         if (isMounted) setError('Failed to initialize player');
       }
@@ -255,7 +240,9 @@ const YouTubePlayer = forwardRef(({
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', filter: 'brightness(0)', mixBlendMode: 'screen' }}></div>
+        <div ref={containerRef} style={audioOnly
+          ? { width: '100%', height: '100%', filter: 'brightness(0)', mixBlendMode: 'screen' } // hidden iOS player: fully rendered but invisible
+          : { width: '100%', height: '100%' }}></div>
       )}
     </div>
   );

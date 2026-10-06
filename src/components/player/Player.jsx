@@ -548,7 +548,7 @@ export default function Player({ hideMini = false }) {
         artist: currentTrack.artistName || currentTrack.artist || '',
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
-        provider: currentTrack.provider || 'native',
+        provider: provider || 'native',
         trackUrl: currentTrack.providerUrl || '',
         albumUrl: currentTrack.albumUrl || ''
       });
@@ -618,9 +618,9 @@ export default function Player({ hideMini = false }) {
 
   if(!currentTrack) return null;
 
-  // YouTube on iOS plays through native AVPlayer (stream extracted server-side).
-  // The hidden iframe is only a fallback, mounted when extraction failed (_ytFallback).
-  const isNativeYT = isNative() && provider === 'youtube' && providerItemId && currentTrack?._ytFallback;
+  // On native iOS with YouTube, render a hidden YouTube player for audio only
+  // The native sheet player handles the UI
+  const isNativeYT = isNative() && provider === 'youtube' && providerItemId;
   const isNativeSC = isNative() && provider === 'soundcloud' && providerItemId;
 
   return (
@@ -654,8 +654,7 @@ export default function Player({ hideMini = false }) {
           />
         </div>
       )}
-      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI.
-           Uses same scale(0.001) trick as YouTube to ensure WKWebView fully loads the iframe. */}
+      {/* Hidden SoundCloud player for native iOS — provides audio while native sheet handles UI. */}
       {isNativeSC && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100vw', height: '100vh', opacity: 1, zIndex: -9999, pointerEvents: 'none' }}>
           <SoundCloudPlayer
