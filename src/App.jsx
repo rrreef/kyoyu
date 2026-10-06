@@ -183,6 +183,7 @@ function CreatorApp() {
           <Route path="/profile"          element={<Profile />} />
           <Route path="/settings"         element={<Settings />} />
           <Route path="/app-settings"     element={<AppSettings />} />
+          <Route path="/subscription"     element={<Subscription />} />
 
           {/* ── Listener tab-bar routes — so iOS tab bar works for creator accounts ── */}
           <Route path="/"                 element={<Home />} />

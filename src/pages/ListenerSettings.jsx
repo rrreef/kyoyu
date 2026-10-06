@@ -2,7 +2,6 @@
 import { Check, Paintbrush2, LayoutGrid, List } from 'lucide-react';
 import { useTheme, THEMES } from '../hooks/useTheme';
 import { useDisplay } from '../contexts/DisplayContext';
-import StreamingServicesCard from '../components/settings/StreamingServicesCard';
 import './Settings.css';
 import './AppSettings.css';
 
@@ -120,8 +119,6 @@ export default function ListenerSettings() {
                 <span><LayoutGrid size={10}/> 1–5 — grid columns of artwork tiles</span>
               </div>
             </div>
-
-            <StreamingServicesCard />
 
           </div>
         </div>

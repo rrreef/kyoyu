@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { payoutData } from '../data/mockData';
+import StreamingServicesCard from '../components/settings/StreamingServicesCard';
 import './Subscription.css';
 
 export default function Subscription() {
@@ -12,6 +13,11 @@ export default function Subscription() {
         <div className="sub-header-badge glass-sm">Fair Payout — April 2026</div>
         <h1>Where Your Money Goes</h1>
         <p>Every cent of your KYO subscription is accounted for. Here's exactly who got paid and how much — this month.</p>
+      </div>
+
+      {/* Connected streaming services (Apple Music / Spotify) */}
+      <div style={{ marginBottom: 24 }}>
+        <StreamingServicesCard />
       </div>
 
       {/* Main split */}
@@ -64,7 +70,11 @@ export default function Subscription() {
           <div className="sub-comp-row">
             <span className="sub-comp-platform">KYO</span>
             <span>User-centric · directly tied to your listening</span>
-            <span className="sub-comp-highlight">€{(d.artistPool / d.topArtists[0].tracks).toFixed(4)} per stream (for your top artist)</span>
+            <span className="sub-comp-highlight">
+              {d.topArtists[0]?.tracks
+                ? `€${(d.artistPool / d.topArtists[0].tracks).toFixed(4)} per stream (for your top artist)`
+                : 'Shown once you start listening'}
+            </span>
           </div>
           <div className="sub-comp-row sub-comp-other">
             <span className="sub-comp-platform">Typical Streaming Platform</span>
