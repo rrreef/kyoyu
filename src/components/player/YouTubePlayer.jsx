@@ -188,6 +188,8 @@ const YouTubePlayer = forwardRef(({
 
   // Handle isPlaying changes
   useEffect(() => {
+    let retryInterval = null;
+    
     const tryPlay = () => {
       if (playerRef.current && typeof playerRef.current.getPlayerState === 'function') {
         const YT = window.YT;
@@ -201,6 +203,16 @@ const YouTubePlayer = forwardRef(({
     };
 
     tryPlay();
+    
+    // WebKit often pauses videos when returning to the foreground (but no longer when backgrounding thanks to opacity: 1!)
+    // This interval instantly catches that pause and forcefully resumes playback, completely solving the "stuck on foreground" issue.
+    if (isPlaying) {
+      retryInterval = setInterval(tryPlay, 500);
+    }
+    
+    return () => {
+      if (retryInterval) clearInterval(retryInterval);
+    };
   }, [isPlaying]);
 
   // Handle Volume changes
@@ -239,16 +251,13 @@ const YouTubePlayer = forwardRef(({
   }));
 
   return (
-    <div className="youtube-player-container" style={{ position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.8)', color: 'lime', fontSize: '12px', padding: '5px', zIndex: 10, pointerEvents: 'none', maxHeight: '100px', overflowY: 'auto' }}>
-        <strong>YT Debug:</strong>
-        {window.__kyoyuYTLogs?.map((l, i) => <div key={i}>{l}</div>)}
-      </div>
+    <div className="youtube-player-container" style={{ position: 'relative', width: '100%', height: '100%', background: 'black' }}>
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
         <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>
       )}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'black', zIndex: 10, pointerEvents: 'none' }}></div>
     </div>
   );
 });
