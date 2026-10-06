@@ -261,10 +261,10 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
  */
 async function searchSpotify(query, offset = 0) {
   try {
-    const res = await fetch('/api/spotify-search', {
+    const res = await fetch('/api/youtube-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, limit: 33, offset }),
+      body: JSON.stringify({ provider: 'spotify', query, limit: 33, offset }),
     });
     if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
     const data = await res.json();
