@@ -466,7 +466,7 @@ export function PlayerProvider({ children }) {
 
     // Resolve the actual stream URL from our serverless API
     try {
-      const res = await fetch(`/api/youtube-stream?videoId=${videoId}`);
+      const res = await fetch(`/api/youtube-search?streamId=${encodeURIComponent(videoId)}`);
       if (!res.ok) {
         console.warn('[Player] YouTube stream resolve failed:', res.status);
         dispatch({ type: 'SET_PLAYING', value: false });

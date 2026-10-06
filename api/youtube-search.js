@@ -75,12 +75,37 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
   
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // ── Stream extraction: GET /api/youtube-search?streamId=<videoId> ──
+  // Lives in this file (not its own function) to stay under Vercel Hobby's 12-function limit.
+  if (req.method === 'GET' && req.query?.streamId) {
+    const videoId = String(req.query.streamId);
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+      return res.status(400).json({ error: 'Invalid videoId' });
+    }
+    try {
+      process.env.YTDL_NO_UPDATE = '1';
+      const { default: ytdl } = await import('@distube/ytdl-core');
+      const info = await ytdl.getInfo(videoId);
+      const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        streamUrl: format.url,
+        mimeType: format.mimeType || null,
+        title: info.videoDetails?.title || '',
+        duration: parseInt(info.videoDetails?.lengthSeconds) || 0,
+      });
+    } catch (err) {
+      console.error('ytdl-core error:', err);
+      return res.status(500).json({ error: 'Extraction failed', details: err?.message || String(err) });
+    }
   }
 
   // Only allow POST
