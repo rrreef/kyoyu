@@ -204,10 +204,10 @@ const YouTubePlayer = forwardRef(({
 
     tryPlay();
     
-    // WebKit often pauses videos when returning to the foreground (but no longer when backgrounding thanks to opacity: 1!)
-    // This interval instantly catches that pause and forcefully resumes playback, completely solving the "stuck on foreground" issue.
+    // WebKit often pauses videos when returning to the foreground
+    // This interval instantly catches that pause and forcefully resumes playback in 100ms.
     if (isPlaying) {
-      retryInterval = setInterval(tryPlay, 500);
+      retryInterval = setInterval(tryPlay, 100);
     }
     
     return () => {
@@ -255,11 +255,8 @@ const YouTubePlayer = forwardRef(({
       {error ? (
         <div className="youtube-player-error">{error}</div>
       ) : (
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>
+        <div ref={containerRef} style={{ width: '100%', height: '100%', filter: 'blur(100px) opacity(0.01)' }}></div>
       )}
-      {/* Camouflage overlay: Perfectly matches the app's dynamic background (dark or white theme)
-          to hide the video from the user while keeping it fully opaque and visible to WebKit! */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg-primary)', zIndex: 10, pointerEvents: 'none' }}></div>
     </div>
   );
 });
