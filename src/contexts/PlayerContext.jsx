@@ -464,22 +464,21 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'PLAY_YOUTUBE', videoId, track: placeholderTrack }); 
     try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: placeholderTrack.title || placeholderTrack.name || '', artwork: placeholderTrack.releaseCover || placeholderTrack.cover || placeholderTrack.artworkUrl || '' }); } catch(e){} 
 
+    // If native extraction fails, fall back to the hidden iframe player (has the background gap, but plays)
+    const fallbackToIframe = (reason) => {
+      if (myCounter !== playYouTubeCounterRef.current) return;
+      console.warn('[Player] YouTube native stream unavailable, using iframe fallback:', reason);
+      dispatch({ type: 'PLAY_YOUTUBE', videoId, track: { ...placeholderTrack, _ytFallback: true } });
+    };
+
     // Resolve the actual stream URL from our serverless API
     try {
       const res = await fetch(`/api/youtube-search?streamId=${encodeURIComponent(videoId)}`);
-      if (!res.ok) {
-        console.warn('[Player] YouTube stream resolve failed:', res.status);
-        dispatch({ type: 'SET_PLAYING', value: false });
-        return;
-      }
+      if (!res.ok) return fallbackToIframe(res.status);
 
       const data = await res.json();
       if (myCounter !== playYouTubeCounterRef.current) return;
-      if (!data.streamUrl) {
-        console.warn('[Player] YouTube: no stream URL returned');
-        dispatch({ type: 'SET_PLAYING', value: false });
-        return;
-      }
+      if (!data.streamUrl) return fallbackToIframe('no streamUrl');
 
       // Play the resolved stream as a native track — dispatches PLAY_TRACK
       // which changes provider to 'native' and triggers the audio useEffect (AVPlayer)
@@ -489,7 +488,7 @@ export function PlayerProvider({ children }) {
         title: metadata.title || data.title || 'YouTube Video',
         artistName: metadata.channelTitle || metadata.artist || '',
         releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
-        duration: metadata.duration || 0,
+        duration: metadata.duration || data.duration || 0,
         src: data.streamUrl,
         provider: 'youtube', // Keeps the YouTube icon
         providerItemId: videoId,
@@ -498,8 +497,7 @@ export function PlayerProvider({ children }) {
 
       playTrack(resolvedTrack);
     } catch (err) {
-      console.error('[Player] Failed to fetch YouTube stream:', err);
-      dispatch({ type: 'SET_PLAYING', value: false });
+      fallbackToIframe(err?.message || err);
     }
   }
 
