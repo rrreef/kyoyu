@@ -548,7 +548,7 @@ export default function Player({ hideMini = false }) {
         artist: currentTrack.artistName || currentTrack.artist || '',
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
-        provider: provider || 'native',
+        provider: currentTrack.provider || 'native',
         trackUrl: currentTrack.providerUrl || '',
         albumUrl: currentTrack.albumUrl || ''
       });
