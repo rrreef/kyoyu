@@ -257,11 +257,6 @@ const YouTubePlayer = forwardRef(({
       ) : (
         <div ref={containerRef} style={{ width: '100%', height: '100%' }}></div>
       )}
-      {/* 99% Opacity Camouflage Overlay:
-          Visually matches the app's background and hides the video.
-          Because it is 0.99 (not 1.0), WebKit cannot use occlusion culling,
-          forcing it to keep the video fully rendered and active in the background! */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--bg-primary)', opacity: 0.99, zIndex: 10, pointerEvents: 'none' }}></div>
     </div>
   );
 });
