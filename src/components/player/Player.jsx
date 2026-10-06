@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
+import { callStreaming, isStreamingProvider, onStreamingEvent } from '../../lib/streaming';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X } from 'lucide-react';
 import './Player.css';
@@ -446,7 +447,9 @@ export default function Player({ hideMini = false }) {
         // Directly control external players for instant response
         const willPlay = !isPlaying; // state BEFORE toggle
         dispatch({type:'TOGGLE_PLAY'});
-        if (provider === 'youtube') {
+        if (isStreamingProvider(provider)) {
+          callStreaming(willPlay ? 'resume' : 'pause', { service: provider }).catch(() => {});
+        } else if (provider === 'youtube') {
           if (willPlay) ytHiddenRef.current?.play?.();
           else          ytHiddenRef.current?.pause?.();
         } else if (provider === 'soundcloud') {
@@ -462,7 +465,8 @@ export default function Player({ hideMini = false }) {
       }
       if(cmd==='play') {
         dispatch({type:'SET_PLAYING', value: true});
-        if (provider === 'youtube') ytHiddenRef.current?.play?.();
+        if (isStreamingProvider(provider)) callStreaming('resume', { service: provider }).catch(() => {});
+        else if (provider === 'youtube') ytHiddenRef.current?.play?.();
         else if (provider === 'soundcloud') scHiddenRef.current?.play?.();
         else {
           try {
@@ -473,7 +477,8 @@ export default function Player({ hideMini = false }) {
       }
       if(cmd==='pause') {
         dispatch({type:'SET_PLAYING', value: false});
-        if (provider === 'youtube') ytHiddenRef.current?.pause?.();
+        if (isStreamingProvider(provider)) callStreaming('pause', { service: provider }).catch(() => {});
+        else if (provider === 'youtube') ytHiddenRef.current?.pause?.();
         else if (provider === 'soundcloud') scHiddenRef.current?.pause?.();
         else {
           try {
@@ -495,7 +500,10 @@ export default function Player({ hideMini = false }) {
       }
       if(cmd==='seekTo' && typeof val === 'number') {
         // Route seek to the correct player based on provider
-        if (provider === 'youtube') {
+        if (isStreamingProvider(provider)) {
+          callStreaming('seek', { service: provider, position: val }).catch(() => {});
+          dispatch({ type: 'SET_PROGRESS', value: val });
+        } else if (provider === 'youtube') {
           ytHiddenRef.current?.seekTo?.(val);
           dispatch({ type: 'SET_PROGRESS', value: val });
         } else if (provider === 'soundcloud') {
@@ -591,14 +599,15 @@ export default function Player({ hideMini = false }) {
   // This guarantees that navigator.mediaSession.metadata overrides any iframe's metadata
   useEffect(() => {
     if (isNative() && silentSessionLockRef.current) {
-      if (isPlaying) {
+      // Apple Music / Spotify own the audio session + lock screen: WebKit audio would interrupt them
+      if (isPlaying && !isStreamingProvider(provider)) {
         // Start immediately to secure the background WebKit process
         silentSessionLockRef.current?.play()?.catch(() => {});
       } else {
         silentSessionLockRef.current?.pause();
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, provider]);
   // Push progress + duration to Swift on every update (replaces old polling approach)
   useEffect(() => {
     if (isNative() && currentTrack) {
@@ -606,10 +615,38 @@ export default function Player({ hideMini = false }) {
     }
   }, [progress, duration]);
 
+  // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end
+  const streamingRef = useRef({});
+  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext }; });
+  useEffect(() => onStreamingEvent((evt) => {
+    const cur = streamingRef.current;
+    if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
+    if (evt.type === 'progress') {
+      if (typeof evt.position === 'number') dispatch({ type: 'SET_PROGRESS', value: evt.position });
+      if (evt.duration > 0) dispatch({ type: 'SET_DURATION', value: evt.duration });
+    } else if (evt.type === 'state') {
+      if (evt.playing !== cur.isPlaying) dispatch({ type: 'SET_PLAYING', value: !!evt.playing });
+    } else if (evt.type === 'ended') {
+      cur.handleNext();
+    }
+  }), [dispatch]);
+
+  // Switching away from Apple Music / Spotify (another source, or stop) → stop that engine
+  const prevProviderRef = useRef(provider);
+  useEffect(() => {
+    const prev = prevProviderRef.current;
+    prevProviderRef.current = provider;
+    if (isStreamingProvider(prev) && prev !== provider) {
+      callStreaming('stop', { service: prev }).catch(() => {});
+    }
+  }, [provider]);
+
   // Handle _restart for external providers (PREV_TRACK → seek to 0)
   useEffect(() => {
     if (!currentTrack?._restart) return;
-    if (provider === 'youtube') {
+    if (isStreamingProvider(provider)) {
+      callStreaming('seek', { service: provider, position: 0 }).catch(() => {});
+    } else if (provider === 'youtube') {
       ytHiddenRef.current?.seekTo?.(0);
     } else if (provider === 'soundcloud') {
       scHiddenRef.current?.seekTo?.(0);

@@ -3,6 +3,7 @@ import { releases, djSets } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { resolveBandcamp, invalidateBandcampResolve } from '../lib/unifiedSearch';
 import { findTrackSource } from '../lib/resolveTrack';
+import { activePlaybackService, findStreamingMatch, callStreaming, refreshStreamingStatus } from '../lib/streaming';
 
 const PlayerContext = createContext(null);
 
@@ -93,6 +94,15 @@ function playerReducer(state, action) {
       return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
                provider: 'soundcloud', providerItemId: action.trackUrl, providerUrl: action.trackUrl };
     }
+    case 'PLAY_STREAMING': {
+      // Apple Music / Spotify — audio is played natively (MusicKit / Spotify app), not by <audio> or an iframe
+      if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
+        window.__kyoyuAudioRef.pause();
+        window.__kyoyuAudioRef.src = '';
+      }
+      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
+               provider: action.service, providerItemId: action.itemId, providerUrl: action.url || null };
+    }
     case 'NATIVE_ERROR':
       return { ...state, nativeErrorCount: (state.nativeErrorCount || 0) + 1 };
     case 'TOGGLE_PLAY':  return { ...state, isPlaying: !state.isPlaying };
@@ -142,6 +152,9 @@ export function PlayerProvider({ children }) {
   const playIdRef = useRef(0); // increments on each track change to cancel stale plays
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Apple Music / Spotify connection status (iOS app only) — needed before the first YouTube play is routed
+  useEffect(() => { refreshStreamingStatus(); }, []);
 
   // ── Native Error Fallback ──
   // AVPlayer could not load the stream: try a fresh Bandcamp stream once, then the same song elsewhere.
@@ -445,7 +458,9 @@ export function PlayerProvider({ children }) {
     playTrack(tracks[0], tracks);
   }
 
+  const playYouTubeCounterRef = useRef(0);
   function playYouTube(videoId, metadata = {}) {
+    const myCounter = ++playYouTubeCounterRef.current;
     const track = {
       id: `yt-${videoId}`,
       title: metadata.title || 'YouTube Video',
@@ -456,7 +471,44 @@ export function PlayerProvider({ children }) {
       provider: 'youtube',
       providerItemId: videoId,
     };
-    dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
+    const startYouTube = () => {
+      if (myCounter !== playYouTubeCounterRef.current) return;
+      dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
+    };
+
+    // iOS + connected Apple Music / Spotify: play the same song natively (gapless in background)
+    const service = activePlaybackService();
+    if (!service) { startYouTube(); return; }
+
+    showPlaceholder(track);
+    (async () => {
+      const match = await findStreamingMatch(service, {
+        title: metadata.title || '', channel: metadata.channelTitle || metadata.artist || '', duration: metadata.duration,
+      });
+      if (myCounter !== playYouTubeCounterRef.current) return;
+      if (!match) { startYouTube(); return; }
+      const streamTrack = {
+        id: track.id,
+        title: match.title || track.title,
+        artistName: match.artist || track.artistName,
+        releaseTitle: match.album || '',
+        releaseCover: match.artworkUrl || track.releaseCover,
+        duration: match.duration || track.duration,
+        src: '',
+        provider: service,
+        providerItemId: match.id,
+        providerUrl: match.url || '',
+        // Likes / history keep pointing at the YouTube video (replays route through here again)
+        origin: { provider: 'youtube', videoId },
+      };
+      dispatch({ type: 'PLAY_STREAMING', service, itemId: match.id, url: match.url, track: streamTrack });
+      try {
+        await callStreaming('play', { service, itemId: match.id });
+      } catch (err) {
+        console.warn(`[Player] ${service} playback failed, using YouTube:`, err?.message || err);
+        startYouTube();
+      }
+    })();
   }
 
   const playSoundCloudCounterRef = useRef(0);
