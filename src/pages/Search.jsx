@@ -812,7 +812,6 @@ export default function Search() {
   const categoryOf = (item) => {
     const et = (item.entityType || 'track').toLowerCase();
     
-    if (activeProvider === 'bandcamp' && et === 'label') return 'artists'; // Merged Artists/Labels filter
     if (activeProvider === 'youtube' && et === 'playlist' && activeFilter === 'albums') return 'albums'; // YouTube playlists act as albums too
     if (activeProvider === 'discogs' && (et === 'release' || et === 'master') && activeFilter === 'titles') return 'titles'; // Let Discogs albums show as titles when searched
     if (et === 'artist') return 'artists';
