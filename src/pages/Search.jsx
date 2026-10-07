@@ -1237,45 +1237,80 @@ export default function Search() {
                     try {
                       let artistId = null;
                       if (item.provider === 'discogs') artistId = item.id;
-                      const r = await fetch('/api/discogs-search', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'artist-profile', artistId, artistName: item.artistName || item.title }),
-                      });
-                      if (r.ok) {
-                        const profile = await r.json();
-                        if (profile && !profile.error) {
-                          // Merge in any location or other data we might have later
-                          openNativeArtistFast({
-                             ...profile,
-                             provider: item.provider,
-                             providerItemId: item.id
-                          });
-                          return;
+                      
+                      let artistData = {
+                          id: item.id || `local-${Math.random()}`,
+                          name: item.artistName || item.title || 'Unknown Artist',
+                          realname: null,
+                          profile: null,
+                          urls: item.url ? [item.url] : [],
+                          aliases: [],
+                          images: (item.profileAvatar || item.cover) ? [item.profileAvatar || item.cover] : [],
+                          topReleases: [],
+                          provider: item.provider,
+                          providerItemId: item.id
+                      };
+
+                      try {
+                        const r = await fetch('/api/discogs-search', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'artist-profile', artistId, artistName: item.artistName || item.title }),
+                        });
+                        if (r.ok) {
+                          const profile = await r.json();
+                          if (profile && !profile.error) {
+                            artistData = {
+                               ...artistData,
+                               ...profile,
+                               images: profile.images?.length ? profile.images : artistData.images,
+                               urls: profile.urls?.length ? profile.urls : artistData.urls,
+                            };
+                          }
                         }
-                      }
-                      if (item.url) window.open(item.url, '_blank');
-                    } catch (e) { if (item.url) window.open(item.url, '_blank'); }
+                      } catch (err) { console.error('Discogs fallback error', err); }
+                      
+                      openNativeArtistFast(artistData);
+                    } catch (e) { 
+                      console.error('Artist sheet fallback failed', e);
+                    }
                   } else if (isLabel) {
                     try {
                       let labelId = null;
                       if (item.provider === 'discogs') labelId = item.id;
-                      const r = await fetch('/api/discogs-search', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'label-profile', labelId, labelName: item.artistName || item.title }),
-                      });
-                      if (r.ok) {
-                        const profile = await r.json();
-                        if (profile && !profile.error) {
-                          openNativeLabelFast({
-                             ...profile,
-                             provider: item.provider,
-                             providerItemId: item.id
-                          });
-                          return;
+                      
+                      let labelData = {
+                          id: item.id || `local-${Math.random()}`,
+                          name: item.artistName || item.title || 'Unknown Label',
+                          profile: null,
+                          urls: item.url ? [item.url] : [],
+                          images: (item.profileAvatar || item.cover) ? [item.profileAvatar || item.cover] : [],
+                          topReleases: [],
+                          provider: item.provider,
+                          providerItemId: item.id
+                      };
+
+                      try {
+                        const r = await fetch('/api/discogs-search', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'label-profile', labelId, labelName: item.artistName || item.title }),
+                        });
+                        if (r.ok) {
+                          const profile = await r.json();
+                          if (profile && !profile.error) {
+                            labelData = {
+                               ...labelData,
+                               ...profile,
+                               images: profile.images?.length ? profile.images : labelData.images,
+                               urls: profile.urls?.length ? profile.urls : labelData.urls,
+                            };
+                          }
                         }
-                      }
-                      if (item.url) window.open(item.url, '_blank');
-                    } catch (e) { if (item.url) window.open(item.url, '_blank'); }
+                      } catch (err) { console.error('Discogs fallback error', err); }
+                      
+                      openNativeLabelFast(labelData);
+                    } catch (e) { 
+                      console.error('Label sheet fallback failed', e);
+                    }
                   } else if (isRelease) {
                     // Universal Album Sheet: fetch tracks from provider, info from Discogs
                     try {
