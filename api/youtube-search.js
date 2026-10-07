@@ -124,28 +124,66 @@ export default async function handler(req, res) {
       const tokenData = await tokenRes.json();
       if (!tokenData.access_token) return res.status(500).json({ error: 'Failed to get Spotify token' });
 
-      const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}&offset=${offset}`, {
+      const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,album,artist&limit=${limit}&offset=${offset}`, {
         headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
       });
       const searchData = await searchRes.json();
+      
+      const results = [];
+      
+      if (searchData.artists?.items) {
+        searchData.artists.items.forEach(a => {
+          results.push({
+            id: `sp-ar-${a.id}`,
+            spotifyId: a.id,
+            title: a.name,
+            artistName: a.name,
+            artworkUrl: a.images?.[0]?.url,
+            url: a.external_urls?.spotify,
+            provider: 'spotify',
+            entityType: 'artist',
+            isExternal: true
+          });
+        });
+      }
 
-      const results = (searchData.tracks?.items || []).map(t => ({
-        id: `sp-${t.id}`,
-        spotifyId: t.id,
-        title: t.name,
-        artistName: t.artists.map(a => a.name).join(', '),
-        artworkUrl: t.album.images?.[0]?.url,
-        duration: Math.floor(t.duration_ms / 1000),
-        albumName: t.album.name,
-        url: t.external_urls?.spotify,
-        provider: 'spotify',
-        entityType: 'track',
-        isExternal: true
-      }));
+      if (searchData.albums?.items) {
+        searchData.albums.items.forEach(a => {
+          results.push({
+            id: `sp-al-${a.id}`,
+            spotifyId: a.id,
+            title: a.name,
+            artistName: a.artists.map(x => x.name).join(', '),
+            artworkUrl: a.images?.[0]?.url,
+            url: a.external_urls?.spotify,
+            provider: 'spotify',
+            entityType: 'album',
+            isExternal: true
+          });
+        });
+      }
+
+      if (searchData.tracks?.items) {
+        searchData.tracks.items.forEach(t => {
+          results.push({
+            id: `sp-${t.id}`,
+            spotifyId: t.id,
+            title: t.name,
+            artistName: t.artists.map(a => a.name).join(', '),
+            artworkUrl: t.album?.images?.[0]?.url,
+            duration: Math.floor(t.duration_ms / 1000),
+            albumName: t.album?.name,
+            url: t.external_urls?.spotify,
+            provider: 'spotify',
+            entityType: 'track',
+            isExternal: true
+          });
+        });
+      }
 
       return res.status(200).json({ 
         results,
-        hasMore: !!searchData.tracks?.next,
+        hasMore: !!searchData.tracks?.next || !!searchData.albums?.next || !!searchData.artists?.next,
         nextOffset: offset + limit
       });
     } catch (error) {

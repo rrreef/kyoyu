@@ -1256,6 +1256,8 @@ export default function Search() {
                         });
                       }
                     } catch (e) { /* ignore */ }
+                  } else if ((item.provider === 'spotify' || item.provider === 'applemusic') && (isArtist || isRelease)) {
+                    if (item.url) window.open(item.url, '_blank');
                   } else if (!isArtist && !isLabel) {
                     handleSearchPlay({
                       id: item.id || `${item.provider}-${item.trackId || item.videoId}`,
@@ -1286,7 +1288,7 @@ export default function Search() {
                     {isPlaylist ? ` · ${item.trackCount || 0} tracks` : ''}
                     {(item.year || item.released) ? ` · ${item.year || item.released}` : ''}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, color: pColor, opacity: 0.85 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, opacity: 0.7 }}>
                     {providerIcons[item.provider] || null}
                     <span style={{ opacity: 0.7 }}>{entityLabel(item)}</span>
                   </span>

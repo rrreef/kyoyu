@@ -281,23 +281,63 @@ async function searchSpotify(query, offset = 0) {
 async function searchAppleMusic(query, offset = 0) {
   try {
     const limit = 33;
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=${limit}&offset=${offset}`);
-    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
-    const data = await res.json();
-    const results = (data.results || []).map(t => ({
-      id: `am-${t.trackId}`,
-      trackId: t.trackId,
-      title: t.trackName,
-      artistName: t.artistName,
-      artworkUrl: t.artworkUrl100?.replace('100x100bb', '600x600bb'),
-      duration: Math.floor(t.trackTimeMillis / 1000),
-      albumName: t.collectionName,
-      provider: 'applemusic',
-      providerItemId: String(t.trackId),
-      entityType: 'track',
-      isExternal: true
-    }));
-    return { results, hasMore: results.length === limit, nextOffset: offset + results.length };
+    const [songsRes, albumsRes, artistsRes] = await Promise.all([
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=${limit}&offset=${offset}`).then(r=>r.ok ? r.json() : {results:[]}).catch(()=>({results:[]})),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=${limit}&offset=${offset}`).then(r=>r.ok ? r.json() : {results:[]}).catch(()=>({results:[]})),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=musicArtist&limit=${limit}&offset=${offset}`).then(r=>r.ok ? r.json() : {results:[]}).catch(()=>({results:[]}))
+    ]);
+    
+    const results = [];
+    
+    (artistsRes.results || []).forEach(a => {
+      results.push({
+        id: `am-ar-${a.artistId}`,
+        providerItemId: String(a.artistId),
+        title: a.artistName,
+        artistName: a.artistName,
+        provider: 'applemusic',
+        entityType: 'artist',
+        isExternal: true,
+        url: a.artistLinkUrl || a.artistViewUrl
+      });
+    });
+
+    (albumsRes.results || []).forEach(a => {
+      results.push({
+        id: `am-al-${a.collectionId}`,
+        providerItemId: String(a.collectionId),
+        title: a.collectionName,
+        artistName: a.artistName,
+        artworkUrl: a.artworkUrl100?.replace('100x100bb', '600x600bb'),
+        provider: 'applemusic',
+        entityType: 'album',
+        isExternal: true,
+        url: a.collectionViewUrl
+      });
+    });
+
+    (songsRes.results || []).forEach(t => {
+      results.push({
+        id: `am-${t.trackId}`,
+        trackId: t.trackId,
+        title: t.trackName,
+        artistName: t.artistName,
+        artworkUrl: t.artworkUrl100?.replace('100x100bb', '600x600bb'),
+        duration: Math.floor(t.trackTimeMillis / 1000),
+        albumName: t.collectionName,
+        provider: 'applemusic',
+        providerItemId: String(t.trackId),
+        entityType: 'track',
+        isExternal: true,
+        url: t.trackViewUrl
+      });
+    });
+
+    return { 
+      results, 
+      hasMore: songsRes.results?.length === limit || albumsRes.results?.length === limit || artistsRes.results?.length === limit, 
+      nextOffset: offset + limit 
+    };
   } catch (err) {
     console.warn('Apple Music search failed:', err);
     return { results: [], hasMore: false, nextOffset: offset };
