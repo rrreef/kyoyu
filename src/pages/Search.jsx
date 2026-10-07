@@ -4,7 +4,7 @@ import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult, prefetchBandcamp } from '../lib/unifiedSearch';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
-import { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast } from '../components/ui/AlbumSheet';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer } from '../contexts/PlayerContext';
 import ContentStateBadge from '../components/ContentStateBadge';
@@ -1158,8 +1158,49 @@ export default function Search() {
                 onClick={async () => {
                   if (isPlaylist && item.tracks) {
                     setPlaylistSheet(item);
-                  } else if ((item.provider === 'spotify' || item.provider === 'applemusic') && isArtist) {
-                    if (item.url) window.open(item.url, '_blank');
+                  } else if (isArtist) {
+                    try {
+                      let artistId = null;
+                      if (item.provider === 'discogs') artistId = item.id;
+                      const r = await fetch('/api/discogs-search', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'artist-profile', artistId, artistName: item.artistName || item.title }),
+                      });
+                      if (r.ok) {
+                        const profile = await r.json();
+                        if (profile && !profile.error) {
+                          // Merge in any location or other data we might have later
+                          openNativeArtistFast({
+                             ...profile,
+                             provider: item.provider,
+                             providerItemId: item.id
+                          });
+                          return;
+                        }
+                      }
+                      if (item.url) window.open(item.url, '_blank');
+                    } catch (e) { if (item.url) window.open(item.url, '_blank'); }
+                  } else if (isLabel) {
+                    try {
+                      let labelId = null;
+                      if (item.provider === 'discogs') labelId = item.id;
+                      const r = await fetch('/api/discogs-search', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'label-profile', labelId, labelName: item.artistName || item.title }),
+                      });
+                      if (r.ok) {
+                        const profile = await r.json();
+                        if (profile && !profile.error) {
+                          openNativeLabelFast({
+                             ...profile,
+                             provider: item.provider,
+                             providerItemId: item.id
+                          });
+                          return;
+                        }
+                      }
+                      if (item.url) window.open(item.url, '_blank');
+                    } catch (e) { if (item.url) window.open(item.url, '_blank'); }
                   } else if (isRelease) {
                     // Universal Album Sheet: fetch tracks from provider, info from Discogs
                     try {
