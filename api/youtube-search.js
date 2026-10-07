@@ -143,7 +143,7 @@ export default async function handler(req, res) {
         });
       }
 
-      const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,album,artist&limit=${limit}&offset=${offset}`, {
+      const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,album,artist,playlist&limit=${limit}&offset=${offset}`, {
         headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
       });
       const searchData = await searchRes.json();
@@ -200,9 +200,25 @@ export default async function handler(req, res) {
         });
       }
 
+      if (searchData.playlists?.items) {
+        searchData.playlists.items.forEach(p => {
+          results.push({
+            id: `sp-pl-${p.id}`,
+            spotifyId: p.id,
+            title: p.name,
+            artistName: p.owner?.display_name || 'Spotify',
+            artworkUrl: p.images?.[0]?.url,
+            url: p.external_urls?.spotify,
+            provider: 'spotify',
+            entityType: 'playlist',
+            isExternal: true
+          });
+        });
+      }
+
       return res.status(200).json({ 
         results,
-        hasMore: !!searchData.tracks?.next || !!searchData.albums?.next || !!searchData.artists?.next,
+        hasMore: !!searchData.tracks?.next || !!searchData.albums?.next || !!searchData.artists?.next || !!searchData.playlists?.next,
         nextOffset: offset + limit
       });
     } catch (error) {
@@ -211,7 +227,7 @@ export default async function handler(req, res) {
   }
 
   const maxResults = Math.min(parseInt(body?.maxResults) || 10, 50);
-  const type = body?.type || 'video';
+  const type = body?.type || 'video,playlist,channel';
   const pageToken = body?.pageToken || null;
 
   if (!query || typeof query !== 'string' || query.length < 2) {
@@ -225,7 +241,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Search for videos
+    // 1. Search for videos, playlists, and channels
     const searchParams = new URLSearchParams({
       part: 'snippet',
       q: query,
@@ -250,19 +266,43 @@ export default async function handler(req, res) {
       return res.status(200).json({ results: [] });
     }
 
-    // Extract video IDs
-    const videoIds = items.map(item => item.id?.videoId).filter(Boolean);
+    const results = [];
+    const videoIds = [];
 
-    if (videoIds.length === 0) {
-      return res.status(200).json({ results: [] });
-    }
-
-    // 2. Fetch video details for duration
-    const videosParams = new URLSearchParams({
-      part: 'contentDetails',
-      id: videoIds.join(','),
-      key: apiKey
+    // Parse non-video items immediately, collect video IDs
+    items.forEach(item => {
+      if (item.id?.kind === 'youtube#playlist') {
+        results.push({
+          videoId: item.id.playlistId,
+          title: item.snippet?.title,
+          channelTitle: item.snippet?.channelTitle,
+          thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url,
+          entityType: 'playlist',
+          provider: 'youtube',
+          isExternal: true
+        });
+      } else if (item.id?.kind === 'youtube#channel') {
+        results.push({
+          videoId: item.id.channelId,
+          title: item.snippet?.channelTitle || item.snippet?.title,
+          channelTitle: item.snippet?.channelTitle || item.snippet?.title,
+          thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url,
+          entityType: 'artist',
+          provider: 'youtube',
+          isExternal: true
+        });
+      } else if (item.id?.videoId) {
+        videoIds.push(item.id.videoId);
+      }
     });
+
+    if (videoIds.length > 0) {
+      // 2. Fetch video details for duration
+      const videosParams = new URLSearchParams({
+        part: 'contentDetails',
+        id: videoIds.join(','),
+        key: apiKey
+      });
 
     const videosRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?${videosParams.toString()}`);
     
@@ -281,20 +321,26 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. Transform response
-    const results = items.map(item => {
-      const snippet = item.snippet;
-      const videoId = item.id.videoId;
-      
-      return {
-        videoId: videoId,
-        title: snippet.title,
-        channelTitle: snippet.channelTitle,
-        thumbnail: snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || snippet.thumbnails?.high?.url,
-        duration: durationMap[videoId] || 0,
-        publishedAt: snippet.publishedAt
-      };
-    }).filter(item => item.videoId);
+    // 3. Transform response for videos
+    items.forEach(item => {
+      if (item.id?.videoId) {
+        const snippet = item.snippet;
+        const videoId = item.id.videoId;
+        
+        results.push({
+          videoId: videoId,
+          title: snippet.title,
+          channelTitle: snippet.channelTitle,
+          thumbnail: snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || snippet.thumbnails?.high?.url,
+          duration: durationMap[videoId] || 0,
+          publishedAt: snippet.publishedAt,
+          entityType: 'track',
+          provider: 'youtube',
+          isExternal: true
+        });
+      }
+    });
+    }
 
     return res.status(200).json({ results, nextPageToken: searchData.nextPageToken || null });
 

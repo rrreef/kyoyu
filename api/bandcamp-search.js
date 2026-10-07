@@ -146,7 +146,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         search_text: query,
-        search_filter: 'b,a,t', // bands/labels, albums, tracks
+        search_filter: 'b,a,t,f', // bands/labels, albums, tracks, fans
         full_page: true,
         fan_id: 0
       }),
@@ -173,7 +173,7 @@ export default async function handler(req, res) {
           artworkUrl = `https://f4.bcbits.com/img/00${item.img_id}_23.jpg`;
         }
         
-        const type = item.type === 'b' ? (item.is_label ? 'label' : 'artist') : item.type === 'a' ? 'album' : 'track';
+        const type = item.type === 'b' ? (item.is_label ? 'label' : 'artist') : item.type === 'a' ? 'album' : item.type === 'f' ? 'fan' : 'track';
 
         return {
           trackId: item.id,

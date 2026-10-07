@@ -811,9 +811,15 @@ export default function Search() {
 
   const categoryOf = (item) => {
     const et = (item.entityType || 'track').toLowerCase();
+    
+    if (activeProvider === 'bandcamp' && et === 'label') return 'artists'; // Merged Artists/Labels filter
+    if (activeProvider === 'youtube' && et === 'playlist' && activeFilter === 'albums') return 'albums'; // YouTube playlists act as albums too
     if (et === 'artist') return 'artists';
     if (et === 'label') return 'labels';
-    if (et === 'release' || et === 'album' || et === 'playlist') return 'albums';
+    if (et === 'profile' || et === 'user') return 'profiles';
+    if (et === 'fan') return 'fans';
+    if (et === 'playlist') return 'playlists'; // Map playlist to 'playlists' filter
+    if (et === 'release' || et === 'album') return 'albums';
     return 'titles';
   };
   const orderedAll = stripInternal(buildResults(query, searchAnalysis, activeExtras))
