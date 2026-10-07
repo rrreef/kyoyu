@@ -124,6 +124,25 @@ export default async function handler(req, res) {
       const tokenData = await tokenRes.json();
       if (!tokenData.access_token) return res.status(500).json({ error: 'Failed to get Spotify token' });
 
+      if (body?.action === 'fetch-spotify-album') {
+        const albumId = body.albumId.replace('sp-al-', '');
+        const albumRes = await fetch(`https://api.spotify.com/v1/albums/${albumId}`, {
+          headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+        });
+        const albumData = await albumRes.json();
+        return res.status(200).json({
+          tracks: (albumData.tracks?.items || []).map(t => ({
+            id: `sp-${t.id}`,
+            spotifyId: t.id,
+            title: t.name,
+            artistName: t.artists.map(a => a.name).join(', '),
+            duration: Math.floor(t.duration_ms / 1000),
+            url: t.external_urls?.spotify,
+            provider: 'spotify',
+          }))
+        });
+      }
+
       const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track,album,artist&limit=${limit}&offset=${offset}`, {
         headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
       });
