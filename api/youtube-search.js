@@ -107,7 +107,7 @@ export default async function handler(req, res) {
   const provider = body?.provider;
 
   if (provider === 'spotify') {
-    const limit = parseInt(body?.limit) || 33;
+    const limit = Math.min(parseInt(body?.limit) || 10, 10);
     const offset = parseInt(body?.offset) || 0;
     const clientId = process.env.SPOTIFY_CLIENT_ID || '2f6a4c4add46410f83e1550aaf07690a';
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '589bed253e4f4395a1c4e77f93719ecd';
