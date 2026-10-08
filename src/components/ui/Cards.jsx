@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Play, Heart, ShoppingBag } from 'lucide-react';
+import { Play, ShoppingBag } from 'lucide-react';
+import LikeIcon from '../../assets/like_icon.svg';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useState, useRef } from 'react';
@@ -43,7 +44,7 @@ export function ReleaseCard({ release, size = 'md' }) {
         </div>
         <div className="card-actions">
           <button className={`card-action-btn ${saved ? 'active' : ''}`} onClick={() => toggleSave(release.id)} title="Save to Library">
-            <Heart size={14} fill={saved ? 'currentColor' : 'none'} />
+            <img src={LikeIcon} style={{ width: 14, height: 14, opacity: saved ? 1 : 0.5,  }} alt="like" />
           </button>
           {release.vinylPrice && (
             <Link to={`/release/${release.id}`} className="card-action-btn" title="Buy Vinyl">
@@ -106,7 +107,7 @@ export function TrackRow({ track, index, release, onPlay }) {
       </div>
       <div className="track-actions">
         <button className={`track-action-btn ${liked ? 'liked' : ''}`} onClick={() => toggleLike(track.id)}>
-          <Heart size={13} fill={liked ? 'currentColor' : 'none'} />
+          <img src={LikeIcon} style={{ width: 13, height: 13, opacity: liked ? 1 : 0.5,  }} alt="like" />
         </button>
       </div>
       <div className="track-duration">{track.duration}</div>
