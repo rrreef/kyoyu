@@ -76,6 +76,7 @@ export function openNativeAlbumFast(album) {
         genre: album.genre || null,
         year: album.year ? String(album.year) : null,
         label: album.label || null,
+        provider: album.provider || null,
         description: album.description || null,
         tracks: (album.tracks || []).map(t => ({
           id: t.id || String(Date.now() + Math.random()),

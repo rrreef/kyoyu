@@ -603,6 +603,18 @@ export default function Player({ hideMini = false }) {
     }
   }, [currentTrack]);
 
+  // Which service the audio REALLY comes from — shown as a badge on the artwork in the native sheet
+  useEffect(() => {
+    if (!isNative() || !currentTrack) return;
+    let src = 'native';
+    if (provider === 'youtube' || isStreamingProvider(provider)) src = provider;
+    else {
+      const r = historyReplayInfo(currentTrack).provider;
+      src = (r && r !== 'lookup') ? r : (currentTrack.provider || 'native');
+    }
+    postNative({ sourceProvider: src });
+  }, [currentTrack?.id, provider, currentTrack?.src]);
+
   const ytHiddenRef = useRef(null);
   const scHiddenRef = useRef(null);
   const silentSessionLockRef = useRef(null);
@@ -635,10 +647,12 @@ export default function Player({ hideMini = false }) {
 
   // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end
   const streamingRef = useRef({});
-  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext }; });
+  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext, itemId: providerItemId }; });
   useEffect(() => onStreamingEvent((evt) => {
     const cur = streamingRef.current;
     if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
+    // Events of a previous song (still in flight while the next one loads) must never drive the current one
+    if (evt.itemId && cur.itemId && String(evt.itemId) !== String(cur.itemId)) return;
     if (evt.type === 'progress') {
       if (typeof evt.position === 'number') dispatch({ type: 'SET_PROGRESS', value: evt.position });
       if (evt.duration > 0) dispatch({ type: 'SET_DURATION', value: evt.duration });

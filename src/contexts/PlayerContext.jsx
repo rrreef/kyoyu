@@ -203,6 +203,22 @@ export function PlayerProvider({ children }) {
     const stillCurrent = () => stateRef.current.currentTrack?.id === id;
     (async () => {
       const r = historyReplayInfo(cur);
+      if (r.provider === 'youtube' && r.videoId) {
+        // YouTube stream failed (expired / refused): fresh URL once, then the iframe player
+        const meta = { title: cur.title, artist: cur.artistName || cur.artist, thumbnail: cur.releaseCover, duration: cur.duration };
+        if (nativeRetryRef.current !== `${id}|yt1`) {
+          nativeRetryRef.current = `${id}|yt1`;
+          let res = null;
+          try { res = await callStreaming('ytResolve', { videoId: r.videoId }, 12000); } catch (e) {}
+          if (!stillCurrent()) return;
+          if (res?.url && res.url !== cur.src) { playTrack({ ...cur, src: res.url, _restart: Date.now() }); return; }
+        }
+        if (nativeRetryRef.current !== `${id}|yt2`) {
+          nativeRetryRef.current = `${id}|yt2`;
+          playYouTube(r.videoId, meta, { forceIframe: true });
+        }
+        return;
+      }
       if (r.provider === 'bandcamp' && nativeRetryRef.current !== `${id}|bc`) {
         nativeRetryRef.current = `${id}|bc`;
         invalidateBandcampResolve(r.url);
@@ -509,58 +525,39 @@ export function PlayerProvider({ children }) {
   }
 
   const playYouTubeCounterRef = useRef(0);
-  function playYouTube(videoId, metadata = {}) {
+  function playYouTube(videoId, metadata = {}, opts = {}) {
     const myCounter = ++playYouTubeCounterRef.current;
-    const track = {
-      id: `yt-${videoId}`,
-      title: metadata.title || 'YouTube Video',
-      artistName: metadata.channelTitle || metadata.artist || '',
-      releaseCover: metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
-      duration: metadata.duration || 0,
-      src: '', // No native audio
-      provider: 'youtube',
-      providerItemId: videoId,
-    };
-    const startYouTube = () => {
-      if (myCounter !== playYouTubeCounterRef.current) return;
-      dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){} 
-    };
+    const title = metadata.title || 'YouTube Video';
+    const artistName = metadata.channelTitle || metadata.artist || '';
+    const releaseCover = metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+    const providerUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const origin = { provider: 'youtube', videoId };
 
-    // iOS + connected Apple Music / Spotify: play the same song natively (gapless in background)
-    const service = activePlaybackService();
-    if (!service) { startYouTube(); return; }
-
-    showPlaceholder(track);
-    (async () => {
-      const match = await Promise.race([
-        findStreamingMatch(service, {
-          title: metadata.title || '', channel: metadata.channelTitle || metadata.artist || '', duration: metadata.duration,
-        }).catch(() => null),
-        new Promise(resolve => setTimeout(() => resolve(null), 4000)),
-      ]);
+    // Fallback engine: the YouTube iframe (foreground only on iOS, but works when the stream can't be resolved)
+    const startIframe = () => {
       if (myCounter !== playYouTubeCounterRef.current) return;
-      if (!match) { startYouTube(); return; }
-      const streamTrack = {
-        id: track.id,
-        title: match.title || track.title,
-        artistName: match.artist || track.artistName,
-        releaseTitle: match.album || '',
-        releaseCover: match.artworkUrl || track.releaseCover,
-        duration: match.duration || track.duration,
-        src: '',
-        provider: service,
-        providerItemId: match.id,
-        providerUrl: match.url || '',
-        // Likes / history keep pointing at the YouTube video (replays route through here again)
-        origin: { provider: 'youtube', videoId },
+      const track = {
+        id: `yt-${videoId}`, title, artistName, releaseCover, duration: metadata.duration || 0,
+        src: '', provider: 'youtube', providerItemId: videoId,
       };
-      dispatch({ type: 'PLAY_STREAMING', service, itemId: match.id, url: match.url, track: streamTrack });
-      try {
-        await callStreaming('play', { service, itemId: match.id });
-      } catch (err) {
-        console.warn(`[Player] ${service} playback failed, using YouTube:`, err?.message || err);
-        startYouTube();
-      }
+      dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){}
+    };
+
+    // iOS app: play the YouTube audio stream with AVPlayer — exactly like SoundCloud / Bandcamp
+    // (background playback, lock screen, Dynamic Island, no iframe). Resolved on the device.
+    if (opts.forceIframe || !isStreamingAvailable()) { startIframe(); return; }
+
+    showPlaceholder({ id: `yt-${videoId}`, title, artistName, releaseCover, duration: metadata.duration || 0, videoId, providerUrl, origin });
+    (async () => {
+      let res = null;
+      try { res = await callStreaming('ytResolve', { videoId }, 12000); } catch (e) { res = null; }
+      if (myCounter !== playYouTubeCounterRef.current) return;
+      if (!res?.url) { startIframe(); return; }
+      playTrack({
+        id: `yt-${videoId}`, title, artistName, releaseCover,
+        duration: res.duration || metadata.duration || 0,
+        src: res.url, videoId, providerUrl, origin,
+      });
     })();
   }
 
