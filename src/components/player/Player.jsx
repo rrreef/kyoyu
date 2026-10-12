@@ -648,6 +648,12 @@ export default function Player({ hideMini = false }) {
         // Start immediately to secure the background WebKit process
         silentSessionLockRef.current?.play()?.catch(() => {});
       } else {
+        // The native anti-pause shield swallows pause() while it believes something should be playing —
+        // tell it Spotify / Apple Music took over, otherwise this unmuted element keeps WebKit's audio session
+        // alive and interrupts them.
+        if (isStreamingProvider(provider)) {
+          try { if (window.__kyoyuTrack) window.__kyoyuTrack.playing = false; } catch (e) {}
+        }
         silentSessionLockRef.current?.pause();
       }
     }
@@ -680,6 +686,10 @@ export default function Player({ hideMini = false }) {
       if (evt.playing !== cur.isPlaying) dispatch({ type: 'SET_PLAYING', value: !!evt.playing });
     } else if (evt.type === 'ended') {
       cur.handleNext();
+    } else if (evt.type === 'failed') {
+      dispatch({ type: 'SET_PLAYING', value: false });
+      const label = evt.service === 'spotify' ? 'Spotify' : 'Apple Music';
+      postNative({ alertTitle: `${label} did not start playing`, alert: `${evt.reason || 'No response from the player.'}\n\nOpen the ${label} app once, make sure you are logged in with Premium, then try again.` });
     }
   }), [dispatch]);
 

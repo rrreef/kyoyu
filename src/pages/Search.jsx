@@ -284,8 +284,7 @@ export default function Search() {
   const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeProvider, setActiveProvider] = useState('all');
-  // The player reads this: with a provider filter on, only that provider's engine may play its results
-  useEffect(() => { window.__kyoyuProviderFilter = activeProvider; }, [activeProvider]);
+  // NOTE: window.__kyoyuProviderFilter is owned by the native filter bar (Swift) and read on mount below — never write it here.
   const [providerRetrying, setProviderRetrying] = useState(false);
   const [expandedAlbums, setExpandedAlbums] = useState({});  // { albumId: tracksArray | true }
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -622,78 +621,37 @@ export default function Search() {
     localStorage.removeItem('kyoyu-search-history');
   };
 
-  // Build a unified search queue from all visible external results (in display order)
+  // Build the search queue from what the user actually sees: same provider / category filters, same order.
+  // (Previously it concatenated EVERY provider's results, so with "Spotify only" next/prev jumped to Bandcamp etc.)
   function buildSearchQueue() {
     const queue = [];
-    // YouTube results
-    if (externalResults.youtube) {
-      for (const yt of externalResults.youtube) {
-        queue.push({
-          id: yt.id || `yt-${yt.videoId}`,
-          title: yt.title,
-          artistName: yt.channelTitle,
-          artworkUrl: yt.thumbnail,
-          duration: yt.duration || 0,
-          provider: 'youtube',
-          providerItemId: yt.videoId,
-        });
-      }
-    }
-    // SoundCloud results
-    if (externalResults.soundcloud) {
-      for (const sc of externalResults.soundcloud) {
-        queue.push({
-          id: sc.id || `sc-${sc.trackId}`,
-          title: sc.title,
-          artistName: sc.artistName,
-          artworkUrl: sc.artworkUrl,
-          duration: sc.duration || 0,
-          provider: 'soundcloud',
-          providerItemId: sc.permalinkUrl,
-          scTrackId: sc.trackId,
-        });
-      }
-    }
-    // Bandcamp results
-    if (externalResults.bandcamp) {
-      for (const bc of externalResults.bandcamp) {
-        queue.push({
-          id: bc.id || `bc-${bc.trackId}`,
-          title: bc.title,
-          artistName: bc.artistName,
-          artworkUrl: bc.artworkUrl,
-          duration: 0,
-          provider: 'bandcamp',
-          providerItemId: bc.trackUrl,
-        });
-      }
-    }
-    // Spotify results
-    if (externalResults.spotify) {
-      for (const sp of externalResults.spotify) {
-        queue.push({
-          id: sp.id,
-          title: sp.title,
-          artistName: sp.artistName,
-          artworkUrl: sp.artworkUrl,
-          duration: sp.duration,
-          provider: 'spotify',
-          providerItemId: sp.spotifyId,
-        });
-      }
-    }
-    // Apple Music results
-    if (externalResults.applemusic) {
-      for (const am of externalResults.applemusic) {
-        queue.push({
-          id: am.id,
-          title: am.title,
-          artistName: am.artistName,
-          artworkUrl: am.artworkUrl,
-          duration: am.duration,
-          provider: 'applemusic',
-          providerItemId: am.trackId,
-        });
+    for (const item of displayAll) {
+      if (categoryOf(item) !== 'titles') continue;
+      if (!providerMatch(item.provider)) continue;
+      const id = item.id || `${item.provider}-${item.trackId || item.videoId}`;
+      switch (item.provider) {
+        case 'youtube':
+          queue.push({ id, title: item.title, artistName: item.artistName || item.channelTitle, artworkUrl: item.thumbnail || item.artworkUrl,
+            duration: item.duration || 0, provider: 'youtube', providerItemId: item.videoId, videoId: item.videoId });
+          break;
+        case 'soundcloud':
+          queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration || 0,
+            provider: 'soundcloud', providerItemId: item.permalinkUrl, scTrackId: item.trackId, trackId: item.trackId });
+          break;
+        case 'bandcamp':
+          queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: 0,
+            provider: 'bandcamp', providerItemId: item.trackUrl, trackUrl: item.trackUrl });
+          break;
+        case 'spotify':
+          queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration,
+            provider: 'spotify', providerItemId: item.spotifyId, spotifyId: item.spotifyId, albumName: item.albumName });
+          break;
+        case 'applemusic':
+          queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration,
+            provider: 'applemusic', providerItemId: item.trackId, trackId: item.trackId });
+          break;
+        default:
+          break;
       }
     }
     return queue;
