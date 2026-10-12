@@ -204,19 +204,20 @@ export function PlayerProvider({ children }) {
     (async () => {
       const r = historyReplayInfo(cur);
       if (r.provider === 'youtube' && r.videoId) {
-        // YouTube stream failed (expired / refused): fresh URL once, then the iframe player
+        // YouTube stream refused by AVPlayer: retry with the next client (skip the ones that failed), iframe only as the last resort
         const meta = { title: cur.title, artist: cur.artistName || cur.artist, thumbnail: cur.releaseCover, duration: cur.duration };
-        if (nativeRetryRef.current !== `${id}|yt1`) {
-          nativeRetryRef.current = `${id}|yt1`;
+        const failedClient = ((cur.src || '').match(/[?&]c=([A-Z_]+)/) || [])[1];
+        const key = `${id}|yt`;
+        const skip = (nativeRetryRef.current.startsWith(key) ? nativeRetryRef.current.slice(key.length).split(',').filter(Boolean) : []);
+        if (failedClient && !skip.includes(failedClient)) skip.push(failedClient);
+        nativeRetryRef.current = key + skip.join(',');
+        if (skip.length < 3) {
           let res = null;
-          try { res = await callStreaming('ytResolve', { videoId: r.videoId }, 12000); } catch (e) {}
+          try { res = await callStreaming('ytResolve', { videoId: r.videoId, skip }, 15000); } catch (e) { window.__kyoyuYtError = e?.message || String(e); }
           if (!stillCurrent()) return;
           if (res?.url && res.url !== cur.src) { playTrack({ ...cur, src: res.url, _restart: Date.now() }); return; }
         }
-        if (nativeRetryRef.current !== `${id}|yt2`) {
-          nativeRetryRef.current = `${id}|yt2`;
-          playYouTube(r.videoId, meta, { forceIframe: true });
-        }
+        playYouTube(r.videoId, meta, { forceIframe: true });
         return;
       }
       if (r.provider === 'bandcamp' && nativeRetryRef.current !== `${id}|bc`) {
@@ -547,10 +548,11 @@ export function PlayerProvider({ children }) {
     // (background playback, lock screen, Dynamic Island, no iframe). Resolved on the device.
     if (opts.forceIframe || !isStreamingAvailable()) { startIframe(); return; }
 
+    nativeRetryRef.current = '';
     showPlaceholder({ id: `yt-${videoId}`, title, artistName, releaseCover, duration: metadata.duration || 0, videoId, providerUrl, origin });
     (async () => {
       let res = null;
-      try { res = await callStreaming('ytResolve', { videoId }, 12000); } catch (e) { res = null; }
+      try { res = await callStreaming('ytResolve', { videoId }, 15000); } catch (e) { res = null; window.__kyoyuYtError = e?.message || String(e); }
       if (myCounter !== playYouTubeCounterRef.current) return;
       if (!res?.url) { startIframe(); return; }
       playTrack({

@@ -12,6 +12,17 @@ function fmt(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 function postNative(p) { try { window.webkit.messageHandlers.player.postMessage(p); } catch(e){} }
+// Which service the audio REALLY comes from (shown as the badge on the artwork in the native sheet)
+function badgeProviderOf(provider, track) {
+  if (provider === 'youtube' || isStreamingProvider(provider)) return provider;
+  if (!track) return 'native';
+  const r = historyReplayInfo(track).provider;
+  const src = (r && r !== 'lookup') ? r : (track.provider || 'native');
+  if (src === 'native' && /googlevideo\.com/i.test(track.src || '')) return 'youtube';
+  if (src === 'native' && /sndcdn\.com/i.test(track.src || '')) return 'soundcloud';
+  if (src === 'native' && /bcbits\.com/i.test(track.src || '')) return 'bandcamp';
+  return src;
+}
 const isNative = () => { try { return !!window.__kyoyuIsNativeApp || !!window.webkit?.messageHandlers?.player; } catch(e){ return false; } };
 
 /* ── Dominant colour extraction (canvas-based, cached per URL) ── */
@@ -569,6 +580,7 @@ export default function Player({ hideMini = false }) {
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         provider: provider || 'native',
+        sourceProvider: badgeProviderOf(provider, currentTrack),
         trackUrl: currentTrack.providerUrl || '',
         albumUrl: currentTrack.albumUrl || ''
       });
@@ -606,14 +618,8 @@ export default function Player({ hideMini = false }) {
   // Which service the audio REALLY comes from — shown as a badge on the artwork in the native sheet
   useEffect(() => {
     if (!isNative() || !currentTrack) return;
-    let src = 'native';
-    if (provider === 'youtube' || isStreamingProvider(provider)) src = provider;
-    else {
-      const r = historyReplayInfo(currentTrack).provider;
-      src = (r && r !== 'lookup') ? r : (currentTrack.provider || 'native');
-    }
-    postNative({ sourceProvider: src });
-  }, [currentTrack?.id, provider, currentTrack?.src]);
+    postNative({ sourceProvider: badgeProviderOf(provider, currentTrack) });
+  }, [currentTrack?.id, provider, currentTrack?.src, currentTrack?.origin?.provider]);
 
   const ytHiddenRef = useRef(null);
   const scHiddenRef = useRef(null);
