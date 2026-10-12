@@ -763,7 +763,7 @@ export default function Search() {
   const bcItems = externalResults.bandcamp || [];
 
   const allExternal = [
-    ...(providerMatch('youtube') ? (externalResults.youtube || []).map(yt => ({
+    ...(providerMatch('youtube') ? (externalResults.youtube || []).filter(yt => /^[\w-]{11}$/.test(yt.videoId || '') && yt.entityType !== 'playlist' && yt.entityType !== 'artist').map(yt => ({
       ...yt, artistName: yt.channelTitle || yt.artistName, entityType: 'track', provider: 'youtube',
     })) : []),
     ...(providerMatch('soundcloud') ? (externalResults.soundcloud || []).map(sc => ({

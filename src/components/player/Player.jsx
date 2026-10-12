@@ -456,6 +456,14 @@ export default function Player({ hideMini = false }) {
         dispatch({ type: 'NATIVE_ERROR' });
         return;
       }
+      if (cmd === 'ytEnsurePause') {
+        // The user paused outside the app: never let the iframe (or the web play state) resume on return
+        if (provider === 'youtube') {
+          if (isPlaying) dispatch({ type: 'SET_PLAYING', value: false });
+          ytHiddenRef.current?.pause?.();
+        }
+        return;
+      }
       if (cmd === 'ytKick') {
         // App just went to the background: WebKit may have paused the iframe — resume it if the user is playing
         if (provider === 'youtube' && isPlaying) ytHiddenRef.current?.play?.();

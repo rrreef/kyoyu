@@ -527,6 +527,8 @@ export function PlayerProvider({ children }) {
 
   const playYouTubeCounterRef = useRef(0);
   function playYouTube(videoId, metadata = {}, opts = {}) {
+    // Playlist ("PL…") / channel ("UC…") ids are not videos and would load forever
+    if (!/^[\w-]{11}$/.test(String(videoId || ''))) { console.warn('[Player] ignoring invalid YouTube video id', videoId); return; }
     const myCounter = ++playYouTubeCounterRef.current;
     const title = metadata.title || 'YouTube Video';
     const artistName = metadata.channelTitle || metadata.artist || '';

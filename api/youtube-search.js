@@ -262,7 +262,7 @@ export default async function handler(req, res) {
     
     if (!searchRes.ok) {
       console.error('YouTube Search API error:', searchRes.status, '- attempting scraper fallback');
-      const fallbackResults = await scrapeYouTube(query);
+      const fallbackResults = (await scrapeYouTube(query)).filter(r => /^[\w-]{11}$/.test(r?.videoId || ''));
       return res.status(200).json({ results: fallbackResults, hasMore: false, nextPageToken: null });
     }
 
@@ -276,29 +276,10 @@ export default async function handler(req, res) {
     const results = [];
     const videoIds = [];
 
-    // Parse non-video items immediately, collect video IDs
+    // Only real videos are playable. Playlist ("PL…") and channel ("UC…") ids are NOT video ids:
+    // handing them to the player made the track load forever, so they are never returned.
     items.forEach(item => {
-      if (item.id?.kind === 'youtube#playlist') {
-        results.push({
-          videoId: item.id.playlistId,
-          title: item.snippet?.title,
-          channelTitle: item.snippet?.channelTitle,
-          thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url,
-          entityType: 'playlist',
-          provider: 'youtube',
-          isExternal: true
-        });
-      } else if (item.id?.kind === 'youtube#channel') {
-        results.push({
-          videoId: item.id.channelId,
-          title: item.snippet?.channelTitle || item.snippet?.title,
-          channelTitle: item.snippet?.channelTitle || item.snippet?.title,
-          thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url,
-          entityType: 'artist',
-          provider: 'youtube',
-          isExternal: true
-        });
-      } else if (item.id?.videoId) {
+      if (item.id?.videoId) {
         videoIds.push(item.id.videoId);
       }
     });
