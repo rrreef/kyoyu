@@ -461,6 +461,12 @@ export default function Player({ hideMini = false }) {
         if (provider === 'youtube' && isPlaying) ytHiddenRef.current?.play?.();
         return;
       }
+      if (cmd === 'next' || cmd === 'prev') {
+        const now = Date.now();
+        const last = window.__kyoyuLastSkip || { cmd: '', t: 0 };
+        if (last.cmd === cmd && now - last.t < 450) return;
+        window.__kyoyuLastSkip = { cmd, t: now };
+      }
       if ((cmd === 'toggle' || cmd === 'play') && restoredPending) {
         // Restored (paused, not loaded) session: first play re-resolves a fresh stream and resumes at the saved spot
         resumeRestoredSession();
