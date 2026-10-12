@@ -704,14 +704,27 @@ export function PlayerProvider({ children }) {
       const track = { ...meta, src: '', provider: service, providerItemId: itemId, providerUrl: item.url || '' };
       dispatch({ type: 'PLAY_STREAMING', service, itemId, url: item.url, track });
       try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artwork: track.releaseCover || '' }); } catch (e) {}
-      try {
-        await callStreaming('play', { service, itemId });
-        return;
-      } catch (err) {
-        console.warn(`[Player] ${service} playback failed, trying the same song elsewhere:`, err?.message || err);
+      // Spotify's App Remote is flaky right after a cold start / app switch: give its own engine a few tries
+      // before even thinking about another source.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!stillCurrent()) return;
+        try {
+          await callStreaming('play', { service, itemId });
+          return;
+        } catch (err) {
+          console.warn(`[Player] ${service} playback failed (attempt ${attempt + 1}):`, err?.message || err);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
+        }
       }
     }
     if (!stillCurrent()) return;
+    // The user filtered the search to this provider (or opened it from a provider-specific sheet):
+    // only that provider may play. Never swap in a Bandcamp/SoundCloud/YouTube copy under a Spotify/Apple Music result.
+    const filter = String(window.__kyoyuProviderFilter || 'all');
+    if (item.strict || (filter !== 'all' && filter.split(',').includes(service))) {
+      dispatch({ type: 'SET_PLAYING', value: false });
+      return;
+    }
     showPlaceholder(meta);
     const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
     if (!stillCurrent()) return;
@@ -809,7 +822,7 @@ export function PlayerProvider({ children }) {
       searchQueueRef.current = [];
       searchQueueIdxRef.current = -1;
       await playStreamingItem(
-        { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '' },
+        { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '', strict: true },
         playSearchItemCounterRef.current += 1,
       );
     } else if (r.provider === 'native') {

@@ -284,6 +284,8 @@ export default function Search() {
   const [bandcampLoading, setBandcampLoading] = useState(null); // trackUrl of currently resolving BC track
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeProvider, setActiveProvider] = useState('all');
+  // The player reads this: with a provider filter on, only that provider's engine may play its results
+  useEffect(() => { window.__kyoyuProviderFilter = activeProvider; }, [activeProvider]);
   const [providerRetrying, setProviderRetrying] = useState(false);
   const [expandedAlbums, setExpandedAlbums] = useState({});  // { albumId: tracksArray | true }
   const [keyboardHeight, setKeyboardHeight] = useState(0);
