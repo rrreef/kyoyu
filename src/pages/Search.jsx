@@ -813,7 +813,7 @@ export default function Search() {
     const et = (item.entityType || 'track').toLowerCase();
     
     if (activeProvider === 'youtube' && et === 'playlist' && activeFilter === 'albums') return 'albums'; // YouTube playlists act as albums too
-    if (activeProvider === 'discogs' && (et === 'release' || et === 'master') && activeFilter === 'titles') return 'titles'; // Let Discogs albums show as titles when searched
+    if (activeProvider === 'discogs' && (et === 'release' || et === 'master') && activeFilter === 'versions') return 'versions'; // Let Discogs albums show as titles when searched
     if (et === 'artist') return 'artists';
     if (et === 'label') return 'labels';
     if (et === 'profile' || et === 'user') return 'profiles';
@@ -1415,8 +1415,12 @@ export default function Search() {
                       artworkUrl: item.artworkUrl || item.thumbnail,
                       duration: item.duration || 0,
                       provider: item.provider,
-                      providerItemId: item.permalinkUrl || item.trackUrl,
+                      providerItemId: item.permalinkUrl || item.trackUrl || item.providerItemId || item.spotifyId,
+                      spotifyId: item.spotifyId,
+                      albumName: item.albumName,
+                      url: item.url,
                       scTrackId: item.trackId,
+                      trackId: item.trackId,
                       videoId: item.videoId,
                     });
                   }

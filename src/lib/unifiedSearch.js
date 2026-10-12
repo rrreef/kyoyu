@@ -3,6 +3,7 @@
  * Native results are always ranked first when an exact match exists.
  */
 import { fetchPublicTracks } from './uploadPipeline';
+import { callStreaming, isStreamingAvailable, getCachedStreamingStatus } from './streaming';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -260,19 +261,52 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
  * Search Spotify via our proxy API endpoint.
  */
 async function searchSpotify(query, offset = 0) {
-  try {
-    const res = await fetch('/api/youtube-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'spotify', query, limit: 33, offset }),
-    });
-    if (!res.ok) return { results: [], hasMore: false, nextOffset: offset };
-    const data = await res.json();
-    return data;
-  } catch (err) {
-    console.warn('Spotify search failed:', err);
-    return { results: [], hasMore: false, nextOffset: offset };
+  const empty = { results: [], hasMore: false, nextOffset: offset };
+  // 1) Our server (catalog search: tracks, albums, artists, playlists). Spotify caps `limit` at 10.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch('/api/youtube-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'spotify', query, limit: 10, offset }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.results?.length) return data;
+        break; // valid but empty answer (or server-side error message) → try the user's account
+      }
+    } catch (err) {
+      console.warn('Spotify search failed:', err);
+    }
   }
+  // 2) The user's own connected Spotify account (through the native app) — tracks only
+  try {
+    if (offset === 0 && isStreamingAvailable() && getCachedStreamingStatus()?.spotify?.connected) {
+      const items = await callStreaming('search', { service: 'spotify', term: query, limit: 10 }, 8000);
+      if (Array.isArray(items) && items.length) {
+        return {
+          results: items.map((t) => ({
+            id: `sp-${t.id}`,
+            spotifyId: t.id,
+            title: t.title,
+            artistName: t.artist,
+            artworkUrl: t.artworkUrl,
+            duration: Math.floor(t.duration || 0),
+            albumName: t.album,
+            url: t.url,
+            provider: 'spotify',
+            entityType: 'track',
+            isExternal: true,
+          })),
+          hasMore: false,
+          nextOffset: offset,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Spotify (account) search failed:', err);
+  }
+  return empty;
 }
 
 /**

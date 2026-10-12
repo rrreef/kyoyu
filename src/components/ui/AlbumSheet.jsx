@@ -252,10 +252,25 @@ export default function AlbumSheet({ album, onClose }) {
 
     // Expose play handler so Swift can trigger it
 
-    const handleNativeLike = (e) => {
+        const handleNativeLike = (e) => {
       if (e.detail.handled) return;
       const trackId = String(e.detail.trackId).split('?ts=')[0];
-      const t = album.tracks.find(tr => String(tr.id) === trackId);
+      let t = album.tracks.find(tr => String(tr.id) === trackId);
+      if (!t && safeLabelRef.current) {
+        safeLabelRef.current.releases?.forEach(r => {
+          const tr = r.tracks?.find(tr => String(tr.id) === String(trackId));
+          if (tr) t = tr;
+        });
+      }
+      if (!t && safeArtistRef.current) {
+        safeArtistRef.current.releases?.forEach(r => {
+          const tr = r.tracks?.find(tr => String(tr.id) === String(trackId));
+          if (tr) t = tr;
+        });
+        safeArtistRef.current.popular_tracks?.forEach(tr => {
+          if (String(tr.id) === String(trackId)) t = tr;
+        });
+      }
       if (!t) return;
 
       e.detail.handled = true;
@@ -271,17 +286,56 @@ export default function AlbumSheet({ album, onClose }) {
 
       try {
         let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
-        if (!saved.some(x => String(x.id) === String(t.id))) {
+        if (saved.some(x => String(x.id) === String(t.id))) {
+          saved = saved.filter(x => String(x.id) !== String(t.id));
+        } else {
           // eslint-disable-next-line no-unused-vars
           const { artworkUrl, artworkFile, ...slim } = trackObj;
           saved.push(slim);
-          localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
         }
+        localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
       } catch(err) {}
     };
     window.addEventListener('kyoyu-native-like', handleNativeLike);
 
-    // Download toggle
+    window.__kyoyuIsTrackInAnyPlaylist = (trackId) => {
+      const pls = getPlaylistsRef.current();
+      return pls.some(pl => pl.tracks && pl.tracks.some(t => String(t.id) === String(trackId)));
+    };
+    window.__kyoyuToggleSaveAlbum = () => {
+      if (!safeAlbumRef.current || !safeAlbumRef.current.tracks) return;
+      const isSaved = window.__kyoyuIsSavedAlbum();
+      let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+      
+      for (const t of safeAlbumRef.current.tracks) {
+        const trackObj = {
+          id: t.id,
+          title: t.title,
+          artistName: safeAlbumRef.current.artist || '',
+          album: safeAlbumRef.current.title || '',
+          cover: safeAlbumRef.current.cover || safeAlbumRef.current.artworkUrl || '',
+          audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
+          ...savedIdentity(t),
+        };
+        try { toggleLikeRef.current(trackObj); } catch (e) {}
+        
+        if (isSaved) {
+            saved = saved.filter(x => String(x.id) !== String(t.id));
+        } else {
+            if (!saved.some(x => String(x.id) === String(t.id))) {
+                const { artworkUrl, artworkFile, ...slim } = trackObj;
+                saved.push(slim);
+            }
+        }
+      }
+      localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
+    };
+    window.__kyoyuIsSavedAlbum = () => {
+      // Just check if all tracks are liked
+      if (!safeAlbumRef.current || !safeAlbumRef.current.tracks) return false;
+      const saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+      return safeAlbumRef.current.tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
+    };
     window.__kyoyuDownloadTrack = (trackId) => {
       const t = album.tracks.find(tr => tr.id === trackId);
       if (!t) return;
@@ -299,8 +353,19 @@ export default function AlbumSheet({ album, onClose }) {
     };
 
     // Playlist bridge
-    window.__kyoyuGetPlaylists = () => {
-      return JSON.stringify(getPlaylistsRef.current());
+    window.__kyoyuGetPlaylists = (trackId) => {
+      const pls = getPlaylistsRef.current().map(pl => {
+        // Find if this playlist contains ANY of the comma-separated track IDs
+        const ids = trackId ? String(trackId).split(',') : [];
+        const containsTrack = ids.length > 0 && ids.every(id => pl.tracks && pl.tracks.find(t => String(t.id) === String(id)));
+        return {
+          id: pl.id,
+          name: pl.title || pl.name,
+          trackCount: pl.trackCount || (pl.tracks || []).length,
+          containsTrack
+        };
+      });
+      return JSON.stringify(pls);
     };
 
     window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
@@ -390,6 +455,9 @@ export default function AlbumSheet({ album, onClose }) {
     return () => {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuCloseNativeAlbum;
+      delete window.__kyoyuToggleSaveAlbum;
+      delete window.__kyoyuIsSavedAlbum;
+      delete window.__kyoyuIsTrackInAnyPlaylist;
       delete window.__kyoyuDownloadTrack;
       delete window.__kyoyuGetPlaylists;
       delete window.__kyoyuAddToPlaylist;

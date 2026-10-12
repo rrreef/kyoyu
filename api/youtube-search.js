@@ -147,6 +147,13 @@ export default async function handler(req, res) {
         headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
       });
       const searchData = await searchRes.json();
+      if (!searchRes.ok) {
+        return res.status(200).json({ results: [], hasMore: false, nextOffset: offset, error: searchData?.error?.message || `Spotify ${searchRes.status}` });
+      }
+      // Spotify returns `null` entries inside item arrays (esp. playlists) — drop them
+      for (const k of ['artists', 'albums', 'tracks', 'playlists']) {
+        if (searchData[k]?.items) searchData[k].items = searchData[k].items.filter(Boolean);
+      }
       
       const results = [];
       
@@ -172,7 +179,7 @@ export default async function handler(req, res) {
             id: `sp-al-${a.id}`,
             spotifyId: a.id,
             title: a.name,
-            artistName: a.artists.map(x => x.name).join(', '),
+            artistName: (a.artists || []).map(x => x.name).join(', '),
             artworkUrl: a.images?.[0]?.url,
             url: a.external_urls?.spotify,
             provider: 'spotify',
@@ -188,9 +195,9 @@ export default async function handler(req, res) {
             id: `sp-${t.id}`,
             spotifyId: t.id,
             title: t.name,
-            artistName: t.artists.map(a => a.name).join(', '),
+            artistName: (t.artists || []).map(a => a.name).join(', '),
             artworkUrl: t.album?.images?.[0]?.url,
-            duration: Math.floor(t.duration_ms / 1000),
+            duration: Math.floor((t.duration_ms || 0) / 1000),
             albumName: t.album?.name,
             url: t.external_urls?.spotify,
             provider: 'spotify',

@@ -3,7 +3,8 @@ import { releases, djSets } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { resolveBandcamp, invalidateBandcampResolve } from '../lib/unifiedSearch';
 import { findTrackSource } from '../lib/resolveTrack';
-import { activePlaybackService, findStreamingMatch, callStreaming, refreshStreamingStatus } from '../lib/streaming';
+import { activePlaybackService, findStreamingMatch, callStreaming, refreshStreamingStatus, isStreamingAvailable, isStreamingProvider } from '../lib/streaming';
+import { resolveAutoplay } from '../lib/autoplay-resolver';
 
 const PlayerContext = createContext(null);
 
@@ -19,6 +20,10 @@ export function historyReplayInfo(t) {
   const id = String(t.id || '');
   if (t.provider === 'youtube' && (t.videoId || t.providerItemId)) return { provider: 'youtube', videoId: t.videoId || t.providerItemId };
   if (/^yt-/.test(id)) return { provider: 'youtube', videoId: id.slice(3) };
+  // Apple Music / Spotify items replay through their own engine (never a lookalike from YouTube)
+  if (isStreamingProvider(t.provider) && (t.providerItemId || t.spotifyId)) {
+    return { provider: t.provider, itemId: String(t.providerItemId || t.spotifyId).replace(/^(am|sp)-/, '') };
+  }
   if (t.provider === 'soundcloud' || /^sc-\d+/.test(id)) {
     const scId = t.scTrackId || (id.match(/^sc-(\d+)/) || [])[1];
     if (scId) return { provider: 'soundcloud', scTrackId: String(scId), url: t.providerUrl || t.providerItemId || '' };
@@ -45,6 +50,7 @@ function historyKey(t, r = historyReplayInfo(t)) {
   if (r.provider === 'youtube')    return `yt:${r.videoId}`;
   if (r.provider === 'soundcloud') return `sc:${r.scTrackId}`;
   if (r.provider === 'bandcamp')   return `bc:${r.url}`;
+  if (isStreamingProvider(r.provider)) return `${r.provider}:${r.itemId}`;
   return `id:${t.id}`;
 }
 
@@ -61,7 +67,18 @@ const initialState = {
   providerUrl: null,        // Original source URL for "Open on..." link
 };
 
+// Actions that must NOT clear a restored (paused, not-yet-loaded) session
+const KEEP_RESTORED = new Set(['SET_PROGRESS', 'SET_DURATION', 'SET_VOLUME', 'SET_QUEUE', 'TOGGLE_SHUFFLE', 'CYCLE_REPEAT', 'RESTORE_SESSION', 'NATIVE_ERROR']);
 function playerReducer(state, action) {
+  const next = baseReducer(state, action);
+  if (!state.restoredPending || next === state || next.restoredPending === false) return next;
+  if (KEEP_RESTORED.has(action.type)) return next;
+  if (action.type === 'SET_PLAYING' && !action.value) return next;
+  return { ...next, restoredPending: false };
+}
+
+function baseReducer(state, action) {
+
   switch (action.type) {
     case 'STOP': {
       if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
@@ -116,6 +133,18 @@ function playerReducer(state, action) {
       const modes = ['none','all','one'];
       return { ...state, repeatMode: modes[(modes.indexOf(state.repeatMode)+1)%modes.length] };
     }
+    case 'RESTORE_SESSION': {
+      // Rebuild the last session PAUSED. Stream URLs expire, so nothing is loaded until the user presses play
+      // (see resumeRestoredSession). provider is 'native' so no iframe / engine starts by itself.
+      return { ...state, currentTrack: action.track, queue: action.queue || [], isPlaying: false,
+               progress: action.progress || 0, duration: action.duration || 0,
+               provider: 'native', providerItemId: null, providerUrl: null, restoredPending: true };
+    }
+    case 'RESTART_CURRENT': {
+      // Last-resort "next": never end in silence — replay the current track from the start
+      if (!state.currentTrack) return state;
+      return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress: 0, isPlaying: true };
+    }
     case 'NEXT_TRACK': {
       if (!state.queue.length) {
         // No queue — stop playback (e.g. end of YT/SC/BC track)
@@ -152,6 +181,13 @@ export function PlayerProvider({ children }) {
   const playIdRef = useRef(0); // increments on each track change to cancel stale plays
   const stateRef = useRef(state);
   stateRef.current = state;
+  // Always-fresh handles for callbacks registered once (audio 'ended', native bridge, timers)
+  const playNextAutoplayRef = useRef(() => {});
+  const playNextSearchRef = useRef(() => {});
+  playNextAutoplayRef.current = () => playNextAutoplay();
+  playNextSearchRef.current = () => playNextSearch();
+  // Position to seek to once a resumed (restored) track is actually playing: { id, pos }
+  const pendingSeekRef = useRef(null);
 
   // Apple Music / Spotify connection status (iOS app only) — needed before the first YouTube play is routed
   useEffect(() => { refreshStreamingStatus(); }, []);
@@ -206,12 +242,16 @@ export function PlayerProvider({ children }) {
     const onPlay  = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: true  }); };
     const onPause = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: false }); };
     const onEnded = () => {
-      if (searchQueueRef.current.length > 0 && searchQueueIdxRef.current >= 0) {
-        playNextSearch();
+      // Always go through refs: this listener is registered once, so direct calls would use stale state
+      if (stateRef.current.repeatMode === 'one') { dispatch({ type: 'RESTART_CURRENT' }); return; }
+      const sq = searchQueueRef.current;
+      if (sq.length > 0 && searchQueueIdxRef.current >= 0 && searchQueueIdxRef.current < sq.length - 1) {
+        playNextSearchRef.current();
       } else {
-        dispatch({ type:'NEXT_TRACK' });
+        playNextAutoplayRef.current();
       }
     };
+
     const onError = () => {
       console.warn('[Player] audio error:', audio.error?.code, audio.error?.message);
     };
@@ -265,8 +305,11 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
+    // A restored session is shown paused; nothing is loaded until the user presses play
+    if (state.restoredPending) return;
     // Skip native audio loading for external providers
     if (state.provider !== 'native') return;
+
     
     // Stop current playback cleanly before switching or if src is empty (placeholder)
     audio.pause();
@@ -302,8 +345,13 @@ export function PlayerProvider({ children }) {
           mh.audioFallback.postMessage({ url: '' });
         } else {
           if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
-          mh.audioFallback.postMessage({ url: src });
+          // Resumed session: start exactly where the user left off
+          const ps = pendingSeekRef.current;
+          let seekTo = 0;
+          if (ps && ps.id === state.currentTrack.id && ps.pos > 1) { seekTo = ps.pos; pendingSeekRef.current = null; }
+          mh.audioFallback.postMessage(seekTo > 0 ? { url: src, seekTo } : { url: src });
         }
+
       }
       if (mh?.audioSession) mh.audioSession.postMessage('play');
     } catch (e) { /* not in WKWebView */ }
@@ -357,12 +405,14 @@ export function PlayerProvider({ children }) {
     };
     // src is a dependency: a resolving track keeps its id (placeholder → real stream), and the
     // audio must load as soon as the stream URL arrives.
-  }, [state.currentTrack?.id, state.currentTrack?._restart, state.currentTrack?.src || state.currentTrack?.fileUrl || state.currentTrack?.audioUrl || '']); // eslint-disable-line
+  }, [state.currentTrack?.id, state.currentTrack?._restart, state.restoredPending, state.currentTrack?.src || state.currentTrack?.fileUrl || state.currentTrack?.audioUrl || '']); // eslint-disable-line
+
 
   // ── Play / pause sync ──
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !state.currentTrack) return;
+    if (state.restoredPending) return;
     // External providers handle their own play/pause
     if (state.provider !== 'native') return;
 
@@ -482,9 +532,12 @@ export function PlayerProvider({ children }) {
 
     showPlaceholder(track);
     (async () => {
-      const match = await findStreamingMatch(service, {
-        title: metadata.title || '', channel: metadata.channelTitle || metadata.artist || '', duration: metadata.duration,
-      });
+      const match = await Promise.race([
+        findStreamingMatch(service, {
+          title: metadata.title || '', channel: metadata.channelTitle || metadata.artist || '', duration: metadata.duration,
+        }).catch(() => null),
+        new Promise(resolve => setTimeout(() => resolve(null), 4000)),
+      ]);
       if (myCounter !== playYouTubeCounterRef.current) return;
       if (!match) { startYouTube(); return; }
       const streamTrack = {
@@ -528,8 +581,9 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    // Show the track in the player UI immediately while resolving
-    // Use PLAY_SOUNDCLOUD to update UI without triggering the audio useEffect
+    // Show the track in the player UI immediately while resolving. This is a plain native placeholder
+    // (provider stays 'native', src ''), exactly like Bandcamp: mounting the SoundCloud widget iframe here
+    // flashed a white full-screen window behind the sheet and is not needed (we play the stream via AVPlayer).
     const placeholderTrack = {
       id: `sc-${trackId}`,
       title: metadata.title || 'SoundCloud Track',
@@ -537,11 +591,10 @@ export function PlayerProvider({ children }) {
       releaseCover: metadata.artworkUrl || '',
       duration: metadata.duration || 0,
       src: '',
-      provider: 'soundcloud',
-      providerItemId: trackUrl,
+      providerUrl: trackUrl,
       scTrackId: trackId,
     };
-    dispatch({ type: 'PLAY_SOUNDCLOUD', trackUrl, track: placeholderTrack }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: placeholderTrack.title || placeholderTrack.name || '', artwork: placeholderTrack.releaseCover || placeholderTrack.cover || placeholderTrack.artworkUrl || '' }); } catch(e){} 
+    showPlaceholder(placeholderTrack);
 
     // Resolve the actual stream URL from our serverless API
     try {
@@ -589,6 +642,7 @@ export function PlayerProvider({ children }) {
   // ── Search queue: multi-provider playlist from search results ──
   const searchQueueRef = useRef([]);
   const searchQueueIdxRef = useRef(-1);
+  const isResolvingAutoplayRef = useRef(false);
 
   // Play a single item from the search queue based on its provider
   const playSearchItemCounterRef = useRef(0);
@@ -627,10 +681,41 @@ export function PlayerProvider({ children }) {
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: meta.url, providerUrl: item.providerUrl || meta.url });
       const isCurrent = () => myCounter === playSearchItemCounterRef.current && stateRef.current.currentTrack?.id === item.id;
       await playBandcampOrFallback(meta, isCurrent);
+    } else if (item.provider === 'spotify' || item.provider === 'applemusic') {
+      await playStreamingItem(item, myCounter);
     } else {
       // native track
       playTrack(item);
     }
+  }
+
+  /** Apple Music / Spotify result → their native engine; if that's unavailable, the same song elsewhere. */
+  async function playStreamingItem(item, myCounter) {
+    const service = item.provider;
+    const itemId = String(item.providerItemId || item.spotifyId || item.trackId || '').replace(/^(am|sp)-/, '');
+    const meta = {
+      id: item.id || `${service}-${itemId}`, title: item.title || '', artistName: item.artistName || item.artist || '',
+      releaseCover: item.artworkUrl || item.releaseCover || '', duration: item.duration || 0,
+      releaseTitle: item.albumName || item.releaseTitle || '',
+    };
+    const stillCurrent = () => myCounter === playSearchItemCounterRef.current;
+    if (itemId && isStreamingAvailable()) {
+      const track = { ...meta, src: '', provider: service, providerItemId: itemId, providerUrl: item.url || '' };
+      dispatch({ type: 'PLAY_STREAMING', service, itemId, url: item.url, track });
+      try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artwork: track.releaseCover || '' }); } catch (e) {}
+      try {
+        await callStreaming('play', { service, itemId });
+        return;
+      } catch (err) {
+        console.warn(`[Player] ${service} playback failed, trying the same song elsewhere:`, err?.message || err);
+      }
+    }
+    if (!stillCurrent()) return;
+    showPlaceholder(meta);
+    const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
+    if (!stillCurrent()) return;
+    if (found) playFoundSource(found, meta);
+    else dispatch({ type: 'SET_PLAYING', value: false });
   }
 
   // ── Shared helpers for resolving plays ──
@@ -719,6 +804,13 @@ export function PlayerProvider({ children }) {
     } else if (r.provider === 'bandcamp') {
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
       await playBandcampOrFallback({ ...meta, url: r.url }, isCurrent);
+    } else if (isStreamingProvider(r.provider)) {
+      searchQueueRef.current = [];
+      searchQueueIdxRef.current = -1;
+      await playStreamingItem(
+        { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '' },
+        playSearchItemCounterRef.current += 1,
+      );
     } else if (r.provider === 'native') {
       playTrack({ ...item, id, artistName: artist, releaseCover: cover });
     } else {
@@ -742,8 +834,8 @@ export function PlayerProvider({ children }) {
     const idx = searchQueueIdxRef.current;
     if (!q.length || idx < 0) return false;
     if (idx >= q.length - 1) {
-      // End of queue
-      dispatch({ type: 'SET_PLAYING', value: false });
+      // End of search queue -> fallback to autoplay
+      playNextAutoplay();
       return true;
     }
     const nextIdx = idx + 1;
@@ -1030,12 +1122,187 @@ export function PlayerProvider({ children }) {
     };
   }); // No deps — always re-bind so closures see latest state
 
+  const AUTOPLAY_TIMEOUT_MS = 6000;
+
+  /** 'Next' that ALWAYS ends in sound: queue → radio-style autoplay → replay current. */
+  /** The YouTube iframe can't play this video (blocked / never starts): same song elsewhere, else the next track. */
+  const ytRecoverRef = useRef('');
+  async function recoverYouTubeFailure() {
+    const cur = stateRef.current.currentTrack;
+    if (!cur) return;
+    const id = cur.id;
+    if (ytRecoverRef.current === id) { playNextAutoplay(); return; }
+    ytRecoverRef.current = id;
+    const stillCurrent = () => stateRef.current.currentTrack?.id === id;
+    let found = null;
+    try { found = await findTrackSource({ artist: cur.artistName || cur.artist || '', title: cur.title || '' }, stillCurrent); } catch (e) {}
+    if (!stillCurrent()) return;
+    if (found && found.provider !== 'youtube') {
+      playFoundSource(found, { id, title: cur.title, artistName: cur.artistName || cur.artist, releaseCover: cur.releaseCover, duration: cur.duration });
+    } else {
+      playNextAutoplay();
+    }
+  }
+
+  async function playNextAutoplay() {
+    const s = stateRef.current;          // always fresh (this can be called from long-lived listeners)
+    const cur = s.currentTrack;
+    if (!cur) return;
+
+    // 1. An explicit queue (album / playlist / saved list) with a following track
+    if (s.queue.length > 0) {
+      const idx = s.queue.findIndex(t => t.id === cur.id);
+      if (idx >= 0 && idx < s.queue.length - 1) {
+        const nxt = s.queue[idx + 1];
+        // A track whose stream URL was dropped (restored session) must be re-resolved, not just "selected"
+        if (nxt && !(nxt.src || nxt.audioUrl || nxt.fileUrl)) { playSaved(nxt); return; }
+        dispatch({ type: 'NEXT_TRACK' });
+        return;
+      }
+    }
+
+    // 2. Radio-style autoplay. The current track keeps playing while we look, so a slow
+    //    network never means silence.
+    if (isResolvingAutoplayRef.current) return;
+    isResolvingAutoplayRef.current = true;
+    try {
+      let next = null;
+      try {
+        const replayProv = historyReplayInfo(cur).provider;
+        const trueProvider = (replayProv && replayProv !== 'lookup') ? replayProv : (cur.provider || 'native');
+        const res = await Promise.race([
+          resolveAutoplay({ ...cur, provider: trueProvider }),
+
+          new Promise(resolve => setTimeout(() => resolve(null), AUTOPLAY_TIMEOUT_MS)),
+        ]);
+        next = Array.isArray(res) ? res[0] : null;
+      } catch (e) { console.warn('[Player] autoplay resolve failed:', e); }
+
+      // The user moved on while we were looking (picked another track) → don't hijack
+      if (stateRef.current.currentTrack?.id !== cur.id) return;
+
+      if (next) {
+        // Extend the search queue so prev/next keep walking this chain of suggestions
+        const q = searchQueueRef.current;
+        const i = searchQueueIdxRef.current;
+        if (q.length > 0 && i >= 0) {
+          searchQueueRef.current = [...q.slice(0, i + 1), next];
+          searchQueueIdxRef.current = i + 1;
+        } else {
+          searchQueueRef.current = [next];
+          searchQueueIdxRef.current = 0;
+        }
+        playSearchItem(next);
+      } else {
+        // 3. Nothing found: never end in silence — replay the current track
+        console.warn('[Player] autoplay found nothing, replaying current track');
+        if (stateRef.current.restoredPending) resumeRestoredSession();
+        else dispatch({ type: 'RESTART_CURRENT' });
+
+      }
+    } finally {
+      isResolvingAutoplayRef.current = false;
+    }
+  }
+
+  // ── Session persistence: the app follows the user ───────────────────────────
+  // Survives WebView process kills / relaunches (localStorage lives in the persistent data store).
+  const SESSION_KEY = 'kyoyu-session';
+  const SESSION_MAX_AGE_MS = 14 * 24 * 3600 * 1000;
+  const stripExpiring = (t) => {
+    if (!t) return t;
+    const out = { ...t };
+    for (const k of ['src', 'audioUrl', 'fileUrl', 'url']) {
+      if (typeof out[k] === 'string' && (EXPIRING_SRC.test(out[k]) || out[k].startsWith('resolve:') || out[k].startsWith('blob:'))) out[k] = '';
+    }
+    delete out._restart;
+    return out;
+  };
+  const saveSession = useCallback(() => {
+    try {
+      const s = stateRef.current;
+      if (!s.currentTrack) return;       // never wipe on startup (before restore); see stop-effect below
+      if (s.restoredPending) return;     // nothing changed since restore
+
+      const replay = historyReplayInfo(s.currentTrack);
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        track: { ...stripExpiring(s.currentTrack), replay },
+        queue: (s.queue || []).slice(0, 60).map(t => ({ ...stripExpiring(t), replay: historyReplayInfo(t) })),
+        progress: s.progress || 0,
+        duration: s.duration || 0,
+        savedAt: Date.now(),
+      }));
+    } catch (e) { /* storage full / unavailable */ }
+  }, []);
+
+  // Restore the last session (paused) once, inside the iOS app only
+  useEffect(() => {
+    if (!window.__kyoyuIsNativeApp || window.__kyoyuTabIndex !== 0) return;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw || stateRef.current.currentTrack) return;
+      const sess = JSON.parse(raw);
+      if (!sess?.track || Date.now() - (sess.savedAt || 0) > SESSION_MAX_AGE_MS) return;
+      dispatch({ type: 'RESTORE_SESSION', track: sess.track, queue: sess.queue, progress: sess.progress, duration: sess.duration });
+    } catch (e) { /* corrupt → ignore */ }
+  }, []);
+
+  // Save on track change, on pause/play, and every 2 s while playing (position)
+  const hadTrackRef = useRef(false);
+  useEffect(() => {
+    if (state.currentTrack) { hadTrackRef.current = true; return; }
+    if (hadTrackRef.current) { hadTrackRef.current = false; try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+  }, [!!state.currentTrack]);
+
+  useEffect(() => { saveSession(); }, [state.currentTrack?.id, state.isPlaying, state.queue.length, saveSession]);
+  useEffect(() => {
+    if (!state.currentTrack) return;
+    const t = setInterval(saveSession, 2000);
+    return () => clearInterval(t);
+  }, [!!state.currentTrack, saveSession]);
+
+  /** First 'play' after a restore: re-resolve a fresh stream (old ones expire) and continue at the saved position. */
+  function resumeRestoredSession() {
+    const s = stateRef.current;
+    const t = s.currentTrack;
+    if (!t || !s.restoredPending) return false;
+    pendingSeekRef.current = { id: t.id, pos: s.progress || 0 };
+    playSaved(t);
+    return true;
+  }
+
+  // Resumed non-AVPlayer providers (YouTube, Apple Music, Spotify): seek once they're really playing
+  useEffect(() => {
+    const ps = pendingSeekRef.current;
+    if (!ps || state.restoredPending || state.provider === 'native') return;
+    if (state.currentTrack?.id !== ps.id || !(state.duration > 0) || !state.isPlaying) return;
+    pendingSeekRef.current = null;
+    if (ps.pos > 1) window.__kyoyuPlayerCmd?.('seekTo', ps.pos);
+  }, [state.duration, state.provider, state.isPlaying, state.restoredPending]); // eslint-disable-line
+
+  // Swift → web: the audio engine's truth after the app returns to the foreground
+  useEffect(() => {
+    window.__kyoyuResync = ({ position, playing } = {}) => {
+      const s = stateRef.current;
+      if (!s.currentTrack || s.restoredPending) return;
+      if (typeof playing === 'boolean' && playing !== s.isPlaying) dispatch({ type: 'SET_PLAYING', value: playing });
+      if (typeof position === 'number' && isFinite(position)) dispatch({ type: 'SET_PROGRESS', value: position });
+    };
+    window.__kyoyuSaveSession = saveSession;
+    return () => { delete window.__kyoyuResync; delete window.__kyoyuSaveSession; };
+  }, [saveSession]);
+
+
+  // Override the native onEnded
   return (
     <PlayerContext.Provider value={{
       state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,
       seekTo, setVolume, setAudioVolumeDirect, allTracks,
-      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue,
+      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue, playNextAutoplay,
+      resumeRestoredSession,
+      recoverYouTubeFailure,
       playFromHistory, playSaved
+
     }}>
       {children}
     </PlayerContext.Provider>

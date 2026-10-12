@@ -49,12 +49,47 @@ const YouTubePlayer = forwardRef(({
   onStateChange, 
   onReady, 
   onEnded,
+  onError,
   audioOnly = false 
 }, ref) => {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
   const [error, setError] = useState(null);
   const progressIntervalRef = useRef(null);
+  // Always-fresh values for callbacks created once inside the YT API closure
+  const readyRef = useRef(false);
+  const videoIdRef = useRef(videoId);
+  const isPlayingRef = useRef(isPlaying);
+  const onEndedRef = useRef(onEnded);
+  const onErrorRef = useRef(onError);
+  const onStateChangeRef = useRef(onStateChange);
+  const watchdogRef = useRef(null);
+  const attemptsRef = useRef(0);
+  videoIdRef.current = videoId;
+  isPlayingRef.current = isPlaying;
+  onEndedRef.current = onEnded;
+  onErrorRef.current = onError;
+  onStateChangeRef.current = onStateChange;
+
+  // A video that never reaches PLAYING/BUFFERING gets re-requested (up to 3x) before we give up.
+  const armWatchdog = useCallback(() => {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = setTimeout(() => {
+      const p = playerRef.current;
+      const YT = window.YT;
+      if (!p || !readyRef.current || !isPlayingRef.current || typeof p.getPlayerState !== 'function') return;
+      const st = p.getPlayerState();
+      if (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING || st === YT.PlayerState.ENDED) { attemptsRef.current = 0; return; }
+      attemptsRef.current += 1;
+      if (attemptsRef.current > 3) {
+        attemptsRef.current = 0;
+        if (onErrorRef.current) onErrorRef.current(-1);
+        return;
+      }
+      try { p.loadVideoById(videoIdRef.current); } catch (e) {}
+      armWatchdog();
+    }, 3000);
+  }, []);
 
   // Progress polling
   const startProgressInterval = useCallback(() => {
@@ -81,6 +116,7 @@ const YouTubePlayer = forwardRef(({
   useEffect(() => {
     let isMounted = true;
 
+    const initialVideoId = videoIdRef.current;
     const initPlayer = async () => {
       try {
         const YT = await loadYouTubeApi();
@@ -89,7 +125,7 @@ const YouTubePlayer = forwardRef(({
         playerRef.current = new YT.Player(containerRef.current, {
           width: '100%',
           height: '100%',
-          videoId: videoId,
+          videoId: videoIdRef.current,
           playerVars: {
             autoplay: 1,
             controls: audioOnly ? 0 : 1,
@@ -110,10 +146,16 @@ const YouTubePlayer = forwardRef(({
                   iframe.setAttribute('allowfullscreen', '');
                 }
               } catch(e) {}
+              readyRef.current = true;
               if (onReady) onReady();
-              if (isPlaying) {
+              // The video may have changed while the player was still booting
+              if (videoIdRef.current && videoIdRef.current !== initialVideoId) {
+                if (isPlayingRef.current) event.target.loadVideoById(videoIdRef.current);
+                else event.target.cueVideoById(videoIdRef.current);
+              } else if (isPlayingRef.current) {
                 event.target.playVideo();
               }
+              if (isPlayingRef.current) armWatchdog();
             },
             onStateChange: (event) => {
               const currentIsPlaying = event.data === YT.PlayerState.PLAYING;
@@ -124,19 +166,23 @@ const YouTubePlayer = forwardRef(({
                 stopProgressInterval();
               }
 
+              if (event.data === YT.PlayerState.PLAYING) attemptsRef.current = 0;
+
               if (event.data === YT.PlayerState.ENDED) {
-                if (onEnded) onEnded();
+                if (onEndedRef.current) onEndedRef.current();
               }
 
-              if (onStateChange) {
+              if (onStateChangeRef.current) {
                 const progress = event.target.getCurrentTime() || 0;
                 const duration = event.target.getDuration() || 0;
-                onStateChange({ isPlaying: currentIsPlaying, progress, duration });
+                onStateChangeRef.current({ isPlaying: currentIsPlaying, progress, duration });
               }
             },
             onError: (event) => {
               console.error('YouTube Player Error:', event.data);
-              setError('Error loading video.');
+              // Unavailable / embedding disabled: let the parent skip to something playable
+              if (onErrorRef.current) onErrorRef.current(event.data);
+              else setError('Error loading video.');
             }
           }
         });
@@ -150,6 +196,8 @@ const YouTubePlayer = forwardRef(({
 
     return () => {
       isMounted = false;
+      readyRef.current = false;
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
       stopProgressInterval();
       if (playerRef.current) {
         playerRef.current.destroy();
@@ -161,10 +209,12 @@ const YouTubePlayer = forwardRef(({
 
   // Handle Video ID changes
   useEffect(() => {
-    if (playerRef.current && videoId) {
-      // If the player is ready and we get a new videoId
+    // Before the player is ready, onReady picks up the latest videoId itself
+    if (playerRef.current && readyRef.current && videoId) {
+      attemptsRef.current = 0;
       if (isPlaying && typeof playerRef.current.loadVideoById === 'function') {
         playerRef.current.loadVideoById(videoId);
+        armWatchdog();
       } else if (!isPlaying && typeof playerRef.current.cueVideoById === 'function') {
         playerRef.current.cueVideoById(videoId);
       }
@@ -176,10 +226,11 @@ const YouTubePlayer = forwardRef(({
     let retryInterval = null;
     
     const tryPlay = () => {
-      if (playerRef.current && typeof playerRef.current.getPlayerState === 'function') {
+      if (playerRef.current && readyRef.current && typeof playerRef.current.getPlayerState === 'function') {
         const YT = window.YT;
         const state = playerRef.current.getPlayerState();
-        if (isPlaying && state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) {
+        // Never restart a finished video (ENDED): the parent is already moving to the next track
+        if (isPlaying && state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING && state !== YT.PlayerState.ENDED) {
           playerRef.current.playVideo();
         } else if (!isPlaying && state === YT.PlayerState.PLAYING) {
           playerRef.current.pauseVideo();

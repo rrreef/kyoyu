@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Play, ShoppingBag } from 'lucide-react';
-import LikeIcon from '../../assets/like_icon.svg';
+import { Play, Heart, ShoppingBag } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useState, useRef } from 'react';

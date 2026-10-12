@@ -265,8 +265,64 @@ function PlaylistBridge() {
 
   useEffect(() => {
     // Always-available playlist handlers (override the AlbumSheet ones)
-    window.__kyoyuGetPlaylists = () => {
-      return JSON.stringify(getRef.current());
+    window.__kyoyuIsTrackInAnyPlaylist = (trackId) => {
+      const pls = getRef.current();
+      return pls.some(pl => pl.tracks && pl.tracks.some(t => String(t.id) === String(trackId)));
+    };
+    window.__kyoyuGetPlaylists = (trackId) => {
+      const pls = getRef.current().map(pl => ({
+        id: pl.id,
+        name: pl.name || pl.title,
+        trackCount: pl.trackCount,
+        containsTrack: trackId ? String(trackId).split(',').every(id => pl.tracks && pl.tracks.find(t => String(t.id) === String(id))) : false
+      }));
+      return JSON.stringify(pls);
+    };
+
+    
+    window.__kyoyuAddTracksToPlaylist = (playlistId, tracksJson) => {
+      try {
+        const tracks = JSON.parse(tracksJson);
+        for (const t of tracks) {
+          addRef.current(playlistId, t);
+        }
+      } catch(e) { console.error(e); }
+    };
+
+    window.__kyoyuToggleSaveTracks = (tracksJson) => {
+      try {
+        const tracks = JSON.parse(tracksJson);
+        if (!tracks.length) return;
+        let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+        
+        // Are ALL tracks already saved?
+        const isSaved = tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
+        
+        for (const t of tracks) {
+            // we dispatch kyoyu-native-like so React contexts can update
+            // BUT we override the localStorage ourselves. 
+            // Wait, kyoyu-native-like in LibraryContext just toggles React state, which is fine!
+            try { window.dispatchEvent(new CustomEvent('kyoyu-native-like', { detail: { trackId: t.id, handled: false } })); } catch(e){}
+            
+            if (isSaved) {
+                saved = saved.filter(x => String(x.id) !== String(t.id));
+            } else {
+                if (!saved.some(x => String(x.id) === String(t.id))) {
+                    saved.push(t);
+                }
+            }
+        }
+        localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
+      } catch(e) { console.error(e); }
+    };
+    
+    window.__kyoyuIsSavedAlbum = (tracksJson) => {
+      try {
+        const tracks = JSON.parse(tracksJson);
+        if (!tracks.length) return false;
+        let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+        return tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
+      } catch(e) { return false; }
     };
 
     window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
@@ -291,6 +347,7 @@ function PlaylistBridge() {
     };
 
     return () => {
+      delete window.__kyoyuIsTrackInAnyPlaylist;
       delete window.__kyoyuGetPlaylists;
       delete window.__kyoyuAddToPlaylist;
       delete window.__kyoyuCreatePlaylist;

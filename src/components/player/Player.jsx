@@ -411,16 +411,18 @@ import { useLibrary } from '../../contexts/LibraryContext';
 
 /* ── Root ── */
 export default function Player({ hideMini = false }) {
-  const { state, dispatch, seekTo, playNextSearch, playPrevSearch, isInSearchQueue } = usePlayer();
+  const { state, dispatch, seekTo, playNextSearch, playPrevSearch, isInSearchQueue, playNextAutoplay, resumeRestoredSession, recoverYouTubeFailure } = usePlayer();
   const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
-  const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume } = state;
+  const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume, restoredPending } = state;
 
   // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
   const handleNext = useCallback(() => {
-    if (isInSearchQueue()) { playNextSearch(); }
-    else { dispatch({ type: 'NEXT_TRACK' }); }
-  }, [isInSearchQueue, playNextSearch, dispatch]);
+    if (isInSearchQueue()) { 
+      playNextSearch(); // internally calls playNextAutoplay if exhausted
+    }
+    else { playNextAutoplay(); }
+  }, [isInSearchQueue, playNextSearch, playNextAutoplay]);
 
   const handlePrev = useCallback(() => {
     if (isInSearchQueue()) { playPrevSearch(); }
@@ -441,6 +443,16 @@ export default function Player({ hideMini = false }) {
     window.__kyoyuPlayerCmd = (cmd, val)=>{
       if (cmd === 'nativeError') {
         dispatch({ type: 'NATIVE_ERROR' });
+        return;
+      }
+      if (cmd === 'ytKick') {
+        // App just went to the background: WebKit may have paused the iframe — resume it if the user is playing
+        if (provider === 'youtube' && isPlaying) ytHiddenRef.current?.play?.();
+        return;
+      }
+      if ((cmd === 'toggle' || cmd === 'play') && restoredPending) {
+        // Restored (paused, not loaded) session: first play re-resolves a fresh stream and resumes at the saved spot
+        resumeRestoredSession();
         return;
       }
       if(cmd==='toggle') {
@@ -543,7 +555,7 @@ export default function Player({ hideMini = false }) {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuPlayerCmd; 
     };
-  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying, handleNext, handlePrev]);
+  },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying, handleNext, handlePrev, restoredPending, resumeRestoredSession]);
   useEffect(() => {
     if (currentTrack) {
       postNative({
@@ -610,10 +622,16 @@ export default function Player({ hideMini = false }) {
   }, [isPlaying, provider]);
   // Push progress + duration to Swift on every update (replaces old polling approach)
   useEffect(() => {
-    if (isNative() && currentTrack) {
+    if (isNative() && currentTrack && provider !== 'native') {
       postNative({ progress, dur: duration });
     }
-  }, [progress, duration]);
+  }, [progress, duration, provider]);
+  // AVPlayer (provider 'native') owns its own clock in Swift — echoing progress back caused the scrubber to flicker.
+  // We still tell Swift the known duration (instant UI before AVPlayer reports it) and a restored session's position.
+  useEffect(() => {
+    if (!(isNative() && currentTrack && provider === 'native')) return;
+    postNative(restoredPending ? { progress, dur: duration } : { dur: duration });
+  }, [duration, provider, currentTrack?.id, restoredPending]);
 
   // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end
   const streamingRef = useRef({});
@@ -688,6 +706,7 @@ export default function Player({ hideMini = false }) {
               if (ytDur > 0) dispatch({ type: 'SET_DURATION', value: ytDur });
             }}
             onEnded={() => handleNext()}
+            onError={() => recoverYouTubeFailure()}
           />
         </div>
       )}
