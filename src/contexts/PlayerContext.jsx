@@ -706,16 +706,19 @@ export function PlayerProvider({ children }) {
       try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artwork: track.releaseCover || '' }); } catch (e) {}
       // Spotify's App Remote is flaky right after a cold start / app switch: give its own engine a few tries
       // before even thinking about another source.
+      let lastError = '';
       for (let attempt = 0; attempt < 3; attempt++) {
         if (!stillCurrent()) return;
         try {
           await callStreaming('play', { service, itemId });
           return;
         } catch (err) {
-          console.warn(`[Player] ${service} playback failed (attempt ${attempt + 1}):`, err?.message || err);
+          lastError = err?.message || String(err);
+          console.warn(`[Player] ${service} playback failed (attempt ${attempt + 1}):`, lastError);
           if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
         }
       }
+      window.__kyoyuStreamError = lastError;
     }
     if (!stillCurrent()) return;
     // The user filtered the search to this provider (or opened it from a provider-specific sheet):
@@ -723,6 +726,9 @@ export function PlayerProvider({ children }) {
     const filter = String(window.__kyoyuProviderFilter || 'all');
     if (item.strict || (filter !== 'all' && filter.split(',').includes(service))) {
       dispatch({ type: 'SET_PLAYING', value: false });
+      const label = service === 'spotify' ? 'Spotify' : 'Apple Music';
+      const why = window.__kyoyuStreamError || 'unknown error';
+      try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\nCheck that ${label} is connected in Settings${service === 'spotify' ? ' (Spotify Premium + the Spotify app are required)' : ''}.` }); } catch (e) {}
       return;
     }
     showPlaceholder(meta);
