@@ -11,7 +11,30 @@ import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../compo
 import EventSheet from '../components/ui/EventSheet';
 import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
+import AccountItemList from '../components/AccountItems';
+import { useConnectedLibrary } from '../lib/useConnectedLibrary';
 import './Library.css';
+
+/* A labelled block of items from a connected SoundCloud / Bandcamp account (first 30, then "Show more") */
+function AcctSection({ title, items, first }) {
+  const [limit, setLimit] = useState(30);
+  if (!items || items.length === 0) return null;
+  return (
+    <>
+      <div className="shelf-row-label" style={{ marginTop: first ? 0 : 18 }}>{title}</div>
+      <AccountItemList items={items.slice(0, limit)} />
+      {items.length > limit && (
+        <button
+          data-kyoyu-injected="1"
+          onClick={() => setLimit(l => l + 60)}
+          style={{ background: 'none', border: 'none', color: '#ff5500', fontSize: '0.8rem', padding: '8px 0', cursor: 'pointer' }}
+        >
+          Show more ({items.length - limit})
+        </button>
+      )}
+    </>
+  );
+}
 
 function groupByAlbum(tracks) {
   const map = new Map();
@@ -70,6 +93,8 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 
 // Main filter keys
 const FILTERS = [
+  { key: 'titles',    label: 'Titles'    },
+  { key: 'albums',    label: 'Albums'    },
   { key: 'likes',     label: 'Likes'     },
   { key: 'playlists', label: 'Playlists' },
   { key: 'follows',   label: 'Follows'   },
@@ -130,6 +155,17 @@ export default function Library() {
   const { playRelease } = usePlayer();
   const libraryLayout = useLibraryLayoutLive();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
+
+  // SoundCloud / Bandcamp accounts connected in Settings → their library shows up here automatically
+  const acct = useConnectedLibrary();
+  const bcPurchaseTracks = acct.bandcamp.collection.filter(i => i.kind === 'track');
+  const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
+  const bcWishTracks     = acct.bandcamp.wishlist.filter(i => i.kind === 'track');
+  const bcWishAlbums     = acct.bandcamp.wishlist.filter(i => i.kind === 'album');
+  const scLikes          = acct.soundcloud.likes;
+  const scPlaylists      = acct.soundcloud.playlists;
+  const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length > 0;
+  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length > 0;
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
   // Group saved releases into albums for the grid view
@@ -200,10 +236,11 @@ export default function Library() {
 
       {/* ── Content ── */}
 
-      {/* Likes → Releases */}
-      {activeFilter === 'likes' && likesSub === 'releases' && (() => {
+      {/* Likes → Releases (also the "Titles" view of the native filter bar) */}
+      {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && (() => {
         const likedUploadsArr = getLikedUploads(user?.id);
-        const catalogLiked = Array.from(new Set(likedTracks)).map(id => {
+        const catalogLiked = Array.from(new Set(likedTracks)).map(id =>
+          {
           let t = releases.flatMap(r => r.tracks).find(x => String(x.id) === String(id));
           if (t) {
             const r = releases.find(rel => rel.tracks.some(tr => tr.id === t.id));
@@ -216,6 +253,7 @@ export default function Library() {
 
         const hasReleases = savedReleaseObjects.length > 0;
         const hasTracks   = combinedLikedTracks.length > 0;
+        if (!hasReleases && !hasTracks && hasAcctTitles) return null;   // connected accounts fill the page below
         if (!hasReleases && !hasTracks)
           return <div className="lib-empty"><p>No liked titles yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>;
         return (
@@ -255,6 +293,53 @@ export default function Library() {
           </>
         );
       })()}
+
+      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes (automatic) */}
+      {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
+        <div style={{ marginTop: 18 }}>
+          <AcctSection first title="Bandcamp · Purchases" items={bcPurchaseTracks} />
+          <AcctSection title="Bandcamp · Wishlist" items={bcWishTracks} />
+          <AcctSection title="SoundCloud · Likes" items={scLikes} />
+        </div>
+      )}
+
+      {/* Albums: saved releases + connected-account albums (Bandcamp purchases / wishlist) */}
+      {activeFilter === 'albums' && (
+        <>
+          {savedAlbums.length > 0 && (
+            <>
+              <div className="shelf-row-label">Saved Albums</div>
+              <div className="upl-grid upl-grid-3">
+                {sortByDate(savedAlbums).map(album => (
+                  <button
+                    key={album.id}
+                    className="upl-grid-cell"
+                    style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                    onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                  >
+                    <div className="upl-grid-art">
+                      {album.cover
+                        ? <img src={album.cover} alt={album.title} loading="lazy"/>
+                        : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                    </div>
+                    <div className="upl-grid-title">{album.title}</div>
+                    <div className="upl-grid-artist">{album.artist}</div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {hasAcctAlbums && (
+            <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
+              <AcctSection first title="Bandcamp · Purchases" items={bcPurchaseAlbums} />
+              <AcctSection title="Bandcamp · Wishlist" items={bcWishAlbums} />
+            </div>
+          )}
+          {savedAlbums.length === 0 && !hasAcctAlbums && (
+            <div className="lib-empty"><p>No albums yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>
+          )}
+        </>
+      )}
 
       {/* Likes → Playlists */}
       {activeFilter === 'likes' && likesSub === 'playlists' && (
@@ -315,6 +400,13 @@ export default function Library() {
               </div>
           }
         </>
+      )}
+
+      {/* Playlists → connected SoundCloud account (own + liked playlists, automatic) */}
+      {activeFilter === 'playlists' && scPlaylists.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <AcctSection first title="SoundCloud · Playlists" items={scPlaylists} />
+        </div>
       )}
 
       {/* Follows */}
