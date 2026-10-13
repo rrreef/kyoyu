@@ -29,9 +29,9 @@ function serviceLine(service, s) {
   }
   if (ACCOUNT_SERVICES.includes(service)) {
     if (!s.connected) {
-      return service === 'soundcloud'
-        ? 'Sign in to see your likes, playlists and follows in Kyoyu'
-        : 'Sign in to see your collection, purchases and wishlist in Kyoyu';
+      if (service === 'soundcloud') return 'Sign in to see your likes, playlists and follows in Kyoyu';
+      if (service === 'discogs') return 'Sign in to see your collection and wishlist in Kyoyu';
+      return 'Sign in to see your collection, purchases and wishlist in Kyoyu';
     }
     return `Connected${s.displayName ? ` as ${s.displayName}` : ''}`;
   }

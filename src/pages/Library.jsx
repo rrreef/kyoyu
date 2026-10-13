@@ -197,8 +197,10 @@ export default function Library() {
   const amPlaylists      = acct.applemusic?.playlists || [];
   const amAlbums         = acct.applemusic?.albums || [];
   const amFollows        = acct.applemusic?.following || [];
+  const dgCollection     = acct.discogs?.collection || [];
+  const dgWishlist       = acct.discogs?.wishlist || [];
   const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length + spLikes.length + amLikes.length > 0;
-  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length + amAlbums.length > 0;
+  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length + amAlbums.length + dgCollection.length + dgWishlist.length > 0;
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
   // Group saved releases into albums for the grid view
@@ -411,6 +413,23 @@ export default function Library() {
           ? <AcctSection items={amLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'No songs in your Apple Music library yet.'));
       }
+    } else if (libProvider === 'discogs') {
+      const cat = ['purchases', 'wishlist'].includes(activeFilter) ? activeFilter : 'purchases';
+      if (!acct.discogs?.connected) {
+        body = empty('Connect Discogs in Settings › Streaming Services to see your collection and wishlist.');
+      } else if (cat === 'wishlist') {
+        const dgWish = acct.discogs.wishlist || [];
+        const err = acct.errors['discogs:wishlist'];
+        body = dgWish.length > 0
+          ? <AcctSection items={dgWish} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'Your Discogs wishlist is empty.'));
+      } else {
+        const dgColl = acct.discogs.collection || [];
+        const err = acct.errors['discogs:collection'];
+        body = dgColl.length > 0
+          ? <AcctSection items={dgColl} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'Your Discogs collection is empty.'));
+      }
     } else {
       body = empty(`Your ${PROVIDER_LABELS[libProvider] || libProvider} library will appear here soon.`);
     }
@@ -543,12 +562,42 @@ export default function Library() {
             <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
               <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Wishlist" items={dgWishlist} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Saved Albums" items={spAlbums} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Saved Albums" items={amAlbums} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
             <div className="lib-empty"><p>No albums yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>
+          )}
+        </>
+      )}
+
+      {/* Purchases */}
+      {activeFilter === 'purchases' && (
+        <>
+          {(bcPurchaseAlbums.length > 0 || bcPurchaseTracks.length > 0 || dgCollection.length > 0) ? (
+            <div>
+              <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Purchases" items={acct.bandcamp.collection} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          ) : (
+            <div className="lib-empty"><p>No purchases yet.</p><p style={{fontSize:'0.8rem',color:'var(--text-dim)'}}>Connect Bandcamp or Discogs in Settings to see your collection.</p></div>
+          )}
+        </>
+      )}
+
+      {/* Wishlist */}
+      {activeFilter === 'wishlist' && (
+        <>
+          {(bcWishAlbums.length > 0 || bcWishTracks.length > 0 || dgWishlist.length > 0) ? (
+            <div>
+              <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Wishlist" items={dgWishlist} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={acct.bandcamp.wishlist} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          ) : (
+            <div className="lib-empty"><p>Your wishlist is empty.</p><p style={{fontSize:'0.8rem',color:'var(--text-dim)'}}>Connect Bandcamp or Discogs in Settings to see your wishlist.</p></div>
           )}
         </>
       )}

@@ -4,7 +4,7 @@ import { fetchAccountLibrary, isStreamingAvailable, useStreamingStatus } from '.
 /* Library data from connected SoundCloud / Bandcamp accounts, fetched automatically as soon as an account is
    connected, cached for the session and refreshed in the background (so the Library is always up to date). */
 
-let cache = { soundcloud: {}, bandcamp: {}, spotify: {}, applemusic: {} };      // service → kind → items
+let cache = { soundcloud: {}, bandcamp: {}, spotify: {}, applemusic: {}, discogs: {} };      // service → kind → items
 let errors = {};                                    // "service:kind" → message of the last failed load
 const fetchedAt = {};                               // "service:kind" → ms
 const inflight = new Map();
@@ -45,6 +45,7 @@ export function useConnectedLibrary() {
   const sc = !!status?.soundcloud?.connected;
   const sp = !!status?.spotify?.connected;
   const am = !!status?.applemusic?.connected;
+  const dg = !!status?.discogs?.connected;
 
   useEffect(() => {
     if (!isStreamingAvailable()) return;
@@ -59,7 +60,10 @@ export function useConnectedLibrary() {
     if (am) {
       ensure('applemusic', 'likes'); ensure('applemusic', 'playlists'); ensure('applemusic', 'albums'); ensure('applemusic', 'following');
     } else if (Object.keys(cache.applemusic || {}).length) { cache.applemusic = {}; emit(); }
-  }, [bc, sc, sp, am]);
+    if (dg) {
+      ensure('discogs', 'collection'); ensure('discogs', 'wishlist');
+    } else if (Object.keys(cache.discogs || {}).length) { cache.discogs = {}; emit(); }
+  }, [bc, sc, sp, am, dg]);
 
   const get = (service, kind) => (cache[service]?.[kind] || []);
   const loading = inflight.size > 0;
@@ -88,6 +92,11 @@ export function useConnectedLibrary() {
       playlists: am ? get('applemusic', 'playlists') : [],
       albums:    am ? get('applemusic', 'albums') : [],
       following: am ? get('applemusic', 'following') : [],
+    },
+    discogs: {
+      connected: dg,
+      collection: dg ? get('discogs', 'collection') : [],
+      wishlist:   dg ? get('discogs', 'wishlist') : [],
     },
   };
 }
