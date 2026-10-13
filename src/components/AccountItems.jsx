@@ -24,13 +24,14 @@ export function toPlayable(it) {
   };
 }
 
-function Art({ src, round }) {
+function Art({ src, round, isPlaylist }) {
+  const cleanSrc = (src && src.includes('bcbits.com')) ? src.replace(/_[0-9]+\.jpg/, '_10.jpg') : src;
   return (
     <div style={{
-      width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
+      width: isPlaylist ? 76 : 64, height: isPlaylist ? 57 : 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+      {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
            : <Music2 size={22} color="rgba(255,255,255,.3)" />}
     </div>
   );
@@ -42,7 +43,7 @@ function Row({ item, onClick, right, sub, round }) {
       onClick={onClick}
       style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', cursor: onClick ? 'pointer' : 'default' }}
     >
-      <Art src={item.artworkUrl} round={round} />
+      <Art src={item.artworkUrl} round={round} isPlaylist={item.kind === 'playlist'} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub ?? item.artistName}</div>
@@ -54,11 +55,15 @@ function Row({ item, onClick, right, sub, round }) {
 
 /** One cell of the icon view (same classes as the liked-tracks grid) */
 function GridCell({ item, onClick, cols }) {
+  const isPlaylist = item.kind === 'playlist';
+  const cleanSrc = (item.artworkUrl && item.artworkUrl.includes('bcbits.com'))
+    ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg')
+    : item.artworkUrl;
   return (
     <div className="upl-grid-cell" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-      <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : undefined}>
-        {item.artworkUrl
-          ? <img src={item.artworkUrl} alt={item.title} loading="lazy" decoding="async" />
+      <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
+        {cleanSrc
+          ? <img src={cleanSrc} alt={item.title} loading="lazy" decoding="async" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
       </div>
       <div className="upl-grid-title">{item.title}</div>

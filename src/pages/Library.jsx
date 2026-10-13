@@ -247,7 +247,10 @@ export default function Library() {
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
     const creator = pl.artistName || pl.creator || user?.displayName || 'You';
-    const cover = pl.artworkUrl || pl.cover || null;
+    let cover = pl.artworkUrl || pl.cover || null;
+    if (cover && cover.includes('bcbits.com')) {
+      cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
+    }
 
     const pushToSheet = (currentTracks) => {
       const albumObj = {
@@ -311,8 +314,8 @@ export default function Library() {
   const layoutMode = nativeView || libraryLayout.mode;     // 'list' | 'grid'
   const gridCols = libraryLayout.cols;
 
-  // The native filter bar now has two rows (categories + providers / view toggle): leave room for the second one
-  const barSpacer = isStreamingAvailable() ? <div style={{ height: 42 }} /> : null;
+  // Spacing so first content sits under the 2nd filter row with exact same gap (21px) as between top buttons and 1st row
+  const barSpacer = isStreamingAvailable() ? <div style={{ height: 156 }} /> : null;
 
   const hiddenFilterButtons = (
     <div style={{ display: 'none' }}>
