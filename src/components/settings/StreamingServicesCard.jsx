@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Headphones } from 'lucide-react';
 import {
-  SERVICES, SERVICE_LABELS, isStreamingAvailable, useStreamingStatus,
+  SERVICES, SERVICE_LABELS, ACCOUNT_SERVICES, ACCOUNT_LABELS, isStreamingAvailable, useStreamingStatus,
   connectService, disconnectService, getPlayThrough, setPlayThrough, callStreaming,
 } from '../../lib/streaming';
 import '../../pages/Settings.css';
@@ -26,6 +27,14 @@ function serviceLine(service, s) {
       ? 'Allowed, but this device\u2019s Apple ID has no active Apple Music subscription yet'
       : 'Allowed, but no active Apple Music subscription was found for this device\u2019s Apple ID';
   }
+  if (ACCOUNT_SERVICES.includes(service)) {
+    if (!s.connected) {
+      return service === 'soundcloud'
+        ? 'Sign in to see your likes, playlists and follows in Kyoyu'
+        : 'Sign in to see your collection, purchases and wishlist in Kyoyu';
+    }
+    return `Connected${s.displayName ? ` as ${s.displayName}` : ''}`;
+  }
   if (!s.configured) return 'Coming soon';
   if (!s.connected) return 'Not connected';
   const who = s.displayName ? ` as ${s.displayName}` : '';
@@ -37,6 +46,7 @@ function serviceLine(service, s) {
 
 export default function StreamingServicesCard() {
   const status = useStreamingStatus();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [playThrough, setPlayThroughState] = useState(getPlayThrough());
@@ -79,16 +89,26 @@ export default function StreamingServicesCard() {
         When a song from YouTube is also on your service, Reef plays it from there — without interruptions when you leave the app.
       </p>
 
-      {SERVICES.map((service, i) => {
+      {[...SERVICES, ...ACCOUNT_SERVICES].map((service, i) => {
         const s = status?.[service];
-        const connectable = service === 'applemusic' || s?.configured;
+        const isAccount = ACCOUNT_SERVICES.includes(service);
+        const connectable = isAccount || service === 'applemusic' || s?.configured;
         return (
           <div key={service}>
             {i > 0 && <div className="s-layout-divider" />}
             <div className="s-layout-row" style={{ alignItems: 'center', gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="s-layout-row-label">{SERVICE_LABELS[service]}</div>
+                <div className="s-layout-row-label">{SERVICE_LABELS[service] || ACCOUNT_LABELS[service]}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>{serviceLine(service, s)}</div>
+                {isAccount && s?.connected && (
+                  <button
+                    data-kyoyu-injected="1"
+                    onClick={() => navigate(`/accounts/${service}`)}
+                    style={{ background: 'none', border: 'none', padding: 0, marginTop: 6, fontSize: '0.74rem', color: '#ff5500', cursor: 'pointer', textAlign: 'left' }}
+                  >
+                    Open your {ACCOUNT_LABELS[service]} library →
+                  </button>
+                )}
               </div>
               {service === 'applemusic' && s?.connected && !s?.canPlay && (
                 <button

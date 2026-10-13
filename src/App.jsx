@@ -34,6 +34,7 @@ import CanonicalArtistPage from './pages/CanonicalArtistPage';
 import CanonicalReleasePage from './pages/CanonicalReleasePage';
 import CanonicalLabelPage from './pages/CanonicalLabelPage';
 import Subscription from './pages/Subscription';
+import AccountLibrary from './pages/AccountLibrary';
 import ListenerSettings from './pages/ListenerSettings';
 import Account      from './pages/Account';
 import UserUploads  from './pages/UserUploads';
@@ -141,6 +142,7 @@ function ListenerApp() {
           <Route path="/artist/:id"     element={<ArtistRoute />} />
           <Route path="/label/:id"      element={<LabelRoute />} />
           <Route path="/subscription"   element={<Subscription />} />
+          <Route path="/accounts/:service" element={<AccountLibrary />} />
           <Route path="/settings"        element={<ListenerSettings />} />
           <Route path="/orders"          element={<Orders />} />
           <Route path="/downloads"       element={<Downloads />} />
@@ -184,6 +186,7 @@ function CreatorApp() {
           <Route path="/settings"         element={<Settings />} />
           <Route path="/app-settings"     element={<AppSettings />} />
           <Route path="/subscription"     element={<Subscription />} />
+          <Route path="/accounts/:service" element={<AccountLibrary />} />
 
           {/* ── Listener tab-bar routes — so iOS tab bar works for creator accounts ── */}
           <Route path="/"                 element={<Home />} />

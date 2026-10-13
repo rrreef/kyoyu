@@ -82,6 +82,16 @@ export function useStreamingStatus() {
 export const connectService = (service) => callStreaming('connect', { service });
 export const disconnectService = (service) => callStreaming('disconnect', { service });
 
+// ── Personal accounts (SoundCloud / Bandcamp): web sign-in handled natively, library read on-device ──
+export const ACCOUNT_SERVICES = ['soundcloud', 'bandcamp'];
+export const ACCOUNT_LABELS = { soundcloud: 'SoundCloud', bandcamp: 'Bandcamp' };
+
+/** kind: soundcloud → likes | playlists | following | playlistTracks · bandcamp → collection | wishlist */
+export async function fetchAccountLibrary(service, kind, extra = {}) {
+  const r = await callStreaming('library', { service, kind, ...extra }, 90000);
+  return Array.isArray(r?.items) ? r.items : [];
+}
+
 // ── "Play through" preference ──
 export function getPlayThrough() {
   try { return localStorage.getItem(PREF_KEY) || 'auto'; } catch { return 'auto'; }
