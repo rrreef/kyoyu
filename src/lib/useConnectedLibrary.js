@@ -5,6 +5,7 @@ import { fetchAccountLibrary, isStreamingAvailable, useStreamingStatus } from '.
    connected, cached for the session and refreshed in the background (so the Library is always up to date). */
 
 let cache = { soundcloud: {}, bandcamp: {} };      // service → kind → items
+let errors = {};                                    // "service:kind" → message of the last failed load
 const fetchedAt = {};                               // "service:kind" → ms
 const inflight = new Map();
 const listeners = new Set();
@@ -16,8 +17,8 @@ async function ensure(service, kind) {
   if (cache[service][kind] && Date.now() - (fetchedAt[k] || 0) < STALE_MS) return;
   if (inflight.has(k)) return;
   const p = fetchAccountLibrary(service, kind)
-    .then((items) => { cache[service][kind] = items; fetchedAt[k] = Date.now(); })
-    .catch(() => { if (!cache[service][kind]) cache[service][kind] = []; })
+    .then((items) => { cache[service][kind] = items; fetchedAt[k] = Date.now(); delete errors[k]; })
+    .catch((e) => { errors[k] = e?.message || 'Could not load'; if (!cache[service][kind]) cache[service][kind] = []; })
     .finally(() => { inflight.delete(k); emit(); });
   inflight.set(k, p);
 }
@@ -36,8 +37,9 @@ export function useConnectedLibrary() {
 
   useEffect(() => {
     if (!isStreamingAvailable()) return;
-    if (bc) { ensure('bandcamp', 'collection'); ensure('bandcamp', 'wishlist'); ensure('bandcamp', 'following'); }
-    else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; emit(); }
+    if (bc) {
+      ensure('bandcamp', 'collection'); ensure('bandcamp', 'wishlist'); ensure('bandcamp', 'following'); ensure('bandcamp', 'playlists');
+    } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; emit(); }
     if (sc) { ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); }
     else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; emit(); }
   }, [bc, sc]);
@@ -47,7 +49,14 @@ export function useConnectedLibrary() {
 
   return {
     loading,
-    bandcamp: { connected: bc, collection: bc ? get('bandcamp', 'collection') : [], wishlist: bc ? get('bandcamp', 'wishlist') : [], following: bc ? get('bandcamp', 'following') : [] },
+    errors,
+    bandcamp: {
+      connected: bc,
+      collection: bc ? get('bandcamp', 'collection') : [],
+      wishlist:   bc ? get('bandcamp', 'wishlist') : [],
+      following:  bc ? get('bandcamp', 'following') : [],
+      playlists:  bc ? get('bandcamp', 'playlists') : [],
+    },
     soundcloud: { connected: sc, likes: sc ? get('soundcloud', 'likes') : [], playlists: sc ? get('soundcloud', 'playlists') : [] },
   };
 }

@@ -28,11 +28,11 @@ export function toPlayable(it) {
 function Art({ src, round }) {
   return (
     <div style={{
-      width: 48, height: 48, borderRadius: round ? 24 : 6, overflow: 'hidden', flexShrink: 0,
+      width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-           : <Music2 size={18} color="rgba(255,255,255,.3)" />}
+           : <Music2 size={22} color="rgba(255,255,255,.3)" />}
     </div>
   );
 }
@@ -41,14 +41,14 @@ function Row({ item, onClick, right, sub, round }) {
   return (
     <div
       onClick={onClick}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', cursor: onClick ? 'pointer' : 'default' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', cursor: onClick ? 'pointer' : 'default' }}
     >
       <Art src={item.artworkUrl} round={round} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub ?? item.artistName}</div>
+        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub ?? item.artistName}</div>
       </div>
-      {right}
+      {right && <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>{right}</div>}
     </div>
   );
 }
@@ -102,9 +102,10 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3 })
 
   const togglePlaylist = async (pl) => {
     if (openPlaylist?.id === pl.id) { setOpenPlaylist(null); return; }
+    if (Array.isArray(pl.tracks) && pl.tracks.length) { setOpenPlaylist({ id: pl.id, tracks: pl.tracks }); return; }
     setOpenPlaylist({ id: pl.id, tracks: null });
     try {
-      const tracks = await fetchAccountLibrary('soundcloud', 'playlistTracks', { playlistId: pl.playlistId });
+      const tracks = await fetchAccountLibrary(pl.provider || 'soundcloud', 'playlistTracks', { playlistId: pl.playlistId, playlistUrl: pl.url });
       setOpenPlaylist({ id: pl.id, tracks });
     } catch (e) { setOpenPlaylist({ id: pl.id, tracks: [] }); setError(e?.message || 'Could not load the playlist'); }
   };
@@ -123,7 +124,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3 })
           item={it}
           sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
           onClick={() => togglePlaylist(it)}
-          right={open ? <ChevronUp size={16} color="rgba(255,255,255,.5)" /> : <ChevronDown size={16} color="rgba(255,255,255,.5)" />}
+          right={open ? <ChevronUp size={20} color="rgba(255,255,255,.5)" /> : <ChevronDown size={20} color="rgba(255,255,255,.5)" />}
         />
         {open && (
           <div style={{ paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,.1)', marginLeft: 6 }}>
@@ -131,7 +132,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3 })
             {openPlaylist.tracks?.map(t => (
               <Row key={t.id} item={t} sub={`${t.artistName}${t.duration ? ` · ${fmt(t.duration)}` : ''}`}
                    onClick={() => playList(openPlaylist.tracks, t)}
-                   right={<Play size={14} color="rgba(255,255,255,.5)" />} />
+                   right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />} />
             ))}
           </div>
         )}
@@ -168,7 +169,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3 })
             <Row key={it.id} item={it}
                  sub={`${it.artistName}${it.kind === 'track' && it.duration ? ` · ${fmt(it.duration)}` : ''}`}
                  onClick={onItemClick(it)}
-                 right={<Play size={14} color="rgba(255,255,255,.5)" />} />
+                 right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />} />
           );
         })
       )}

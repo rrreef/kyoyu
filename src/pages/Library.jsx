@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Play, Plus, ChevronDown, ChevronUp, Music2, Trash2, Lock, ArrowRight, Radio } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
@@ -16,23 +16,30 @@ import { useConnectedLibrary } from '../lib/useConnectedLibrary';
 import { isStreamingAvailable } from '../lib/streaming';
 import './Library.css';
 
-/* A labelled block of items from a connected SoundCloud / Bandcamp account (first 30, then "Show more") */
+/* A labelled block of items from a connected SoundCloud / Bandcamp account.
+   Renders in pages; more items load automatically when the user scrolls near the bottom. */
 function AcctSection({ title, items, first, view = 'list', cols = 3 }) {
-  const [limit, setLimit] = useState(30);
-  if (!items || items.length === 0) return null;
+  const PAGE = 40;
+  const [limit, setLimit] = useState(PAGE);
+  const sentinelRef = useRef(null);
+  const total = items ? items.length : 0;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || limit >= total) return undefined;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some(e => e.isIntersecting)) setLimit(l => Math.min(l + PAGE, total));
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [limit, total]);
+
+  if (!items || total === 0) return null;
   return (
     <>
       {title && <div className="shelf-row-label" style={{ marginTop: first ? 0 : 18 }}>{title}</div>}
       <AccountItemList items={items.slice(0, limit)} view={view} cols={cols} />
-      {items.length > limit && (
-        <button
-          data-kyoyu-injected="1"
-          onClick={() => setLimit(l => l + 60)}
-          style={{ background: 'none', border: 'none', color: '#ff5500', fontSize: '0.8rem', padding: '8px 0', cursor: 'pointer' }}
-        >
-          Show more ({items.length - limit})
-        </button>
-      )}
+      {limit < total && <div ref={sentinelRef} style={{ height: 1 }} />}
     </>
   );
 }
@@ -292,17 +299,11 @@ export default function Library() {
       if (!acct.bandcamp.connected) {
         body = empty('Connect Bandcamp in Settings › Streaming Services to see your purchases and wishlist.');
       } else if (cat === 'playlists') {
-        const bcPlaylists = playlists.filter(pl => (pl.tracks || []).some(t =>
-          /bandcamp|bcbits/i.test(`${t.provider || ''} ${t.url || ''} ${t.streamUrl || ''} ${t.audioUrl || ''} ${t.providerItemId || ''}`)));
-        body = bcPlaylists.length === 0
-          ? empty('No playlists with Bandcamp tracks yet.')
-          : <div className="scroll-row">
-              {bcPlaylists.map(pl => (
-                <div key={pl.id} onClick={() => openPlaylistSheet(pl)}>
-                  <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length || 0} tracks`} badge={pl.isAI ? 'AI' : null} />
-                </div>
-              ))}
-            </div>;
+        const bcPl = acct.bandcamp.playlists;
+        const err = acct.errors['bandcamp:playlists'];
+        body = bcPl.length > 0
+          ? <AcctSection items={bcPl} view={layoutMode} cols={gridCols} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No playlists in your Bandcamp account yet.'));
       } else {
         const list = cat === 'wishlist' ? acct.bandcamp.wishlist : cat === 'follows' ? acct.bandcamp.following : acct.bandcamp.collection;
         body = list.length > 0
