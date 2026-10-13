@@ -209,8 +209,8 @@ export default function AlbumSheet({ album, onClose }) {
 
   const playlistsRef = useRef(playlists);
   playlistsRef.current = playlists;
-  const safeAlbumRef = useRef(safeAlbum);
-  safeAlbumRef.current = safeAlbum;
+  const safeAlbumRef = useRef(album);
+  safeAlbumRef.current = album;
   const playTrackRef = useRef(playTrack);
   playTrackRef.current = playTrack;
   const onCloseRef = useRef(onClose);
@@ -256,29 +256,15 @@ export default function AlbumSheet({ album, onClose }) {
         const handleNativeLike = (e) => {
       if (e.detail.handled) return;
       const trackId = String(e.detail.trackId).split('?ts=')[0];
-      let t = album.tracks.find(tr => String(tr.id) === trackId);
-      if (!t && safeLabelRef.current) {
-        safeLabelRef.current.releases?.forEach(r => {
-          const tr = r.tracks?.find(tr => String(tr.id) === String(trackId));
-          if (tr) t = tr;
-        });
-      }
-      if (!t && safeArtistRef.current) {
-        safeArtistRef.current.releases?.forEach(r => {
-          const tr = r.tracks?.find(tr => String(tr.id) === String(trackId));
-          if (tr) t = tr;
-        });
-        safeArtistRef.current.popular_tracks?.forEach(tr => {
-          if (String(tr.id) === String(trackId)) t = tr;
-        });
-      }
+      const curAlbum = safeAlbumRef.current || album;
+      let t = (curAlbum?.tracks || []).find(tr => String(tr.id) === trackId);
       if (!t) return;
 
       e.detail.handled = true;
       const trackObj = {
         ...t,
-        cover: album.cover || album.artworkUrl || '',
-        album: album.title || '',
+        cover: curAlbum?.cover || curAlbum?.artworkUrl || '',
+        album: curAlbum?.title || '',
         storageKey: t.storageKey || '',
         ...savedIdentity(t),
       };
@@ -338,14 +324,15 @@ export default function AlbumSheet({ album, onClose }) {
       return safeAlbumRef.current.tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
     };
     window.__kyoyuDownloadTrack = (trackId) => {
-      const t = album.tracks.find(tr => tr.id === trackId);
+      const curAlbum = safeAlbumRef.current || album;
+      const t = (curAlbum?.tracks || []).find(tr => String(tr.id) === String(trackId));
       if (!t) return;
       const trackObj = {
         id: t.id,
         title: t.title || t.name || '',
-        artist: t.artist || album.artist || '',
-        album: album.title || '',
-        cover: album.cover || album.artworkUrl || '',
+        artist: t.artist || curAlbum?.artist || '',
+        album: curAlbum?.title || '',
+        cover: curAlbum?.cover || curAlbum?.artworkUrl || '',
         audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
         ...savedIdentity(t),
       };
@@ -370,25 +357,11 @@ export default function AlbumSheet({ album, onClose }) {
     };
 
     window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
-      if (!safeAlbumRef.current || !safeAlbumRef.current.tracks) return;
+      const curAlbum = safeAlbumRef.current || album;
+      if (!curAlbum || !curAlbum.tracks) return;
       const ids = String(trackId).split(',');
       for (const id of ids) {
-        let trackObj = safeAlbumRef.current.tracks.find(t => String(t.id) === String(id));
-        if (!trackObj && safeLabelRef.current) {
-           safeLabelRef.current.releases?.forEach(r => {
-             const t = r.tracks?.find(tr => String(tr.id) === String(id));
-             if (t) trackObj = t;
-           });
-        }
-        if (!trackObj && safeArtistRef.current) {
-           safeArtistRef.current.releases?.forEach(r => {
-             const t = r.tracks?.find(tr => String(tr.id) === String(id));
-             if (t) trackObj = t;
-           });
-           safeArtistRef.current.popular_tracks?.forEach(t => {
-             if (String(t.id) === String(id)) trackObj = t;
-           });
-        }
+        let trackObj = (curAlbum.tracks || []).find(t => String(t.id) === String(id));
         if (trackObj) {
           addToPlaylistRef.current(playlistId, trackObj);
         }
