@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Headphones } from 'lucide-react';
 import {
   SERVICES, SERVICE_LABELS, isStreamingAvailable, useStreamingStatus,
-  connectService, disconnectService, getPlayThrough, setPlayThrough,
+  connectService, disconnectService, getPlayThrough, setPlayThrough, callStreaming,
 } from '../../lib/streaming';
 import '../../pages/Settings.css';
 import '../../pages/AppSettings.css';
@@ -20,8 +20,11 @@ function serviceLine(service, s) {
   if (!s) return 'Checking…';
   if (service === 'applemusic') {
     if (s.authorization === 'denied' || s.authorization === 'restricted') return 'Access denied — allow Reef in iOS Settings › Privacy › Media & Apple Music';
-    if (!s.connected) return 'Not connected';
-    return s.canPlay ? 'Connected' : 'Connected — an Apple Music subscription is required to play';
+    if (!s.connected) return 'Not connected — tap Connect to allow Reef to use Apple Music on this device';
+    if (s.canPlay) return 'Connected — playing with this device\u2019s Apple Music subscription';
+    return s.canSubscribe
+      ? 'Allowed, but this device\u2019s Apple ID has no active Apple Music subscription yet'
+      : 'Allowed, but no active Apple Music subscription was found for this device\u2019s Apple ID';
   }
   if (!s.configured) return 'Coming soon';
   if (!s.connected) return 'Not connected';
@@ -61,6 +64,12 @@ export default function StreamingServicesCard() {
     setBusy('');
   };
 
+  const subscribe = async (service) => {
+    setError('');
+    try { await callStreaming('subscribe', { service }); }
+    catch (e) { setError(e?.message || 'Something went wrong'); }
+  };
+
   const choose = (id) => { setPlayThrough(id); setPlayThroughState(id); };
 
   return (
@@ -81,6 +90,16 @@ export default function StreamingServicesCard() {
                 <div className="s-layout-row-label">{SERVICE_LABELS[service]}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>{serviceLine(service, s)}</div>
               </div>
+              {service === 'applemusic' && s?.connected && !s?.canPlay && (
+                <button
+                  className="s-layout-btn active"
+                  style={{ width: 'auto', padding: '0 14px' }}
+                  disabled={!!busy}
+                  onClick={() => subscribe(service)}
+                >
+                  Get Apple Music
+                </button>
+              )}
               {connectable && (
                 <button
                   className={`s-layout-btn${s?.connected ? '' : ' active'}`}

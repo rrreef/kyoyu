@@ -715,6 +715,7 @@ export function PlayerProvider({ children }) {
         } catch (err) {
           lastError = err?.message || String(err);
           console.warn(`[Player] ${service} playback failed (attempt ${attempt + 1}):`, lastError);
+          if (/subscription|not connected|not configured|not installed/i.test(lastError)) break;   // retrying can't fix these
           if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
         }
       }
@@ -735,7 +736,12 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'SET_PLAYING', value: false });
     const label = service === 'spotify' ? 'Spotify' : 'Apple Music';
     const why = window.__kyoyuStreamError || (isStreamingAvailable() ? 'unknown error' : `${label} is only available in the Kyoyu iOS app`);
-    try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\nCheck that ${label} is connected in Settings${service === 'spotify' ? ' (Spotify Premium + the Spotify app are required)' : ''}.` }); } catch (e) {}
+    const hint = service === 'spotify'
+      ? 'Check that Spotify is connected in Settings (Spotify Premium + the Spotify app are required).'
+      : /subscription/i.test(why)
+        ? 'Open Settings › Streaming Services › Apple Music and tap “Get Apple Music”. The subscription must be on the Apple ID signed in on this device.'
+        : 'Check that Apple Music is connected in Settings.';
+    try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\n${hint}` }); } catch (e) {}
   }
 
   // ── Shared helpers for resolving plays ──
