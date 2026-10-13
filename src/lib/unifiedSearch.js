@@ -260,14 +260,25 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
 /**
  * Search Spotify via our proxy API endpoint.
  */
+/**
+ * Inside the iOS app, Spotify / Apple Music are only offered when the user connected them in Settings
+ * (Spotify additionally needs the Spotify app). On the website there is no connection → unchanged.
+ */
+async function streamingServiceAllowed(service) {
+  if (!isStreamingAvailable()) return true;
+  let st = getCachedStreamingStatus();
+  if (!st) { try { st = await refreshStreamingStatus(); } catch { /* unknown → don't block */ } }
+  const s = st?.[service];
+  if (!s) return true;
+  if (!s.connected) return false;
+  if (service === 'spotify' && s.installed === false) return false;
+  return true;
+}
+
 async function searchSpotify(query, offset = 0) {
   const empty = { results: [], hasMore: false, nextOffset: offset };
-  // In the iOS app Spotify only plays through the Spotify app: without it, don't suggest Spotify music at all
-  if (isStreamingAvailable()) {
-    let st = getCachedStreamingStatus();
-    if (!st) { try { st = await refreshStreamingStatus(); } catch { /* unknown → don't block */ } }
-    if (st?.spotify && st.spotify.installed === false) return empty;
-  }
+  // In the iOS app Spotify only shows up when the user connected it (and Spotify plays through the Spotify app)
+  if (!(await streamingServiceAllowed('spotify'))) return empty;
   // 1) Our server (catalog search: tracks, albums, artists, playlists). Spotify caps `limit` at 10.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -319,6 +330,8 @@ async function searchSpotify(query, offset = 0) {
  * Search Apple Music via the public iTunes Search API.
  */
 async function searchAppleMusic(query, offset = 0) {
+  // In the iOS app Apple Music only shows up when the user connected it in Settings
+  if (!(await streamingServiceAllowed('applemusic'))) return { results: [], hasMore: false, nextOffset: offset };
   try {
     const limit = 33;
     const [songsRes, albumsRes, artistsRes] = await Promise.all([
