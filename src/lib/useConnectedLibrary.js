@@ -36,7 +36,7 @@ export function useConnectedLibrary() {
 
   useEffect(() => {
     if (!isStreamingAvailable()) return;
-    if (bc) { ensure('bandcamp', 'collection'); ensure('bandcamp', 'wishlist'); }
+    if (bc) { ensure('bandcamp', 'collection'); ensure('bandcamp', 'wishlist'); ensure('bandcamp', 'following'); }
     else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; emit(); }
     if (sc) { ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); }
     else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; emit(); }
@@ -47,7 +47,7 @@ export function useConnectedLibrary() {
 
   return {
     loading,
-    bandcamp: { connected: bc, collection: bc ? get('bandcamp', 'collection') : [], wishlist: bc ? get('bandcamp', 'wishlist') : [] },
+    bandcamp: { connected: bc, collection: bc ? get('bandcamp', 'collection') : [], wishlist: bc ? get('bandcamp', 'wishlist') : [], following: bc ? get('bandcamp', 'following') : [] },
     soundcloud: { connected: sc, likes: sc ? get('soundcloud', 'likes') : [], playlists: sc ? get('soundcloud', 'playlists') : [] },
   };
 }

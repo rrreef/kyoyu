@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Play, Music2, ChevronDown, ChevronUp, EyeOff } from 'lucide-react';
+import { Play, Music2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchAccountLibrary } from '../lib/streaming';
 import { usePlayer } from '../contexts/PlayerContext';
 
-/* Rows for items coming from a connected SoundCloud / Bandcamp account
-   (tracks, albums, playlists, followed profiles) — with tap-to-play. Shared by the account page and the Library. */
+/* Items coming from a connected SoundCloud / Bandcamp account (tracks, albums, playlists, followed profiles)
+   with tap-to-play, as a list or as an icon grid (same look as the liked tracks). Shared by the account page and the Library. */
 
 const fmt = (s) => {
   const n = Math.round(Number(s) || 0);
@@ -53,9 +53,22 @@ function Row({ item, onClick, right, sub, round }) {
   );
 }
 
-const hiddenTag = (it) => (it.isHidden ? <EyeOff size={13} color="rgba(255,255,255,.4)" style={{ flexShrink: 0 }} /> : null);
+/** One cell of the icon view (same classes as the liked-tracks grid) */
+function GridCell({ item, onClick, cols }) {
+  return (
+    <div className="upl-grid-cell" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+      <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : undefined}>
+        {item.artworkUrl
+          ? <img src={item.artworkUrl} alt={item.title} loading="lazy" decoding="async" />
+          : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
+      </div>
+      <div className="upl-grid-title">{item.title}</div>
+      {item.artistName ? <div className="upl-grid-artist">{item.artistName}</div> : null}
+    </div>
+  );
+}
 
-export default function AccountItemList({ items = [] }) {
+export default function AccountItemList({ items = [], view = 'list', cols = 3 }) {
   const { setSearchQueue, playSearchItem } = usePlayer();
   const [openPlaylist, setOpenPlaylist] = useState(null);   // { id, tracks | null }
   const [error, setError] = useState('');
@@ -96,55 +109,69 @@ export default function AccountItemList({ items = [] }) {
     } catch (e) { setOpenPlaylist({ id: pl.id, tracks: [] }); setError(e?.message || 'Could not load the playlist'); }
   };
 
+  const onItemClick = (it) => {
+    if (it.kind === 'album') return () => playBandcampAlbum(it);
+    if (it.kind === 'track') return () => playList(items, it);
+    return undefined;     // profiles: display only
+  };
+
+  const renderPlaylist = (it) => {
+    const open = openPlaylist?.id === it.id;
+    return (
+      <div key={it.id}>
+        <Row
+          item={it}
+          sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
+          onClick={() => togglePlaylist(it)}
+          right={open ? <ChevronUp size={16} color="rgba(255,255,255,.5)" /> : <ChevronDown size={16} color="rgba(255,255,255,.5)" />}
+        />
+        {open && (
+          <div style={{ paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,.1)', marginLeft: 6 }}>
+            {openPlaylist.tracks === null && <div style={{ padding: 8, fontSize: '0.78rem', color: 'var(--text-dim)' }}>Loading tracks…</div>}
+            {openPlaylist.tracks?.map(t => (
+              <Row key={t.id} item={t} sub={`${t.artistName}${t.duration ? ` · ${fmt(t.duration)}` : ''}`}
+                   onClick={() => playList(openPlaylist.tracks, t)}
+                   right={<Play size={14} color="rgba(255,255,255,.5)" />} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const safeCols = Math.min(5, Math.max(1, cols));
+  const gridItems = items.filter(i => i.kind !== 'playlist');
+  const playlists = items.filter(i => i.kind === 'playlist');
+
   return (
     <>
       {error && <p style={{ fontSize: '0.78rem', color: '#ff6b6b', marginBottom: 8 }}>{error}</p>}
-      {items.map(it => {
-        // ── SoundCloud playlists: tap to expand its tracks ──
-        if (it.kind === 'playlist') {
-          const open = openPlaylist?.id === it.id;
-          return (
-            <div key={it.id}>
-              <Row
-                item={it}
-                sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
-                onClick={() => togglePlaylist(it)}
-                right={open ? <ChevronUp size={16} color="rgba(255,255,255,.5)" /> : <ChevronDown size={16} color="rgba(255,255,255,.5)" />}
-              />
-              {open && (
-                <div style={{ paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,.1)', marginLeft: 6 }}>
-                  {openPlaylist.tracks === null && <div style={{ padding: 8, fontSize: '0.78rem', color: 'var(--text-dim)' }}>Loading tracks…</div>}
-                  {openPlaylist.tracks?.map(t => (
-                    <Row key={t.id} item={t} sub={`${t.artistName}${t.duration ? ` · ${fmt(t.duration)}` : ''}`}
-                         onClick={() => playList(openPlaylist.tracks, t)}
-                         right={<Play size={14} color="rgba(255,255,255,.5)" />} />
-                  ))}
-                </div>
-              )}
+
+      {view === 'grid' ? (
+        <>
+          {gridItems.length > 0 && (
+            <div className={`upl-grid upl-grid-${safeCols}`}>
+              {gridItems.map(it => <GridCell key={it.id} item={it} cols={safeCols} onClick={onItemClick(it)} />)}
             </div>
-          );
-        }
-        // ── SoundCloud followings ──
-        if (it.kind === 'profile') {
-          return <Row key={it.id} item={it} round sub={it.followers ? `${it.followers.toLocaleString()} followers` : it.artistName} />;
-        }
-        // ── Bandcamp albums: play from the first track ──
-        if (it.kind === 'album') {
+          )}
+          {playlists.map(renderPlaylist)}
+        </>
+      ) : (
+        items.map(it => {
+          if (it.kind === 'playlist') return renderPlaylist(it);
+          // ── followed profiles (SoundCloud / Bandcamp) ──
+          if (it.kind === 'profile') {
+            return <Row key={it.id} item={it} round sub={it.followers ? `${it.followers.toLocaleString()} followers` : (it.artistName || '')} />;
+          }
+          // ── albums / tracks ──
           return (
             <Row key={it.id} item={it}
-                 sub={`${it.artistName} · album${it.purchased ? ' · purchased' : ''}${it.isHidden ? ' · hidden' : ''}`}
-                 onClick={() => playBandcampAlbum(it)}
-                 right={<>{hiddenTag(it)}<Play size={14} color="rgba(255,255,255,.5)" /></>} />
+                 sub={`${it.artistName}${it.kind === 'track' && it.duration ? ` · ${fmt(it.duration)}` : ''}`}
+                 onClick={onItemClick(it)}
+                 right={<Play size={14} color="rgba(255,255,255,.5)" />} />
           );
-        }
-        // ── Tracks (SoundCloud likes, Bandcamp single tracks) ──
-        return (
-          <Row key={it.id} item={it}
-               sub={`${it.artistName}${it.duration ? ` · ${fmt(it.duration)}` : ''}${it.purchased ? ' · purchased' : ''}${it.isHidden ? ' · hidden' : ''}`}
-               onClick={() => playList(items, it)}
-               right={<>{hiddenTag(it)}<Play size={14} color="rgba(255,255,255,.5)" /></>} />
-        );
-      })}
+        })
+      )}
     </>
   );
 }

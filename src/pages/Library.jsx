@@ -13,16 +13,17 @@ import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
 import AccountItemList from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
+import { isStreamingAvailable } from '../lib/streaming';
 import './Library.css';
 
 /* A labelled block of items from a connected SoundCloud / Bandcamp account (first 30, then "Show more") */
-function AcctSection({ title, items, first }) {
+function AcctSection({ title, items, first, view = 'list', cols = 3 }) {
   const [limit, setLimit] = useState(30);
   if (!items || items.length === 0) return null;
   return (
     <>
-      <div className="shelf-row-label" style={{ marginTop: first ? 0 : 18 }}>{title}</div>
-      <AccountItemList items={items.slice(0, limit)} />
+      {title && <div className="shelf-row-label" style={{ marginTop: first ? 0 : 18 }}>{title}</div>}
+      <AccountItemList items={items.slice(0, limit)} view={view} cols={cols} />
       {items.length > limit && (
         <button
           data-kyoyu-injected="1"
@@ -95,6 +96,8 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 const FILTERS = [
   { key: 'titles',    label: 'Titles'    },
   { key: 'albums',    label: 'Albums'    },
+  { key: 'purchases', label: 'Purchases' },
+  { key: 'wishlist',  label: 'Wishlist'  },
   { key: 'likes',     label: 'Likes'     },
   { key: 'playlists', label: 'Playlists' },
   { key: 'follows',   label: 'Follows'   },
@@ -109,8 +112,23 @@ const LIKES_SUB = [
   { key: 'playlists', label: 'Playlists' },
 ];
 
+const PROVIDER_LABELS = { soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs', spotify: 'Spotify', applemusic: 'Apple Music' };
+
 export default function Library() {
-  const [activeFilter, setFilter]    = useState('likes');
+  // The native filter bar owns provider / category / view; the page only mirrors it
+  const [activeFilter, setFilter]    = useState(window.__kyoyuLibraryCategory || 'likes');
+  const [libProvider,  setLibProvider] = useState(window.__kyoyuLibraryProvider || 'all');
+  const [nativeView,   setNativeView]  = useState(window.__kyoyuLibraryView || null);   // 'list' | 'grid' | null (website)
+  useEffect(() => {
+    const onState = (e) => {
+      const d = e.detail || {};
+      if (d.provider) setLibProvider(d.provider);
+      if (d.category) setFilter(d.category);
+      if (d.view) setNativeView(d.view);
+    };
+    document.addEventListener('kyoyu-library-state', onState);
+    return () => document.removeEventListener('kyoyu-library-state', onState);
+  }, []);
   const [likesSub,     setLikesSub]  = useState('releases');
   const [sortDesc,     setSort]      = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -216,8 +234,106 @@ export default function Library() {
     if (key !== 'likes') setLikesSub('releases'); // reset sub when leaving Likes
   }
 
+  // Opens one of the user's Kyoyu playlists in the album sheet
+  function openPlaylistSheet(pl) {
+    const ts = Date.now();
+    window.__lastFastOpenTs = ts;
+    // Build album-like object for React AlbumSheet (registers JS callbacks)
+    const albumObj = {
+      ...pl,
+      artist: pl.creator || user?.displayName || 'You',
+      _ts: ts,
+    };
+    setSelectedAlbum(albumObj);
+    // Tapping a playlist track in the native sheet plays it like History / Likes
+    registerAlbumPlayback(albumObj);
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({
+        playlistOpen: true,
+        nativePlaylist: {
+          _ts: String(ts),
+          id: pl.id,
+          title: pl.title,
+          cover: pl.cover || null,
+          creator: pl.creator || user?.displayName || 'You',
+          tracks: (pl.tracks || []).map(t => ({
+            id: t.id || String(Date.now() + Math.random()),
+            title: t.title || t.name || 'Unknown Track',
+            artist: t.artist || '',
+            url: t.url || t.streamUrl || t.audioUrl || ''
+          }))
+        }
+      });
+    } catch(e) {}
+  }
+
+  // List / icon view chosen in the native filter bar (website: the display setting)
+  const layoutMode = nativeView || libraryLayout.mode;     // 'list' | 'grid'
+  const gridCols = libraryLayout.cols;
+
+  // The native filter bar now has two rows (categories + providers / view toggle): leave room for the second one
+  const barSpacer = isStreamingAvailable() ? <div style={{ height: 42 }} /> : null;
+
+  const hiddenFilterButtons = (
+    <div style={{ display: 'none' }}>
+      {FILTERS.map(({ key }) => (
+        <button key={key} data-library-filter={key} onClick={() => handleFilterClick(key)} />
+      ))}
+    </div>
+  );
+
+  // ── Provider-specific library (provider filter row) ──
+  if (libProvider !== 'all') {
+    const empty = (msg) => <div className="lib-empty"><p>{msg}</p></div>;
+    let body = null;
+
+    if (libProvider === 'bandcamp') {
+      const cat = ['purchases', 'wishlist', 'follows', 'playlists'].includes(activeFilter) ? activeFilter : 'purchases';
+      if (!acct.bandcamp.connected) {
+        body = empty('Connect Bandcamp in Settings › Streaming Services to see your purchases and wishlist.');
+      } else if (cat === 'playlists') {
+        const bcPlaylists = playlists.filter(pl => (pl.tracks || []).some(t =>
+          /bandcamp|bcbits/i.test(`${t.provider || ''} ${t.url || ''} ${t.streamUrl || ''} ${t.audioUrl || ''} ${t.providerItemId || ''}`)));
+        body = bcPlaylists.length === 0
+          ? empty('No playlists with Bandcamp tracks yet.')
+          : <div className="scroll-row">
+              {bcPlaylists.map(pl => (
+                <div key={pl.id} onClick={() => openPlaylistSheet(pl)}>
+                  <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length || 0} tracks`} badge={pl.isAI ? 'AI' : null} />
+                </div>
+              ))}
+            </div>;
+      } else {
+        const list = cat === 'wishlist' ? acct.bandcamp.wishlist : cat === 'follows' ? acct.bandcamp.following : acct.bandcamp.collection;
+        body = list.length > 0
+          ? <AcctSection items={list} view={layoutMode} cols={gridCols} />
+          : empty(acct.loading ? 'Loading…' : cat === 'wishlist' ? 'Your wishlist is empty.' : cat === 'follows' ? 'You don’t follow anyone on Bandcamp yet.' : 'Nothing in your collection yet.');
+      }
+    } else if (libProvider === 'soundcloud') {
+      if (!acct.soundcloud.connected) {
+        body = empty('Connect SoundCloud in Settings › Streaming Services to see your likes and playlists.');
+      } else if (activeFilter === 'playlists') {
+        body = scPlaylists.length > 0 ? <AcctSection items={scPlaylists} view={layoutMode} cols={gridCols} /> : empty(acct.loading ? 'Loading…' : 'No playlists yet.');
+      } else {
+        body = scLikes.length > 0 ? <AcctSection items={scLikes} view={layoutMode} cols={gridCols} /> : empty(acct.loading ? 'Loading…' : 'No likes yet.');
+      }
+    } else {
+      body = empty(`Your ${PROVIDER_LABELS[libProvider] || libProvider} library will appear here soon.`);
+    }
+
+    return (
+      <div className="page library-page animate-in">
+        {barSpacer}
+        {hiddenFilterButtons}
+        {body}
+        {selectedAlbum && <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />}
+      </div>
+    );
+  }
+
   return (
     <div className="page library-page animate-in">
+      {barSpacer}
 
       {/* Header */}
       <div className="library-header">
@@ -228,11 +344,7 @@ export default function Library() {
       </div>
 
       {/* Hidden filter buttons — targeted by native LibraryFilterBar */}
-      <div style={{ display: 'none' }}>
-        {FILTERS.map(({ key }) => (
-          <button key={key} data-library-filter={key} onClick={() => handleFilterClick(key)} />
-        ))}
-      </div>
+      {hiddenFilterButtons}
 
       {/* ── Content ── */}
 
@@ -261,7 +373,7 @@ export default function Library() {
             {hasTracks && (
               <>
                 <div className="shelf-row-label">Liked Tracks</div>
-                {libraryLayout.mode === 'list'
+                {layoutMode === 'list'
                   ? <UploadExpandedList uploads={combinedLikedTracks}/>
                   : <UploadGridView uploads={combinedLikedTracks} cols={libraryLayout.cols}/>
                 }
@@ -297,9 +409,9 @@ export default function Library() {
       {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes (automatic) */}
       {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
         <div style={{ marginTop: 18 }}>
-          <AcctSection first title="Bandcamp · Purchases" items={bcPurchaseTracks} />
-          <AcctSection title="Bandcamp · Wishlist" items={bcWishTracks} />
-          <AcctSection title="SoundCloud · Likes" items={scLikes} />
+          <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} />
+          <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishTracks} />
+          <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} />
         </div>
       )}
 
@@ -331,8 +443,8 @@ export default function Library() {
           )}
           {hasAcctAlbums && (
             <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
-              <AcctSection first title="Bandcamp · Purchases" items={bcPurchaseAlbums} />
-              <AcctSection title="Bandcamp · Wishlist" items={bcWishAlbums} />
+              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} />
             </div>
           )}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
@@ -363,37 +475,7 @@ export default function Library() {
             ? <div className="lib-empty"><p>No playlists yet.</p></div>
             : <div className="scroll-row">
                 {playlists.map(pl => (
-                  <div key={pl.id} onClick={() => {
-                    const ts = Date.now();
-                    window.__lastFastOpenTs = ts;
-                    // Build album-like object for React AlbumSheet (registers JS callbacks)
-                    const albumObj = {
-                      ...pl,
-                      artist: pl.creator || user?.displayName || 'You',
-                      _ts: ts,
-                    };
-                    setSelectedAlbum(albumObj);
-                    // Tapping a playlist track in the native sheet plays it like History / Likes
-                    registerAlbumPlayback(albumObj);
-                    try {
-                      window.webkit?.messageHandlers?.player?.postMessage({
-                        playlistOpen: true,
-                        nativePlaylist: {
-                          _ts: String(ts),
-                          id: pl.id,
-                          title: pl.title,
-                          cover: pl.cover || null,
-                          creator: pl.creator || user?.displayName || 'You',
-                          tracks: (pl.tracks || []).map(t => ({
-                            id: t.id || String(Date.now() + Math.random()),
-                            title: t.title || t.name || 'Unknown Track',
-                            artist: t.artist || '',
-                            url: t.url || t.streamUrl || t.audioUrl || ''
-                          }))
-                        }
-                      });
-                    } catch(e) {}
-                  }}>
+                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)}>
                     <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
                   </div>
                 ))}
@@ -405,7 +487,7 @@ export default function Library() {
       {/* Playlists → connected SoundCloud account (own + liked playlists, automatic) */}
       {activeFilter === 'playlists' && scPlaylists.length > 0 && (
         <div style={{ marginTop: 18 }}>
-          <AcctSection first title="SoundCloud · Playlists" items={scPlaylists} />
+          <AcctSection view={layoutMode} cols={gridCols} first title="SoundCloud · Playlists" items={scPlaylists} />
         </div>
       )}
 
@@ -434,7 +516,7 @@ export default function Library() {
           ? <div className="lib-empty"><p>No uploads yet.</p><Link to="/uploads" className="lib-empty-link">Upload your first track →</Link></div>
           : <>
               <div className="shelf-row-label" style={{display:'flex',alignItems:'center',gap:5}}><Lock size={11}/> My Uploads</div>
-              {libraryLayout.mode === 'list'
+              {layoutMode === 'list'
                 ? <UploadExpandedList uploads={myUploads}/>
                 : <UploadGridView uploads={myUploads} cols={libraryLayout.cols}/>
               }
