@@ -3,7 +3,7 @@
  * Native results are always ranked first when an exact match exists.
  */
 import { fetchPublicTracks } from './uploadPipeline';
-import { callStreaming, isStreamingAvailable, getCachedStreamingStatus } from './streaming';
+import { callStreaming, isStreamingAvailable, getCachedStreamingStatus, refreshStreamingStatus } from './streaming';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -262,6 +262,12 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
  */
 async function searchSpotify(query, offset = 0) {
   const empty = { results: [], hasMore: false, nextOffset: offset };
+  // In the iOS app Spotify only plays through the Spotify app: without it, don't suggest Spotify music at all
+  if (isStreamingAvailable()) {
+    let st = getCachedStreamingStatus();
+    if (!st) { try { st = await refreshStreamingStatus(); } catch { /* unknown → don't block */ } }
+    if (st?.spotify && st.spotify.installed === false) return empty;
+  }
   // 1) Our server (catalog search: tracks, albums, artists, playlists). Spotify caps `limit` at 10.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
