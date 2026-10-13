@@ -18,6 +18,13 @@ export function toPlayable(it) {
       provider: 'soundcloud', providerItemId: it.permalinkUrl, scTrackId: it.trackId, trackId: it.trackId,
     };
   }
+  if (it.provider === 'spotify') {
+    return {
+      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
+      provider: 'spotify', providerItemId: it.spotifyId || it.trackId, spotifyId: it.spotifyId || it.trackId,
+      albumName: it.albumName, uri: it.uri,
+    };
+  }
   return {
     id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
     provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl, streamUrl: it.streamUrl || undefined,
@@ -136,7 +143,10 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
 
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
-    if (it.kind === 'album') return () => playBandcampAlbum(it);
+    if (it.kind === 'album') {
+      if (it.provider === 'spotify') return () => handlePlaylistClick(it);
+      return () => playBandcampAlbum(it);
+    }
     if (it.kind === 'track') return () => playList(items, it);
     return undefined;     // profiles: display only
   };
