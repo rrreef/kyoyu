@@ -92,7 +92,7 @@ export default function StreamingServicesCard() {
               </div>
               {service === 'applemusic' && s?.connected && !s?.canPlay && (
                 <button
-                  className="s-layout-btn active"
+                  className="s-layout-btn active" data-kyoyu-injected="1"
                   style={{ width: 'auto', padding: '0 14px' }}
                   disabled={!!busy}
                   onClick={() => subscribe(service)}
@@ -103,6 +103,7 @@ export default function StreamingServicesCard() {
               {connectable && (
                 <button
                   className={`s-layout-btn${s?.connected ? '' : ' active'}`}
+                  data-kyoyu-injected="1"
                   style={{ width: 'auto', padding: '0 14px' }}
                   disabled={!!busy}
                   onClick={() => toggle(service)}
@@ -125,6 +126,7 @@ export default function StreamingServicesCard() {
             <button
               key={opt.id}
               className={`s-layout-btn${playThrough === opt.id ? ' active' : ''}`}
+              data-kyoyu-injected="1"
               style={{ width: 'auto', padding: '0 10px' }}
               onClick={() => choose(opt.id)}
             >
