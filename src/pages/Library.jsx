@@ -314,8 +314,9 @@ export default function Library() {
   const layoutMode = nativeView || libraryLayout.mode;     // 'list' | 'grid'
   const gridCols = libraryLayout.cols;
 
-  // Spacing so first content sits under the 2nd filter row with exact same gap (21px) as between top buttons and 1st row
-  const barSpacer = isStreamingAvailable() ? <div style={{ height: 156 }} /> : null;
+  const isNative = typeof window !== 'undefined' && !!(window.webkit?.messageHandlers?.player || window.webkit?.messageHandlers?.streaming);
+  // Spacing so first content sits under the 2nd filter row with exact same gap as between top buttons and 1st row
+  const barSpacer = isNative ? <div style={{ height: 82 }} /> : null;
 
   const hiddenFilterButtons = (
     <div style={{ display: 'none' }}>
@@ -372,13 +373,15 @@ export default function Library() {
     <div className="page library-page animate-in">
       {barSpacer}
 
-      {/* Header */}
-      <div className="library-header">
-        <button className="lib-add-btn glass-sm" onClick={() => setShowCreateModal(true)}>
-          <Plus size={16} />
-          <span>New Playlist</span>
-        </button>
-      </div>
+      {/* Header — only shown when viewing Playlists */}
+      {activeFilter === 'playlists' && (
+        <div className="library-header" style={{ marginTop: 8, marginBottom: 12 }}>
+          <button className="lib-add-btn glass-sm" onClick={() => setShowCreateModal(true)}>
+            <Plus size={16} />
+            <span>New Playlist</span>
+          </button>
+        </div>
+      )}
 
       {/* Hidden filter buttons — targeted by native LibraryFilterBar */}
       {hiddenFilterButtons}
@@ -409,7 +412,7 @@ export default function Library() {
           <>
             {hasTracks && (
               <>
-                <div className="shelf-row-label">Liked Tracks</div>
+                <div className="shelf-row-label" style={{ marginTop: 0 }}>Liked Tracks</div>
                 {layoutMode === 'list'
                   ? <UploadExpandedList uploads={combinedLikedTracks}/>
                   : <UploadGridView uploads={combinedLikedTracks} cols={libraryLayout.cols}/>
@@ -457,7 +460,7 @@ export default function Library() {
         <>
           {savedAlbums.length > 0 && (
             <>
-              <div className="shelf-row-label">Saved Albums</div>
+              <div className="shelf-row-label" style={{ marginTop: 0 }}>Saved Albums</div>
               <div className="upl-grid upl-grid-3">
                 {sortByDate(savedAlbums).map(album => (
                   <button
