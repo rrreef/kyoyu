@@ -18,7 +18,7 @@ import './Library.css';
 
 /* A labelled block of items from a connected SoundCloud / Bandcamp account.
    Renders in pages; more items load automatically when the user scrolls near the bottom. */
-function AcctSection({ title, items, first, view = 'list', cols = 3 }) {
+function AcctSection({ title, items, first, view = 'list', cols = 3, onOpenPlaylist }) {
   const PAGE = 40;
   const [limit, setLimit] = useState(PAGE);
   const sentinelRef = useRef(null);
@@ -38,7 +38,7 @@ function AcctSection({ title, items, first, view = 'list', cols = 3 }) {
   return (
     <>
       {title && <div className="shelf-row-label" style={{ marginTop: first ? 0 : 18 }}>{title}</div>}
-      <AccountItemList items={items.slice(0, limit)} view={view} cols={cols} />
+      <AccountItemList items={items.slice(0, limit)} view={view} cols={cols} onOpenPlaylist={onOpenPlaylist} />
       {limit < total && <div ref={sentinelRef} style={{ height: 1 }} />}
     </>
   );
@@ -241,37 +241,67 @@ export default function Library() {
     if (key !== 'likes') setLikesSub('releases'); // reset sub when leaving Likes
   }
 
-  // Opens one of the user's Kyoyu playlists in the album sheet
-  function openPlaylistSheet(pl) {
+  // Opens a playlist (Kyoyu or connected account) in the native sheet
+  async function openPlaylistSheet(pl) {
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
-    // Build album-like object for React AlbumSheet (registers JS callbacks)
-    const albumObj = {
-      ...pl,
-      artist: pl.creator || user?.displayName || 'You',
-      _ts: ts,
+    const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
+    const creator = pl.artistName || pl.creator || user?.displayName || 'You';
+    const cover = pl.artworkUrl || pl.cover || null;
+
+    const pushToSheet = (currentTracks) => {
+      const albumObj = {
+        ...pl,
+        artist: creator,
+        cover,
+        tracks: currentTracks,
+        _ts: ts,
+      };
+      setSelectedAlbum(albumObj);
+      // Tapping a playlist track in the native sheet plays it like History / Likes
+      registerAlbumPlayback(albumObj);
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          playlistOpen: true,
+          nativePlaylist: {
+            _ts: String(ts),
+            id: pl.id,
+            title: pl.title,
+            cover,
+            creator,
+            provider: pl.provider || null,
+            tracks: currentTracks.map(t => ({
+              id: t.id || String(Date.now() + Math.random()),
+              title: t.title || t.name || 'Unknown Track',
+              artist: t.artist || t.artistName || '',
+              url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+              cover: t.artworkUrl || t.cover || null,
+              provider: t.provider || pl.provider || null,
+            }))
+          }
+        });
+      } catch(e) {}
     };
-    setSelectedAlbum(albumObj);
-    // Tapping a playlist track in the native sheet plays it like History / Likes
-    registerAlbumPlayback(albumObj);
-    try {
-      window.webkit?.messageHandlers?.player?.postMessage({
-        playlistOpen: true,
-        nativePlaylist: {
-          _ts: String(ts),
-          id: pl.id,
-          title: pl.title,
-          cover: pl.cover || null,
-          creator: pl.creator || user?.displayName || 'You',
-          tracks: (pl.tracks || []).map(t => ({
-            id: t.id || String(Date.now() + Math.random()),
-            title: t.title || t.name || 'Unknown Track',
-            artist: t.artist || '',
-            url: t.url || t.streamUrl || t.audioUrl || ''
-          }))
+
+    // Open sheet immediately (0ms latency!)
+    pushToSheet(initialTracks);
+
+    // If external playlist and tracks are not loaded yet, fetch them on demand:
+    if (!initialTracks.length && (pl.playlistId || pl.url)) {
+      try {
+        const fetched = await fetchAccountLibrary(
+          pl.provider || 'bandcamp',
+          'playlistTracks',
+          { playlistId: pl.playlistId, playlistUrl: pl.url }
+        );
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          pl.tracks = fetched;
+          pushToSheet(fetched);
         }
-      });
-    } catch(e) {}
+      } catch (err) {
+        console.warn('Failed to load playlist tracks:', err);
+      }
+    }
   }
 
   // List / icon view chosen in the native filter bar (website: the display setting)
@@ -302,21 +332,21 @@ export default function Library() {
         const bcPl = acct.bandcamp.playlists;
         const err = acct.errors['bandcamp:playlists'];
         body = bcPl.length > 0
-          ? <AcctSection items={bcPl} view={layoutMode} cols={gridCols} />
+          ? <AcctSection items={bcPl} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'No playlists in your Bandcamp account yet.'));
       } else {
         const list = cat === 'wishlist' ? acct.bandcamp.wishlist : cat === 'follows' ? acct.bandcamp.following : acct.bandcamp.collection;
         body = list.length > 0
-          ? <AcctSection items={list} view={layoutMode} cols={gridCols} />
+          ? <AcctSection items={list} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : cat === 'wishlist' ? 'Your wishlist is empty.' : cat === 'follows' ? 'You don’t follow anyone on Bandcamp yet.' : 'Nothing in your collection yet.');
       }
     } else if (libProvider === 'soundcloud') {
       if (!acct.soundcloud.connected) {
         body = empty('Connect SoundCloud in Settings › Streaming Services to see your likes and playlists.');
       } else if (activeFilter === 'playlists') {
-        body = scPlaylists.length > 0 ? <AcctSection items={scPlaylists} view={layoutMode} cols={gridCols} /> : empty(acct.loading ? 'Loading…' : 'No playlists yet.');
+        body = scPlaylists.length > 0 ? <AcctSection items={scPlaylists} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} /> : empty(acct.loading ? 'Loading…' : 'No playlists yet.');
       } else {
-        body = scLikes.length > 0 ? <AcctSection items={scLikes} view={layoutMode} cols={gridCols} /> : empty(acct.loading ? 'Loading…' : 'No likes yet.');
+        body = scLikes.length > 0 ? <AcctSection items={scLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} /> : empty(acct.loading ? 'Loading…' : 'No likes yet.');
       }
     } else {
       body = empty(`Your ${PROVIDER_LABELS[libProvider] || libProvider} library will appear here soon.`);
@@ -410,9 +440,9 @@ export default function Library() {
       {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes (automatic) */}
       {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
         <div style={{ marginTop: 18 }}>
-          <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} />
-          <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishTracks} />
-          <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} />
+          <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} onOpenPlaylist={openPlaylistSheet} />
+          <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishTracks} onOpenPlaylist={openPlaylistSheet} />
+          <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} onOpenPlaylist={openPlaylistSheet} />
         </div>
       )}
 
@@ -444,8 +474,8 @@ export default function Library() {
           )}
           {hasAcctAlbums && (
             <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} />
+              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
@@ -462,7 +492,9 @@ export default function Library() {
               <div className="shelf-row-label">Liked Playlists</div>
               <div className="scroll-row">
                 {savedPlaylists.map(pl => (
-                  <ShelfCard key={pl.id} cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI?'AI':null}/>
+                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
+                    <ShelfCard cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI?'AI':null}/>
+                  </div>
                 ))}
               </div>
             </>
@@ -476,7 +508,7 @@ export default function Library() {
             ? <div className="lib-empty"><p>No playlists yet.</p></div>
             : <div className="scroll-row">
                 {playlists.map(pl => (
-                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)}>
+                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
                     <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
                   </div>
                 ))}
@@ -485,11 +517,20 @@ export default function Library() {
         </>
       )}
 
-      {/* Playlists → connected SoundCloud account (own + liked playlists, automatic) */}
-      {activeFilter === 'playlists' && scPlaylists.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <AcctSection view={layoutMode} cols={gridCols} first title="SoundCloud · Playlists" items={scPlaylists} />
-        </div>
+      {/* Playlists → connected accounts: Bandcamp & SoundCloud (own + liked playlists, automatic) */}
+      {activeFilter === 'playlists' && (
+        <>
+          {acct.bandcamp?.playlists?.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Playlists" items={acct.bandcamp.playlists} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          )}
+          {scPlaylists.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <AcctSection view={layoutMode} cols={gridCols} first title="SoundCloud · Playlists" items={scPlaylists} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          )}
+        </>
       )}
 
       {/* Follows */}

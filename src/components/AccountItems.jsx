@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Play, Music2, ChevronDown, ChevronUp } from 'lucide-react';
-import { fetchAccountLibrary } from '../lib/streaming';
+import { Play, Music2 } from 'lucide-react';
 import { usePlayer } from '../contexts/PlayerContext';
 
 /* Items coming from a connected SoundCloud / Bandcamp account (tracks, albums, playlists, followed profiles)
@@ -68,9 +67,8 @@ function GridCell({ item, onClick, cols }) {
   );
 }
 
-export default function AccountItemList({ items = [], view = 'list', cols = 3 }) {
+export default function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
   const { setSearchQueue, playSearchItem } = usePlayer();
-  const [openPlaylist, setOpenPlaylist] = useState(null);   // { id, tracks | null }
   const [error, setError] = useState('');
 
   const playList = (list, item) => {
@@ -100,66 +98,66 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3 })
     } catch { setError('Couldn’t load this album’s tracks'); }
   };
 
-  const togglePlaylist = async (pl) => {
-    if (openPlaylist?.id === pl.id) { setOpenPlaylist(null); return; }
-    if (Array.isArray(pl.tracks) && pl.tracks.length) { setOpenPlaylist({ id: pl.id, tracks: pl.tracks }); return; }
-    setOpenPlaylist({ id: pl.id, tracks: null });
+  const handlePlaylistClick = (pl) => {
+    if (onOpenPlaylist) {
+      onOpenPlaylist(pl);
+      return;
+    }
+    // Fallback: post directly to native Swift playerBridge
+    const ts = Date.now();
+    window.__lastFastOpenTs = ts;
     try {
-      const tracks = await fetchAccountLibrary(pl.provider || 'soundcloud', 'playlistTracks', { playlistId: pl.playlistId, playlistUrl: pl.url });
-      setOpenPlaylist({ id: pl.id, tracks });
-    } catch (e) { setOpenPlaylist({ id: pl.id, tracks: [] }); setError(e?.message || 'Could not load the playlist'); }
+      window.webkit?.messageHandlers?.player?.postMessage({
+        playlistOpen: true,
+        nativePlaylist: {
+          _ts: String(ts),
+          id: pl.id,
+          title: pl.title,
+          cover: pl.artworkUrl || pl.cover || null,
+          creator: pl.artistName || pl.creator || 'You',
+          provider: pl.provider || null,
+          tracks: (pl.tracks || []).map(t => ({
+            id: t.id || String(Date.now() + Math.random()),
+            title: t.title || t.name || 'Unknown Track',
+            artist: t.artist || t.artistName || '',
+            url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+            cover: t.artworkUrl || t.cover || null,
+            provider: t.provider || pl.provider || null,
+          }))
+        }
+      });
+    } catch(e) {}
   };
 
   const onItemClick = (it) => {
+    if (it.kind === 'playlist') return () => handlePlaylistClick(it);
     if (it.kind === 'album') return () => playBandcampAlbum(it);
     if (it.kind === 'track') return () => playList(items, it);
     return undefined;     // profiles: display only
   };
 
-  const renderPlaylist = (it) => {
-    const open = openPlaylist?.id === it.id;
-    return (
-      <div key={it.id}>
-        <Row
-          item={it}
-          sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
-          onClick={() => togglePlaylist(it)}
-          right={open ? <ChevronUp size={20} color="rgba(255,255,255,.5)" /> : <ChevronDown size={20} color="rgba(255,255,255,.5)" />}
-        />
-        {open && (
-          <div style={{ paddingLeft: 12, borderLeft: '1px solid rgba(255,255,255,.1)', marginLeft: 6 }}>
-            {openPlaylist.tracks === null && <div style={{ padding: 8, fontSize: '0.78rem', color: 'var(--text-dim)' }}>Loading tracks…</div>}
-            {openPlaylist.tracks?.map(t => (
-              <Row key={t.id} item={t} sub={`${t.artistName}${t.duration ? ` · ${fmt(t.duration)}` : ''}`}
-                   onClick={() => playList(openPlaylist.tracks, t)}
-                   right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const safeCols = Math.min(5, Math.max(1, cols));
-  const gridItems = items.filter(i => i.kind !== 'playlist');
-  const playlists = items.filter(i => i.kind === 'playlist');
 
   return (
     <>
       {error && <p style={{ fontSize: '0.78rem', color: '#ff6b6b', marginBottom: 8 }}>{error}</p>}
 
       {view === 'grid' ? (
-        <>
-          {gridItems.length > 0 && (
-            <div className={`upl-grid upl-grid-${safeCols}`}>
-              {gridItems.map(it => <GridCell key={it.id} item={it} cols={safeCols} onClick={onItemClick(it)} />)}
-            </div>
-          )}
-          {playlists.map(renderPlaylist)}
-        </>
+        <div className={`upl-grid upl-grid-${safeCols}`}>
+          {items.map(it => <GridCell key={it.id} item={it} cols={safeCols} onClick={onItemClick(it)} />)}
+        </div>
       ) : (
         items.map(it => {
-          if (it.kind === 'playlist') return renderPlaylist(it);
+          if (it.kind === 'playlist') {
+            return (
+              <Row
+                key={it.id}
+                item={it}
+                sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
+                onClick={onItemClick(it)}
+              />
+            );
+          }
           // ── followed profiles (SoundCloud / Bandcamp) ──
           if (it.kind === 'profile') {
             return <Row key={it.id} item={it} round sub={it.followers ? `${it.followers.toLocaleString()} followers` : (it.artistName || '')} />;
