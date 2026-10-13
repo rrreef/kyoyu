@@ -25,6 +25,13 @@ export function toPlayable(it) {
       albumName: it.albumName, uri: it.uri,
     };
   }
+  if (it.provider === 'applemusic') {
+    return {
+      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
+      provider: 'applemusic', providerItemId: it.appleMusicId || it.trackId, appleMusicId: it.appleMusicId || it.trackId,
+      albumName: it.albumName, url: it.url,
+    };
+  }
   return {
     id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
     provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl, streamUrl: it.streamUrl || undefined,
@@ -144,7 +151,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
     if (it.kind === 'album') {
-      if (it.provider === 'spotify') return () => handlePlaylistClick(it);
+      if (it.provider === 'spotify' || it.provider === 'applemusic') return () => handlePlaylistClick(it);
       return () => playBandcampAlbum(it);
     }
     if (it.kind === 'track') return () => playList(items, it);

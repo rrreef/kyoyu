@@ -181,7 +181,7 @@ export default function Library() {
   const libraryLayout = useLibraryLayoutLive();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
 
-  // SoundCloud / Bandcamp / Spotify accounts connected in Settings → their library shows up here automatically
+  // SoundCloud / Bandcamp / Spotify / Apple Music accounts connected in Settings → their library shows up here automatically
   const acct = useConnectedLibrary();
   const bcPurchaseTracks = acct.bandcamp.collection.filter(i => i.kind === 'track');
   const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
@@ -193,8 +193,12 @@ export default function Library() {
   const spPlaylists      = acct.spotify?.playlists || [];
   const spAlbums         = acct.spotify?.albums || [];
   const spFollows        = acct.spotify?.following || [];
-  const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length + spLikes.length > 0;
-  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length > 0;
+  const amLikes          = acct.applemusic?.likes || [];
+  const amPlaylists      = acct.applemusic?.playlists || [];
+  const amAlbums         = acct.applemusic?.albums || [];
+  const amFollows        = acct.applemusic?.following || [];
+  const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length + spLikes.length + amLikes.length > 0;
+  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length + amAlbums.length > 0;
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
   // Group saved releases into albums for the grid view
@@ -383,6 +387,30 @@ export default function Library() {
           ? <AcctSection items={spLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'No liked songs in your Spotify account yet.'));
       }
+    } else if (libProvider === 'applemusic') {
+      if (!acct.applemusic?.connected) {
+        body = empty('Connect Apple Music in Settings › Streaming Services to see your library.');
+      } else if (activeFilter === 'playlists') {
+        const err = acct.errors['applemusic:playlists'];
+        body = amPlaylists.length > 0
+          ? <AcctSection items={amPlaylists} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No playlists in your Apple Music account yet.'));
+      } else if (activeFilter === 'albums') {
+        const err = acct.errors['applemusic:albums'];
+        body = amAlbums.length > 0
+          ? <AcctSection items={amAlbums} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No saved albums in your Apple Music account yet.'));
+      } else if (activeFilter === 'follows') {
+        const err = acct.errors['applemusic:following'];
+        body = amFollows.length > 0
+          ? <AcctSection items={amFollows} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'You don’t have any artists in your Apple Music library yet.'));
+      } else {
+        const err = acct.errors['applemusic:likes'];
+        body = amLikes.length > 0
+          ? <AcctSection items={amLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No songs in your Apple Music library yet.'));
+      }
     } else {
       body = empty(`Your ${PROVIDER_LABELS[libProvider] || libProvider} library will appear here soon.`);
     }
@@ -474,17 +502,18 @@ export default function Library() {
         );
       })()}
 
-      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes, Spotify likes (automatic) */}
+      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes, Spotify likes, Apple Music songs (automatic) */}
       {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
         <div style={{ marginTop: 18 }}>
           <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} onOpenPlaylist={openPlaylistSheet} />
           <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishTracks} onOpenPlaylist={openPlaylistSheet} />
           <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} onOpenPlaylist={openPlaylistSheet} />
           <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Liked Songs" items={spLikes} onOpenPlaylist={openPlaylistSheet} />
+          <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Songs" items={amLikes} onOpenPlaylist={openPlaylistSheet} />
         </div>
       )}
 
-      {/* Albums: saved releases + connected-account albums (Bandcamp purchases / wishlist / Spotify saved albums) */}
+      {/* Albums: saved releases + connected-account albums (Bandcamp purchases / wishlist / Spotify saved albums / Apple Music albums) */}
       {activeFilter === 'albums' && (
         <>
           {savedAlbums.length > 0 && (
@@ -515,6 +544,7 @@ export default function Library() {
               <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Saved Albums" items={spAlbums} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Saved Albums" items={amAlbums} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
@@ -556,7 +586,7 @@ export default function Library() {
         </>
       )}
 
-      {/* Playlists → connected accounts: Bandcamp, SoundCloud & Spotify (own + liked playlists, automatic) */}
+      {/* Playlists → connected accounts: Bandcamp, SoundCloud, Spotify & Apple Music (own + liked playlists, automatic) */}
       {activeFilter === 'playlists' && (
         <>
           {acct.bandcamp?.playlists?.length > 0 && (
@@ -574,12 +604,17 @@ export default function Library() {
               <AcctSection view={layoutMode} cols={gridCols} first title="Spotify · Playlists" items={spPlaylists} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
+          {amPlaylists.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Playlists" items={amPlaylists} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          )}
         </>
       )}
 
       {/* Follows */}
       {activeFilter === 'follows' && (
-        (followedArtists?.length > 0 || spFollows.length > 0)
+        (followedArtists?.length > 0 || spFollows.length > 0 || amFollows.length > 0)
           ? <>
               {followedArtists?.length > 0 && (
                 <>
@@ -594,6 +629,11 @@ export default function Library() {
               {spFollows.length > 0 && (
                 <div style={{ marginTop: followedArtists?.length ? 18 : 0 }}>
                   <AcctSection view={layoutMode} cols={gridCols} first title="Spotify · Followed Artists" items={spFollows} onOpenPlaylist={openPlaylistSheet} />
+                </div>
+              )}
+              {amFollows.length > 0 && (
+                <div style={{ marginTop: (followedArtists?.length || spFollows.length) ? 18 : 0 }}>
+                  <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Artists" items={amFollows} onOpenPlaylist={openPlaylistSheet} />
                 </div>
               )}
             </>

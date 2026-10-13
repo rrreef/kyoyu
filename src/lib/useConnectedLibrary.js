@@ -4,7 +4,7 @@ import { fetchAccountLibrary, isStreamingAvailable, useStreamingStatus } from '.
 /* Library data from connected SoundCloud / Bandcamp accounts, fetched automatically as soon as an account is
    connected, cached for the session and refreshed in the background (so the Library is always up to date). */
 
-let cache = { soundcloud: {}, bandcamp: {}, spotify: {} };      // service → kind → items
+let cache = { soundcloud: {}, bandcamp: {}, spotify: {}, applemusic: {} };      // service → kind → items
 let errors = {};                                    // "service:kind" → message of the last failed load
 const fetchedAt = {};                               // "service:kind" → ms
 const inflight = new Map();
@@ -44,6 +44,7 @@ export function useConnectedLibrary() {
   const bc = !!status?.bandcamp?.connected;
   const sc = !!status?.soundcloud?.connected;
   const sp = !!status?.spotify?.connected;
+  const am = !!status?.applemusic?.connected;
 
   useEffect(() => {
     if (!isStreamingAvailable()) return;
@@ -55,7 +56,10 @@ export function useConnectedLibrary() {
     if (sp) {
       ensure('spotify', 'likes'); ensure('spotify', 'playlists'); ensure('spotify', 'albums'); ensure('spotify', 'following');
     } else if (Object.keys(cache.spotify).length) { cache.spotify = {}; emit(); }
-  }, [bc, sc, sp]);
+    if (am) {
+      ensure('applemusic', 'likes'); ensure('applemusic', 'playlists'); ensure('applemusic', 'albums'); ensure('applemusic', 'following');
+    } else if (Object.keys(cache.applemusic || {}).length) { cache.applemusic = {}; emit(); }
+  }, [bc, sc, sp, am]);
 
   const get = (service, kind) => (cache[service]?.[kind] || []);
   const loading = inflight.size > 0;
@@ -77,6 +81,13 @@ export function useConnectedLibrary() {
       playlists: sp ? get('spotify', 'playlists') : [],
       albums:    sp ? get('spotify', 'albums') : [],
       following: sp ? get('spotify', 'following') : [],
+    },
+    applemusic: {
+      connected: am,
+      likes:     am ? get('applemusic', 'likes') : [],
+      playlists: am ? get('applemusic', 'playlists') : [],
+      albums:    am ? get('applemusic', 'albums') : [],
+      following: am ? get('applemusic', 'following') : [],
     },
   };
 }
