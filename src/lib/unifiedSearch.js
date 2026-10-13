@@ -271,6 +271,7 @@ async function streamingServiceAllowed(service) {
   const s = st?.[service];
   if (!s) return true;
   if (!s.connected) return false;
+  if (service === 'applemusic' && s.canPlay === false) return false;   // no subscription → nothing to stream
   if (service === 'spotify' && s.installed === false) return false;
   return true;
 }
