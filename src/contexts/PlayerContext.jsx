@@ -721,21 +721,21 @@ export function PlayerProvider({ children }) {
       window.__kyoyuStreamError = lastError;
     }
     if (!stillCurrent()) return;
-    // The user filtered the search to this provider (or opened it from a provider-specific sheet):
-    // only that provider may play. Never swap in a Bandcamp/SoundCloud/YouTube copy under a Spotify/Apple Music result.
-    const filter = String(window.__kyoyuProviderFilter || 'all');
-    if (item.strict || (filter !== 'all' && filter.split(',').includes(service))) {
-      dispatch({ type: 'SET_PLAYING', value: false });
-      const label = service === 'spotify' ? 'Spotify' : 'Apple Music';
-      const why = window.__kyoyuStreamError || 'unknown error';
-      try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\nCheck that ${label} is connected in Settings${service === 'spotify' ? ' (Spotify Premium + the Spotify app are required)' : ''}.` }); } catch (e) {}
+    if (!isStreamingAvailable()) {
+      // Website (no native bridge): there is no Spotify / Apple Music engine, so play the same song elsewhere
+      showPlaceholder(meta);
+      const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
+      if (!stillCurrent()) return;
+      if (found) playFoundSource(found, meta);
+      else dispatch({ type: 'SET_PLAYING', value: false });
       return;
     }
-    showPlaceholder(meta);
-    const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
-    if (!stillCurrent()) return;
-    if (found) playFoundSource(found, meta);
-    else dispatch({ type: 'SET_PLAYING', value: false });
+    // The user picked a Spotify / Apple Music title: only that provider may play it. Never swap in a
+    // Bandcamp/SoundCloud/YouTube copy under it — show why it failed instead.
+    dispatch({ type: 'SET_PLAYING', value: false });
+    const label = service === 'spotify' ? 'Spotify' : 'Apple Music';
+    const why = window.__kyoyuStreamError || (isStreamingAvailable() ? 'unknown error' : `${label} is only available in the Kyoyu iOS app`);
+    try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\nCheck that ${label} is connected in Settings${service === 'spotify' ? ' (Spotify Premium + the Spotify app are required)' : ''}.` }); } catch (e) {}
   }
 
   // ── Shared helpers for resolving plays ──
