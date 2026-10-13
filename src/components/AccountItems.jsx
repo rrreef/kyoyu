@@ -20,8 +20,8 @@ export function toPlayable(it) {
     };
   }
   return {
-    id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: 0,
-    provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl,
+    id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
+    provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl, streamUrl: it.streamUrl || undefined,
   };
 }
 
