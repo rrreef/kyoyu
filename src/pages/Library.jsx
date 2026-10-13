@@ -297,9 +297,12 @@ export default function Library() {
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
           pushToSheet(fetched);
+        } else {
+          pushToSheet([]);
         }
       } catch (err) {
         console.warn('Failed to load playlist tracks:', err);
+        pushToSheet([]);
       }
     }
   }
