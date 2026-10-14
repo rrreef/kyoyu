@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Music2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Music2 } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import './Home.css';
 
 export default function AllReleases() {
-  const navigate = useNavigate();
   const [publicReleases, setPublicReleases] = useState([]);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
 
@@ -57,18 +56,14 @@ export default function AllReleases() {
   };
 
   return (
-    <div className="page animate-in">
-      <div className="settings-header">
-        <button className="settings-back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <div className="settings-title">All Releases</div>
-        <div style={{ width: 44 }} />
-      </div>
+    <div className="page home-page animate-in">
+      <section className="home-section">
+        <div className="section-title">
+          <span>Releases</span>
+        </div>
 
-      <div className="main-content" style={{ padding: '0 20px', paddingTop: '100px' }}>
         {publicAlbums.length === 0 ? (
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', textAlign: 'center', marginTop: 40 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>
             No public releases yet.
           </p>
         ) : (
@@ -91,7 +86,7 @@ export default function AllReleases() {
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
