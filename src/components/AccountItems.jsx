@@ -52,11 +52,11 @@ export function toPlayable(it) {
   };
 }
 
-function Art({ src, round, isPlaylist }) {
+function Art({ src, round }) {
   const cleanSrc = (src && src.includes('bcbits.com')) ? src.replace(/_[0-9]+\.jpg/, '_10.jpg') : src;
   return (
     <div style={{
-      width: isPlaylist ? 76 : 64, height: isPlaylist ? 57 : 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
+      width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
@@ -191,6 +191,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
                 item={it}
                 sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
                 onClick={onItemClick(it)}
+                right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />}
               />
             );
           }

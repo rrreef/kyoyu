@@ -990,38 +990,24 @@ export default function Search() {
 
   // Renderers
   const renderTrackRow = (track, isPodcast = false) => (
-    <div key={track.id} className="search-result-row">
+    <div key={track.id} className="search-result-row" style={{ cursor: 'pointer' }} onClick={() => playTrack(track, [track])}>
       <div className="search-result-art">
         {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder" />}
       </div>
       <div className="search-result-info">
         <span className="search-result-title">{track.title}</span>
-        {track.album && track.album !== track.title && !isPodcast && (
-          <span className="search-result-album">{track.album}</span>
-        )}
-        <span className="search-result-artist">{track.artist}</span>
+        <span className="search-result-artist">
+          {track.artist}{track.album && track.album !== track.title && !isPodcast ? ` · ${track.album}` : ''}
+        </span>
       </div>
       <div className="search-result-actions">
-        {track.downloadUrl && (
-          <a href={track.downloadUrl} download className="search-action-btn" title="Download">
-            <Download size={16} />
-          </a>
-        )}
-        <button className="search-action-btn" title="Like">
-          <Heart size={16} />
-        </button>
-        <button className="search-action-btn" title="Add to Playlist">
-          <ListPlus size={16} />
-        </button>
-        <button className="search-action-btn search-play-btn" title="Play" onClick={() => playTrack(track, [track])}>
-          <Play size={16} fill="currentColor" />
-        </button>
+        <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
       </div>
     </div>
   );
 
   const renderAlbumRow = (track) => (
-    <div key={`album-${track.album}`} className="search-result-row">
+    <div key={`album-${track.album}`} className="search-result-row" style={{ cursor: 'pointer' }} onClick={() => playTrack(track, [track])}>
       <div className="search-result-art">
         {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder" />}
       </div>
@@ -1030,20 +1016,7 @@ export default function Search() {
         <span className="search-result-artist">{track.artist}</span>
       </div>
       <div className="search-result-actions">
-        {track.downloadUrl && (
-          <a href={track.downloadUrl} download className="search-action-btn" title="Download">
-            <Download size={16} />
-          </a>
-        )}
-        <button className="search-action-btn" title="Like">
-          <Heart size={16} />
-        </button>
-        <button className="search-action-btn" title="Add to Playlist">
-          <ListPlus size={16} />
-        </button>
-        <button className="search-action-btn search-play-btn" title="Play Album" onClick={() => playTrack(track, [track])}>
-          <Play size={16} fill="currentColor" />
-        </button>
+        <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
       </div>
     </div>
   );
@@ -1056,11 +1029,12 @@ export default function Search() {
 
     return (
       <div key={`artist-${aid}`} className="search-result-row search-artist-row">
-        <div className="search-result-art artist-avatar">
+        <div className="search-result-art artist-avatar circle">
           {avatar ? <img src={avatar} alt="" /> : <div className="search-result-art-placeholder circle" />}
         </div>
         <div className="search-result-info">
           <span className="search-result-title">{name}</span>
+          <span className="search-result-artist">Artist</span>
         </div>
         <div className="search-result-actions">
           <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(aid)}>
@@ -1073,15 +1047,16 @@ export default function Search() {
 
   const renderLabelRow = (track) => {
     const lid = track.label;
-    const following = isFollowing(lid); // Using same follow logic for now
+    const following = isFollowing(lid);
 
     return (
       <div key={`label-${lid}`} className="search-result-row search-artist-row">
-        <div className="search-result-art artist-avatar">
+        <div className="search-result-art artist-avatar circle">
           {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder circle" />}
         </div>
         <div className="search-result-info">
           <span className="search-result-title">{track.label}</span>
+          <span className="search-result-artist">Label</span>
         </div>
         <div className="search-result-actions">
           <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(lid)}>
@@ -1468,25 +1443,28 @@ export default function Search() {
                 }}
                 style={{ cursor: 'pointer' }}
               >
-                <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '6px' }}>
-                  {(item.coverImage || item.artworkUrl || item.thumbnail || item.thumb) ? (
-                    <img src={item.coverImage || item.artworkUrl || item.thumbnail || item.thumb} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                  ) : (
+                <div className="search-result-art discogs-art" style={{ borderRadius: isArtist || isLabel ? '50%' : '8px' }}>
+                  {(item.coverImage || item.artworkUrl || item.thumbnail || item.thumb) ? (() => {
+                    const rawArt = item.coverImage || item.artworkUrl || item.thumbnail || item.thumb;
+                    const cleanArt = rawArt.includes('bcbits.com') ? rawArt.replace(/_[0-9]+\.jpg/, '_10.jpg') : rawArt;
+                    return <img src={cleanArt} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />;
+                  })() : (
                     <EntityPlaceholder name={item.title} type={isArtist ? 'artist' : isLabel ? 'label' : 'release'} />
                   )}
                 </div>
                 <div className="search-result-info">
                   <span className="search-result-title">{item.title}</span>
                   <span className="search-result-artist">
-                    {item.artistName || ''}
+                    {item.artistName || entityLabel(item)}
                     {isPlaylist ? ` · ${item.trackCount || 0} tracks` : ''}
                     {(item.year || item.released) ? ` · ${item.year || item.released}` : ''}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 11, opacity: 0.7 }}>
-                    {providerIcons[item.provider] || null}
-                    <span style={{ opacity: 0.7 }}>{entityLabel(item)}</span>
-                  </span>
                 </div>
+                {!isArtist && !isLabel && (
+                  <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
+                    <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1514,14 +1492,14 @@ export default function Search() {
           }}>✕</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             {playlistSheet.artworkUrl && (
-              <img src={playlistSheet.artworkUrl} alt="" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />
+              <img src={playlistSheet.artworkUrl} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />
             )}
             <div>
               <div style={{ color: '#fff', fontSize: 18, fontWeight: 600 }}>{playlistSheet.title}</div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>{playlistSheet.artistName} · {playlistSheet.trackCount} tracks</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {(playlistSheet.tracks || []).map((t, i) => (
               <div key={t.trackId || i} className="search-result-row search-external-row"
                 onClick={() => {
@@ -1536,16 +1514,19 @@ export default function Search() {
                     scTrackId: t.trackId,
                   });
                 }}>
-                <div className="search-result-art discogs-art" style={{ borderRadius: '6px' }}>
+                <div className="search-result-art discogs-art" style={{ borderRadius: '8px' }}>
                   {t.artworkUrl ? (
                     <img src={t.artworkUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', borderRadius: 'inherit' }} />
+                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.07)', borderRadius: 'inherit' }} />
                   )}
                 </div>
                 <div className="search-result-info">
                   <span className="search-result-title">{t.title}</span>
                   <span className="search-result-artist">{t.artistName}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
+                  <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
                 </div>
               </div>
             ))}

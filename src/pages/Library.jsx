@@ -99,6 +99,33 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
   );
 }
 
+function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) {
+  const cleanSrc = (cover && cover.includes('bcbits.com')) ? cover.replace(/_[0-9]+\.jpg/, '_10.jpg') : cover;
+  return (
+    <div
+      onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', cursor: onClick ? 'pointer' : 'default' }}
+    >
+      <div style={{
+        width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
+        background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+             : <Music2 size={22} color="rgba(255,255,255,.3)" />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub || ''}</div>
+      </div>
+      {showPlay && (
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
+          <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Main filter keys
 const FILTERS = [
   { key: 'titles',    label: 'Titles'    },
@@ -550,24 +577,38 @@ export default function Library() {
             {hasReleases && (
               <>
                 <div className="shelf-row-label" style={{marginTop: hasTracks ? 16 : 0}}>Liked Releases</div>
-                <div className="upl-grid upl-grid-3">
-                  {sortByDate(savedAlbums).map(album => (
-                    <button
-                      key={album.id}
-                      className="upl-grid-cell"
-                      style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
-                      onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
-                    >
-                      <div className="upl-grid-art">
-                        {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="lazy"/>
-                          : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                      </div>
-                      <div className="upl-grid-title">{album.title}</div>
-                      <div className="upl-grid-artist">{album.artist}</div>
-                    </button>
-                  ))}
-                </div>
+                {layoutMode === 'list' ? (
+                  <div>
+                    {sortByDate(savedAlbums).map(album => (
+                      <LibRow
+                        key={album.id}
+                        cover={album.cover}
+                        title={album.title}
+                        sub={album.artist}
+                        onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`upl-grid upl-grid-${Math.min(5, Math.max(1, gridCols))}`}>
+                    {sortByDate(savedAlbums).map(album => (
+                      <button
+                        key={album.id}
+                        className="upl-grid-cell"
+                        style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                        onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                      >
+                        <div className="upl-grid-art">
+                          {album.cover
+                            ? <img src={album.cover} alt={album.title} loading="lazy"/>
+                            : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                        </div>
+                        <div className="upl-grid-title">{album.title}</div>
+                        <div className="upl-grid-artist">{album.artist}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -592,24 +633,38 @@ export default function Library() {
           {savedAlbums.length > 0 && (
             <>
               <div className="shelf-row-label" style={{ marginTop: 0 }}>Saved Albums</div>
-              <div className="upl-grid upl-grid-3">
-                {sortByDate(savedAlbums).map(album => (
-                  <button
-                    key={album.id}
-                    className="upl-grid-cell"
-                    style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
-                    onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
-                  >
-                    <div className="upl-grid-art">
-                      {album.cover
-                        ? <img src={album.cover} alt={album.title} loading="lazy"/>
-                        : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                    </div>
-                    <div className="upl-grid-title">{album.title}</div>
-                    <div className="upl-grid-artist">{album.artist}</div>
-                  </button>
-                ))}
-              </div>
+              {layoutMode === 'list' ? (
+                <div>
+                  {sortByDate(savedAlbums).map(album => (
+                    <LibRow
+                      key={album.id}
+                      cover={album.cover}
+                      title={album.title}
+                      sub={album.artist}
+                      onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className={`upl-grid upl-grid-${Math.min(5, Math.max(1, gridCols))}`}>
+                  {sortByDate(savedAlbums).map(album => (
+                    <button
+                      key={album.id}
+                      className="upl-grid-cell"
+                      style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                      onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                    >
+                      <div className="upl-grid-art">
+                        {album.cover
+                          ? <img src={album.cover} alt={album.title} loading="lazy"/>
+                          : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                      </div>
+                      <div className="upl-grid-title">{album.title}</div>
+                      <div className="upl-grid-artist">{album.artist}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           )}
           {hasAcctAlbums && (
@@ -664,13 +719,27 @@ export default function Library() {
           ? <div className="lib-empty"><p>No liked playlists yet.</p></div>
           : <>
               <div className="shelf-row-label">Liked Playlists</div>
-              <div className="scroll-row">
-                {savedPlaylists.map(pl => (
-                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
-                    <ShelfCard cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI?'AI':null}/>
-                  </div>
-                ))}
-              </div>
+              {layoutMode === 'list' ? (
+                <div>
+                  {savedPlaylists.map(pl => (
+                    <LibRow
+                      key={pl.id}
+                      cover={pl.cover}
+                      title={pl.title}
+                      sub={pl.curator}
+                      onClick={() => openPlaylistSheet(pl)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="scroll-row">
+                  {savedPlaylists.map(pl => (
+                    <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
+                      <ShelfCard cover={pl.cover} title={pl.title} sub={pl.curator} badge={pl.isAI?'AI':null}/>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
       )}
 
@@ -680,13 +749,27 @@ export default function Library() {
           <div className="shelf-row-label">My Playlists</div>
           {playlists.length === 0
             ? <div className="lib-empty"><p>No playlists yet.</p></div>
-            : <div className="scroll-row">
+            : layoutMode === 'list' ? (
+              <div>
+                {playlists.map(pl => (
+                  <LibRow
+                    key={pl.id}
+                    cover={pl.cover}
+                    title={pl.title}
+                    sub={`${pl.tracks?.length||0} tracks`}
+                    onClick={() => openPlaylistSheet(pl)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="scroll-row">
                 {playlists.map(pl => (
                   <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
                     <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
                   </div>
                 ))}
               </div>
+            )
           }
         </>
       )}
@@ -729,11 +812,19 @@ export default function Library() {
               {followedArtists?.length > 0 && (
                 <>
                   <div className="shelf-row-label">Artists</div>
-                  <div className="scroll-row">
-                    {followedArtists.map(a => (
-                      <ShelfCard key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''}/>
-                    ))}
-                  </div>
+                  {layoutMode === 'list' ? (
+                    <div>
+                      {followedArtists.map(a => (
+                        <LibRow key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''} round showPlay={false} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="scroll-row">
+                      {followedArtists.map(a => (
+                        <ShelfCard key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''}/>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
               {spFollows.length > 0 && (

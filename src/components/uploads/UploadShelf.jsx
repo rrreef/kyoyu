@@ -314,32 +314,26 @@ export function UploadExpandedList({ uploads }) {
   return (
     <>
       <div className="upl-expanded-list">
-        {sorted.map(t => (
-          <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`}>
-            {((t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null') || (t.cover && t.cover !== 'undefined' && t.cover !== 'null'))
-              ? <img src={(t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null) || (t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null)} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
-              : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={15}/></div>
-            }
-            <div className="upl-exp-info">
-              <div className="upl-exp-title">{t.title || 'Untitled'}</div>
-              <div className="upl-exp-sub">{t.artist || ''}</div>
+        {sorted.map(t => {
+          const rawSrc = (t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null)
+            || (t.cover && t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null);
+          const cleanSrc = (rawSrc && rawSrc.includes('bcbits.com')) ? rawSrc.replace(/_[0-9]+\.jpg/, '_10.jpg') : rawSrc;
+          return (
+            <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`} onClick={() => play(t)}>
+              {cleanSrc
+                ? <img src={cleanSrc} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
+                : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
+              }
+              <div className="upl-exp-info">
+                <div className="upl-exp-title">{t.title || 'Untitled'}</div>
+                <div className="upl-exp-sub">{t.artist || ''}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
+                <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+              </div>
             </div>
-            <button
-              className={`upl-exp-heart${isLikedUpload(t.id) ? ' liked' : ''}`}
-              onClick={(e) => { e.stopPropagation(); toggleLikeUpload(t); }}
-              aria-label={isLikedUpload(t.id) ? 'Unlike' : 'Like'}
-              data-kyoyu-injected="1"
-            >
-              <Heart size={15} fill={isLikedUpload(t.id) ? '#ffffff' : 'none'} color={isLikedUpload(t.id) ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
-            </button>
-            <button className="upl-exp-more" onClick={(e) => { e.stopPropagation(); openEdit(t); }}>
-              <MoreHorizontal size={16}/>
-            </button>
-            <button className="upl-exp-play" onClick={() => play(t)}>
-              {activeId === t.id ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {editingTrack && (
