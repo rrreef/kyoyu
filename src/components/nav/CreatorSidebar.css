@@ -54,22 +54,13 @@
   overflow-x: hidden;
   position: relative;
   z-index: 1;
-  padding-right: 2px;     /* room for scrollbar */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.10) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .creator-sidebar__nav::-webkit-scrollbar {
-  width: 3px;
-}
-.creator-sidebar__nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-.creator-sidebar__nav::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.12);
-  border-radius: 99px;
-}
-.creator-sidebar__nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.22);
+  display: none;
+  width: 0;
+  height: 0;
 }
 .creator-nav-item {
   display: flex;
