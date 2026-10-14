@@ -21,6 +21,7 @@ function mergeResults(nativeTracks, external) {
   pool.push(...norm(external.bandcamp, 'bandcamp'));
   pool.push(...norm(external.spotify, 'spotify'));
   pool.push(...norm(external.applemusic, 'applemusic'));
+  pool.push(...norm(external.tidal, 'tidal'));
   return pool;
 }
 

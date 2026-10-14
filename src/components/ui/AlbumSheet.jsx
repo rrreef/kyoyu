@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef } from 'react';
 import { usePlayer, historyReplayInfo, trackIdentity } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { syncProviderLike } from '../../lib/streaming';
+import { isItemInConnectedLikes } from '../../lib/useConnectedLibrary';
 
 const FRESH_STREAM_MS = 10 * 60 * 1000;
 
@@ -11,6 +13,9 @@ const FRESH_STREAM_MS = 10 * 60 * 1000;
  *   stream URL has expired) goes through playSaved, so it plays exactly like History / Likes.
  */
 export function registerAlbumPlayback(album) {
+  if (typeof window !== 'undefined') {
+    window.__kyoyuCurrentNativeAlbum = album;
+  }
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
     const queue = (album.tracks || []).map(t => {
       const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
@@ -49,6 +54,7 @@ export function openNativeAlbumFast(album) {
   if (!album) return null;
   const ts = Date.now();
   window.__lastFastOpenTs = ts;
+  window.__kyoyuCurrentNativeAlbum = album;
 
   // Sanitize Discogs tracks unconditionally (covers groupByAlbum which drops album.provider)
   // Also make generic Discogs track ids ("discogs-track-0") unique per album, otherwise
@@ -82,7 +88,7 @@ export function openNativeAlbumFast(album) {
           id: t.id || String(Date.now() + Math.random()),
           title: t.title || t.name || 'Unknown Track',
           artist: t.artist || '',
-          url: t.url || t.streamUrl || t.audioUrl || '',
+          url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
           cover: t.cover || null,
           provider: t.provider || album.provider || null
         }))
@@ -242,6 +248,7 @@ export default function AlbumSheet({ album, onClose }) {
 
   useLayoutEffect(() => {
     if (!album) return;
+    window.__kyoyuCurrentNativeAlbum = album;
 
     // Expose close handler so Swift can trigger it
     window.__kyoyuCloseNativeAlbum = (incomingTs) => {
@@ -253,29 +260,41 @@ export default function AlbumSheet({ album, onClose }) {
 
     // Expose play handler so Swift can trigger it
 
-        const handleNativeLike = (e) => {
+    const handleNativeLike = (e) => {
       if (e.detail.handled) return;
       const trackId = String(e.detail.trackId).split('?ts=')[0];
-      const curAlbum = safeAlbumRef.current || album;
+      const curAlbum = safeAlbumRef.current || album || window.__kyoyuCurrentNativeAlbum;
       let t = (curAlbum?.tracks || []).find(tr => String(tr.id) === trackId);
       if (!t) return;
 
       e.detail.handled = true;
       const trackObj = {
         ...t,
-        cover: curAlbum?.cover || curAlbum?.artworkUrl || '',
+        artist: t.artist || curAlbum?.artist || '',
+        cover: curAlbum?.cover || curAlbum?.artworkUrl || t.cover || '',
         album: curAlbum?.title || '',
+        albumId: curAlbum?.id || '',
+        albumProvider: curAlbum?.provider || '',
+        trackUrl: t.trackUrl || curAlbum?.trackUrl || curAlbum?.url || '',
         storageKey: t.storageKey || '',
         ...savedIdentity(t),
       };
 
-      try { toggleLikeRef.current(trackObj); } catch(err) { console.warn('toggleLikeUpload error:', err); }
+      try {
+        toggleLikeRef.current(trackObj, {
+          skipProviderSync: !!e.detail.skipProviderSync,
+          forceLiked: e.detail.forceLiked,
+        });
+      } catch(err) { console.warn('toggleLikeUpload error:', err); }
 
       try {
         let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
-        if (saved.some(x => String(x.id) === String(t.id))) {
+        const shouldLike = typeof e.detail.forceLiked === 'boolean'
+          ? e.detail.forceLiked
+          : !saved.some(x => String(x.id) === String(t.id));
+        if (!shouldLike) {
           saved = saved.filter(x => String(x.id) !== String(t.id));
-        } else {
+        } else if (!saved.some(x => String(x.id) === String(t.id))) {
           // eslint-disable-next-line no-unused-vars
           const { artworkUrl, artworkFile, ...slim } = trackObj;
           saved.push(slim);
@@ -290,23 +309,29 @@ export default function AlbumSheet({ album, onClose }) {
       return pls.some(pl => pl.tracks && pl.tracks.some(t => String(t.id) === String(trackId)));
     };
     window.__kyoyuToggleSaveAlbum = () => {
-      if (!safeAlbumRef.current || !safeAlbumRef.current.tracks) return;
-      const isSaved = window.__kyoyuIsSavedAlbum();
+      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
+      if (!curAlbum || !curAlbum.tracks) return;
+      const isSaved = window.__kyoyuIsSavedAlbum(null, curAlbum.id);
+      const nextLiked = !isSaved;
       let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
       
-      for (const t of safeAlbumRef.current.tracks) {
+      for (const t of curAlbum.tracks) {
         const trackObj = {
           id: t.id,
           title: t.title,
-          artistName: safeAlbumRef.current.artist || '',
-          album: safeAlbumRef.current.title || '',
-          cover: safeAlbumRef.current.cover || safeAlbumRef.current.artworkUrl || '',
+          artistName: curAlbum.artist || '',
+          artist: t.artist || curAlbum.artist || '',
+          album: curAlbum.title || '',
+          albumId: curAlbum.id || '',
+          albumProvider: curAlbum.provider || '',
+          trackUrl: t.trackUrl || curAlbum.trackUrl || curAlbum.url || '',
+          cover: curAlbum.cover || curAlbum.artworkUrl || '',
           audioUrl: t.url || t.streamUrl || t.audioUrl || t.src || '',
           ...savedIdentity(t),
         };
-        try { toggleLikeRef.current(trackObj); } catch (e) {}
+        try { toggleLikeRef.current(trackObj, { skipProviderSync: true, forceLiked: nextLiked }); } catch (e) {}
         
-        if (isSaved) {
+        if (!nextLiked) {
             saved = saved.filter(x => String(x.id) !== String(t.id));
         } else {
             if (!saved.some(x => String(x.id) === String(t.id))) {
@@ -316,12 +341,36 @@ export default function AlbumSheet({ album, onClose }) {
         }
       }
       localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
+
+      // Perform a single album-level provider sync
+      try {
+        syncProviderLike({
+          id: curAlbum.id,
+          albumId: curAlbum.id,
+          kind: 'album',
+          provider: curAlbum.provider || curAlbum.tracks?.[0]?.provider || '',
+          title: curAlbum.title || '',
+          artist: curAlbum.artist || '',
+          album: curAlbum.title || '',
+          cover: curAlbum.cover || curAlbum.artworkUrl || '',
+          trackUrl: curAlbum.trackUrl || curAlbum.url || curAlbum.tracks?.[0]?.trackUrl || '',
+          url: curAlbum.url || curAlbum.trackUrl || '',
+        }, nextLiked);
+      } catch (e) {}
     };
-    window.__kyoyuIsSavedAlbum = () => {
-      // Just check if all tracks are liked
-      if (!safeAlbumRef.current || !safeAlbumRef.current.tracks) return false;
+    window.__kyoyuIsSavedAlbum = (tracksJson, incomingAlbumId) => {
+      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
+      const aid = incomingAlbumId || curAlbum?.id || '';
+      if (aid && isItemInConnectedLikes({ id: aid, trackUrl: curAlbum?.trackUrl || curAlbum?.url || '' })) {
+        return true;
+      }
+      let tracks = curAlbum?.tracks || [];
+      if (tracksJson) {
+        try { tracks = JSON.parse(tracksJson); } catch {}
+      }
+      if (!tracks || !tracks.length) return false;
       const saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
-      return safeAlbumRef.current.tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
+      return tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
     };
     window.__kyoyuDownloadTrack = (trackId) => {
       const curAlbum = safeAlbumRef.current || album;
@@ -416,7 +465,7 @@ export default function AlbumSheet({ album, onClose }) {
                 id: t.id || String(Date.now() + Math.random()),
                 title: t.title || t.name || 'Unknown Track',
                 artist: t.artist || '',
-                url: t.url || t.streamUrl || t.audioUrl || '',
+                url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
                 provider: t.provider || album.provider || null
               }))
             }

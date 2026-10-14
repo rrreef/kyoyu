@@ -3,6 +3,7 @@ import './SourceButtons.css';
 
 const PLATFORM_CONFIG = {
   spotify: { icon: '🟢', text: 'Play on Spotify', color: '#1DB954' },
+  tidal: { icon: '⚫', text: 'Play on TIDAL', color: '#00FFFF' },
   youtube: { icon: '🔴', text: 'Watch on YouTube', color: '#FF0000' },
   bandcamp: { icon: '🔵', text: 'Open on Bandcamp', color: '#1DA0C3' },
   soundcloud: { icon: '🟠', text: 'Listen on SoundCloud', color: '#FF5500' },

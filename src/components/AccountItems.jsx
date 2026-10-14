@@ -32,6 +32,13 @@ export function toPlayable(it) {
       albumName: it.albumName, url: it.url,
     };
   }
+  if (it.provider === 'tidal') {
+    return {
+      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
+      provider: 'tidal', providerItemId: it.tidalId || it.trackId, tidalId: it.tidalId || it.trackId,
+      albumName: it.albumName, url: it.url,
+    };
+  }
   if (it.provider === 'discogs') {
     return {
       id: it.id, title: it.title, artistName: it.artistName, artworkUrl: it.artworkUrl, duration: it.duration || 0,
@@ -158,7 +165,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
     if (it.kind === 'album') {
-      if (it.provider === 'spotify' || it.provider === 'applemusic' || it.provider === 'discogs') return () => handlePlaylistClick(it);
+      if (it.provider === 'spotify' || it.provider === 'applemusic' || it.provider === 'tidal' || it.provider === 'discogs') return () => handlePlaylistClick(it);
       return () => playBandcampAlbum(it);
     }
     if (it.kind === 'track') return () => playList(items, it);

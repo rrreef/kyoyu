@@ -253,10 +253,12 @@ function HashRedirector() {
 // Registers global playlist JS handlers using both PlayerContext and LibraryContext.
 // Lives inside both providers so it always has access to both contexts.
 import { useLibrary } from './contexts/LibraryContext';
+import { syncProviderLike } from './lib/streaming';
+import { isItemInConnectedLikes } from './lib/useConnectedLibrary';
 
 function PlaylistBridge() {
   const { state } = usePlayer();
-  const { getPlaylists, addToPlaylist, createPlaylist } = useLibrary();
+  const { getPlaylists, addToPlaylist, createPlaylist, toggleLikeUpload } = useLibrary();
   const stateRef = React.useRef(state);
   stateRef.current = state;
   const addRef = React.useRef(addToPlaylist);
@@ -265,8 +267,36 @@ function PlaylistBridge() {
   getRef.current = getPlaylists;
   const createRef = React.useRef(createPlaylist);
   createRef.current = createPlaylist;
+  const toggleLikeRef = React.useRef(toggleLikeUpload);
+  toggleLikeRef.current = toggleLikeUpload;
 
   useEffect(() => {
+    const handleFallbackNativeLike = (e) => {
+      if (e.detail.handled) return;
+      const trackId = String(e.detail.trackId).split('?ts=')[0];
+      const curAlbum = window.__kyoyuCurrentNativeAlbum;
+      const t = (curAlbum?.tracks || []).find(tr => String(tr.id) === trackId);
+      if (!t) return;
+      e.detail.handled = true;
+      const trackObj = {
+        ...t,
+        artist: t.artist || curAlbum?.artist || '',
+        cover: curAlbum?.cover || curAlbum?.artworkUrl || t.cover || '',
+        album: curAlbum?.title || '',
+        albumId: curAlbum?.id || '',
+        albumProvider: curAlbum?.provider || '',
+        trackUrl: t.trackUrl || curAlbum?.trackUrl || curAlbum?.url || '',
+        ...trackIdentity({ ...t, src: t.src || t.url || t.streamUrl || t.audioUrl || '' }),
+      };
+      try {
+        toggleLikeRef.current(trackObj, {
+          skipProviderSync: !!e.detail.skipProviderSync,
+          forceLiked: e.detail.forceLiked,
+        });
+      } catch (err) {}
+    };
+    window.addEventListener('kyoyu-native-like', handleFallbackNativeLike);
+
     // Always-available playlist handlers (override the AlbumSheet ones)
     window.__kyoyuIsTrackInAnyPlaylist = (trackId) => {
       const pls = getRef.current();
@@ -292,22 +322,26 @@ function PlaylistBridge() {
       } catch(e) { console.error(e); }
     };
 
-    window.__kyoyuToggleSaveTracks = (tracksJson) => {
+    window.__kyoyuToggleSaveTracks = (tracksJson, albumId, albumTitle, albumArtist, albumProvider) => {
       try {
         const tracks = JSON.parse(tracksJson);
         if (!tracks.length) return;
         let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+        const curAlbum = window.__kyoyuCurrentNativeAlbum;
+        const aid = albumId || curAlbum?.id || '';
         
-        // Are ALL tracks already saved?
-        const isSaved = tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
+        // Is the album (or all its tracks) already saved?
+        const isSaved = window.__kyoyuIsSavedAlbum(tracksJson, aid);
+        const nextLiked = !isSaved;
         
         for (const t of tracks) {
-            // we dispatch kyoyu-native-like so React contexts can update
-            // BUT we override the localStorage ourselves. 
-            // Wait, kyoyu-native-like in LibraryContext just toggles React state, which is fine!
-            try { window.dispatchEvent(new CustomEvent('kyoyu-native-like', { detail: { trackId: t.id, handled: false } })); } catch(e){}
+            try {
+              window.dispatchEvent(new CustomEvent('kyoyu-native-like', {
+                detail: { trackId: t.id, handled: false, skipProviderSync: true, forceLiked: nextLiked }
+              }));
+            } catch(e){}
             
-            if (isSaved) {
+            if (!nextLiked) {
                 saved = saved.filter(x => String(x.id) !== String(t.id));
             } else {
                 if (!saved.some(x => String(x.id) === String(t.id))) {
@@ -316,12 +350,33 @@ function PlaylistBridge() {
             }
         }
         localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(saved));
+
+        // Perform a single album-level provider sync
+        try {
+          syncProviderLike({
+            id: aid || tracks[0]?.id || '',
+            albumId: aid,
+            kind: 'album',
+            provider: albumProvider || curAlbum?.provider || tracks[0]?.provider || '',
+            title: albumTitle || curAlbum?.title || '',
+            artist: albumArtist || curAlbum?.artist || tracks[0]?.artist || '',
+            album: albumTitle || curAlbum?.title || '',
+            cover: curAlbum?.cover || curAlbum?.artworkUrl || tracks[0]?.cover || '',
+            trackUrl: curAlbum?.trackUrl || curAlbum?.url || tracks[0]?.trackUrl || tracks[0]?.url || '',
+            url: curAlbum?.url || curAlbum?.trackUrl || tracks[0]?.url || '',
+          }, nextLiked);
+        } catch (e) {}
       } catch(e) { console.error(e); }
     };
     
-    window.__kyoyuIsSavedAlbum = (tracksJson) => {
+    window.__kyoyuIsSavedAlbum = (tracksJson, albumId) => {
       try {
-        const tracks = JSON.parse(tracksJson);
+        const curAlbum = window.__kyoyuCurrentNativeAlbum;
+        const aid = albumId || curAlbum?.id || '';
+        if (aid && isItemInConnectedLikes({ id: aid, trackUrl: curAlbum?.trackUrl || curAlbum?.url || '' })) {
+          return true;
+        }
+        const tracks = tracksJson ? JSON.parse(tracksJson) : (curAlbum?.tracks || []);
         if (!tracks.length) return false;
         let saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
         return tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
@@ -350,6 +405,7 @@ function PlaylistBridge() {
     };
 
     return () => {
+      window.removeEventListener('kyoyu-native-like', handleFallbackNativeLike);
       delete window.__kyoyuIsTrackInAnyPlaylist;
       delete window.__kyoyuGetPlaylists;
       delete window.__kyoyuAddToPlaylist;

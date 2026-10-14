@@ -561,10 +561,10 @@ export default function Player({ hideMini = false }) {
         const trackObj = {
           ...currentTrack,
           cover: currentTrack.releaseCover || currentTrack.artworkUrl || '',
-          // Preserve provider metadata for YouTube/SoundCloud playback from library
-          provider: currentTrack.provider || provider,
-          providerItemId: currentTrack.providerItemId || undefined,
-          scTrackId: currentTrack.scTrackId || undefined,
+          // Preserve provider metadata for YouTube/SoundCloud/Bandcamp playback & like sync from library
+          provider: badgeProviderOf(provider, currentTrack),
+          providerItemId: currentTrack.providerItemId || currentTrack.providerUrl || undefined,
+          scTrackId: currentTrack.scTrackId || currentTrack.origin?.scTrackId || undefined,
           // exact source for replay from Library (Bandcamp page / SoundCloud id / YouTube id)
           replay: historyReplayInfo(currentTrack),
         };
@@ -595,7 +595,7 @@ export default function Player({ hideMini = false }) {
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         provider: provider || 'native',
         sourceProvider: badgeProviderOf(provider, currentTrack),
-        trackUrl: currentTrack.providerUrl || '',
+        trackUrl: currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.replay?.url || '',
         albumUrl: currentTrack.albumUrl || ''
       });
     } else {
@@ -688,7 +688,7 @@ export default function Player({ hideMini = false }) {
       cur.handleNext();
     } else if (evt.type === 'failed') {
       dispatch({ type: 'SET_PLAYING', value: false });
-      const label = evt.service === 'spotify' ? 'Spotify' : 'Apple Music';
+      const label = evt.service === 'spotify' ? 'Spotify' : evt.service === 'tidal' ? 'TIDAL' : 'Apple Music';
       postNative({ alertTitle: `${label} did not start playing`, alert: `${evt.reason || 'No response from the player.'}\n\nOpen the ${label} app once, make sure you are logged in with Premium, then try again.` });
     }
   }), [dispatch]);

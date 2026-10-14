@@ -20,9 +20,9 @@ export function historyReplayInfo(t) {
   const id = String(t.id || '');
   if (t.provider === 'youtube' && (t.videoId || t.providerItemId)) return { provider: 'youtube', videoId: t.videoId || t.providerItemId };
   if (/^yt-/.test(id)) return { provider: 'youtube', videoId: id.slice(3) };
-  // Apple Music / Spotify items replay through their own engine (never a lookalike from YouTube)
-  if (isStreamingProvider(t.provider) && (t.providerItemId || t.spotifyId)) {
-    return { provider: t.provider, itemId: String(t.providerItemId || t.spotifyId).replace(/^(am|sp)-/, '') };
+  // Apple Music / Spotify / TIDAL items replay through their own engine (never a lookalike from YouTube)
+  if (isStreamingProvider(t.provider) && (t.providerItemId || t.spotifyId || t.tidalId)) {
+    return { provider: t.provider, itemId: String(t.providerItemId || t.spotifyId || t.tidalId).replace(/^(am|sp|td)-/, '') };
   }
   if (t.provider === 'soundcloud' || /^sc-\d+/.test(id)) {
     const scId = t.scTrackId || (id.match(/^sc-(\d+)/) || [])[1];
@@ -39,7 +39,7 @@ export function historyReplayInfo(t) {
 export function trackIdentity(t) {
   if (!t) return {};
   const out = {};
-  for (const k of ['provider', 'providerItemId', 'providerUrl', 'scTrackId', 'videoId', 'origin']) {
+  for (const k of ['provider', 'providerItemId', 'providerUrl', 'scTrackId', 'spotifyId', 'appleMusicId', 'tidalId', 'videoId', 'origin']) {
     if (t[k]) out[k] = t[k];
   }
   out.replay = historyReplayInfo(t);
@@ -592,8 +592,11 @@ export function PlayerProvider({ children }) {
       releaseCover: metadata.artworkUrl || '',
       duration: metadata.duration || 0,
       src: '',
+      provider: 'soundcloud',
       providerUrl: trackUrl,
-      scTrackId: trackId,
+      providerItemId: trackUrl,
+      scTrackId: String(trackId),
+      origin: { provider: 'soundcloud', scTrackId: String(trackId), url: trackUrl || '' },
     };
     showPlaceholder(placeholderTrack);
 
@@ -625,6 +628,8 @@ export function PlayerProvider({ children }) {
         id: `sc-${trackId}`,
         _restart: Date.now(), // re-fires the audio useEffect (same id as the placeholder)
         scTrackId: String(trackId),
+        provider: 'soundcloud',
+        providerItemId: trackUrl,
         origin: { provider: 'soundcloud', scTrackId: String(trackId), url: trackUrl || '' },
         title: data.title || metadata.title || 'SoundCloud Track',
         artistName: data.artistName || metadata.artistName || metadata.artist || '',
@@ -682,7 +687,7 @@ export function PlayerProvider({ children }) {
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: meta.url, providerUrl: item.providerUrl || meta.url });
       const isCurrent = () => myCounter === playSearchItemCounterRef.current && stateRef.current.currentTrack?.id === item.id;
       await playBandcampOrFallback(meta, isCurrent);
-    } else if (item.provider === 'spotify' || item.provider === 'applemusic') {
+    } else if (item.provider === 'spotify' || item.provider === 'applemusic' || item.provider === 'tidal') {
       await playStreamingItem(item, myCounter);
     } else {
       // native track
@@ -690,10 +695,10 @@ export function PlayerProvider({ children }) {
     }
   }
 
-  /** Apple Music / Spotify result → their native engine; if that's unavailable, the same song elsewhere. */
+  /** Apple Music / Spotify / TIDAL result → their native engine; if that's unavailable, the same song elsewhere. */
   async function playStreamingItem(item, myCounter) {
     const service = item.provider;
-    const itemId = String(item.providerItemId || item.spotifyId || item.trackId || '').replace(/^(am|sp)-/, '');
+    const itemId = String(item.providerItemId || item.spotifyId || item.tidalId || item.trackId || '').replace(/^(am|sp|td)-/, '');
     const meta = {
       id: item.id || `${service}-${itemId}`, title: item.title || '', artistName: item.artistName || item.artist || '',
       releaseCover: item.artworkUrl || item.releaseCover || '', duration: item.duration || 0,
@@ -701,7 +706,16 @@ export function PlayerProvider({ children }) {
     };
     const stillCurrent = () => myCounter === playSearchItemCounterRef.current;
     if (itemId && isStreamingAvailable()) {
-      const track = { ...meta, src: '', provider: service, providerItemId: itemId, providerUrl: item.url || '' };
+      const track = {
+        ...meta,
+        src: '',
+        provider: service,
+        providerItemId: itemId,
+        providerUrl: item.url || '',
+        ...(service === 'spotify' ? { spotifyId: itemId } : {}),
+        ...(service === 'applemusic' ? { appleMusicId: itemId } : {}),
+        ...(service === 'tidal' ? { tidalId: itemId } : {}),
+      };
       dispatch({ type: 'PLAY_STREAMING', service, itemId, url: item.url, track });
       try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artwork: track.releaseCover || '' }); } catch (e) {}
       // Spotify's App Remote is flaky right after a cold start / app switch: give its own engine a few tries
@@ -723,7 +737,7 @@ export function PlayerProvider({ children }) {
     }
     if (!stillCurrent()) return;
     if (!isStreamingAvailable()) {
-      // Website (no native bridge): there is no Spotify / Apple Music engine, so play the same song elsewhere
+      // Website (no native bridge): there is no Spotify / Apple Music / TIDAL engine, so play the same song elsewhere
       showPlaceholder(meta);
       const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
       if (!stillCurrent()) return;
@@ -731,16 +745,18 @@ export function PlayerProvider({ children }) {
       else dispatch({ type: 'SET_PLAYING', value: false });
       return;
     }
-    // The user picked a Spotify / Apple Music title: only that provider may play it. Never swap in a
+    // The user picked a Spotify / Apple Music / TIDAL title: only that provider may play it. Never swap in a
     // Bandcamp/SoundCloud/YouTube copy under it — show why it failed instead.
     dispatch({ type: 'SET_PLAYING', value: false });
-    const label = service === 'spotify' ? 'Spotify' : 'Apple Music';
+    const label = service === 'spotify' ? 'Spotify' : service === 'tidal' ? 'TIDAL' : 'Apple Music';
     const why = window.__kyoyuStreamError || (isStreamingAvailable() ? 'unknown error' : `${label} is only available in the Kyoyu iOS app`);
     const hint = service === 'spotify'
       ? 'Check that Spotify is connected in Settings (Spotify Premium + the Spotify app are required).'
-      : /subscription/i.test(why)
-        ? 'Open Settings › Streaming Services › Apple Music and tap “Get Apple Music”. The subscription must be on the Apple ID signed in on this device.'
-        : 'Check that Apple Music is connected in Settings.';
+      : service === 'tidal'
+        ? 'Check that TIDAL is connected in Settings.'
+        : /subscription/i.test(why)
+          ? 'Open Settings › Streaming Services › Apple Music and tap “Get Apple Music”. The subscription must be on the Apple ID signed in on this device.'
+          : 'Check that Apple Music is connected in Settings.';
     try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\n${hint}` }); } catch (e) {}
   }
 
@@ -766,13 +782,15 @@ export function PlayerProvider({ children }) {
     }
     const isBc = found.provider === 'bandcamp';
     playTrack({
-      id: meta.id, title, artistName: artist, releaseCover: cover, src: found.src,
+      id: meta.id || (found.scTrackId ? `sc-${found.scTrackId}` : ''), title, artistName: artist, releaseCover: cover, src: found.src,
       releaseTitle: meta.releaseTitle || '',
       duration: found.duration || meta.duration || 0, providerUrl: found.providerItemId,
-      ...(isBc ? { provider: 'bandcamp', providerItemId: found.providerItemId } : { scTrackId: found.scTrackId }),
+      ...(isBc
+        ? { provider: 'bandcamp', providerItemId: found.providerItemId }
+        : { provider: 'soundcloud', providerItemId: found.providerItemId, scTrackId: String(found.scTrackId || '') }),
       origin: isBc
         ? { provider: 'bandcamp', url: found.providerItemId }
-        : { provider: 'soundcloud', scTrackId: found.scTrackId, url: found.providerItemId || '' },
+        : { provider: 'soundcloud', scTrackId: String(found.scTrackId || ''), url: found.providerItemId || '' },
     });
   }
 

@@ -265,6 +265,7 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
  * (Spotify additionally needs the Spotify app). On the website there is no connection → unchanged.
  */
 async function streamingServiceAllowed(service) {
+  if (service === 'tidal') return true;
   if (!isStreamingAvailable()) return true;
   let st = getCachedStreamingStatus();
   if (!st) { try { st = await refreshStreamingStatus(); } catch { /* unknown → don't block */ } }
@@ -274,6 +275,102 @@ async function streamingServiceAllowed(service) {
   if (service === 'applemusic' && s.canPlay === false) return false;   // no subscription → nothing to stream
   if (service === 'spotify' && s.installed === false) return false;
   return true;
+}
+
+async function searchTidal(query, offset = 0) {
+  const empty = { results: [], hasMore: false, nextOffset: offset };
+  // 1) Try native iOS bridge first when running inside the iOS app (instant, uses on-device TidalService)
+  if (offset === 0 && isStreamingAvailable()) {
+    try {
+      const cat = await callStreaming('search', { service: 'tidal', term: query, limit: 15, fullCatalog: true }, 10000);
+      if (cat && !Array.isArray(cat) && (cat.tracks || cat.albums || cat.artists || cat.playlists)) {
+        const results = [];
+        for (const a of (cat.artists || [])) {
+          const rawId = String(a.tidalId || a.providerItemId || a.id || '').replace(/^td-ar-/, '');
+          results.push({
+            id: `td-ar-${rawId}`,
+            tidalId: rawId,
+            providerItemId: rawId,
+            title: a.name || a.title,
+            artistName: a.name || a.artist,
+            artworkUrl: a.artworkUrl || a.cover,
+            url: a.externalUrl || a.url,
+            provider: 'tidal',
+            entityType: 'artist',
+            isExternal: true,
+          });
+        }
+        for (const a of (cat.albums || [])) {
+          const rawId = String(a.tidalId || a.providerItemId || a.id || '').replace(/^td-al-/, '');
+          results.push({
+            id: `td-al-${rawId}`,
+            tidalId: rawId,
+            providerItemId: rawId,
+            title: a.title,
+            artistName: a.artist,
+            artworkUrl: a.artworkUrl || a.cover,
+            url: a.externalUrl || a.url,
+            provider: 'tidal',
+            entityType: 'album',
+            isExternal: true,
+          });
+        }
+        for (const t of (cat.tracks || [])) {
+          const rawId = String(t.tidalId || t.providerItemId || t.id || '').replace(/^td-/, '');
+          results.push({
+            id: `td-${rawId}`,
+            tidalId: rawId,
+            providerItemId: rawId,
+            title: t.title,
+            artistName: t.artist,
+            artworkUrl: t.artworkUrl || t.cover,
+            duration: Math.floor(t.duration || 0),
+            albumName: t.album,
+            url: t.externalUrl || t.url,
+            provider: 'tidal',
+            entityType: 'track',
+            isExternal: true,
+          });
+        }
+        for (const p of (cat.playlists || [])) {
+          const rawId = String(p.tidalId || p.providerItemId || p.id || '').replace(/^td-pl-/, '');
+          results.push({
+            id: `td-pl-${rawId}`,
+            tidalId: rawId,
+            providerItemId: rawId,
+            title: p.title,
+            artistName: p.artist || 'TIDAL',
+            artworkUrl: p.artworkUrl || p.cover,
+            url: p.externalUrl || p.url,
+            provider: 'tidal',
+            entityType: 'playlist',
+            isExternal: true,
+          });
+        }
+        if (results.length) return { results, hasMore: false, nextOffset: offset + 15 };
+      }
+    } catch (err) {
+      console.warn('TIDAL native search fallback failed:', err);
+    }
+  }
+  // 2) Server API endpoint (/api/youtube-search with provider: 'tidal')
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch('/api/youtube-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'tidal', query, limit: 15, offset }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.results?.length) return data;
+        break;
+      }
+    } catch (err) {
+      console.warn('TIDAL search failed:', err);
+    }
+  }
+  return empty;
 }
 
 async function searchSpotify(query, offset = 0) {
@@ -484,7 +581,7 @@ export function invalidateBandcampResolve(trackUrl) {
 
 /**
  * Search a single provider by name. Used for retry when provider filter changes.
- * @param {'youtube'|'soundcloud'|'bandcamp'|'discogs'} provider
+ * @param {'youtube'|'soundcloud'|'bandcamp'|'discogs'|'spotify'|'applemusic'|'tidal'} provider
  * @param {string} query
  * @returns {Promise<Array>}
  */
@@ -513,17 +610,21 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
       const data = await searchAppleMusic(q, paginationCursor?.nextOffset || 0);
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
     }
+    case 'tidal': {
+      const data = await searchTidal(q, paginationCursor?.nextOffset || 0);
+      return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
+    }
     default: return { results: [], pagination: {} };
   }
 }
 
 
 /**
- * Run unified search: native catalog + Discogs + YouTube + SoundCloud + Bandcamp, merged and deduplicated.
+ * Run unified search: native catalog + Discogs + YouTube + SoundCloud + Bandcamp + Spotify + Apple Music + TIDAL, merged and deduplicated.
  * Native results always come first.
  * 
  * @param {string} query - Search query (min 2 chars)
- * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array, bandcamp: Array } }}
+ * @returns {{ nativeTracks: Array, external: { artists: Array, releases: Array, labels: Array, youtube: Array, soundcloud: Array, bandcamp: Array, spotify: Array, applemusic: Array, tidal: Array } }}
  */
 // Recent complete answers, so re-running the same search is instant and identical
 const unifiedCache = new Map();
@@ -536,7 +637,7 @@ export function categorizeDiscogs(discogsResults) {
 
 export async function unifiedSearch(query) {
   if (!query || query.trim().length === 0) {
-    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [] } };
+    return { nativeTracks: [], external: { artists: [], releases: [], labels: [], youtube: [], soundcloud: [], bandcamp: [], spotify: [], applemusic: [], tidal: [] } };
   }
   
   let trimmed = query.trim();
@@ -545,7 +646,7 @@ export async function unifiedSearch(query) {
   if (hit && Date.now() - hit.ts < UNIFIED_CACHE_TTL) return hit.value;
   
   // Run all searches in parallel with the user's exact query
-  const [nativeTracks, discogsData, ytData, scData, bcData, spData, amData] = await Promise.all([
+  const [nativeTracks, discogsData, ytData, scData, bcData, spData, amData, tdData] = await Promise.all([
     fetchPublicTracks(trimmed).catch(() => []),
     searchDiscogs(trimmed),
     searchYouTube(trimmed),
@@ -553,6 +654,7 @@ export async function unifiedSearch(query) {
     searchBandcamp(trimmed, { reportFailure: true }),
     searchSpotify(trimmed),
     searchAppleMusic(trimmed),
+    searchTidal(trimmed),
   ]);
   
   // Categorize and deduplicate Discogs results
@@ -564,6 +666,7 @@ export async function unifiedSearch(query) {
   external.bandcamp = bcData;
   external.spotify = spData.results || [];
   external.applemusic = amData.results || [];
+  external.tidal = tdData.results || [];
   
   // Pagination cursors for "Load More" per provider
   const pagination = {
@@ -591,4 +694,4 @@ export function cacheUnifiedResult(query, value) {
   unifiedCache.set(query.trim().toLowerCase(), { value, ts: Date.now() });
 }
 
-export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud, searchBandcamp };
+export { parseDiscogsTitle, searchDiscogs, searchYouTube, searchSoundCloud, searchBandcamp, searchTidal };

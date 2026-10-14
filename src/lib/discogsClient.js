@@ -114,6 +114,7 @@ export function classifyUrl(url) {
   if (!url) return 'website';
   const u = url.toLowerCase();
   if (u.includes('spotify.com')) return 'spotify';
+  if (u.includes('tidal.com')) return 'tidal';
   if (u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
   if (u.includes('bandcamp.com')) return 'bandcamp';
   if (u.includes('soundcloud.com')) return 'soundcloud';

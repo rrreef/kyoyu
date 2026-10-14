@@ -4,13 +4,13 @@
 
 import { useEffect, useState } from 'react';
 
-export const SERVICES = ['applemusic', 'spotify'];
-export const SERVICE_LABELS = { applemusic: 'Apple Music', spotify: 'Spotify' };
-const PREF_KEY = 'kyoyu-play-through'; // 'auto' | 'applemusic' | 'spotify' | 'off'
+export const SERVICES = ['applemusic', 'spotify', 'tidal'];
+export const SERVICE_LABELS = { applemusic: 'Apple Music', spotify: 'Spotify', tidal: 'TIDAL' };
+const PREF_KEY = 'kyoyu-play-through'; // 'auto' | 'applemusic' | 'spotify' | 'tidal' | 'off'
 
 const handler = () => window.webkit?.messageHandlers?.streaming;
 export const isStreamingAvailable = () => !!handler();
-export const isStreamingProvider = (p) => p === 'applemusic' || p === 'spotify';
+export const isStreamingProvider = (p) => p === 'applemusic' || p === 'spotify' || p === 'tidal';
 
 // ── Request / reply ──
 let seq = 0;
@@ -92,6 +92,141 @@ export async function fetchAccountLibrary(service, kind, extra = {}) {
   return Array.isArray(r?.items) ? r.items : [];
 }
 
+/** Detect which external provider(s) a track or album belongs to. */
+export function detectItemProviders(item) {
+  if (!item) return [];
+  const found = new Set();
+  const id = String(item.id || '');
+  const albumId = String(item.albumId || item.releaseId || '');
+  const urls = [
+    item.trackUrl, item.providerUrl, item.providerItemId,
+    item.permalinkUrl, item.url, item.audioUrl, item.src,
+    item.replay?.url, item.origin?.url,
+  ].filter((u) => typeof u === 'string' && u.length > 0);
+
+  const checkProvider = (p) => {
+    const norm = String(p || '').toLowerCase();
+    if (['bandcamp', 'soundcloud', 'discogs', 'spotify', 'applemusic', 'tidal'].includes(norm)) {
+      found.add(norm);
+    }
+  };
+
+  checkProvider(item.provider);
+  checkProvider(item.albumProvider);
+  checkProvider(item.sourceProvider);
+  checkProvider(item.origin?.provider);
+  checkProvider(item.replay?.provider);
+
+  if (/^bcpl?-|^bandcamp-/i.test(id) || /^bc-|^bandcamp-/i.test(albumId)) found.add('bandcamp');
+  if (/^sc(-?pl)?-|^soundcloud-/i.test(id) || item.scTrackId || item.playlistId || item.replay?.scTrackId) found.add('soundcloud');
+  if (/^(dg|discogs)-/i.test(id) || /^(dg|discogs)-/i.test(albumId) || /^discogs-track-/i.test(id)) found.add('discogs');
+  if (/^sp(ab|pl|-al|-pl)?-|^spotify[-:]/i.test(id) || /^sp(ab|-al)?-|^spotify[-:]/i.test(albumId) || item.spotifyId || String(item.uri || '').startsWith('spotify:')) found.add('spotify');
+  if (/^am-(alb-|al-|pl-)?|^applemusic-/i.test(id) || /^am-(alb-|al-)?|^applemusic-/i.test(albumId) || item.appleMusicId) found.add('applemusic');
+  if (/^td(ab|pl|-al|-pl)?-|^tidal[-:]/i.test(id) || /^td(ab|-al)?-|^tidal[-:]/i.test(albumId) || item.tidalId || String(item.uri || '').startsWith('tidal:')) found.add('tidal');
+
+  for (const u of urls) {
+    if (u.includes('bandcamp.com') && !u.includes('bcbits.com')) found.add('bandcamp');
+    if (u.includes('soundcloud.com') && !u.includes('sndcdn.com')) found.add('soundcloud');
+    if (u.includes('discogs.com')) found.add('discogs');
+    if (u.includes('spotify.com') || u.startsWith('spotify:')) found.add('spotify');
+    if (u.includes('music.apple.com') || u.includes('itunes.apple.com')) found.add('applemusic');
+    if (u.includes('tidal.com') || u.startsWith('tidal:')) found.add('tidal');
+  }
+
+  return Array.from(found);
+}
+
+/**
+ * Two-way sync: when a user likes/unlikes a track or album in Kyoyu,
+ * sync the like/wishlist state back to the connected provider(s).
+ */
+export async function syncProviderLike(item, liked = true) {
+  if (!isStreamingAvailable() || !item) return;
+  const providers = detectItemProviders(item);
+  if (!providers.length) return;
+
+  const status = cachedStatus || await refreshStreamingStatus();
+  if (!status) return;
+
+  const id = String(item.id || '');
+  const albumId = String(item.albumId || item.releaseId || '');
+  const title = String(item.title || item.name || '');
+  const artist = String(item.artistName || item.artist || '');
+  const album = String(item.album || item.albumName || item.releaseTitle || '');
+  const isPlaylistKind = item.kind === 'playlist' || item.entityType === 'playlist' || /^(sc(-?pl)|sp(-?pl)|td(-?pl)|am-pl)-/i.test(id);
+  const isAlbumKind = item.kind === 'album' || item.entityType === 'album' || item.entityType === 'release' || /^(sp(ab|-al)|td(ab|-al)|am-(alb|al))-/i.test(id);
+  const baseKind = isPlaylistKind ? 'playlist' : (isAlbumKind ? 'album' : 'track');
+
+  const urls = [
+    item.uri, item.trackUrl, item.providerUrl, item.providerItemId,
+    item.permalinkUrl, item.url, item.audioUrl, item.src,
+    item.replay?.url, item.origin?.url,
+  ].filter((u) => typeof u === 'string' && u.length > 0);
+
+  await Promise.all(providers.map(async (service) => {
+    if (!status?.[service]?.connected) return;
+
+    let itemId = id;
+    let kind = baseKind;
+    let url = '';
+
+    if (service === 'bandcamp') {
+      url = urls.find((u) => u.includes('bandcamp.com') && !u.includes('bcbits.com')) || '';
+      if (/^bc(pl)?-/i.test(id)) itemId = id;
+      else if (/^bc-/i.test(albumId)) itemId = albumId;
+      else if (url) itemId = url;
+      if (url.includes('/album/') && baseKind === 'album') kind = 'album';
+    } else if (service === 'soundcloud') {
+      url = urls.find((u) => u.includes('soundcloud.com') && !u.includes('sndcdn.com')) || '';
+      itemId = String(item.scTrackId || item.playlistId || item.replay?.scTrackId || (/^sc(-?pl)?-/i.test(id) ? id : '') || id);
+      if (url.includes('/sets/') || /^sc(-?pl)-/i.test(id)) kind = 'playlist';
+    } else if (service === 'discogs') {
+      url = urls.find((u) => u.includes('discogs.com')) || '';
+      itemId = /^(dg|discogs)-/i.test(albumId) ? albumId : id;
+      kind = 'album'; // Discogs wantlist is release-level
+    } else if (service === 'spotify') {
+      url = urls.find((u) => u.includes('spotify.com') || u.startsWith('spotify:')) || '';
+      itemId = String(item.spotifyId || (item.replay?.provider === 'spotify' ? item.replay?.itemId : '') || (/^sp/i.test(id) ? id : (/^sp/i.test(albumId) ? albumId : id)));
+      if (url.includes('/playlist/') || url.includes(':playlist:') || /^sp(-?pl)-/i.test(itemId)) kind = 'playlist';
+      else if (url.includes('/album/') || url.includes(':album:') || /^sp(ab|-al)-/i.test(itemId)) kind = 'album';
+    } else if (service === 'applemusic') {
+      url = urls.find((u) => u.includes('music.apple.com') || u.includes('itunes.apple.com')) || '';
+      itemId = String(item.appleMusicId || (item.replay?.provider === 'applemusic' ? item.replay?.itemId : '') || (/^am-|^applemusic-/i.test(id) ? id : (/^am-|^applemusic-/i.test(albumId) ? albumId : id)));
+      if (url.includes('/playlist/') || /^am-pl-/i.test(itemId)) kind = 'playlist';
+      else if ((url.includes('/album/') && !url.includes('?i=')) || /^am-(alb|al)-/i.test(itemId)) kind = 'album';
+    } else if (service === 'tidal') {
+      url = urls.find((u) => u.includes('tidal.com') || u.startsWith('tidal:')) || '';
+      itemId = String(item.tidalId || (item.replay?.provider === 'tidal' ? item.replay?.itemId : '') || (/^td|^tidal/i.test(id) ? id : (/^td|^tidal/i.test(albumId) ? albumId : id)));
+      if (url.includes('/playlist/') || url.includes(':playlist:') || /^td(-?pl)-/i.test(itemId)) kind = 'playlist';
+      else if (url.includes('/album/') || url.includes(':album:') || /^td(ab|-al)-/i.test(itemId)) kind = 'album';
+    }
+
+    // Notify listeners for instant optimistic update
+    listeners.forEach((fn) => {
+      try { fn({ type: 'libraryOptimistic', service, kind, item, itemId, url, liked: !!liked }); } catch { /* ignore */ }
+    });
+
+    try {
+      await callStreaming('like', {
+        service,
+        liked: !!liked,
+        itemId,
+        kind,
+        url,
+        title,
+        artist,
+        album,
+      }, 30000);
+    } catch (err) {
+      console.warn(`[syncProviderLike] ${service} error:`, err?.message || err);
+    } finally {
+      listeners.forEach((fn) => {
+        try { fn({ type: 'libraryChanged', service, kind }); } catch { /* ignore */ }
+      });
+    }
+  }));
+}
+
 // ── "Play through" preference ──
 export function getPlayThrough() {
   try { return localStorage.getItem(PREF_KEY) || 'auto'; } catch { return 'auto'; }
@@ -104,7 +239,7 @@ export function setPlayThrough(value) {
 const canPlay = (service, status) => {
   const s = status?.[service];
   if (!s?.connected) return false;
-  if (service === 'applemusic') return !!s.canPlay;
+  if (service === 'applemusic' || service === 'tidal') return !!s.canPlay;
   return !!(s.configured && s.sdk && s.installed && s.premium !== false);
 };
 
@@ -113,7 +248,7 @@ export function activePlaybackService(status = cachedStatus) {
   if (!isStreamingAvailable() || !status) return null;
   const pref = getPlayThrough();
   if (pref === 'off') return null;
-  if (pref === 'applemusic' || pref === 'spotify') return canPlay(pref, status) ? pref : null;
+  if (pref === 'applemusic' || pref === 'spotify' || pref === 'tidal') return canPlay(pref, status) ? pref : null;
   return SERVICES.find((s) => canPlay(s, status)) || null; // auto: Apple Music first
 }
 

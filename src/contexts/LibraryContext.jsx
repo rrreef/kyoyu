@@ -1,10 +1,13 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { playlists as mockPlaylists, releases } from '../data/mockData';
+import { syncProviderLike } from '../lib/streaming';
+import { isItemInConnectedLikes } from '../lib/useConnectedLibrary';
 
 const LibraryContext = createContext(null);
 
 export function LibraryProvider({ children }) {
+  const { user } = useAuth() || {};
   const [likedTracks, setLikedTracks] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-liked') || '[]'); } catch { return []; }
   });
@@ -63,10 +66,19 @@ export function LibraryProvider({ children }) {
   }
   function isLiked(trackId) { return likedTracks.includes(trackId); }
 
-  function toggleLikeUpload(track) {
+  function toggleLikeUpload(track, opts = {}) {
+    if (!track) return;
+    const existsInUploads = likedUploads.some(t => String(t.id) === String(track.id));
+    const existsInConnected = isItemInConnectedLikes(track);
+    const wasLiked = typeof opts.forceLiked === 'boolean' ? !opts.forceLiked : (existsInUploads || existsInConnected);
+    const nextLiked = !wasLiked;
+
     setLikedUploads(prev => {
       const exists = prev.find(t => String(t.id) === String(track.id));
-      if (exists) return prev.filter(t => String(t.id) !== String(track.id));
+      if (!nextLiked) {
+        return exists ? prev.filter(t => String(t.id) !== String(track.id)) : prev;
+      }
+      if (exists) return prev;
       
       // Save artwork in a separate key to avoid quota issues on the main array
       const art = track.artworkUrl || track.cover || track.releaseCover;
@@ -93,6 +105,10 @@ export function LibraryProvider({ children }) {
       return [...prev, slim];
     });
 
+    if (!opts.skipProviderSync) {
+      try { syncProviderLike(track, nextLiked); } catch (e) {}
+    }
+
     try {
       if (window.__kyoyuToggleLike) {
         window.__kyoyuToggleLike({
@@ -114,7 +130,7 @@ export function LibraryProvider({ children }) {
       const cleanId = String(trackId).split('?ts=')[0];
       const inUploads = likedUploads.some(t => String(t.id) === cleanId);
       const inCatalog = likedTracks.some(id => String(id) === cleanId);
-      return inUploads || inCatalog;
+      return inUploads || inCatalog || isItemInConnectedLikes(cleanId);
     };
   }, [likedUploads, likedTracks]);
 
@@ -127,7 +143,7 @@ export function LibraryProvider({ children }) {
     }));
   }
 
-  function isLikedUpload(trackId) { return likedUploads.some(t => String(t.id) === String(trackId)); }
+  function isLikedUpload(trackId) { return likedUploads.some(t => String(t.id) === String(trackId)) || isItemInConnectedLikes(trackId); }
 
   function toggleSave(releaseId) {
     setSavedReleases(prev =>

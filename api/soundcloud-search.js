@@ -18,7 +18,7 @@ let tokenExpiresAt = 0;
 
 // Cached web client_id (extracted from soundcloud.com JS bundles for v2 API)
 // Pre-seeded with a known working value to avoid cold-start timeout
-let cachedWebClientId = '3S7oLyCj5BwyR9w2KU2LQQGDwRda5EZ0';
+let cachedWebClientId = 'kR7dAfT5UXQgmgde1pLjfsRGiaoANLvT';
 let webClientIdExpiresAt = Date.now() + 3600000; // treat seed as valid for 1h
 
 /**

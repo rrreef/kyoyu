@@ -2,12 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import {
-  ACCOUNT_LABELS, ACCOUNT_SERVICES, fetchAccountLibrary, useStreamingStatus, isStreamingAvailable,
+  SERVICES, SERVICE_LABELS, ACCOUNT_LABELS, ACCOUNT_SERVICES, fetchAccountLibrary, useStreamingStatus, isStreamingAvailable,
 } from '../lib/streaming';
 import AccountItemList from '../components/AccountItems';
 import './Library.css';
 
-/* Personal SoundCloud / Bandcamp library (likes, playlists, follows / collection, wishlist) read on-device
+/* Personal SoundCloud / Bandcamp / TIDAL library (likes, playlists, follows / collection, wishlist) read on-device
    through the account the user signed into in Settings › Streaming Services. */
 
 const TABS = {
@@ -19,6 +19,12 @@ const TABS = {
   bandcamp: [
     { key: 'collection', label: 'Collection' },
     { key: 'wishlist',   label: 'Wishlist' },
+  ],
+  tidal: [
+    { key: 'likes',     label: 'Likes' },
+    { key: 'albums',    label: 'Albums' },
+    { key: 'playlists', label: 'Playlists' },
+    { key: 'following', label: 'Following' },
   ],
 };
 
@@ -43,7 +49,7 @@ export default function AccountLibrary() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (!ACCOUNT_SERVICES.includes(service)) return <div className="page library-page"><div className="lib-empty"><p>Unknown account.</p></div></div>;
+  if (!ACCOUNT_SERVICES.includes(service) && !SERVICES.includes(service)) return <div className="page library-page"><div className="lib-empty"><p>Unknown account.</p></div></div>;
 
   return (
     <div className="page library-page animate-in">
@@ -52,7 +58,7 @@ export default function AccountLibrary() {
           <ChevronLeft size={22} />
         </button>
         <div>
-          <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{ACCOUNT_LABELS[service]}</div>
+          <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{ACCOUNT_LABELS[service] || SERVICE_LABELS[service]}</div>
           {acct?.displayName && <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>{acct.displayName}</div>}
         </div>
       </div>

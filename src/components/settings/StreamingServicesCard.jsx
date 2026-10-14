@@ -14,6 +14,7 @@ const PLAY_THROUGH_OPTIONS = [
   { id: 'auto',       label: 'Automatic' },
   { id: 'applemusic', label: 'Apple Music' },
   { id: 'spotify',    label: 'Spotify' },
+  { id: 'tidal',      label: 'TIDAL' },
   { id: 'off',        label: 'Off' },
 ];
 
@@ -26,6 +27,12 @@ function serviceLine(service, s) {
     return s.canSubscribe
       ? 'Allowed, but this device\u2019s Apple ID has no active Apple Music subscription yet'
       : 'Allowed, but no active Apple Music subscription was found for this device\u2019s Apple ID';
+  }
+  if (service === 'tidal') {
+    if (!s.configured) return 'Coming soon';
+    if (!s.connected) return 'Sign in to see your likes, albums, playlists and follows in Kyoyu';
+    const who = s.displayName ? ` as ${s.displayName}` : '';
+    return `Connected${who}`;
   }
   if (ACCOUNT_SERVICES.includes(service)) {
     if (!s.connected) {
@@ -56,7 +63,7 @@ export default function StreamingServicesCard() {
       <div className="s-card glass" style={{ marginTop: 16 }}>
         <div className="s-section-heading"><Headphones size={13} style={{ opacity: 0.6 }} /> Streaming Services</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-          Connect Apple Music or Spotify in the Reef iOS app.
+          Connect Apple Music, Spotify, or TIDAL in the Reef iOS app.
         </p>
       </div>
     );
@@ -92,7 +99,7 @@ export default function StreamingServicesCard() {
       {[...SERVICES, ...ACCOUNT_SERVICES].map((service, i) => {
         const s = status?.[service];
         const isAccount = ACCOUNT_SERVICES.includes(service);
-        const connectable = isAccount || service === 'applemusic' || s?.configured;
+        const connectable = isAccount || service === 'applemusic' || service === 'tidal' || s?.configured;
         return (
           <div key={service}>
             {i > 0 && <div className="s-layout-divider" />}
@@ -100,13 +107,13 @@ export default function StreamingServicesCard() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="s-layout-row-label">{SERVICE_LABELS[service] || ACCOUNT_LABELS[service]}</div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>{serviceLine(service, s)}</div>
-                {isAccount && s?.connected && (
+                {(isAccount || service === 'tidal') && s?.connected && (
                   <button
                     data-kyoyu-injected="1"
                     onClick={() => navigate(`/accounts/${service}`)}
                     style={{ background: 'none', border: 'none', padding: 0, marginTop: 6, fontSize: '0.74rem', color: '#ff5500', cursor: 'pointer', textAlign: 'left' }}
                   >
-                    Open your {ACCOUNT_LABELS[service]} library →
+                    Open your {ACCOUNT_LABELS[service] || SERVICE_LABELS[service]} library →
                   </button>
                 )}
               </div>

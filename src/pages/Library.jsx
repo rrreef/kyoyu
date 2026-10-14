@@ -119,7 +119,7 @@ const LIKES_SUB = [
   { key: 'playlists', label: 'Playlists' },
 ];
 
-const PROVIDER_LABELS = { soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs', spotify: 'Spotify', applemusic: 'Apple Music' };
+const PROVIDER_LABELS = { soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs', spotify: 'Spotify', applemusic: 'Apple Music', tidal: 'TIDAL' };
 
 export default function Library() {
   // The native filter bar owns provider / category / view; the page only mirrors it
@@ -181,7 +181,7 @@ export default function Library() {
   const libraryLayout = useLibraryLayoutLive();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
 
-  // SoundCloud / Bandcamp / Spotify / Apple Music accounts connected in Settings → their library shows up here automatically
+  // SoundCloud / Bandcamp / Spotify / Apple Music / TIDAL accounts connected in Settings → their library shows up here automatically
   const acct = useConnectedLibrary();
   const bcPurchaseTracks = acct.bandcamp.collection.filter(i => i.kind === 'track');
   const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
@@ -197,10 +197,15 @@ export default function Library() {
   const amPlaylists      = acct.applemusic?.playlists || [];
   const amAlbums         = acct.applemusic?.albums || [];
   const amFollows        = acct.applemusic?.following || [];
+  const tdLikes          = acct.tidal?.likes || [];
+  const tdPlaylists      = acct.tidal?.playlists || [];
+  const tdAlbums         = acct.tidal?.albums || [];
+  const tdFollows        = acct.tidal?.following || [];
   const dgCollection     = acct.discogs?.collection || [];
   const dgWishlist       = acct.discogs?.wishlist || [];
-  const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length + spLikes.length + amLikes.length > 0;
-  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length + amAlbums.length + dgCollection.length + dgWishlist.length > 0;
+  const dgPurchases      = acct.discogs?.purchases || [];
+  const hasAcctTitles    = bcPurchaseTracks.length + bcWishTracks.length + scLikes.length + spLikes.length + amLikes.length + tdLikes.length > 0;
+  const hasAcctAlbums    = bcPurchaseAlbums.length + bcWishAlbums.length + spAlbums.length + amAlbums.length + tdAlbums.length + dgCollection.length + dgWishlist.length + dgPurchases.length > 0;
 
   const savedReleaseObjects = releases.filter(r => savedReleases.includes(r.id));
   // Group saved releases into albums for the grid view
@@ -273,26 +278,45 @@ export default function Library() {
       setSelectedAlbum(albumObj);
       // Tapping a playlist track in the native sheet plays it like History / Likes
       registerAlbumPlayback(albumObj);
+      const mappedTracks = currentTracks.map(t => ({
+        id: t.id || String(Date.now() + Math.random()),
+        title: t.title || t.name || 'Unknown Track',
+        artist: t.artist || t.artistName || '',
+        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+        cover: t.artworkUrl || t.cover || null,
+        provider: t.provider || pl.provider || null,
+      }));
       try {
-        window.webkit?.messageHandlers?.player?.postMessage({
-          playlistOpen: true,
-          nativePlaylist: {
-            _ts: String(ts),
-            id: pl.id,
-            title: pl.title,
-            cover,
-            creator,
-            provider: pl.provider || null,
-            tracks: currentTracks.map(t => ({
-              id: t.id || String(Date.now() + Math.random()),
-              title: t.title || t.name || 'Unknown Track',
-              artist: t.artist || t.artistName || '',
-              url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-              cover: t.artworkUrl || t.cover || null,
-              provider: t.provider || pl.provider || null,
-            }))
-          }
-        });
+        if (pl.kind === 'album') {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            albumOpen: true,
+            nativeAlbum: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              artist: creator,
+              cover,
+              genre: pl.genre || null,
+              year: pl.year ? String(pl.year) : null,
+              label: pl.label || null,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
+        } else {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            playlistOpen: true,
+            nativePlaylist: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              cover,
+              creator,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
+        }
       } catch(e) {}
     };
 
@@ -413,16 +437,45 @@ export default function Library() {
           ? <AcctSection items={amLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'No songs in your Apple Music library yet.'));
       }
+    } else if (libProvider === 'tidal') {
+      if (!acct.tidal?.connected) {
+        body = empty('Connect TIDAL in Settings › Streaming Services to see your library.');
+      } else if (activeFilter === 'playlists') {
+        const err = acct.errors['tidal:playlists'];
+        body = tdPlaylists.length > 0
+          ? <AcctSection items={tdPlaylists} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No playlists in your TIDAL account yet.'));
+      } else if (activeFilter === 'albums') {
+        const err = acct.errors['tidal:albums'];
+        body = tdAlbums.length > 0
+          ? <AcctSection items={tdAlbums} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No saved albums in your TIDAL account yet.'));
+      } else if (activeFilter === 'follows') {
+        const err = acct.errors['tidal:following'];
+        body = tdFollows.length > 0
+          ? <AcctSection items={tdFollows} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'You don’t follow any artists on TIDAL yet.'));
+      } else {
+        const err = acct.errors['tidal:likes'];
+        body = tdLikes.length > 0
+          ? <AcctSection items={tdLikes} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No liked tracks in your TIDAL account yet.'));
+      }
     } else if (libProvider === 'discogs') {
-      const cat = ['purchases', 'wishlist'].includes(activeFilter) ? activeFilter : 'purchases';
       if (!acct.discogs?.connected) {
-        body = empty('Connect Discogs in Settings › Streaming Services to see your collection and wishlist.');
-      } else if (cat === 'wishlist') {
+        body = empty('Connect Discogs in Settings › Streaming Services to see your collection, purchases, and wishlist.');
+      } else if (activeFilter === 'wishlist') {
         const dgWish = acct.discogs.wishlist || [];
         const err = acct.errors['discogs:wishlist'];
         body = dgWish.length > 0
           ? <AcctSection items={dgWish} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'Your Discogs wishlist is empty.'));
+      } else if (activeFilter === 'purchases') {
+        const dgPurch = (acct.discogs.purchases && acct.discogs.purchases.length > 0) ? acct.discogs.purchases : (acct.discogs.collection || []);
+        const err = acct.errors['discogs:purchases'] || acct.errors['discogs:collection'];
+        body = dgPurch.length > 0
+          ? <AcctSection items={dgPurch} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
+          : empty(acct.loading ? 'Loading…' : (err || 'No Discogs purchases found.'));
       } else {
         const dgColl = acct.discogs.collection || [];
         const err = acct.errors['discogs:collection'];
@@ -521,7 +574,7 @@ export default function Library() {
         );
       })()}
 
-      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes, Spotify likes, Apple Music songs (automatic) */}
+      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes, Spotify likes, Apple Music songs, TIDAL likes (automatic) */}
       {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
         <div style={{ marginTop: 18 }}>
           <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} onOpenPlaylist={openPlaylistSheet} />
@@ -529,10 +582,11 @@ export default function Library() {
           <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} onOpenPlaylist={openPlaylistSheet} />
           <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Liked Songs" items={spLikes} onOpenPlaylist={openPlaylistSheet} />
           <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Songs" items={amLikes} onOpenPlaylist={openPlaylistSheet} />
+          <AcctSection view={layoutMode} cols={gridCols} title="TIDAL · Liked Tracks" items={tdLikes} onOpenPlaylist={openPlaylistSheet} />
         </div>
       )}
 
-      {/* Albums: saved releases + connected-account albums (Bandcamp purchases / wishlist / Spotify saved albums / Apple Music albums) */}
+      {/* Albums: saved releases + connected-account albums (Bandcamp purchases / wishlist / Spotify saved albums / Apple Music albums / TIDAL albums) */}
       {activeFilter === 'albums' && (
         <>
           {savedAlbums.length > 0 && (
@@ -566,6 +620,7 @@ export default function Library() {
               <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Wishlist" items={dgWishlist} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Saved Albums" items={spAlbums} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Saved Albums" items={amAlbums} onOpenPlaylist={openPlaylistSheet} />
+              <AcctSection view={layoutMode} cols={gridCols} title="TIDAL · Saved Albums" items={tdAlbums} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
@@ -577,9 +632,10 @@ export default function Library() {
       {/* Purchases */}
       {activeFilter === 'purchases' && (
         <>
-          {(bcPurchaseAlbums.length > 0 || bcPurchaseTracks.length > 0 || dgCollection.length > 0) ? (
+          {(bcPurchaseAlbums.length > 0 || bcPurchaseTracks.length > 0 || dgCollection.length > 0 || dgPurchases.length > 0) ? (
             <div>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
+              {dgPurchases.length > 0 && <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Orders & Purchases" items={dgPurchases} onOpenPlaylist={openPlaylistSheet} />}
+              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
               <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Purchases" items={acct.bandcamp.collection} onOpenPlaylist={openPlaylistSheet} />
             </div>
           ) : (
@@ -635,7 +691,7 @@ export default function Library() {
         </>
       )}
 
-      {/* Playlists → connected accounts: Bandcamp, SoundCloud, Spotify & Apple Music (own + liked playlists, automatic) */}
+      {/* Playlists → connected accounts: Bandcamp, SoundCloud, Spotify, Apple Music & TIDAL (own + liked playlists, automatic) */}
       {activeFilter === 'playlists' && (
         <>
           {acct.bandcamp?.playlists?.length > 0 && (
@@ -658,12 +714,17 @@ export default function Library() {
               <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Playlists" items={amPlaylists} onOpenPlaylist={openPlaylistSheet} />
             </div>
           )}
+          {tdPlaylists.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <AcctSection view={layoutMode} cols={gridCols} first title="TIDAL · Playlists" items={tdPlaylists} onOpenPlaylist={openPlaylistSheet} />
+            </div>
+          )}
         </>
       )}
 
       {/* Follows */}
       {activeFilter === 'follows' && (
-        (followedArtists?.length > 0 || spFollows.length > 0 || amFollows.length > 0)
+        (followedArtists?.length > 0 || spFollows.length > 0 || amFollows.length > 0 || tdFollows.length > 0)
           ? <>
               {followedArtists?.length > 0 && (
                 <>
@@ -683,6 +744,11 @@ export default function Library() {
               {amFollows.length > 0 && (
                 <div style={{ marginTop: (followedArtists?.length || spFollows.length) ? 18 : 0 }}>
                   <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Artists" items={amFollows} onOpenPlaylist={openPlaylistSheet} />
+                </div>
+              )}
+              {tdFollows.length > 0 && (
+                <div style={{ marginTop: (followedArtists?.length || spFollows.length || amFollows.length) ? 18 : 0 }}>
+                  <AcctSection view={layoutMode} cols={gridCols} first title="TIDAL · Followed Artists" items={tdFollows} onOpenPlaylist={openPlaylistSheet} />
                 </div>
               )}
             </>
