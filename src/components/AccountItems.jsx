@@ -12,7 +12,71 @@ const fmt = (s) => {
 
 const _resolvedArtMem = new Map();
 
+// Clean up any previously cached false-positive artworks for private Apple Music uploads (e.g. am-i.* / i.*)
+if (typeof window !== 'undefined') {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('kyoyu-art-') && (!/^kyoyu-art-[0-9a-f-]{20,}-/i.test(k) || /-am-i\.|-i\./i.test(k))) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    const histRaw = localStorage.getItem('kyoyu-play-history');
+    if (histRaw) {
+      const hist = JSON.parse(histRaw);
+      if (Array.isArray(hist)) {
+        let changed = false;
+        const cleaned = hist.map((h) => {
+          if (!h) return h;
+          const hid = String(h.id || '');
+          const htid = String(h.trackId || h.providerItemId || h.appleMusicId || '');
+          if (hid.startsWith('am-i.') || htid.startsWith('i.')) {
+            if (h.cover || h.artworkUrl || h.releaseCover) {
+              changed = true;
+              return { ...h, cover: '', artworkUrl: '', releaseCover: '' };
+            }
+          }
+          return h;
+        });
+        if (changed) {
+          localStorage.setItem('kyoyu-play-history', JSON.stringify(cleaned));
+          window.dispatchEvent(new CustomEvent('kyoyu-play-history-changed'));
+        }
+      }
+    }
+
+    const likedRaw = localStorage.getItem('kyoyu-liked-uploads');
+    if (likedRaw) {
+      const liked = JSON.parse(likedRaw);
+      if (Array.isArray(liked)) {
+        let changed = false;
+        const cleanedLiked = liked.map((item) => {
+          if (!item) return item;
+          const lid = String(item.id || '');
+          const ltid = String(item.trackId || item.providerItemId || item.appleMusicId || '');
+          if (lid.startsWith('am-i.') || ltid.startsWith('i.')) {
+            if (item.cover || item.artworkUrl || item.releaseCover) {
+              changed = true;
+              return { ...item, cover: '', artworkUrl: '', releaseCover: '' };
+            }
+          }
+          return item;
+        });
+        if (changed) {
+          localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(cleanedLiked));
+        }
+      }
+    }
+  } catch {}
+}
+
 export function sanitizeArtworkUrl(raw, itemId) {
+  if (itemId && (/^am-i\./i.test(String(itemId)) || /^i\./i.test(String(itemId)))) {
+    // Private library items should only use genuine artwork when not accompanied by an invented catalogId
+  }
   if (raw && typeof raw === 'string') {
     const s = raw.trim();
     if (s && s !== 'undefined' && s !== 'null' && /^(https?:\/\/|data:|blob:|\/)/i.test(s)) {
@@ -25,40 +89,55 @@ export function sanitizeArtworkUrl(raw, itemId) {
       return url;
     }
   }
-  if (itemId) {
-    if (_resolvedArtMem.has(itemId)) return _resolvedArtMem.get(itemId);
-    try {
-      const cached = localStorage.getItem(`kyoyu-art-${itemId}`);
-      if (cached && /^https?:\/\//i.test(cached)) {
-        _resolvedArtMem.set(itemId, cached);
-        return cached;
-      }
-    } catch {}
+  if (itemId && _resolvedArtMem.has(itemId)) {
+    return _resolvedArtMem.get(itemId);
+  }
+  return '';
+}
+
+function getExactAppleMusicCatalogId(item) {
+  if (!item || item.provider !== 'applemusic') return '';
+  const tid = String(item.trackId || item.providerItemId || item.appleMusicId || '');
+  const aid = String(item.albumId || '');
+  const id = String(item.id || '').replace(/^am-(?:alb-|al-|pl-)?/, '');
+  // Private uploaded tracks have library IDs starting with "i." or "l." or "p." — never look those up on iTunes
+  if (tid.startsWith('i.') || aid.startsWith('l.') || id.startsWith('i.') || id.startsWith('l.') || id.startsWith('p.')) {
+    return '';
+  }
+  for (const cand of [tid, aid, id]) {
+    if (/^\d+$/.test(cand)) return cand;
   }
   return '';
 }
 
 function useResolvedArtwork(item) {
   const itemId = item?.id || item?.trackId || item?.playlistId || '';
-  const initial = sanitizeArtworkUrl(item?.artworkUrl || item?.cover || item?.avatar, itemId);
+  const tid = String(item?.trackId || item?.providerItemId || item?.appleMusicId || '');
+  const aid = String(item?.albumId || '');
+  const isFakePrivateArt =
+    item?.provider === 'applemusic' &&
+    (((tid.startsWith('i.') || String(itemId).startsWith('am-i.')) && !!item?.catalogId) ||
+     (aid.startsWith('l.') && !!item?.catalogId));
+
+  const rawArt = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
+  const initial = sanitizeArtworkUrl(rawArt, itemId);
   const [art, setArt] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const next = sanitizeArtworkUrl(item?.artworkUrl || item?.cover || item?.avatar, itemId);
+    const nextRaw = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
+    const next = sanitizeArtworkUrl(nextRaw, itemId);
     setArt(next);
     setFailed(false);
-  }, [item?.artworkUrl, item?.cover, item?.avatar, itemId]);
+  }, [item?.artworkUrl, item?.cover, item?.avatar, itemId, isFakePrivateArt]);
 
   useEffect(() => {
-    if ((art && !failed) || !item?.title) return;
-    if (item.kind === 'profile') return;
+    if (art && !failed) return;
+    // Only resolve via exact numeric Apple Music catalog ID — never search by title/artist
+    const exactCatId = getExactAppleMusicCatalogId(item);
+    if (!exactCatId) return;
     let cancelled = false;
-    const artist = item.artistName || item.artist || '';
-    const q = `${item.title} ${artist === 'Apple Music' ? '' : artist}`.trim();
-    if (!q) return;
-    const entity = item.kind === 'album' ? 'album' : 'song';
-    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=${entity}&limit=1`)
+    fetch(`https://itunes.apple.com/lookup?id=${encodeURIComponent(exactCatId)}`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (cancelled) return;
@@ -73,7 +152,6 @@ function useResolvedArtwork(item) {
           }
           if (itemId) {
             _resolvedArtMem.set(itemId, hiRes);
-            try { localStorage.setItem(`kyoyu-art-${itemId}`, hiRes); } catch {}
           }
         }
       })
@@ -86,7 +164,13 @@ function useResolvedArtwork(item) {
 
 /** Account item → the shape playSearchItem / the search queue understand */
 export function toPlayable(it) {
-  const art = sanitizeArtworkUrl(it.artworkUrl || it.cover, it.id);
+  const tid = String(it?.trackId || it?.providerItemId || it?.appleMusicId || '');
+  const aid = String(it?.albumId || '');
+  const isFakePrivateArt =
+    it?.provider === 'applemusic' &&
+    (((tid.startsWith('i.') || String(it?.id || '').startsWith('am-i.')) && !!it?.catalogId) ||
+     (aid.startsWith('l.') && !!it?.catalogId));
+  const art = isFakePrivateArt ? '' : sanitizeArtworkUrl(it.artworkUrl || it.cover, it.id);
   if (it.provider === 'soundcloud') {
     return {
       id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,

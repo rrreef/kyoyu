@@ -273,51 +273,21 @@ export default function UploadShelf({ uploads }) {
 
 function useUploadArtwork(t) {
   const itemId = t?.id || '';
-  const initial = sanitizeArtworkUrl(t?.artworkUrl || t?.cover, itemId);
+  const tid = String(t?.trackId || t?.providerItemId || t?.appleMusicId || '');
+  const isFakePrivateArt =
+    (t?.provider === 'applemusic' || String(itemId).startsWith('am-')) &&
+    (tid.startsWith('i.') || String(itemId).startsWith('am-i.')) &&
+    !!t?.catalogId;
+  const rawArt = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
+  const initial = sanitizeArtworkUrl(rawArt, itemId);
   const [src, setSrc] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setSrc(sanitizeArtworkUrl(t?.artworkUrl || t?.cover, itemId));
+    const nextRaw = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
+    setSrc(sanitizeArtworkUrl(nextRaw, itemId));
     setFailed(false);
-  }, [t?.artworkUrl, t?.cover, itemId]);
-
-  useEffect(() => {
-    if ((src && !failed) || !t?.title) return;
-    let cancelled = false;
-    const q = `${t.title} ${t.artist || t.artistName || ''}`.trim();
-    if (!q) return;
-    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (cancelled) return;
-        const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
-        if (raw) {
-          const hiRes = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
-          setSrc(hiRes);
-          setFailed(false);
-          t.artworkUrl = hiRes;
-          t.cover = hiRes;
-          if (itemId) {
-            try {
-              localStorage.setItem(`kyoyu-art-${itemId}`, hiRes);
-              const liked = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
-              let updated = false;
-              const nextLiked = liked.map(x => {
-                if (x && x.id === itemId && (!x.artworkUrl || /^musickit:\/\//i.test(x.artworkUrl))) {
-                  updated = true;
-                  return { ...x, artworkUrl: hiRes, cover: hiRes };
-                }
-                return x;
-              });
-              if (updated) localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(nextLiked));
-            } catch {}
-          }
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [src, failed, t, itemId]);
+  }, [t?.artworkUrl, t?.cover, itemId, isFakePrivateArt]);
 
   return { cleanSrc: failed ? '' : src, onError: () => setFailed(true) };
 }

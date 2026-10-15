@@ -136,6 +136,9 @@ const listeners = new Set();
 let cachedStatus = null;
 if (typeof window !== 'undefined') {
   window.__kyoyuStreamingEvent = (evt) => {
+    if (evt?.type === 'artwork' && evt?.service === 'applemusic' && String(evt.itemId || '').startsWith('i.')) {
+      return;
+    }
     if (evt?.type === 'status' && evt.status) cachedStatus = evt.status;
     listeners.forEach((fn) => { try { fn(evt); } catch { /* ignore */ } });
   };
@@ -176,10 +179,31 @@ export const disconnectService = (service) => callStreaming('disconnect', { serv
 export const ACCOUNT_SERVICES = ['soundcloud', 'bandcamp', 'discogs', 'youtube'];
 export const ACCOUNT_LABELS = { soundcloud: 'SoundCloud', bandcamp: 'Bandcamp', discogs: 'Discogs', youtube: 'YouTube Music' };
 
+function sanitizeAppleMusicLibraryItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((it) => {
+    if (!it || typeof it !== 'object') return it;
+    const tid = String(it.trackId || it.providerItemId || it.appleMusicId || '');
+    const aid = String(it.albumId || '');
+    const id = String(it.id || '');
+    // In AppleMusicService, genuine catalog songs have a numeric bestTrackId (not starting with "i.").
+    // If trackId starts with "i." (or albumId starts with "l.") AND catalogId is set, that catalogId and artworkUrl
+    // were invented by the legacy fuzzy MusicCatalogSearchRequest fallback for a private uploaded item that had no artwork.
+    const hasInventedCatalogArt =
+      ((tid.startsWith('i.') || id.startsWith('am-i.')) && !!it.catalogId) ||
+      (aid.startsWith('l.') && !!it.catalogId);
+    if (hasInventedCatalogArt) {
+      return { ...it, artworkUrl: '', cover: '', catalogId: '' };
+    }
+    return it;
+  });
+}
+
 /** kind: soundcloud → likes | playlists | following | playlistTracks · bandcamp → collection | wishlist · discogs → collection | wishlist · youtube → likes | playlists | albums | following | playlistTracks */
 export async function fetchAccountLibrary(service, kind, extra = {}) {
   const r = await callStreaming('library', { service, kind, ...extra }, 90000);
-  return Array.isArray(r?.items) ? r.items : [];
+  const items = Array.isArray(r?.items) ? r.items : [];
+  return service === 'applemusic' ? sanitizeAppleMusicLibraryItems(items) : items;
 }
 
 /** Detect which external provider(s) a track or album belongs to. */
