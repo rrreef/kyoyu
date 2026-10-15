@@ -288,34 +288,25 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
     return false;
   };
 
+  const isAlbumItem = (it) => {
+    if (!it || it.kind === 'playlist' || it.kind === 'profile') return false;
+    const u = String(it.trackUrl || it.url || '');
+    if (it.provider === 'bandcamp') {
+      if (u.includes('/track/')) return false;
+      if (u.includes('/album/')) return true;
+    }
+    return it.kind === 'album';
+  };
+
   const playList = (list, item) => {
-    const queue = list.filter(x => x.kind === 'track').map(toPlayable);
+    const queue = list.filter(x => x.kind === 'track' && !isAlbumItem(x)).map(toPlayable);
+    const playable = toPlayable(item);
     const idx = queue.findIndex(q => q.id === item.id);
-    setSearchQueue(queue, idx >= 0 ? idx : 0);
-    playSearchItem(toPlayable(item));
-    window.__kyoyuPlayerCmd?.('expand');
+    setSearchQueue(queue.length > 0 ? queue : [playable], idx >= 0 ? idx : 0);
+    playSearchItem(playable);
   };
 
-  // Bandcamp album → its tracks (same endpoint the album sheet uses), then play from the first
-  const playBandcampAlbum = async (album) => {
-    try {
-      const r = await fetch('/api/bandcamp-search', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fetch-album', albumUrl: album.trackUrl }),
-      });
-      const data = r.ok ? await r.json() : { tracks: [] };
-      const tracks = (data.tracks || []).map(t => ({
-        id: `bc-${t.trackId}`, kind: 'track', provider: 'bandcamp', title: t.title,
-        artistName: t.artistName || album.artistName, artworkUrl: t.artworkUrl || album.artworkUrl, trackUrl: t.trackUrl,
-      }));
-      if (!tracks.length) { setError('Couldn’t load this album’s tracks'); return; }
-      setSearchQueue(tracks.map(toPlayable), 0);
-      playSearchItem(toPlayable(tracks[0]));
-      window.__kyoyuPlayerCmd?.('expand');
-    } catch { setError('Couldn’t load this album’s tracks'); }
-  };
-
-  const handlePlaylistClick = (pl) => {
+  const handlePlaylistClick = async (pl) => {
     if (onOpenPlaylist) {
       onOpenPlaylist(pl);
       return;
@@ -323,35 +314,93 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
     // Fallback: post directly to native Swift playerBridge
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
-    try {
-      window.webkit?.messageHandlers?.player?.postMessage({
-        playlistOpen: true,
-        nativePlaylist: {
-          _ts: String(ts),
-          id: pl.id,
-          title: pl.title,
-          cover: pl.artworkUrl || pl.cover || null,
-          creator: pl.artistName || pl.creator || 'You',
-          provider: pl.provider || null,
-          tracks: (pl.tracks || []).map(t => ({
-            id: t.id || String(Date.now() + Math.random()),
-            title: t.title || t.name || 'Unknown Track',
-            artist: t.artist || t.artistName || '',
-            url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-            cover: t.artworkUrl || t.cover || null,
-            provider: t.provider || pl.provider || null,
-          }))
+    const isAlbum = pl.kind === 'album';
+    const creator = pl.artistName || pl.creator || 'You';
+    const cover = pl.artworkUrl || pl.cover || null;
+
+    const postSheet = (tracksList) => {
+      const mappedTracks = (tracksList || []).map(t => ({
+        id: t.id || String(Date.now() + Math.random()),
+        title: t.title || t.name || 'Unknown Track',
+        artist: t.artist || t.artistName || creator || '',
+        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+        cover: t.artworkUrl || t.cover || cover || null,
+        provider: t.provider || pl.provider || null,
+      }));
+      try {
+        if (isAlbum) {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            albumOpen: true,
+            nativeAlbum: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              artist: creator,
+              cover,
+              genre: pl.genre || null,
+              year: pl.year ? String(pl.year) : null,
+              label: pl.label || null,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
+        } else {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            playlistOpen: true,
+            nativePlaylist: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              cover,
+              creator,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
         }
-      });
-    } catch(e) {}
+      } catch(e) {}
+    };
+
+    const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
+    postSheet(initialTracks);
+
+    if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
+      try {
+        const r = await fetch('/api/bandcamp-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url }),
+        });
+        const data = r.ok ? await r.json() : { tracks: [] };
+        const now = Date.now();
+        const tracks = (data.tracks || []).map((t, i) => ({
+          id: `bc-${t.trackId || i}`,
+          kind: 'track',
+          provider: 'bandcamp',
+          title: t.title,
+          artist: t.artistName || creator,
+          artistName: t.artistName || creator,
+          artworkUrl: t.artworkUrl || cover,
+          cover: t.artworkUrl || cover,
+          duration: t.duration || 0,
+          streamUrl: t.streamUrl || '',
+          audioUrl: t.streamUrl || '',
+          url: t.streamUrl || t.trackUrl || '',
+          trackUrl: t.trackUrl || '',
+          providerItemId: t.trackUrl || '',
+          streamFetchedAt: t.streamUrl ? now : undefined,
+        }));
+        if (tracks.length > 0) {
+          pl.tracks = tracks;
+          postSheet(tracks);
+        }
+      } catch {}
+    }
   };
 
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
-    if (it.kind === 'album') {
-      if (it.provider === 'spotify' || it.provider === 'applemusic' || it.provider === 'tidal' || it.provider === 'discogs' || it.provider === 'youtube') return () => handlePlaylistClick(it);
-      return () => playBandcampAlbum(it);
-    }
+    if (isAlbumItem(it)) return () => handlePlaylistClick({ ...it, kind: 'album' });
     if (it.kind === 'track') return () => playList(items, it);
     return undefined;     // profiles: display only
   };

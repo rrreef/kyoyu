@@ -357,13 +357,55 @@ export default function Library() {
     // Open sheet immediately (0ms latency!)
     pushToSheet(initialTracks);
 
+    if (!initialTracks.length && pl.provider === 'bandcamp' && pl.kind === 'album' && (pl.trackUrl || pl.url)) {
+      const albumUrl = pl.trackUrl || pl.url;
+      try {
+        const r = await fetch('/api/bandcamp-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'fetch-album', albumUrl }),
+        });
+        const data = r.ok ? await r.json() : { tracks: [] };
+        const now = Date.now();
+        let fetched = (data.tracks || []).map((t, i) => ({
+          id: `bc-${t.trackId || i}`,
+          kind: 'track',
+          provider: 'bandcamp',
+          title: t.title,
+          artist: t.artistName || creator,
+          artistName: t.artistName || creator,
+          artworkUrl: t.artworkUrl || cover,
+          cover: t.artworkUrl || cover,
+          duration: t.duration || 0,
+          streamUrl: t.streamUrl || '',
+          audioUrl: t.streamUrl || '',
+          url: t.streamUrl || t.trackUrl || '',
+          trackUrl: t.trackUrl || '',
+          providerItemId: t.trackUrl || '',
+          streamFetchedAt: t.streamUrl ? now : undefined,
+        }));
+        if (!fetched.length) {
+          fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
+        }
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          pl.tracks = fetched;
+          pushToSheet(fetched);
+        } else {
+          pushToSheet([]);
+        }
+      } catch (err) {
+        pushToSheet([]);
+      }
+      return;
+    }
+
     // If external playlist and tracks are not loaded yet, fetch them on demand:
-    if (!initialTracks.length && (pl.playlistId || pl.url)) {
+    if (!initialTracks.length && (pl.playlistId || pl.url || pl.trackUrl)) {
       try {
         const fetched = await fetchAccountLibrary(
           pl.provider || 'bandcamp',
           'playlistTracks',
-          { playlistId: pl.playlistId, playlistUrl: pl.url }
+          { playlistId: pl.playlistId, playlistUrl: pl.url || pl.trackUrl }
         );
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
