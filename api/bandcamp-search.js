@@ -58,50 +58,86 @@ export default async function handler(req, res) {
   if (body?.action === 'fetch-album' && body?.albumUrl) {
     try {
       const albumRes = await fetch(body.albumUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' }
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        }
       });
       if (!albumRes.ok) return res.status(200).json({ tracks: [] });
       const html = await albumRes.text();
       
-      // Extract track data from the page's LD+JSON or data-tralbum attribute
+      // Extract track data from the page's data-tralbum, TralbumData var, inline trackinfo, or LD+JSON
       const tracks = [];
-      
-      // Try data-tralbum JSON (most reliable)
-      const tralbumMatch = html.match(/data-tralbum="([^"]+)"/);
+      let tralbum = null;
+
+      // 1. Try data-tralbum JSON (double or single quotes)
+      const tralbumMatch = html.match(/data-tralbum="([^"]+)"/) || html.match(/data-tralbum='([^']+)'/);
       if (tralbumMatch) {
         try {
-          const tralbum = JSON.parse(tralbumMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'"));
-          const albumArt = (html.match(/<a class="popupImage"[^>]*href="([^"]+)"/) || [])[1] || '';
-          for (const t of (tralbum.trackinfo || [])) {
-            tracks.push({
-              trackId: t.track_id || t.id,
-              title: t.title || '',
-              duration: Math.round((t.duration || 0)),
-              streamUrl: t.file?.['mp3-128'] || '',
-              // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
-              trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, body.albumUrl).href : ''; } catch (e) { return ''; } })(),
-              artworkUrl: albumArt,
-              artistName: tralbum.artist || '',
-            });
-          }
+          const decoded = tralbumMatch[1]
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+          tralbum = JSON.parse(decoded);
         } catch (e) { /* parse error, fall through */ }
       }
+
+      // 2. Fallback: var TralbumData = {...};
+      if (!tralbum || !tralbum.trackinfo) {
+        const varMatch = html.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/);
+        if (varMatch) {
+          try { tralbum = JSON.parse(varMatch[1]); } catch (e) { /* ignore */ }
+        }
+      }
+
+      // 3. Fallback: "trackinfo": [...] in script
+      if (!tralbum || !tralbum.trackinfo) {
+        const scriptMatch = html.match(/"trackinfo"\s*:\s*(\[[\s\S]*?\])\s*,/);
+        if (scriptMatch) {
+          try { tralbum = { trackinfo: JSON.parse(scriptMatch[1]) }; } catch (e) { /* ignore */ }
+        }
+      }
+
+      const albumArt =
+        (html.match(/<a class="popupImage"[^>]*href="([^"]+)"/) || [])[1] ||
+        (html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/) || [])[1] ||
+        '';
+
+      if (tralbum && Array.isArray(tralbum.trackinfo)) {
+        for (const t of tralbum.trackinfo) {
+          const file = t.file;
+          const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || '') : '';
+          tracks.push({
+            trackId: t.track_id || t.id,
+            title: t.title || '',
+            duration: Math.round((t.duration || 0)),
+            streamUrl,
+            // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
+            trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, body.albumUrl).href : body.albumUrl; } catch (e) { return body.albumUrl; } })(),
+            artworkUrl: albumArt,
+            artistName: tralbum.artist || '',
+          });
+        }
+      }
       
-      // Fallback: try LD+JSON
+      // 4. Fallback: try LD+JSON
       if (tracks.length === 0) {
         const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
         if (ldMatch) {
           try {
             const ld = JSON.parse(ldMatch[1]);
-            const albumArt = ld.image || '';
+            const ldArt = ld.image || albumArt;
             for (const t of (ld.track?.itemListElement || [])) {
               const item = t.item || t;
               tracks.push({
                 trackId: item['@id'] || t.position,
-                trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : '',
+                trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : body.albumUrl,
                 title: item.name || '',
                 duration: 0,
-                artworkUrl: albumArt,
+                artworkUrl: ldArt,
                 artistName: ld.byArtist?.name || '',
               });
             }

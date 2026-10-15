@@ -392,7 +392,9 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
         }));
         if (tracks.length > 0) {
           pl.tracks = tracks;
-          postSheet(tracks);
+          if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
+            postSheet(tracks);
+          }
         }
       } catch {}
     }
@@ -400,7 +402,10 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
 
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
-    if (isAlbumItem(it)) return () => handlePlaylistClick({ ...it, kind: 'album' });
+    if (isAlbumItem(it)) return () => {
+      it.kind = 'album';
+      handlePlaylistClick(it);
+    };
     if (it.kind === 'track') return () => playList(items, it);
     return undefined;     // profiles: display only
   };

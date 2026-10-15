@@ -249,21 +249,54 @@ export default function AlbumSheet({ album, onClose }) {
   useLayoutEffect(() => {
     if (!album) return;
     window.__kyoyuCurrentNativeAlbum = album;
+    registerAlbumPlayback(album);
 
+    // Tell Swift to open the native overlay if not already sent
+    if (window.__lastFastOpenTs !== album._ts) {
+      window.__lastFastOpenTs = album._ts;
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          albumOpen: true,
+          nativeAlbum: {
+            _ts: album._ts ? String(album._ts) : null,
+            id: album.id || String(Date.now()),
+            title: album.title || '',
+            artist: album.artist || '',
+            cover: album.cover || album.artworkUrl || null,
+            genre: album.genre || null,
+            year: album.year ? String(album.year) : null,
+            label: album.label || null,
+            provider: album.provider || null,
+            tracks: (album.tracks || []).map(t => ({
+              id: t.id || String(Date.now() + Math.random()),
+              title: t.title || t.name || 'Unknown Track',
+              artist: t.artist || '',
+              url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
+              cover: t.artworkUrl || t.cover || null,
+              provider: t.provider || album.provider || null
+            }))
+          }
+        });
+      } catch(e) {
+        console.warn("Failed to open native album sheet", e);
+      }
+    }
+  }, [album]);
+
+  useLayoutEffect(() => {
     // Expose close handler so Swift can trigger it
     window.__kyoyuCloseNativeAlbum = (incomingTs) => {
       if (incomingTs && window.__lastFastOpenTs && String(incomingTs) !== String(window.__lastFastOpenTs)) {
          return;
       }
+      window.__lastFastOpenTs = 0;
       onCloseRef.current();
     };
-
-    // Expose play handler so Swift can trigger it
 
     const handleNativeLike = (e) => {
       if (e.detail.handled) return;
       const trackId = String(e.detail.trackId).split('?ts=')[0];
-      const curAlbum = safeAlbumRef.current || album || window.__kyoyuCurrentNativeAlbum;
+      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
       let t = (curAlbum?.tracks || []).find(tr => String(tr.id) === trackId);
       if (!t) return;
 
@@ -373,7 +406,7 @@ export default function AlbumSheet({ album, onClose }) {
       return tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
     };
     window.__kyoyuDownloadTrack = (trackId) => {
-      const curAlbum = safeAlbumRef.current || album;
+      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
       const t = (curAlbum?.tracks || []).find(tr => String(tr.id) === String(trackId));
       if (!t) return;
       const trackObj = {
@@ -406,7 +439,7 @@ export default function AlbumSheet({ album, onClose }) {
     };
 
     window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
-      const curAlbum = safeAlbumRef.current || album;
+      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
       if (!curAlbum || !curAlbum.tracks) return;
       const ids = String(trackId).split(',');
       for (const id of ids) {
@@ -446,35 +479,6 @@ export default function AlbumSheet({ album, onClose }) {
       return false; // default
     };
 
-    // Tell Swift to open the native overlay if not already sent
-    if (window.__lastFastOpenTs !== album._ts) {
-        window.__lastFastOpenTs = album._ts;
-        try {
-          window.webkit?.messageHandlers?.player?.postMessage({
-            albumOpen: true,
-            nativeAlbum: {
-              _ts: album._ts ? String(album._ts) : null,
-              id: album.id || String(Date.now()),
-              title: album.title || '',
-              artist: album.artist || '',
-              cover: album.cover || album.artworkUrl || null,
-              genre: album.genre || null,
-              year: album.year ? String(album.year) : null,
-              label: album.label || null,
-              tracks: (album.tracks || []).map(t => ({
-                id: t.id || String(Date.now() + Math.random()),
-                title: t.title || t.name || 'Unknown Track',
-                artist: t.artist || '',
-                url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
-                provider: t.provider || album.provider || null
-              }))
-            }
-          });
-        } catch(e) {
-          console.warn("Failed to open native album sheet", e);
-        }
-    }
-
     return () => {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuCloseNativeAlbum;
@@ -491,14 +495,15 @@ export default function AlbumSheet({ album, onClose }) {
       delete window.__kyoyuReorderPlaylist;
       delete window.__kyoyuTogglePlaylistPublic;
       delete window.__kyoyuGetPlaylistPublic;
-      const myTs = album?._ts;
-      if (!myTs || String(myTs) === String(window.__lastFastOpenTs)) {
+      const myTs = safeAlbumRef.current?._ts;
+      if (!myTs || (window.__lastFastOpenTs && String(myTs) === String(window.__lastFastOpenTs))) {
+        window.__lastFastOpenTs = 0;
         try {
           window.webkit?.messageHandlers?.player?.postMessage({ albumOpen: false });
         } catch(e) {}
       }
     };
-  }, [album]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

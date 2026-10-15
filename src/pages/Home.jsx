@@ -153,21 +153,46 @@ export default function Home() {
           streamUrl: t.streamUrl || '',
           audioUrl: t.streamUrl || '',
           url: t.streamUrl || t.trackUrl || '',
-          trackUrl: t.trackUrl || '',
-          providerItemId: t.trackUrl || '',
+          trackUrl: t.trackUrl || albumUrl,
+          providerItemId: t.trackUrl || albumUrl,
           streamFetchedAt: t.streamUrl ? now : undefined,
         }));
+        if (!fetched.length) {
+          const r2 = await fetch('/api/bandcamp-resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'album-tracks', url: albumUrl }),
+          }).catch(() => null);
+          const data2 = r2 && r2.ok ? await r2.json() : { tracks: [] };
+          fetched = (data2.tracks || []).map((t, i) => ({
+            id: `bc-${t.trackId || t.trackNum || i}`,
+            kind: 'track',
+            provider: 'bandcamp',
+            title: t.title,
+            artist: t.artist || t.artistName || creator,
+            artistName: t.artist || t.artistName || creator,
+            artworkUrl: t.artworkUrl || cover,
+            cover: t.artworkUrl || cover,
+            duration: t.duration || 0,
+            streamUrl: t.streamUrl || '',
+            audioUrl: t.streamUrl || '',
+            url: t.streamUrl || t.url || albumUrl,
+            trackUrl: t.url || albumUrl,
+            providerItemId: t.url || albumUrl,
+            streamFetchedAt: t.streamUrl ? now : undefined,
+          }));
+        }
         if (!fetched.length) {
           fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
-          pushToSheet(fetched);
-        } else {
-          pushToSheet([]);
+          if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
+            pushToSheet(fetched);
+          }
         }
       } catch (err) {
-        pushToSheet([]);
+        // Sheet already opened with initialTracks
       }
       return;
     }
@@ -181,12 +206,12 @@ export default function Home() {
         );
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
-          pushToSheet(fetched);
-        } else {
-          pushToSheet([]);
+          if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
+            pushToSheet(fetched);
+          }
         }
       } catch (err) {
-        pushToSheet([]);
+        // Sheet already opened with initialTracks
       }
     }
   }
