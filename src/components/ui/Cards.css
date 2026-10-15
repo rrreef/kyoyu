@@ -206,8 +206,8 @@
   transition: var(--transition-fast);
   cursor: pointer;
 }
-.track-row:hover { background: rgba(255,255,255,0.05); }
-.track-row-active { background: rgba(255,255,255,0.1) !important; }
+.track-row:hover { background: transparent !important; }
+.track-row-active { background: transparent !important; }
 .track-row .track-play-trigger {
   opacity: 0;
   color: var(--text-primary);

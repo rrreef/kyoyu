@@ -82,17 +82,24 @@ function Row({ item, onClick, right, sub, round }) {
 }
 
 /** One cell of the icon view (same classes as the liked-tracks grid) */
-function GridCell({ item, onClick, cols }) {
+function GridCell({ item, onClick, cols, isActive, isPlaying }) {
   const isPlaylist = item.kind === 'playlist';
   const cleanSrc = (item.artworkUrl && item.artworkUrl.includes('bcbits.com'))
     ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg')
     : item.artworkUrl;
   return (
-    <div className="upl-grid-cell" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
           ? <img src={cleanSrc} alt={item.title} loading="lazy" decoding="async" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
+        {isActive && (
+          <div className="upl-grid-playing">
+            <div className={`upl-grid-bars${isPlaying ? '' : ' paused'}`}>
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
       </div>
       <div className="upl-grid-title">{item.title}</div>
       {item.artistName ? <div className="upl-grid-artist">{item.artistName}</div> : null}
@@ -101,8 +108,18 @@ function GridCell({ item, onClick, cols }) {
 }
 
 export default function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
-  const { setSearchQueue, playSearchItem } = usePlayer();
+  const { setSearchQueue, playSearchItem, state } = usePlayer();
   const [error, setError] = useState('');
+
+  const isItemActive = (it) => {
+    const cur = state?.currentTrack;
+    if (!cur || !it) return false;
+    if (cur.id && it.id && String(cur.id) === String(it.id)) return true;
+    if (it.trackUrl && (cur.providerItemId === it.trackUrl || cur.trackUrl === it.trackUrl || cur.src === it.trackUrl)) return true;
+    if (it.permalinkUrl && cur.providerItemId === it.permalinkUrl) return true;
+    if (it.kind === 'track' && cur.title && it.title && cur.title === it.title && (cur.artistName || cur.artist || '') === (it.artistName || '')) return true;
+    return false;
+  };
 
   const playList = (list, item) => {
     const queue = list.filter(x => x.kind === 'track').map(toPlayable);
@@ -180,7 +197,16 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
 
       {view === 'grid' ? (
         <div className={`upl-grid upl-grid-${safeCols}`}>
-          {items.map(it => <GridCell key={it.id} item={it} cols={safeCols} onClick={onItemClick(it)} />)}
+          {items.map(it => (
+            <GridCell
+              key={it.id}
+              item={it}
+              cols={safeCols}
+              isActive={isItemActive(it)}
+              isPlaying={!!state?.isPlaying}
+              onClick={onItemClick(it)}
+            />
+          ))}
         </div>
       ) : (
         items.map(it => {

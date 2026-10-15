@@ -248,8 +248,8 @@
   height: .5px;
   background: rgba(255,255,255,.06);
 }
-.as-track:active { background: rgba(255,255,255,.05); }
-.as-track.as-playing { background: rgba(255,255,255,.04); }
+.as-track:active { background: transparent !important; }
+.as-track.as-playing { background: transparent !important; }
 
 .as-track-num {
   font-size: .73rem;

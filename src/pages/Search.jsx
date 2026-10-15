@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult, prefetchBandcamp } from '../lib/unifiedSearch';
@@ -7,7 +7,11 @@ import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
 import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast } from '../components/ui/AlbumSheet';
 import { useLibrary } from '../contexts/LibraryContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useConnectedLibrary } from '../lib/useConnectedLibrary';
+import { toPlayable } from '../components/AccountItems';
+import { releases as catalogReleases } from '../data/mockData';
 import ContentStateBadge from '../components/ContentStateBadge';
 import EntityPlaceholder from '../components/EntityPlaceholder';
 import './Search.css';
@@ -87,12 +91,14 @@ function SwipeableHistoryItem({ item, onClick, onRemove }) {
   if (removed) return null;
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden' }}>
-      {/* Background Trash Icon */}
+    <div style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'transparent' }}>
+      {/* Background Trash Icon — only visible while swiping left */}
       <div style={{
         position: 'absolute', top: 0, right: 0, bottom: 0, width: '100%',
         display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-        paddingRight: '32px', color: '#888', zIndex: 0
+        paddingRight: '32px', color: '#888', zIndex: 0,
+        opacity: translateX < -10 ? Math.min(1, Math.abs(translateX) / 80) : 0,
+        pointerEvents: 'none',
       }}>
         <Trash2 size={18} />
       </div>
@@ -109,7 +115,7 @@ function SwipeableHistoryItem({ item, onClick, onRemove }) {
           transition: translateX === 0 || translateX < -100 ? 'transform 0.3s ease-out' : 'none',
           position: 'relative',
           zIndex: 1,
-          backgroundColor: '#000'
+          backgroundColor: 'transparent'
         }}
       >
         <Clock size={14} className="search-history-icon" />
@@ -297,8 +303,10 @@ export default function Search() {
   const debounceRef = useRef(null);
   const frozenOrderRef = useRef({ key: '', ids: [] });
   const fetchingMoreRef = useRef(false);
-  const { isFollowing, toggleFollow } = useLibrary();
-  const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem } = usePlayer();
+  const { isFollowing, toggleFollow, getLikedUploads, likedTracks, savedReleases, playlists } = useLibrary();
+  const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem, playSaved, playRelease } = usePlayer();
+  const { user } = useAuth();
+  const acct = useConnectedLibrary();
 
   // Load history from localStorage
   useEffect(() => {
@@ -364,25 +372,10 @@ export default function Search() {
       setActiveProvider(window.__kyoyuProviderFilter);
     }
 
-    // 5. Listen for exact keyboard height changes
+    // 5. Listen for exact keyboard height changes (without scrolling search history upwards)
     const onKeyboard = (e) => {
       const newHeight = e.detail || 0;
-      setKeyboardHeight(prevHeight => {
-        const oldPadding = prevHeight > 0 ? prevHeight + 128 : 128;
-        const newPadding = newHeight > 0 ? newHeight + 128 : 128;
-        const paddingDiff = newPadding - oldPadding;
-        
-        // If padding increased (keyboard opened/grew), scroll down to push content up smoothly
-        if (paddingDiff > 0) {
-          setTimeout(() => {
-            const scrollContainer = document.querySelector('.main-content');
-            if (scrollContainer) {
-              scrollContainer.scrollBy({ top: paddingDiff, behavior: 'smooth' });
-            }
-          }, 50); // slight delay to allow React to apply the new padding first
-        }
-        return newHeight;
-      });
+      setKeyboardHeight(newHeight);
     };
     window.addEventListener('kyoyu-keyboard-change', onKeyboard);
 
@@ -394,27 +387,15 @@ export default function Search() {
     };
   }, []);
 
-  // Override .main-content padding dynamically for perfect alignment
+  // Keep search history anchored at top when keyboard opens
   useEffect(() => {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
-      // 114px is the top of the filter card. 128px padding creates a perfect 14px gap.
-      // When open, the filter card moves up by keyboardHeight, so we add exactly that!
-      const paddingStyle = keyboardHeight > 0 
-        ? (keyboardHeight + 128) + 'px' 
-        : '128px';
-      mainContent.style.paddingBottom = paddingStyle;
-      mainContent.style.transition = 'padding-bottom 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-    }
-
-    return () => {
-      // Clear inline styles when leaving the search page
-      if (mainContent) {
-        mainContent.style.paddingBottom = '';
-        mainContent.style.transition = '';
+      if (query.trim().length === 0) {
+        mainContent.scrollTop = 0;
       }
-    };
-  }, [keyboardHeight]);
+    }
+  }, [keyboardHeight, query]);
 
   // Debounced search — fires on every query change
   useEffect(() => {
@@ -1067,26 +1048,266 @@ export default function Search() {
     );
   };
 
-  return (
-    <div className="page search-page animate-in" style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 80}px` : undefined }}>
+  // ── Library search matches (1–10 items from user's library shown first) ──
+  const libraryMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const qWords = q.split(/\s+/).filter(Boolean);
 
-      {/* Spacer for native filter overlay */}
-      <div style={{ height: '80px' }} />
+    const candidates = [];
+
+    // 1. Liked uploads / tracks
+    const likedUploadsArr = getLikedUploads ? getLikedUploads(user?.id) : [];
+    for (const u of likedUploadsArr) {
+      const prov = historyReplayInfo(u).provider || u.provider || 'native';
+      candidates.push({
+        id: `lib-upl-${u.id}`,
+        title: u.title || 'Untitled',
+        artistName: u.artist || u.artistName || '',
+        albumName: u.album || '',
+        artworkUrl: (u.artworkUrl && u.artworkUrl !== 'undefined' && u.artworkUrl !== 'null' ? u.artworkUrl : null) || (u.cover && u.cover !== 'undefined' && u.cover !== 'null' ? u.cover : null) || '',
+        provider: prov,
+        kind: 'track',
+        _libType: 'likedUpload',
+        _raw: u,
+      });
+    }
+
+    // 2. Catalog liked tracks
+    for (const id of (likedTracks || [])) {
+      const rel = (catalogReleases || []).find(r => (r.tracks || []).some(x => String(x.id) === String(id)));
+      const t = rel ? (rel.tracks || []).find(x => String(x.id) === String(id)) : null;
+      if (t) {
+        candidates.push({
+          id: `lib-cat-${t.id}`,
+          title: t.title || 'Untitled',
+          artistName: t.artist || rel?.artist || '',
+          albumName: rel?.title || '',
+          artworkUrl: rel?.cover || '',
+          provider: 'native',
+          kind: 'track',
+          _libType: 'catalogTrack',
+          _raw: { ...t, cover: rel?.cover, artist: t.artist || rel?.artist, album: rel?.title, src: t.src || t.audioUrl || '' },
+        });
+      }
+    }
+
+    // 3. Saved releases
+    for (const rid of (savedReleases || [])) {
+      const rel = (catalogReleases || []).find(r => String(r.id) === String(rid));
+      if (rel) {
+        candidates.push({
+          id: `lib-rel-${rel.id}`,
+          title: rel.title || 'Untitled',
+          artistName: rel.artist || '',
+          albumName: rel.title || '',
+          label: rel.label || '',
+          artworkUrl: rel.cover || '',
+          provider: 'native',
+          kind: 'album',
+          _libType: 'savedRelease',
+          _raw: rel,
+        });
+      }
+    }
+
+    // 4. Kyoyu Playlists
+    for (const pl of (playlists || [])) {
+      candidates.push({
+        id: `lib-pl-${pl.id}`,
+        title: pl.title || pl.name || 'Playlist',
+        artistName: pl.creator || user?.displayName || 'Playlist',
+        artworkUrl: pl.cover || pl.artworkUrl || '',
+        provider: pl.provider || 'native',
+        kind: 'playlist',
+        _libType: 'playlist',
+        _raw: pl,
+      });
+    }
+
+    // 5. Connected account library items
+    const acctLists = [
+      ...(acct?.bandcamp?.collection || []),
+      ...(acct?.bandcamp?.wishlist || []),
+      ...(acct?.bandcamp?.playlists || []),
+      ...(acct?.soundcloud?.likes || []),
+      ...(acct?.soundcloud?.playlists || []),
+      ...(acct?.spotify?.likes || []),
+      ...(acct?.spotify?.albums || []),
+      ...(acct?.spotify?.playlists || []),
+      ...(acct?.applemusic?.likes || []),
+      ...(acct?.applemusic?.albums || []),
+      ...(acct?.applemusic?.playlists || []),
+      ...(acct?.tidal?.likes || []),
+      ...(acct?.tidal?.albums || []),
+      ...(acct?.tidal?.playlists || []),
+      ...(acct?.discogs?.collection || []),
+      ...(acct?.discogs?.wishlist || []),
+      ...(acct?.discogs?.purchases || []),
+    ];
+    for (const it of acctLists) {
+      if (!it || it.kind === 'profile') continue;
+      candidates.push({
+        id: `lib-acct-${it.provider || 'ext'}-${it.id}`,
+        title: it.title || 'Untitled',
+        artistName: it.artistName || it.artist || '',
+        albumName: it.albumName || it.album || '',
+        artworkUrl: it.artworkUrl || it.cover || '',
+        provider: it.provider || 'native',
+        kind: it.kind || 'track',
+        _libType: 'acctItem',
+        _raw: it,
+      });
+    }
+
+    const scored = [];
+    const seen = new Set();
+
+    for (const item of candidates) {
+      if (activeProvider !== 'all' && item.provider !== 'native' && !providerMatch(item.provider)) continue;
+      if (activeFilter !== 'all') {
+        const catKey = item.kind === 'album' ? 'albums' : item.kind === 'playlist' ? 'playlists' : 'titles';
+        if (!filterMatch(catKey)) continue;
+      }
+
+      const titleL = (item.title || '').toLowerCase();
+      const artistL = (item.artistName || '').toLowerCase();
+      const albumL = (item.albumName || '').toLowerCase();
+      const haystack = `${titleL} ${artistL} ${albumL}`.trim();
+      if (!haystack) continue;
+
+      const matchesFull = haystack.includes(q);
+      const matchesWords = qWords.length > 0 && qWords.every(w => haystack.includes(w));
+      if (!matchesFull && !matchesWords) continue;
+
+      const dedupKey = `${item.kind}|${titleL}|${artistL}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+
+      let score = 0;
+      if (titleL === q) score += 100;
+      else if (titleL.startsWith(q)) score += 75;
+      else if (titleL.includes(q)) score += 50;
+      if (artistL === q) score += 80;
+      else if (artistL.startsWith(q)) score += 60;
+      else if (artistL.includes(q)) score += 40;
+      if (matchesWords) score += 20;
+
+      scored.push({ ...item, _score: score });
+    }
+
+    scored.sort((a, b) => b._score - a._score);
+    return scored.slice(0, 10);
+  }, [query, activeProvider, activeFilter, getLikedUploads, user?.id, user?.displayName, likedTracks, savedReleases, playlists, acct]);
+
+  const hasLibraryMatches = libraryMatches.length > 0;
+
+  const handleLibraryItemClick = async (item) => {
+    const raw = item._raw;
+    if (!raw) return;
+    if (item._libType === 'likedUpload') {
+      if (historyReplayInfo(raw).provider !== 'native') {
+        playSaved(raw);
+      } else {
+        const t = {
+          id: raw.id,
+          title: raw.title || 'Untitled',
+          artistName: raw.artist || '',
+          artist: raw.artist || '',
+          releaseCover: raw.artworkUrl || raw.cover || '',
+          releaseTitle: raw.album || raw.title || '',
+          src: raw.fileUrl || raw.audioUrl || '',
+        };
+        playTrack(t, [t]);
+      }
+      window.__kyoyuPlayerCmd?.('expand');
+      return;
+    }
+    if (item._libType === 'catalogTrack') {
+      playTrack(raw, [raw]);
+      window.__kyoyuPlayerCmd?.('expand');
+      return;
+    }
+    if (item._libType === 'savedRelease') {
+      playRelease(raw);
+      openNativeAlbumFast(raw);
+      return;
+    }
+    if (item._libType === 'playlist' || item.kind === 'playlist') {
+      setPlaylistSheet({
+        id: raw.id,
+        title: raw.title || raw.name || 'Playlist',
+        artistName: raw.artistName || raw.creator || user?.displayName || 'You',
+        artworkUrl: raw.artworkUrl || raw.cover || null,
+        provider: raw.provider || null,
+        tracks: raw.tracks || [],
+      });
+      return;
+    }
+    if (item._libType === 'acctItem') {
+      if (raw.kind === 'album') {
+        if (raw.provider === 'bandcamp' && raw.trackUrl) {
+          try {
+            const r = await fetch('/api/bandcamp-search', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'fetch-album', albumUrl: raw.trackUrl }),
+            });
+            const data = r.ok ? await r.json() : { tracks: [] };
+            const tracks = (data.tracks || []).map(t => ({
+              id: `bc-${t.trackId}`,
+              title: t.title,
+              artist: t.artistName || raw.artistName,
+              cover: t.artworkUrl || raw.artworkUrl,
+              trackUrl: t.trackUrl,
+              provider: 'bandcamp',
+            }));
+            openNativeAlbumFast({
+              id: raw.id,
+              title: raw.title,
+              artist: raw.artistName,
+              cover: raw.artworkUrl,
+              provider: 'bandcamp',
+              tracks,
+            });
+          } catch {}
+          return;
+        }
+        openNativeAlbumFast({
+          id: raw.id,
+          title: raw.title,
+          artist: raw.artistName || raw.artist || '',
+          cover: raw.artworkUrl || raw.cover || '',
+          provider: raw.provider || null,
+          tracks: raw.tracks || [],
+        });
+        return;
+      }
+      const playable = toPlayable(raw);
+      setSearchQueue([playable], 0);
+      playSearchItem(playable);
+      window.__kyoyuPlayerCmd?.('expand');
+    }
+  };
+
+  return (
+    <div className="page search-page animate-in">
+
+      {/* Spacer for native filter overlay — exact same 82px height as Library page barSpacer */}
+      <div style={{ height: 82 }} />
 
       {/* Search History — shown when no active query */}
       {showHistory && (
         <div className="search-history">
-          <div className="search-history-header">
-            <span className="search-history-title">Recent</span>
-            {history.length > 0 && (
-              <button className="search-history-clear" onClick={clearHistory}>Clear All</button>
-            )}
-          </div>
           {history.length > 0 ? (
             <div className="search-history-list">
-              {groupHistoryByDay(history).map(group => (
+              {groupHistoryByDay(history).map((group, idx) => (
                 <div key={group.label} className="search-history-group">
-                  <div className="search-history-group-label">{group.label}</div>
+                  <div className="search-history-group-label" style={idx === 0 ? { marginTop: 0, paddingTop: 0 } : undefined}>
+                    <span>{group.label}</span>
+                    {idx === 0 && (
+                      <button className="search-history-clear" onClick={clearHistory}>Clear All</button>
+                    )}
+                  </div>
                   {group.items.map(item => (
                     <SwipeableHistoryItem
                       key={item.timestamp}
@@ -1103,6 +1324,41 @@ export default function Search() {
               No recent searches
             </div>
           )}
+        </div>
+      )}
+
+      {/* First Search Results Category: Library (1–10 matching items already in Library) */}
+      {!isQueryEmpty && hasLibraryMatches && (
+        <div className="search-results-list" style={{ marginBottom: 18 }}>
+          <div className="search-section">
+            <div className="search-section-title">Library</div>
+            {libraryMatches.map(item => {
+              const cleanArt = (item.artworkUrl && item.artworkUrl.includes('bcbits.com'))
+                ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg')
+                : item.artworkUrl;
+              return (
+                <div
+                  key={item.id}
+                  className="search-result-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleLibraryItemClick(item)}
+                >
+                  <div className="search-result-art">
+                    {cleanArt ? <img src={cleanArt} alt="" loading="lazy" /> : <div className="search-result-art-placeholder" />}
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title">{item.title}</span>
+                    <span className="search-result-artist">
+                      {item.artistName}{item.kind === 'album' ? ' · Album' : item.kind === 'playlist' ? ' · Playlist' : ''}
+                    </span>
+                  </div>
+                  <div className="search-result-actions">
+                    <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1150,7 +1406,7 @@ export default function Search() {
       )}
 
       {/* Loading state */}
-      {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && (
+      {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && (
         <div className="search-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
           <Loader2 className="spin-icon" size={28} color="rgba(255,255,255,0.4)" />
           <span>{providerRetrying ? 'Loading results...' : 'Searching...'}</span>
@@ -1158,7 +1414,7 @@ export default function Search() {
       )}
 
       {/* No results */}
-      {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && (
+      {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && (
         <div className="search-empty">No results found</div>
       )}
 

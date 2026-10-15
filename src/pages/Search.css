@@ -1,5 +1,5 @@
 .search-page {
-  padding-top: var(--sp-6);
+  padding-top: 0 !important;
 }
 
 /* ── Filter Rows ── */
@@ -73,6 +73,7 @@
   padding: 0 0 40px 0;
   margin-left: -16px;
   margin-right: -16px;
+  background: transparent !important;
 }
 
 .search-history-header {
@@ -97,7 +98,8 @@
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 0;
+  line-height: 1.2;
   opacity: 0.7;
   margin-left: auto;
 }
@@ -105,13 +107,19 @@
 
 .search-history-group {
   margin-bottom: 20px;
+  background: transparent !important;
 }
 
 .search-history-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-muted);
+  margin-top: 0;
   margin-bottom: 4px;
+  padding-top: 0;
   padding-bottom: 4px;
   padding-left: 16px;
   padding-right: 16px;
@@ -122,6 +130,7 @@
   flex-direction: column;
   gap: 0;
   overflow-x: hidden;
+  background: transparent !important;
 }
 
 .search-history-item {
@@ -130,14 +139,15 @@
   gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
+  background: transparent !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  transition: background 0.15s;
 }
 .search-history-item:last-child {
   border-bottom: none;
 }
+.search-history-item:hover,
 .search-history-item:active {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent !important;
 }
 
 .search-history-icon {
@@ -377,7 +387,7 @@
 }
 
 body.kyoyu-search-active .search-page {
-    padding-top: 100px !important;
+    padding-top: 0 !important;
 }
 
 /* ── Load More Button ── */

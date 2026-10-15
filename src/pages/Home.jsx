@@ -3,13 +3,16 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ArrowRight, Lock, Music2 } from 'lucide-react';
 import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
-import { usePlayer } from '../contexts/PlayerContext';
+import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
+import AccountItemList from '../components/AccountItems';
+import { useConnectedLibrary } from '../lib/useConnectedLibrary';
+import { fetchAccountLibrary } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
-import AlbumSheet, { openNativeAlbumFast } from '../components/ui/AlbumSheet';
+import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
 import './Home.css';
 
@@ -53,12 +56,96 @@ function groupByAlbum(tracks) {
 export default function Home() {
   const { playRelease, playTrack, playFromHistory } = usePlayer();
   const { user } = useAuth();
-  const { getLikedUploads } = useLibrary();
+  const { getLikedUploads, playlists } = useLibrary();
+  const acct = useConnectedLibrary();
   const homeLayout = useHomeLayoutLive();
   const [myUploads,      setMyUploads]      = useState([]);
   const [publicReleases, setPublicReleases] = useState([]);
   const [selectedAlbum,  setSelectedAlbum]  = useState(null);
   const [selectedEventIndex, setSelectedEventIndex] = useState(null);
+
+  async function openPlaylistSheet(pl) {
+    const ts = Date.now();
+    window.__lastFastOpenTs = ts;
+    const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
+    const creator = pl.artistName || pl.creator || user?.displayName || 'You';
+    let cover = pl.artworkUrl || pl.cover || null;
+    if (cover && cover.includes('bcbits.com')) {
+      cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
+    }
+
+    const pushToSheet = (currentTracks) => {
+      const albumObj = {
+        ...pl,
+        artist: creator,
+        cover,
+        tracks: currentTracks,
+        _ts: ts,
+      };
+      setSelectedAlbum(albumObj);
+      registerAlbumPlayback(albumObj);
+      const mappedTracks = currentTracks.map(t => ({
+        id: t.id || String(Date.now() + Math.random()),
+        title: t.title || t.name || 'Unknown Track',
+        artist: t.artist || t.artistName || '',
+        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+        cover: t.artworkUrl || t.cover || null,
+        provider: t.provider || pl.provider || null,
+      }));
+      try {
+        if (pl.kind === 'album') {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            albumOpen: true,
+            nativeAlbum: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              artist: creator,
+              cover,
+              genre: pl.genre || null,
+              year: pl.year ? String(pl.year) : null,
+              label: pl.label || null,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
+        } else {
+          window.webkit?.messageHandlers?.player?.postMessage({
+            playlistOpen: true,
+            nativePlaylist: {
+              _ts: String(ts),
+              id: pl.id,
+              title: pl.title,
+              cover,
+              creator,
+              provider: pl.provider || null,
+              tracks: mappedTracks,
+            }
+          });
+        }
+      } catch(e) {}
+    };
+
+    pushToSheet(initialTracks);
+
+    if (!initialTracks.length && (pl.playlistId || pl.url)) {
+      try {
+        const fetched = await fetchAccountLibrary(
+          pl.provider || 'bandcamp',
+          'playlistTracks',
+          { playlistId: pl.playlistId, playlistUrl: pl.url }
+        );
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          pl.tracks = fetched;
+          pushToSheet(fetched);
+        } else {
+          pushToSheet([]);
+        }
+      } catch (err) {
+        pushToSheet([]);
+      }
+    }
+  }
 
   // Group flat tracks into albums
   const publicAlbums = useMemo(() => groupByAlbum(publicReleases), [publicReleases]);
@@ -244,6 +331,71 @@ export default function Home() {
           )}
         </section>
       )}
+
+      {/* ═══ 1.2 — LIBRARY PER PROVIDER: LIKES / COLLECTION & PLAYLISTS (LAST 9) ═══ */}
+      {showFeatured && (() => {
+        const likedUploads = getLikedUploads(user?.id) || [];
+        const ytLikes = likedUploads.filter(t => {
+          const p = historyReplayInfo(t).provider || t.provider || '';
+          return p === 'youtube' || String(t.id || '').startsWith('yt-');
+        }).slice(0, 9);
+
+        const likeSections = [
+          { key: 'bandcamp',   title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
+          { key: 'soundcloud', title: 'SoundCloud · Likes',    items: (acct.soundcloud?.likes || []).slice(0, 9),    type: 'acct' },
+          { key: 'youtube',    title: 'YouTube · Likes',       items: ytLikes,                                       type: 'uploads' },
+          { key: 'spotify',    title: 'Spotify · Likes',       items: (acct.spotify?.likes || []).slice(0, 9),       type: 'acct' },
+          { key: 'applemusic', title: 'Apple Music · Likes',   items: (acct.applemusic?.likes || []).slice(0, 9),    type: 'acct' },
+          { key: 'tidal',      title: 'TIDAL · Likes',         items: (acct.tidal?.likes || []).slice(0, 9),         type: 'acct' },
+        ].filter(s => s.items.length > 0);
+
+        const ytPlaylists = ((acct.youtube?.playlists || []).concat(
+          (playlists || []).filter(p => p.provider === 'youtube')
+        )).slice(0, 9);
+
+        const playlistSections = [
+          { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',    items: (acct.bandcamp?.playlists || []).slice(0, 9) },
+          { key: 'soundcloud-pl', title: 'SoundCloud · Playlists',  items: (acct.soundcloud?.playlists || []).slice(0, 9) },
+          { key: 'youtube-pl',    title: 'YouTube · Playlists',     items: ytPlaylists },
+          { key: 'spotify-pl',    title: 'Spotify · Playlists',     items: (acct.spotify?.playlists || []).slice(0, 9) },
+          { key: 'applemusic-pl', title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9) },
+          { key: 'tidal-pl',      title: 'TIDAL · Playlists',       items: (acct.tidal?.playlists || []).slice(0, 9) },
+        ].filter(s => s.items.length > 0);
+
+        if (likeSections.length === 0 && playlistSections.length === 0) return null;
+
+        const viewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
+
+        return (
+          <>
+            {likeSections.map(sec => (
+              <section key={sec.key} className="home-section">
+                <div className="section-title">
+                  <span>{sec.title}</span>
+                  <Link to="/library">See All <ArrowRight size={12} /></Link>
+                </div>
+                {sec.type === 'uploads' ? (
+                  viewMode === 'list'
+                    ? <UploadExpandedList uploads={sec.items} />
+                    : <UploadGridView uploads={sec.items} cols={3} />
+                ) : (
+                  <AccountItemList items={sec.items} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                )}
+              </section>
+            ))}
+
+            {playlistSections.map(sec => (
+              <section key={sec.key} className="home-section">
+                <div className="section-title">
+                  <span>{sec.title}</span>
+                  <Link to="/library">See All <ArrowRight size={12} /></Link>
+                </div>
+                <AccountItemList items={sec.items} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+              </section>
+            ))}
+          </>
+        );
+      })()}
 
       {/* ═══ 1.5 — HISTORY ═══ */}
       {showFeatured && playHistory.length > 0 && (

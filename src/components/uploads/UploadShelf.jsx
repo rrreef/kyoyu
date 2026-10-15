@@ -397,7 +397,9 @@ export function UploadGridView({ uploads, cols = 2 }) {
               }
               {isActive && (
                 <div className="upl-grid-playing">
-                  <Pause size={safeCols >= 4 ? 10 : 16} fill="currentColor"/>
+                  <div className={`upl-grid-bars${state.isPlaying ? '' : ' paused'}`}>
+                    <span /><span /><span />
+                  </div>
                 </div>
               )}
               <button
