@@ -333,7 +333,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* ═══ 1.2 — LIBRARY PER PROVIDER: LIKES / COLLECTION & PLAYLISTS (LAST 9) ═══ */}
+      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (LAST 9) ═══ */}
       {showFeatured && (() => {
         const likedUploads = getLikedUploads(user?.id) || [];
         const ytLocalLikes = likedUploads.filter(t => {
@@ -341,43 +341,53 @@ export default function Home() {
           return p === 'youtube' || String(t.id || '').startsWith('yt-');
         }).slice(0, 9);
         const ytAcctLikes = (acct.youtube?.likes || []).slice(0, 9);
-
-        const likeByProvider = {
-          bandcamp:   { key: 'bandcamp',   title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
-          soundcloud: { key: 'soundcloud', title: 'SoundCloud · Likes',    items: (acct.soundcloud?.likes || []).slice(0, 9),    type: 'acct' },
-          youtube:    { key: 'youtube',    title: 'YouTube · Likes',       items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
-          discogs:    { key: 'discogs',    title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, 9),  type: 'acct' },
-          spotify:    { key: 'spotify',    title: 'Spotify · Likes',       items: (acct.spotify?.likes || []).slice(0, 9),       type: 'acct' },
-          applemusic: { key: 'applemusic', title: 'Apple Music · Likes',   items: (acct.applemusic?.likes || []).slice(0, 9),    type: 'acct' },
-          tidal:      { key: 'tidal',      title: 'TIDAL · Likes',         items: (acct.tidal?.likes || []).slice(0, 9),         type: 'acct' },
-        };
-        const likeSections = providerPriority
-          .map(p => likeByProvider[p])
-          .filter(s => s && s.items.length > 0);
-
         const ytPlaylists = ((acct.youtube?.playlists || []).concat(
           (playlists || []).filter(p => p.provider === 'youtube')
         )).slice(0, 9);
 
-        const playlistByProvider = {
-          bandcamp:   { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',    items: (acct.bandcamp?.playlists || []).slice(0, 9) },
-          soundcloud: { key: 'soundcloud-pl', title: 'SoundCloud · Playlists',  items: (acct.soundcloud?.playlists || []).slice(0, 9) },
-          youtube:    { key: 'youtube-pl',    title: 'YouTube · Playlists',     items: ytPlaylists },
-          spotify:    { key: 'spotify-pl',    title: 'Spotify · Playlists',     items: (acct.spotify?.playlists || []).slice(0, 9) },
-          applemusic: { key: 'applemusic-pl', title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9) },
-          tidal:      { key: 'tidal-pl',      title: 'TIDAL · Playlists',       items: (acct.tidal?.playlists || []).slice(0, 9) },
+        const sectionsByProvider = {
+          bandcamp: [
+            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
+            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   items: (acct.bandcamp?.wishlist || []).slice(0, 9),   type: 'acct' },
+            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  items: (acct.bandcamp?.playlists || []).slice(0, 9),  type: 'acct' },
+          ],
+          discogs: [
+            { key: 'discogs-col',   title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, 9),  type: 'acct' },
+            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    items: (acct.discogs?.wishlist || []).slice(0, 9),    type: 'acct' },
+          ],
+          soundcloud: [
+            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     items: (acct.soundcloud?.likes || []).slice(0, 9),     type: 'acct' },
+            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', items: (acct.soundcloud?.playlists || []).slice(0, 9), type: 'acct' },
+          ],
+          youtube: [
+            { key: 'youtube-likes', title: 'YouTube · Likes',     items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
+            { key: 'youtube-pl',    title: 'YouTube · Playlists', items: ytPlaylists,                                         type: 'acct' },
+          ],
+          spotify: [
+            { key: 'spotify-likes', title: 'Spotify · Likes',     items: (acct.spotify?.likes || []).slice(0, 9),     type: 'acct' },
+            { key: 'spotify-pl',    title: 'Spotify · Playlists', items: (acct.spotify?.playlists || []).slice(0, 9), type: 'acct' },
+          ],
+          applemusic: [
+            { key: 'applemusic-likes', title: 'Apple Music · Likes',     items: (acct.applemusic?.likes || []).slice(0, 9),     type: 'acct' },
+            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9), type: 'acct' },
+          ],
+          tidal: [
+            { key: 'tidal-likes', title: 'TIDAL · Likes',     items: (acct.tidal?.likes || []).slice(0, 9),     type: 'acct' },
+            { key: 'tidal-pl',    title: 'TIDAL · Playlists', items: (acct.tidal?.playlists || []).slice(0, 9), type: 'acct' },
+          ],
         };
-        const playlistSections = providerPriority
-          .map(p => playlistByProvider[p])
+
+        const orderedSections = providerPriority
+          .flatMap(p => sectionsByProvider[p] || [])
           .filter(s => s && s.items.length > 0);
 
-        if (likeSections.length === 0 && playlistSections.length === 0) return null;
+        if (orderedSections.length === 0) return null;
 
         const viewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
 
         return (
           <>
-            {likeSections.map(sec => (
+            {orderedSections.map(sec => (
               <section key={sec.key} className="home-section">
                 <div className="section-title">
                   <span>{sec.title}</span>
@@ -390,16 +400,6 @@ export default function Home() {
                 ) : (
                   <AccountItemList items={sec.items} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
                 )}
-              </section>
-            ))}
-
-            {playlistSections.map(sec => (
-              <section key={sec.key} className="home-section">
-                <div className="section-title">
-                  <span>{sec.title}</span>
-                  <Link to="/library">See All <ArrowRight size={12} /></Link>
-                </div>
-                <AccountItemList items={sec.items} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
               </section>
             ))}
           </>
