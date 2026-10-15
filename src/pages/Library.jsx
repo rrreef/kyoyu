@@ -13,7 +13,7 @@ import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
 import AccountItemList from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
-import { isStreamingAvailable } from '../lib/streaming';
+import { isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import './Library.css';
 
 /* A labelled block of items from a connected SoundCloud / Bandcamp account.
@@ -210,6 +210,7 @@ export default function Library() {
 
   // SoundCloud / Bandcamp / Spotify / Apple Music / TIDAL / YouTube Music accounts connected in Settings → their library shows up here automatically
   const acct = useConnectedLibrary();
+  const [providerPriority] = useProviderPriority();
   const bcPurchaseTracks = acct.bandcamp.collection.filter(i => i.kind === 'track');
   const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
   const bcWishTracks     = acct.bandcamp.wishlist.filter(i => i.kind === 'track');
@@ -647,18 +648,30 @@ export default function Library() {
         );
       })()}
 
-      {/* Titles → connected accounts: Bandcamp purchases + wishlist, SoundCloud likes, YouTube Music likes, Spotify likes, Apple Music songs, TIDAL likes (automatic) */}
-      {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (
-        <div style={{ marginTop: 18 }}>
-          <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseTracks} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishTracks} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="SoundCloud · Likes" items={scLikes} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="YouTube · Likes" items={ytLikes} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Liked Songs" items={spLikes} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Songs" items={amLikes} onOpenPlaylist={openPlaylistSheet} />
-          <AcctSection view={layoutMode} cols={gridCols} title="TIDAL · Liked Tracks" items={tdLikes} onOpenPlaylist={openPlaylistSheet} />
-        </div>
-      )}
+      {/* Titles → connected accounts ordered by providerPriority */}
+      {(activeFilter === 'likes' || activeFilter === 'titles') && likesSub === 'releases' && hasAcctTitles && (() => {
+        const titleSectionsByProvider = {
+          bandcamp: [
+            { key: 'bc-purch', title: 'Bandcamp · Purchases', items: bcPurchaseTracks },
+            { key: 'bc-wish',  title: 'Bandcamp · Wishlist',  items: bcWishTracks },
+          ],
+          soundcloud: [{ key: 'sc-likes', title: 'SoundCloud · Likes',     items: scLikes }],
+          youtube:    [{ key: 'yt-likes', title: 'YouTube · Likes',        items: ytLikes }],
+          spotify:    [{ key: 'sp-likes', title: 'Spotify · Liked Songs',  items: spLikes }],
+          applemusic: [{ key: 'am-likes', title: 'Apple Music · Songs',    items: amLikes }],
+          tidal:      [{ key: 'td-likes', title: 'TIDAL · Liked Tracks',   items: tdLikes }],
+        };
+        const orderedTitleSections = providerPriority
+          .flatMap(p => titleSectionsByProvider[p] || [])
+          .filter(s => s.items && s.items.length > 0);
+        return (
+          <div style={{ marginTop: 18 }}>
+            {orderedTitleSections.map((s, idx) => (
+              <AcctSection key={s.key} view={layoutMode} cols={gridCols} first={idx === 0} title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Albums: saved releases + connected-account albums */}
       {activeFilter === 'albums' && (
@@ -700,18 +713,32 @@ export default function Library() {
               )}
             </>
           )}
-          {hasAcctAlbums && (
-            <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Purchases" items={bcPurchaseAlbums} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={bcWishAlbums} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Wishlist" items={dgWishlist} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="YouTube · Saved Albums" items={ytAlbums} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Spotify · Saved Albums" items={spAlbums} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Apple Music · Saved Albums" items={amAlbums} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="TIDAL · Saved Albums" items={tdAlbums} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
+          {hasAcctAlbums && (() => {
+            const albumSectionsByProvider = {
+              bandcamp: [
+                { key: 'bc-alb-purch', title: 'Bandcamp · Purchases', items: bcPurchaseAlbums },
+                { key: 'bc-alb-wish',  title: 'Bandcamp · Wishlist',  items: bcWishAlbums },
+              ],
+              discogs: [
+                { key: 'dg-coll', title: 'Discogs · Collection', items: dgCollection },
+                { key: 'dg-wish', title: 'Discogs · Wishlist',   items: dgWishlist },
+              ],
+              youtube:    [{ key: 'yt-alb', title: 'YouTube · Saved Albums',     items: ytAlbums }],
+              spotify:    [{ key: 'sp-alb', title: 'Spotify · Saved Albums',     items: spAlbums }],
+              applemusic: [{ key: 'am-alb', title: 'Apple Music · Saved Albums', items: amAlbums }],
+              tidal:      [{ key: 'td-alb', title: 'TIDAL · Saved Albums',       items: tdAlbums }],
+            };
+            const orderedAlbumSections = providerPriority
+              .flatMap(p => albumSectionsByProvider[p] || [])
+              .filter(s => s.items && s.items.length > 0);
+            return (
+              <div style={{ marginTop: savedAlbums.length ? 18 : 0 }}>
+                {orderedAlbumSections.map((s, idx) => (
+                  <AcctSection key={s.key} view={layoutMode} cols={gridCols} first={idx === 0} title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+                ))}
+              </div>
+            );
+          })()}
           {savedAlbums.length === 0 && !hasAcctAlbums && (
             <div className="lib-empty"><p>No albums yet.</p><Link to="/search" className="lib-empty-link">Browse the catalog →</Link></div>
           )}
@@ -721,13 +748,27 @@ export default function Library() {
       {/* Purchases */}
       {activeFilter === 'purchases' && (
         <>
-          {(bcPurchaseAlbums.length > 0 || bcPurchaseTracks.length > 0 || dgCollection.length > 0 || dgPurchases.length > 0) ? (
-            <div>
-              {dgPurchases.length > 0 && <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Orders & Purchases" items={dgPurchases} onOpenPlaylist={openPlaylistSheet} />}
-              <AcctSection view={layoutMode} cols={gridCols} title="Discogs · Collection" items={dgCollection} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Purchases" items={acct.bandcamp.collection} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          ) : (
+          {(bcPurchaseAlbums.length > 0 || bcPurchaseTracks.length > 0 || dgCollection.length > 0 || dgPurchases.length > 0) ? (() => {
+            const purchaseSectionsByProvider = {
+              discogs: [
+                { key: 'dg-orders', title: 'Discogs · Orders & Purchases', items: dgPurchases },
+                { key: 'dg-coll-p', title: 'Discogs · Collection',         items: dgCollection },
+              ],
+              bandcamp: [
+                { key: 'bc-coll-p', title: 'Bandcamp · Purchases',         items: acct.bandcamp.collection },
+              ],
+            };
+            const orderedPurchaseSections = providerPriority
+              .flatMap(p => purchaseSectionsByProvider[p] || [])
+              .filter(s => s.items && s.items.length > 0);
+            return (
+              <div>
+                {orderedPurchaseSections.map((s, idx) => (
+                  <AcctSection key={s.key} view={layoutMode} cols={gridCols} first={idx === 0} title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+                ))}
+              </div>
+            );
+          })() : (
             <div className="lib-empty"><p>No purchases yet.</p><p style={{fontSize:'0.8rem',color:'var(--text-dim)'}}>Connect Bandcamp or Discogs in Settings to see your collection.</p></div>
           )}
         </>
@@ -736,12 +777,22 @@ export default function Library() {
       {/* Wishlist */}
       {activeFilter === 'wishlist' && (
         <>
-          {(bcWishAlbums.length > 0 || bcWishTracks.length > 0 || dgWishlist.length > 0) ? (
-            <div>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Discogs · Wishlist" items={dgWishlist} onOpenPlaylist={openPlaylistSheet} />
-              <AcctSection view={layoutMode} cols={gridCols} title="Bandcamp · Wishlist" items={acct.bandcamp.wishlist} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          ) : (
+          {(bcWishAlbums.length > 0 || bcWishTracks.length > 0 || dgWishlist.length > 0) ? (() => {
+            const wishSectionsByProvider = {
+              discogs:  [{ key: 'dg-wish-w', title: 'Discogs · Wishlist',  items: dgWishlist }],
+              bandcamp: [{ key: 'bc-wish-w', title: 'Bandcamp · Wishlist', items: acct.bandcamp.wishlist }],
+            };
+            const orderedWishSections = providerPriority
+              .flatMap(p => wishSectionsByProvider[p] || [])
+              .filter(s => s.items && s.items.length > 0);
+            return (
+              <div>
+                {orderedWishSections.map((s, idx) => (
+                  <AcctSection key={s.key} view={layoutMode} cols={gridCols} first={idx === 0} title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+                ))}
+              </div>
+            );
+          })() : (
             <div className="lib-empty"><p>Your wishlist is empty.</p><p style={{fontSize:'0.8rem',color:'var(--text-dim)'}}>Connect Bandcamp or Discogs in Settings to see your wishlist.</p></div>
           )}
         </>
@@ -808,41 +859,25 @@ export default function Library() {
         </>
       )}
 
-      {/* Playlists → connected accounts: Bandcamp, SoundCloud, YouTube, Spotify, Apple Music & TIDAL (own + liked playlists, automatic) */}
-      {activeFilter === 'playlists' && (
-        <>
-          {acct.bandcamp?.playlists?.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Playlists" items={acct.bandcamp.playlists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-          {scPlaylists.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="SoundCloud · Playlists" items={scPlaylists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-          {ytPlaylists.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="YouTube · Playlists" items={ytPlaylists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-          {spPlaylists.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Spotify · Playlists" items={spPlaylists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-          {amPlaylists.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Playlists" items={amPlaylists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-          {tdPlaylists.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <AcctSection view={layoutMode} cols={gridCols} first title="TIDAL · Playlists" items={tdPlaylists} onOpenPlaylist={openPlaylistSheet} />
-            </div>
-          )}
-        </>
-      )}
+      {/* Playlists → connected accounts ordered by providerPriority */}
+      {activeFilter === 'playlists' && (() => {
+        const plByProvider = {
+          bandcamp:   { key: 'bc-pl', title: 'Bandcamp · Playlists',    items: acct.bandcamp?.playlists || [] },
+          soundcloud: { key: 'sc-pl', title: 'SoundCloud · Playlists',  items: scPlaylists },
+          youtube:    { key: 'yt-pl', title: 'YouTube · Playlists',     items: ytPlaylists },
+          spotify:    { key: 'sp-pl', title: 'Spotify · Playlists',     items: spPlaylists },
+          applemusic: { key: 'am-pl', title: 'Apple Music · Playlists', items: amPlaylists },
+          tidal:      { key: 'td-pl', title: 'TIDAL · Playlists',       items: tdPlaylists },
+        };
+        const orderedPl = providerPriority
+          .map(p => plByProvider[p])
+          .filter(s => s && s.items && s.items.length > 0);
+        return orderedPl.map(s => (
+          <div key={s.key} style={{ marginTop: 18 }}>
+            <AcctSection view={layoutMode} cols={gridCols} first title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+          </div>
+        ));
+      })()}
 
       {/* Follows */}
       {activeFilter === 'follows' && (
@@ -866,36 +901,24 @@ export default function Library() {
                   )}
                 </>
               )}
-              {bcFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="Bandcamp · Following" items={bcFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
-              {scFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="SoundCloud · Following" items={scFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
-              {ytFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="YouTube · Followed Artists" items={ytFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
-              {spFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="Spotify · Followed Artists" items={spFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
-              {amFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="Apple Music · Artists" items={amFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
-              {tdFollows.length > 0 && (
-                <div style={{ marginTop: 18 }}>
-                  <AcctSection view={layoutMode} cols={gridCols} first title="TIDAL · Followed Artists" items={tdFollows} onOpenPlaylist={openPlaylistSheet} />
-                </div>
-              )}
+              {(() => {
+                const followsByProvider = {
+                  bandcamp:   { key: 'bc-fol', title: 'Bandcamp · Following',        items: bcFollows },
+                  soundcloud: { key: 'sc-fol', title: 'SoundCloud · Following',      items: scFollows },
+                  youtube:    { key: 'yt-fol', title: 'YouTube · Followed Artists',  items: ytFollows },
+                  spotify:    { key: 'sp-fol', title: 'Spotify · Followed Artists',  items: spFollows },
+                  applemusic: { key: 'am-fol', title: 'Apple Music · Artists',       items: amFollows },
+                  tidal:      { key: 'td-fol', title: 'TIDAL · Followed Artists',    items: tdFollows },
+                };
+                const orderedFollows = providerPriority
+                  .map(p => followsByProvider[p])
+                  .filter(s => s && s.items && s.items.length > 0);
+                return orderedFollows.map(s => (
+                  <div key={s.key} style={{ marginTop: 18 }}>
+                    <AcctSection view={layoutMode} cols={gridCols} first title={s.title} items={s.items} onOpenPlaylist={openPlaylistSheet} />
+                  </div>
+                ));
+              })()}
             </>
           : <div className="lib-empty"><p>Artists you follow will appear here.</p><Link to="/search" className="lib-empty-link">Find artists →</Link></div>
       )}

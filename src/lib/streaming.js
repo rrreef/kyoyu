@@ -7,6 +7,94 @@ import { useEffect, useState } from 'react';
 export const SERVICES = ['applemusic', 'spotify', 'tidal'];
 export const SERVICE_LABELS = { applemusic: 'Apple Music', spotify: 'Spotify', tidal: 'TIDAL' };
 const PREF_KEY = 'kyoyu-play-through'; // 'auto' | 'applemusic' | 'spotify' | 'tidal' | 'off'
+const PRIORITY_KEY = 'providerPriority';
+export const DEFAULT_PROVIDER_PRIORITY = ['bandcamp', 'soundcloud', 'youtube', 'discogs', 'spotify', 'applemusic', 'tidal'];
+export const ALL_PROVIDERS = DEFAULT_PROVIDER_PRIORITY;
+export const ALL_PROVIDER_LABELS = {
+  bandcamp: 'Bandcamp',
+  soundcloud: 'SoundCloud',
+  youtube: 'YouTube Music',
+  discogs: 'Discogs',
+  spotify: 'Spotify',
+  applemusic: 'Apple Music',
+  tidal: 'TIDAL',
+};
+
+export function normalizeProviderPriority(list) {
+  const valid = new Set(DEFAULT_PROVIDER_PRIORITY);
+  const seen = new Set();
+  const out = [];
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const k = String(item || '').toLowerCase();
+      if (valid.has(k) && !seen.has(k)) {
+        seen.add(k);
+        out.push(k);
+      }
+    }
+  }
+  for (const k of DEFAULT_PROVIDER_PRIORITY) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  return out;
+}
+
+export function getProviderPriority() {
+  try {
+    const raw = localStorage.getItem(PRIORITY_KEY) || localStorage.getItem('kyoyu-provider-priority');
+    if (raw) return normalizeProviderPriority(JSON.parse(raw));
+  } catch { /* ignore */ }
+  return [...DEFAULT_PROVIDER_PRIORITY];
+}
+
+export function setProviderPriority(order) {
+  const normalized = normalizeProviderPriority(order);
+  try {
+    const json = JSON.stringify(normalized);
+    localStorage.setItem(PRIORITY_KEY, json);
+    localStorage.setItem('kyoyu-provider-priority', json);
+  } catch { /* ignore */ }
+  listeners.forEach((fn) => {
+    try { fn({ type: 'providerPriority', order: normalized }); } catch { /* ignore */ }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('kyoyu-provider-priority', { detail: normalized }));
+  }
+  if (isStreamingAvailable()) {
+    callStreaming('setProviderPriority', { order: normalized }).catch(() => {});
+  }
+  return normalized;
+}
+
+export function useProviderPriority() {
+  const [priority, setPriorityState] = useState(() => getProviderPriority());
+  useEffect(() => {
+    const off = onStreamingEvent((evt) => {
+      if (evt?.type === 'providerPriority' && Array.isArray(evt.order)) {
+        setPriorityState(normalizeProviderPriority(evt.order));
+      } else if (evt?.type === 'status' && Array.isArray(evt.status?.providerPriority)) {
+        setPriorityState(normalizeProviderPriority(evt.status.providerPriority));
+      }
+    });
+    const onWin = (e) => {
+      if (Array.isArray(e?.detail)) setPriorityState(normalizeProviderPriority(e.detail));
+    };
+    window.addEventListener('kyoyu-provider-priority', onWin);
+    return () => {
+      off();
+      window.removeEventListener('kyoyu-provider-priority', onWin);
+    };
+  }, []);
+  const update = (nextOrder) => {
+    const next = typeof nextOrder === 'function' ? nextOrder(getProviderPriority()) : nextOrder;
+    const saved = setProviderPriority(next);
+    setPriorityState(saved);
+  };
+  return [priority, update];
+}
 
 const handler = () => window.webkit?.messageHandlers?.streaming;
 export const isStreamingAvailable = () => !!handler();
@@ -61,6 +149,8 @@ export function onStreamingEvent(fn) {
 export async function refreshStreamingStatus() {
   if (!isStreamingAvailable()) return null;
   try {
+    const localOrder = getProviderPriority();
+    callStreaming('setProviderPriority', { order: localOrder }).catch(() => {});
     cachedStatus = await callStreaming('status');
     listeners.forEach((fn) => { try { fn({ type: 'status', status: cachedStatus }); } catch { /* ignore */ } });
   } catch { /* keep last known */ }

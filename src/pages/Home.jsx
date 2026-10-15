@@ -10,7 +10,7 @@ import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import AccountItemList, { sanitizeArtworkUrl } from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
-import { fetchAccountLibrary } from '../lib/streaming';
+import { fetchAccountLibrary, useProviderPriority } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
@@ -58,6 +58,7 @@ export default function Home() {
   const { user } = useAuth();
   const { getLikedUploads, playlists } = useLibrary();
   const acct = useConnectedLibrary();
+  const [providerPriority] = useProviderPriority();
   const homeLayout = useHomeLayoutLive();
   const [myUploads,      setMyUploads]      = useState([]);
   const [publicReleases, setPublicReleases] = useState([]);
@@ -341,27 +342,34 @@ export default function Home() {
         }).slice(0, 9);
         const ytAcctLikes = (acct.youtube?.likes || []).slice(0, 9);
 
-        const likeSections = [
-          { key: 'bandcamp',   title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
-          { key: 'soundcloud', title: 'SoundCloud · Likes',    items: (acct.soundcloud?.likes || []).slice(0, 9),    type: 'acct' },
-          { key: 'youtube',    title: 'YouTube · Likes',       items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
-          { key: 'spotify',    title: 'Spotify · Likes',       items: (acct.spotify?.likes || []).slice(0, 9),       type: 'acct' },
-          { key: 'applemusic', title: 'Apple Music · Likes',   items: (acct.applemusic?.likes || []).slice(0, 9),    type: 'acct' },
-          { key: 'tidal',      title: 'TIDAL · Likes',         items: (acct.tidal?.likes || []).slice(0, 9),         type: 'acct' },
-        ].filter(s => s.items.length > 0);
+        const likeByProvider = {
+          bandcamp:   { key: 'bandcamp',   title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
+          soundcloud: { key: 'soundcloud', title: 'SoundCloud · Likes',    items: (acct.soundcloud?.likes || []).slice(0, 9),    type: 'acct' },
+          youtube:    { key: 'youtube',    title: 'YouTube · Likes',       items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
+          discogs:    { key: 'discogs',    title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, 9),  type: 'acct' },
+          spotify:    { key: 'spotify',    title: 'Spotify · Likes',       items: (acct.spotify?.likes || []).slice(0, 9),       type: 'acct' },
+          applemusic: { key: 'applemusic', title: 'Apple Music · Likes',   items: (acct.applemusic?.likes || []).slice(0, 9),    type: 'acct' },
+          tidal:      { key: 'tidal',      title: 'TIDAL · Likes',         items: (acct.tidal?.likes || []).slice(0, 9),         type: 'acct' },
+        };
+        const likeSections = providerPriority
+          .map(p => likeByProvider[p])
+          .filter(s => s && s.items.length > 0);
 
         const ytPlaylists = ((acct.youtube?.playlists || []).concat(
           (playlists || []).filter(p => p.provider === 'youtube')
         )).slice(0, 9);
 
-        const playlistSections = [
-          { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',    items: (acct.bandcamp?.playlists || []).slice(0, 9) },
-          { key: 'soundcloud-pl', title: 'SoundCloud · Playlists',  items: (acct.soundcloud?.playlists || []).slice(0, 9) },
-          { key: 'youtube-pl',    title: 'YouTube · Playlists',     items: ytPlaylists },
-          { key: 'spotify-pl',    title: 'Spotify · Playlists',     items: (acct.spotify?.playlists || []).slice(0, 9) },
-          { key: 'applemusic-pl', title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9) },
-          { key: 'tidal-pl',      title: 'TIDAL · Playlists',       items: (acct.tidal?.playlists || []).slice(0, 9) },
-        ].filter(s => s.items.length > 0);
+        const playlistByProvider = {
+          bandcamp:   { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',    items: (acct.bandcamp?.playlists || []).slice(0, 9) },
+          soundcloud: { key: 'soundcloud-pl', title: 'SoundCloud · Playlists',  items: (acct.soundcloud?.playlists || []).slice(0, 9) },
+          youtube:    { key: 'youtube-pl',    title: 'YouTube · Playlists',     items: ytPlaylists },
+          spotify:    { key: 'spotify-pl',    title: 'Spotify · Playlists',     items: (acct.spotify?.playlists || []).slice(0, 9) },
+          applemusic: { key: 'applemusic-pl', title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9) },
+          tidal:      { key: 'tidal-pl',      title: 'TIDAL · Playlists',       items: (acct.tidal?.playlists || []).slice(0, 9) },
+        };
+        const playlistSections = providerPriority
+          .map(p => playlistByProvider[p])
+          .filter(s => s && s.items.length > 0);
 
         if (likeSections.length === 0 && playlistSections.length === 0) return null;
 

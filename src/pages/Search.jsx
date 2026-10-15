@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Clock, X, Download, Heart, ListPlus, Play, UserPlus, UserCheck, ExternalLink, Disc3, Music, Tag, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs, cacheUnifiedResult, prefetchBandcamp } from '../lib/unifiedSearch';
-import { fetchAccountLibrary, isStreamingAvailable } from '../lib/streaming';
+import { fetchAccountLibrary, isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
 import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast } from '../components/ui/AlbumSheet';
@@ -775,13 +775,7 @@ export default function Search() {
     if (et === 'release' || et === 'album') return 'albums';
     return 'titles';
   };
-  const providerPriority = (() => {
-    try {
-      const stored = localStorage.getItem('providerPriority');
-      if (stored) return JSON.parse(stored);
-    } catch(e) {}
-    return ['spotify', 'applemusic', 'tidal', 'youtube', 'bandcamp', 'soundcloud', 'discogs'];
-  })();
+  const [providerPriority] = useProviderPriority();
 
   const getProviderScore = (provider) => {
     const idx = providerPriority.indexOf(provider);
