@@ -583,11 +583,15 @@ export default function Player({ hideMini = false }) {
   },[dispatch, seekTo, currentTrack, toggleLikeUpload, provider, isPlaying, handleNext, handlePrev, restoredPending, resumeRestoredSession]);
   useEffect(() => {
     if (currentTrack) {
+      const rawArt = currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '';
+      const validArt = (typeof rawArt === 'string' && /^(https?:\/\/|data:|blob:|\/)/i.test(rawArt.trim()))
+        ? rawArt.trim().replace('{w}', '600').replace('{h}', '600')
+        : (currentTrack.id ? (localStorage.getItem(`kyoyu-art-${currentTrack.id}`) || '') : '');
       postNative({
         visible: true,
         playing: isPlaying,
         title: currentTrack.title || '',
-        artwork: currentTrack.releaseCover || currentTrack.artworkUrl || currentTrack.cover || '',
+        artwork: validArt,
         trackId: String(currentTrack.id || ''),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
         artist: currentTrack.artistName || currentTrack.artist || '',
@@ -598,6 +602,26 @@ export default function Player({ hideMini = false }) {
         trackUrl: currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.replay?.url || '',
         albumUrl: currentTrack.albumUrl || ''
       });
+      if (!validArt && currentTrack.title) {
+        const q = `${currentTrack.title} ${currentTrack.artistName || currentTrack.artist || ''}`.trim();
+        const tid = currentTrack.id;
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => {
+            const found = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
+            if (found) {
+              const hiRes = found.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
+              currentTrack.releaseCover = hiRes;
+              currentTrack.artworkUrl = hiRes;
+              currentTrack.cover = hiRes;
+              if (tid) {
+                try { localStorage.setItem(`kyoyu-art-${tid}`, hiRes); } catch {}
+              }
+              postNative({ artwork: hiRes });
+            }
+          })
+          .catch(() => {});
+      }
     } else {
       postNative({ visible: false, playing: false });
     }
@@ -671,9 +695,9 @@ export default function Player({ hideMini = false }) {
     postNative(restoredPending ? { progress, dur: duration } : { dur: duration });
   }, [duration, provider, currentTrack?.id, restoredPending]);
 
-  // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end
+  // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end, artwork
   const streamingRef = useRef({});
-  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext, itemId: providerItemId }; });
+  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext, itemId: providerItemId, currentTrack }; });
   useEffect(() => onStreamingEvent((evt) => {
     const cur = streamingRef.current;
     if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
@@ -684,6 +708,16 @@ export default function Player({ hideMini = false }) {
       if (evt.duration > 0) dispatch({ type: 'SET_DURATION', value: evt.duration });
     } else if (evt.type === 'state') {
       if (evt.playing !== cur.isPlaying) dispatch({ type: 'SET_PLAYING', value: !!evt.playing });
+    } else if (evt.type === 'artwork' && evt.artworkUrl) {
+      if (cur.currentTrack) {
+        cur.currentTrack.releaseCover = evt.artworkUrl;
+        cur.currentTrack.artworkUrl = evt.artworkUrl;
+        cur.currentTrack.cover = evt.artworkUrl;
+        if (cur.currentTrack.id) {
+          try { localStorage.setItem(`kyoyu-art-${cur.currentTrack.id}`, evt.artworkUrl); } catch {}
+        }
+      }
+      postNative({ artwork: evt.artworkUrl });
     } else if (evt.type === 'ended') {
       cur.handleNext();
     } else if (evt.type === 'failed') {

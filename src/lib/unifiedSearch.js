@@ -424,12 +424,110 @@ async function searchSpotify(query, offset = 0) {
   return empty;
 }
 
+function formatAppleArtwork(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return '';
+  return trimmed
+    .replace('{w}', '600')
+    .replace('{h}', '600')
+    .replace('{f}', 'jpg')
+    .replace('{c}', 'bb')
+    .replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
+}
+
 /**
- * Search Apple Music via the public iTunes Search API.
+ * Search Apple Music via native iOS MusicKit first, falling back to public iTunes Search API.
  */
 async function searchAppleMusic(query, offset = 0) {
   // In the iOS app Apple Music only shows up when the user connected it in Settings
   if (!(await streamingServiceAllowed('applemusic'))) return { results: [], hasMore: false, nextOffset: offset };
+
+  // 1) Try native iOS MusicKit catalog search first when running inside the iOS app
+  if (offset === 0 && isStreamingAvailable()) {
+    try {
+      const cat = await callStreaming('search', { service: 'applemusic', term: query, limit: 25, fullCatalog: true }, 10000);
+      if (cat && !Array.isArray(cat) && (cat.tracks || cat.albums || cat.artists || cat.playlists)) {
+        const results = [];
+        for (const a of (cat.artists || [])) {
+          const rawId = String(a.providerItemId || a.id || '').replace(/^am-ar-/, '');
+          const art = formatAppleArtwork(a.artworkUrl || a.cover);
+          results.push({
+            id: `am-ar-${rawId}`,
+            providerItemId: rawId,
+            title: a.name || a.title,
+            artistName: a.name || a.artistName || a.artist,
+            artworkUrl: art,
+            cover: art,
+            provider: 'applemusic',
+            entityType: 'artist',
+            isExternal: true,
+            url: a.url,
+          });
+        }
+        for (const a of (cat.albums || [])) {
+          const rawId = String(a.albumId || a.providerItemId || a.id || '').replace(/^am-al-/, '');
+          const art = formatAppleArtwork(a.artworkUrl || a.cover);
+          results.push({
+            id: `am-al-${rawId}`,
+            providerItemId: rawId,
+            title: a.title,
+            artistName: a.artistName || a.artist,
+            artworkUrl: art,
+            cover: art,
+            provider: 'applemusic',
+            entityType: 'album',
+            isExternal: true,
+            url: a.url,
+          });
+        }
+        for (const t of (cat.tracks || [])) {
+          const rawId = String(t.trackId || t.providerItemId || t.id || '').replace(/^am-/, '');
+          const art = formatAppleArtwork(t.artworkUrl || t.cover);
+          results.push({
+            id: `am-${rawId}`,
+            trackId: rawId,
+            appleMusicId: rawId,
+            title: t.title,
+            artistName: t.artistName || t.artist,
+            artworkUrl: art,
+            cover: art,
+            duration: Math.floor(t.duration || 0),
+            albumName: t.albumName || t.album || '',
+            provider: 'applemusic',
+            providerItemId: rawId,
+            entityType: 'track',
+            isExternal: true,
+            url: t.url,
+          });
+        }
+        for (const p of (cat.playlists || [])) {
+          const rawId = String(p.playlistId || p.providerItemId || p.id || '').replace(/^am-pl-/, '');
+          const art = formatAppleArtwork(p.artworkUrl || p.cover);
+          results.push({
+            id: `am-pl-${rawId}`,
+            playlistId: rawId,
+            providerItemId: rawId,
+            title: p.title,
+            artistName: p.artistName || p.artist || 'Apple Music',
+            artworkUrl: art,
+            cover: art,
+            provider: 'applemusic',
+            entityType: 'playlist',
+            isExternal: true,
+            url: p.url,
+          });
+        }
+        if (results.length) {
+          return { results, hasMore: true, nextOffset: offset + 25 };
+        }
+      }
+    } catch (err) {
+      console.warn('Apple Music native search fallback failed:', err);
+    }
+  }
+
+  // 2) Public iTunes Search API fallback
   try {
     const limit = 33;
     const [songsRes, albumsRes, artistsRes] = await Promise.all([
@@ -454,12 +552,14 @@ async function searchAppleMusic(query, offset = 0) {
     });
 
     (albumsRes.results || []).forEach(a => {
+      const art = formatAppleArtwork(a.artworkUrl100 || a.artworkUrl60);
       results.push({
         id: `am-al-${a.collectionId}`,
         providerItemId: String(a.collectionId),
         title: a.collectionName,
         artistName: a.artistName,
-        artworkUrl: a.artworkUrl100?.replace('100x100bb', '600x600bb'),
+        artworkUrl: art,
+        cover: art,
         provider: 'applemusic',
         entityType: 'album',
         isExternal: true,
@@ -468,12 +568,15 @@ async function searchAppleMusic(query, offset = 0) {
     });
 
     (songsRes.results || []).forEach(t => {
+      const art = formatAppleArtwork(t.artworkUrl100 || t.artworkUrl60);
       results.push({
         id: `am-${t.trackId}`,
         trackId: t.trackId,
+        appleMusicId: String(t.trackId),
         title: t.trackName,
         artistName: t.artistName,
-        artworkUrl: t.artworkUrl100?.replace('100x100bb', '600x600bb'),
+        artworkUrl: art,
+        cover: art,
         duration: Math.floor(t.trackTimeMillis / 1000),
         albumName: t.collectionName,
         provider: 'applemusic',

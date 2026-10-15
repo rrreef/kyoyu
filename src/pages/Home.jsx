@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AccountItemList from '../components/AccountItems';
+import AccountItemList, { sanitizeArtworkUrl } from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
 import { fetchAccountLibrary } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
@@ -404,26 +404,29 @@ export default function Home() {
             <span>History</span>
           </div>
           <div className="scroll-row">
-            {playHistory.map(item => (
-              <button 
-                key={item._hkey || item.id} 
-                className="shelf-card" 
-                style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                onClick={() => playFromHistory(item)}
-              >
-                <div className="shelf-card-art">
-                  {item.cover ? (
-                    <img src={item.cover} alt={item.title} loading="lazy" decoding="async" />
-                  ) : (
-                    <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
-                  )}
-                </div>
-                <div className="shelf-card-info">
-                  <div className="shelf-card-title">{item.title}</div>
-                  <div className="shelf-card-sub">{item.artist}</div>
-                </div>
-              </button>
-            ))}
+            {playHistory.map(item => {
+              const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
+              return (
+                <button 
+                  key={item._hkey || item.id} 
+                  className="shelf-card" 
+                  style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
+                  onClick={() => playFromHistory(item)}
+                >
+                  <div className="shelf-card-art">
+                    {cleanCover ? (
+                      <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                    ) : (
+                      <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
+                    )}
+                  </div>
+                  <div className="shelf-card-info">
+                    <div className="shelf-card-title">{item.title}</div>
+                    <div className="shelf-card-sub">{item.artist}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

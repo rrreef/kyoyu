@@ -630,10 +630,12 @@ export default function Search() {
           queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration,
             provider: 'spotify', providerItemId: item.spotifyId, spotifyId: item.spotifyId, albumName: item.albumName });
           break;
-        case 'applemusic':
-          queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration,
-            provider: 'applemusic', providerItemId: item.trackId, trackId: item.trackId });
+        case 'applemusic': {
+          const amId = item.trackId || item.appleMusicId || item.providerItemId || String(item.id || '').replace(/^am-/, '');
+          queue.push({ id, title: item.title, artistName: item.artistName || item.artist, artworkUrl: item.artworkUrl || item.cover || '', duration: item.duration,
+            provider: 'applemusic', providerItemId: amId, trackId: amId, appleMusicId: amId, albumName: item.albumName });
           break;
+        }
         case 'tidal':
           queue.push({ id, title: item.title, artistName: item.artistName, artworkUrl: item.artworkUrl, duration: item.duration,
             provider: 'tidal', providerItemId: item.tidalId || item.providerItemId, tidalId: item.tidalId || item.providerItemId, albumName: item.albumName });
@@ -1569,11 +1571,48 @@ export default function Search() {
                         });
                         if (r.ok) tracks = (await r.json()).tracks.map(t => ({ ...t, providerItemId: t.spotifyId }));
                       } else if (item.provider === 'applemusic') {
-                        const amId = item.id.replace('am-al-', '');
-                        const r = await fetch(`https://itunes.apple.com/lookup?id=${amId}&entity=song`);
-                        if (r.ok) {
-                          const data = await r.json();
-                          tracks = data.results.slice(1).map(t => ({ id: `am-${t.trackId}`, title: t.trackName, artist: t.artistName, duration: Math.floor(t.trackTimeMillis / 1000), provider: 'applemusic', providerItemId: String(t.trackId) }));
+                        if (isStreamingAvailable()) {
+                          try {
+                            const raw = await fetchAccountLibrary('applemusic', 'playlistTracks', { playlistId: item.playlistId || item.albumId || item.id });
+                            tracks = (raw || []).map(t => {
+                              const rawId = t.trackId || t.appleMusicId || t.providerItemId || String(t.id || '').replace(/^am-/, '');
+                              const art = t.cover || t.artworkUrl || item.artworkUrl || item.cover || '';
+                              return {
+                                id: t.id || `am-${rawId}`,
+                                title: t.title,
+                                artist: t.artist || t.artistName || item.artistName || '',
+                                duration: t.duration || 0,
+                                provider: 'applemusic',
+                                providerItemId: String(rawId),
+                                trackId: String(rawId),
+                                appleMusicId: String(rawId),
+                                cover: art,
+                                artworkUrl: art,
+                              };
+                            });
+                          } catch {}
+                        }
+                        if (!tracks.length) {
+                          const amId = String(item.albumId || item.providerItemId || item.id || '').replace(/^am-alb?-/, '');
+                          const r = await fetch(`https://itunes.apple.com/lookup?id=${encodeURIComponent(amId)}&entity=song`);
+                          if (r.ok) {
+                            const data = await r.json();
+                            tracks = (data.results || []).slice(1).map(t => {
+                              const art = (t.artworkUrl100 || '').replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1') || item.artworkUrl || item.cover || '';
+                              return {
+                                id: `am-${t.trackId}`,
+                                title: t.trackName,
+                                artist: t.artistName,
+                                duration: Math.floor((t.trackTimeMillis || 0) / 1000),
+                                provider: 'applemusic',
+                                providerItemId: String(t.trackId),
+                                trackId: String(t.trackId),
+                                appleMusicId: String(t.trackId),
+                                cover: art,
+                                artworkUrl: art,
+                              };
+                            });
+                          }
                         }
                       } else if (item.provider === 'tidal') {
                         if (isStreamingAvailable()) {

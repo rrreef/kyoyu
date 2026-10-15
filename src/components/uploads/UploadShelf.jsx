@@ -4,6 +4,7 @@ import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check, Heart } from 'luci
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { sanitizeArtworkUrl } from '../AccountItems';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -270,6 +271,107 @@ export default function UploadShelf({ uploads }) {
   );
 }
 
+function useUploadArtwork(t) {
+  const itemId = t?.id || '';
+  const initial = sanitizeArtworkUrl(t?.artworkUrl || t?.cover, itemId);
+  const [src, setSrc] = useState(initial);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setSrc(sanitizeArtworkUrl(t?.artworkUrl || t?.cover, itemId));
+    setFailed(false);
+  }, [t?.artworkUrl, t?.cover, itemId]);
+
+  useEffect(() => {
+    if ((src && !failed) || !t?.title) return;
+    let cancelled = false;
+    const q = `${t.title} ${t.artist || t.artistName || ''}`.trim();
+    if (!q) return;
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled) return;
+        const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
+        if (raw) {
+          const hiRes = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
+          setSrc(hiRes);
+          setFailed(false);
+          t.artworkUrl = hiRes;
+          t.cover = hiRes;
+          if (itemId) {
+            try {
+              localStorage.setItem(`kyoyu-art-${itemId}`, hiRes);
+              const liked = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
+              let updated = false;
+              const nextLiked = liked.map(x => {
+                if (x && x.id === itemId && (!x.artworkUrl || /^musickit:\/\//i.test(x.artworkUrl))) {
+                  updated = true;
+                  return { ...x, artworkUrl: hiRes, cover: hiRes };
+                }
+                return x;
+              });
+              if (updated) localStorage.setItem('kyoyu-liked-uploads', JSON.stringify(nextLiked));
+            } catch {}
+          }
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [src, failed, t, itemId]);
+
+  return { cleanSrc: failed ? '' : src, onError: () => setFailed(true) };
+}
+
+function UploadExpRow({ t, isActive, onPlay }) {
+  const { cleanSrc, onError } = useUploadArtwork(t);
+  return (
+    <div className={`upl-exp-row${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
+      {cleanSrc
+        ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="lazy" decoding="async"/>
+        : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
+      }
+      <div className="upl-exp-info">
+        <div className="upl-exp-title">{t.title || 'Untitled'}</div>
+        <div className="upl-exp-sub">{t.artist || ''}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
+        <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+      </div>
+    </div>
+  );
+}
+
+function UploadGridCellItem({ t, isActive, isPlaying, liked, safeCols, onPlay, onToggleLike }) {
+  const { cleanSrc, onError } = useUploadArtwork(t);
+  return (
+    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
+      <div className="upl-grid-art">
+        {cleanSrc
+          ? <img src={cleanSrc} alt={t.title} onError={onError} loading="lazy" decoding="async"/>
+          : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
+        }
+        {isActive && (
+          <div className="upl-grid-playing">
+            <div className={`upl-grid-bars${isPlaying ? '' : ' paused'}`}>
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
+        <button
+          className={`upl-grid-heart${liked ? ' liked' : ''}`}
+          onClick={e => { e.stopPropagation(); onToggleLike(t); }}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          data-kyoyu-injected="1"
+        >
+          <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? '#ffffff' : 'none'} color={liked ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
+        </button>
+      </div>
+      <div className="upl-grid-title">{t.title || 'Untitled'}</div>
+      {safeCols <= 3 && <div className="upl-grid-artist">{t.artist || ''}</div>}
+    </div>
+  );
+}
+
 /* ── Named export: vertical track list reused in Home & Library ── */
 export function UploadExpandedList({ uploads }) {
   const { playTrack, playSaved } = usePlayer();
@@ -290,7 +392,7 @@ export function UploadExpandedList({ uploads }) {
     }
     const queue = sorted.map(u => ({
       id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
-      releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
+      releaseCover: sanitizeArtworkUrl(u.artworkUrl || u.cover, u.id), releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
     }));
     playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
     setActiveId(t.id);
@@ -314,26 +416,9 @@ export function UploadExpandedList({ uploads }) {
   return (
     <>
       <div className="upl-expanded-list">
-        {sorted.map(t => {
-          const rawSrc = (t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null)
-            || (t.cover && t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null);
-          const cleanSrc = (rawSrc && rawSrc.includes('bcbits.com')) ? rawSrc.replace(/_[0-9]+\.jpg/, '_10.jpg') : rawSrc;
-          return (
-            <div key={t.id} className={`upl-exp-row${activeId === t.id ? ' active' : ''}`} onClick={() => play(t)}>
-              {cleanSrc
-                ? <img src={cleanSrc} alt="" className="upl-exp-art" loading="lazy" decoding="async"/>
-                : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
-              }
-              <div className="upl-exp-info">
-                <div className="upl-exp-title">{t.title || 'Untitled'}</div>
-                <div className="upl-exp-sub">{t.artist || ''}</div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
-                <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
-              </div>
-            </div>
-          );
-        })}
+        {sorted.map(t => (
+          <UploadExpRow key={t.id} t={t} isActive={activeId === t.id} onPlay={play} />
+        ))}
       </div>
 
       {editingTrack && (
@@ -376,7 +461,7 @@ export function UploadGridView({ uploads, cols = 2 }) {
     }
     const queue = sorted.map(u => ({
       id: u.id, title: u.title || 'Untitled', artistName: u.artist || '', artist: u.artist || '',
-      releaseCover: u.artworkUrl || u.cover || '', releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
+      releaseCover: sanitizeArtworkUrl(u.artworkUrl || u.cover, u.id), releaseTitle: u.album || u.title || '', src: u.fileUrl || u.audioUrl || '',
     }));
     playTrack(queue.find(q => q.id === t.id) || queue[0], queue);
   }
@@ -385,37 +470,18 @@ export function UploadGridView({ uploads, cols = 2 }) {
 
   return (
     <div className={`upl-grid upl-grid-${safeCols}`}>
-      {sorted.map(t => {
-        const isActive = state.currentTrack?.id === t.id;
-        const liked    = isLikedUpload(t.id);
-        return (
-          <div key={t.id} className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => play(t)}>
-            <div className="upl-grid-art">
-              {((t.artworkUrl && t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null') || (t.cover && t.cover !== 'undefined' && t.cover !== 'null'))
-                ? <img src={(t.artworkUrl !== 'undefined' && t.artworkUrl !== 'null' ? t.artworkUrl : null) || (t.cover !== 'undefined' && t.cover !== 'null' ? t.cover : null)} alt={t.title} loading="lazy" decoding="async"/>
-                : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
-              }
-              {isActive && (
-                <div className="upl-grid-playing">
-                  <div className={`upl-grid-bars${state.isPlaying ? '' : ' paused'}`}>
-                    <span /><span /><span />
-                  </div>
-                </div>
-              )}
-              <button
-                className={`upl-grid-heart${liked ? ' liked' : ''}`}
-                onClick={e => { e.stopPropagation(); toggleLikeUpload(t); }}
-                aria-label={liked ? 'Unlike' : 'Like'}
-                data-kyoyu-injected="1"
-              >
-                <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? '#ffffff' : 'none'} color={liked ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
-              </button>
-            </div>
-            <div className="upl-grid-title">{t.title || 'Untitled'}</div>
-            {safeCols <= 3 && <div className="upl-grid-artist">{t.artist || ''}</div>}
-          </div>
-        );
-      })}
+      {sorted.map(t => (
+        <UploadGridCellItem
+          key={t.id}
+          t={t}
+          isActive={state.currentTrack?.id === t.id}
+          isPlaying={!!state.isPlaying}
+          liked={isLikedUpload(t.id)}
+          safeCols={safeCols}
+          onPlay={play}
+          onToggleLike={toggleLikeUpload}
+        />
+      ))}
     </div>
   );
 }
