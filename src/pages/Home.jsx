@@ -10,7 +10,7 @@ import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
 import AccountItemList, { sanitizeArtworkUrl } from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
-import { fetchAccountLibrary, useProviderPriority } from '../lib/streaming';
+import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
@@ -59,6 +59,7 @@ export default function Home() {
   const { getLikedUploads, playlists } = useLibrary();
   const acct = useConnectedLibrary();
   const [providerPriority] = useProviderPriority();
+  const [homeSectionRows] = useHomeSectionRows();
   const homeLayout = useHomeLayoutLive();
   const [myUploads,      setMyUploads]      = useState([]);
   const [publicReleases, setPublicReleases] = useState([]);
@@ -333,47 +334,54 @@ export default function Home() {
         </section>
       )}
 
-      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (LAST 9) ═══ */}
+      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (N ROWS × 3 TITLES) ═══ */}
       {showFeatured && (() => {
+        const limitFor = (sectionKey) => {
+          const rows = homeSectionRows?.[sectionKey] ?? DEFAULT_HOME_SECTION_ROWS;
+          return Math.max(0, Number(rows) || 0) * HOME_TITLES_PER_ROW;
+        };
+
         const likedUploads = getLikedUploads(user?.id) || [];
+        const ytLikesMax = limitFor('youtube-likes');
+        const ytPlMax = limitFor('youtube-pl');
         const ytLocalLikes = likedUploads.filter(t => {
           const p = historyReplayInfo(t).provider || t.provider || '';
           return p === 'youtube' || String(t.id || '').startsWith('yt-');
-        }).slice(0, 9);
-        const ytAcctLikes = (acct.youtube?.likes || []).slice(0, 9);
+        }).slice(0, ytLikesMax);
+        const ytAcctLikes = (acct.youtube?.likes || []).slice(0, ytLikesMax);
         const ytPlaylists = ((acct.youtube?.playlists || []).concat(
           (playlists || []).filter(p => p.provider === 'youtube')
-        )).slice(0, 9);
+        )).slice(0, ytPlMax);
 
         const sectionsByProvider = {
           bandcamp: [
-            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
-            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   items: (acct.bandcamp?.wishlist || []).slice(0, 9),   type: 'acct' },
-            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  items: (acct.bandcamp?.playlists || []).slice(0, 9),  type: 'acct' },
+            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, limitFor('bandcamp-col')),  type: 'acct' },
+            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   items: (acct.bandcamp?.wishlist || []).slice(0, limitFor('bandcamp-wish')),   type: 'acct' },
+            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  items: (acct.bandcamp?.playlists || []).slice(0, limitFor('bandcamp-pl')),    type: 'acct' },
           ],
           discogs: [
-            { key: 'discogs-col',   title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, 9),  type: 'acct' },
-            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    items: (acct.discogs?.wishlist || []).slice(0, 9),    type: 'acct' },
+            { key: 'discogs-col',   title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, limitFor('discogs-col')),   type: 'acct' },
+            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    items: (acct.discogs?.wishlist || []).slice(0, limitFor('discogs-wish')),    type: 'acct' },
           ],
           soundcloud: [
-            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     items: (acct.soundcloud?.likes || []).slice(0, 9),     type: 'acct' },
-            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', items: (acct.soundcloud?.playlists || []).slice(0, 9), type: 'acct' },
+            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     items: (acct.soundcloud?.likes || []).slice(0, limitFor('soundcloud-likes')),     type: 'acct' },
+            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', items: (acct.soundcloud?.playlists || []).slice(0, limitFor('soundcloud-pl')),    type: 'acct' },
           ],
           youtube: [
             { key: 'youtube-likes', title: 'YouTube · Likes',     items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
             { key: 'youtube-pl',    title: 'YouTube · Playlists', items: ytPlaylists,                                         type: 'acct' },
           ],
           spotify: [
-            { key: 'spotify-likes', title: 'Spotify · Likes',     items: (acct.spotify?.likes || []).slice(0, 9),     type: 'acct' },
-            { key: 'spotify-pl',    title: 'Spotify · Playlists', items: (acct.spotify?.playlists || []).slice(0, 9), type: 'acct' },
+            { key: 'spotify-likes', title: 'Spotify · Likes',     items: (acct.spotify?.likes || []).slice(0, limitFor('spotify-likes')),     type: 'acct' },
+            { key: 'spotify-pl',    title: 'Spotify · Playlists', items: (acct.spotify?.playlists || []).slice(0, limitFor('spotify-pl')),    type: 'acct' },
           ],
           applemusic: [
-            { key: 'applemusic-likes', title: 'Apple Music · Likes',     items: (acct.applemusic?.likes || []).slice(0, 9),     type: 'acct' },
-            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, 9), type: 'acct' },
+            { key: 'applemusic-likes', title: 'Apple Music · Likes',     items: (acct.applemusic?.likes || []).slice(0, limitFor('applemusic-likes')),     type: 'acct' },
+            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, limitFor('applemusic-pl')),    type: 'acct' },
           ],
           tidal: [
-            { key: 'tidal-likes', title: 'TIDAL · Likes',     items: (acct.tidal?.likes || []).slice(0, 9),     type: 'acct' },
-            { key: 'tidal-pl',    title: 'TIDAL · Playlists', items: (acct.tidal?.playlists || []).slice(0, 9), type: 'acct' },
+            { key: 'tidal-likes', title: 'TIDAL · Likes',     items: (acct.tidal?.likes || []).slice(0, limitFor('tidal-likes')),     type: 'acct' },
+            { key: 'tidal-pl',    title: 'TIDAL · Playlists', items: (acct.tidal?.playlists || []).slice(0, limitFor('tidal-pl')),    type: 'acct' },
           ],
         };
 

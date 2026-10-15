@@ -82,10 +82,24 @@ export function useProviderPriority() {
     const onWin = (e) => {
       if (Array.isArray(e?.detail)) setPriorityState(normalizeProviderPriority(e.detail));
     };
+    const onStorage = (e) => {
+      if (!e || !e.key || e.key === PRIORITY_KEY || e.key === 'kyoyu-provider-priority') {
+        setPriorityState(getProviderPriority());
+      }
+    };
+    const onFocusOrVisible = () => {
+      setPriorityState(getProviderPriority());
+    };
     window.addEventListener('kyoyu-provider-priority', onWin);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
     return () => {
       off();
       window.removeEventListener('kyoyu-provider-priority', onWin);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
     };
   }, []);
   const update = (nextOrder) => {
@@ -94,6 +108,125 @@ export function useProviderPriority() {
     setPriorityState(saved);
   };
   return [priority, update];
+}
+
+// ── Home Page Rows per Section (3 titles per row, default 3 rows = 9 titles) ──
+const HOME_ROWS_KEY = 'kyoyu-home-section-rows';
+export const HOME_TITLES_PER_ROW = 3;
+export const DEFAULT_HOME_SECTION_ROWS = 3;
+
+export const HOME_PROVIDER_SECTIONS = {
+  bandcamp: [
+    { key: 'bandcamp-col',  shortLabel: 'Collection', title: 'Bandcamp · Collection' },
+    { key: 'bandcamp-wish', shortLabel: 'Wishlist',   title: 'Bandcamp · Wishlist' },
+    { key: 'bandcamp-pl',   shortLabel: 'Playlists',  title: 'Bandcamp · Playlists' },
+  ],
+  discogs: [
+    { key: 'discogs-col',   shortLabel: 'Collection', title: 'Discogs · Collection' },
+    { key: 'discogs-wish',  shortLabel: 'Wishlist',   title: 'Discogs · Wishlist' },
+  ],
+  soundcloud: [
+    { key: 'soundcloud-likes', shortLabel: 'Likes',     title: 'SoundCloud · Likes' },
+    { key: 'soundcloud-pl',    shortLabel: 'Playlists', title: 'SoundCloud · Playlists' },
+  ],
+  youtube: [
+    { key: 'youtube-likes', shortLabel: 'Likes',     title: 'YouTube · Likes' },
+    { key: 'youtube-pl',    shortLabel: 'Playlists', title: 'YouTube · Playlists' },
+  ],
+  spotify: [
+    { key: 'spotify-likes', shortLabel: 'Likes',     title: 'Spotify · Likes' },
+    { key: 'spotify-pl',    shortLabel: 'Playlists', title: 'Spotify · Playlists' },
+  ],
+  applemusic: [
+    { key: 'applemusic-likes', shortLabel: 'Likes',     title: 'Apple Music · Likes' },
+    { key: 'applemusic-pl',    shortLabel: 'Playlists', title: 'Apple Music · Playlists' },
+  ],
+  tidal: [
+    { key: 'tidal-likes', shortLabel: 'Likes',     title: 'TIDAL · Likes' },
+    { key: 'tidal-pl',    shortLabel: 'Playlists', title: 'TIDAL · Playlists' },
+  ],
+};
+
+export const ALL_HOME_SECTION_KEYS = Object.values(HOME_PROVIDER_SECTIONS)
+  .flat()
+  .map((s) => s.key);
+
+export function normalizeHomeSectionRows(rawMap) {
+  const out = {};
+  for (const key of ALL_HOME_SECTION_KEYS) {
+    const val = rawMap && typeof rawMap === 'object' ? Number(rawMap[key]) : NaN;
+    out[key] = Number.isFinite(val) && val >= 0 ? Math.min(50, Math.round(val)) : DEFAULT_HOME_SECTION_ROWS;
+  }
+  return out;
+}
+
+export function getHomeSectionRows() {
+  try {
+    const raw = localStorage.getItem(HOME_ROWS_KEY);
+    if (raw) return normalizeHomeSectionRows(JSON.parse(raw));
+  } catch { /* ignore */ }
+  return normalizeHomeSectionRows({});
+}
+
+export function setHomeSectionRows(nextMap) {
+  const normalized = normalizeHomeSectionRows(nextMap);
+  try {
+    localStorage.setItem(HOME_ROWS_KEY, JSON.stringify(normalized));
+  } catch { /* ignore */ }
+  listeners.forEach((fn) => {
+    try { fn({ type: 'homeSectionRows', rows: normalized }); } catch { /* ignore */ }
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('kyoyu-home-section-rows', { detail: normalized }));
+  }
+  if (isStreamingAvailable()) {
+    callStreaming('setHomeSectionRows', { rows: normalized }).catch(() => {});
+  }
+  return normalized;
+}
+
+export function useHomeSectionRows() {
+  const [rowsMap, setRowsMap] = useState(() => getHomeSectionRows());
+  useEffect(() => {
+    const off = onStreamingEvent((evt) => {
+      if (evt?.type === 'homeSectionRows' && evt.rows && typeof evt.rows === 'object') {
+        setRowsMap(normalizeHomeSectionRows(evt.rows));
+      } else if (evt?.type === 'status' && evt.status?.homeSectionRows && typeof evt.status.homeSectionRows === 'object') {
+        setRowsMap(normalizeHomeSectionRows(evt.status.homeSectionRows));
+      }
+    });
+    const onWin = (e) => {
+      if (e?.detail && typeof e.detail === 'object') {
+        setRowsMap(normalizeHomeSectionRows(e.detail));
+      }
+    };
+    const onStorage = (e) => {
+      if (!e || !e.key || e.key === HOME_ROWS_KEY) {
+        setRowsMap(getHomeSectionRows());
+      }
+    };
+    const onFocusOrVisible = () => {
+      setRowsMap(getHomeSectionRows());
+    };
+    window.addEventListener('kyoyu-home-section-rows', onWin);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+    return () => {
+      off();
+      window.removeEventListener('kyoyu-home-section-rows', onWin);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+    };
+  }, []);
+  const update = (updater) => {
+    const current = getHomeSectionRows();
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    const saved = setHomeSectionRows(next);
+    setRowsMap(saved);
+  };
+  return [rowsMap, update];
 }
 
 const handler = () => window.webkit?.messageHandlers?.streaming;
