@@ -335,15 +335,16 @@ export default function Home() {
       {/* ═══ 1.2 — LIBRARY PER PROVIDER: LIKES / COLLECTION & PLAYLISTS (LAST 9) ═══ */}
       {showFeatured && (() => {
         const likedUploads = getLikedUploads(user?.id) || [];
-        const ytLikes = likedUploads.filter(t => {
+        const ytLocalLikes = likedUploads.filter(t => {
           const p = historyReplayInfo(t).provider || t.provider || '';
           return p === 'youtube' || String(t.id || '').startsWith('yt-');
         }).slice(0, 9);
+        const ytAcctLikes = (acct.youtube?.likes || []).slice(0, 9);
 
         const likeSections = [
           { key: 'bandcamp',   title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, 9), type: 'acct' },
           { key: 'soundcloud', title: 'SoundCloud · Likes',    items: (acct.soundcloud?.likes || []).slice(0, 9),    type: 'acct' },
-          { key: 'youtube',    title: 'YouTube · Likes',       items: ytLikes,                                       type: 'uploads' },
+          { key: 'youtube',    title: 'YouTube · Likes',       items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
           { key: 'spotify',    title: 'Spotify · Likes',       items: (acct.spotify?.likes || []).slice(0, 9),       type: 'acct' },
           { key: 'applemusic', title: 'Apple Music · Likes',   items: (acct.applemusic?.likes || []).slice(0, 9),    type: 'acct' },
           { key: 'tidal',      title: 'TIDAL · Likes',         items: (acct.tidal?.likes || []).slice(0, 9),         type: 'acct' },

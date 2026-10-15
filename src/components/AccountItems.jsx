@@ -122,6 +122,14 @@ export function toPlayable(it) {
       albumName: it.albumName || it.title, url: it.url,
     };
   }
+  if (it.provider === 'youtube') {
+    const vid = it.videoId || it.trackId || it.providerItemId || String(it.id || '').replace(/^yt-|^youtube-/, '');
+    return {
+      id: it.id || `yt-${vid}`, title: it.title, artistName: it.artistName || it.artist, artworkUrl: art, duration: it.duration || 0,
+      provider: 'youtube', providerItemId: vid, videoId: vid, trackId: vid,
+      albumName: it.albumName, url: it.url || `https://music.youtube.com/watch?v=${vid}`,
+    };
+  }
   return {
     id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
     provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl, streamUrl: it.streamUrl || undefined,
@@ -189,6 +197,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
     const cur = state?.currentTrack;
     if (!cur || !it) return false;
     if (cur.id && it.id && String(cur.id) === String(it.id)) return true;
+    if (it.videoId && (cur.videoId === it.videoId || cur.providerItemId === it.videoId)) return true;
     if (it.trackUrl && (cur.providerItemId === it.trackUrl || cur.trackUrl === it.trackUrl || cur.src === it.trackUrl)) return true;
     if (it.permalinkUrl && cur.providerItemId === it.permalinkUrl) return true;
     if (it.kind === 'track' && cur.title && it.title && cur.title === it.title && (cur.artistName || cur.artist || '') === (it.artistName || '')) return true;
@@ -256,7 +265,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
   const onItemClick = (it) => {
     if (it.kind === 'playlist') return () => handlePlaylistClick(it);
     if (it.kind === 'album') {
-      if (it.provider === 'spotify' || it.provider === 'applemusic' || it.provider === 'tidal' || it.provider === 'discogs') return () => handlePlaylistClick(it);
+      if (it.provider === 'spotify' || it.provider === 'applemusic' || it.provider === 'tidal' || it.provider === 'discogs' || it.provider === 'youtube') return () => handlePlaylistClick(it);
       return () => playBandcampAlbum(it);
     }
     if (it.kind === 'track') return () => playList(items, it);

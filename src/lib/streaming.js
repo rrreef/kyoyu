@@ -82,11 +82,11 @@ export function useStreamingStatus() {
 export const connectService = (service) => callStreaming('connect', { service });
 export const disconnectService = (service) => callStreaming('disconnect', { service });
 
-// ── Personal accounts (SoundCloud / Bandcamp / Discogs): web sign-in handled natively, library read on-device ──
-export const ACCOUNT_SERVICES = ['soundcloud', 'bandcamp', 'discogs'];
-export const ACCOUNT_LABELS = { soundcloud: 'SoundCloud', bandcamp: 'Bandcamp', discogs: 'Discogs' };
+// ── Personal accounts (SoundCloud / Bandcamp / Discogs / YouTube Music): web sign-in handled natively, library read on-device ──
+export const ACCOUNT_SERVICES = ['soundcloud', 'bandcamp', 'discogs', 'youtube'];
+export const ACCOUNT_LABELS = { soundcloud: 'SoundCloud', bandcamp: 'Bandcamp', discogs: 'Discogs', youtube: 'YouTube Music' };
 
-/** kind: soundcloud → likes | playlists | following | playlistTracks · bandcamp → collection | wishlist · discogs → collection | wishlist */
+/** kind: soundcloud → likes | playlists | following | playlistTracks · bandcamp → collection | wishlist · discogs → collection | wishlist · youtube → likes | playlists | albums | following | playlistTracks */
 export async function fetchAccountLibrary(service, kind, extra = {}) {
   const r = await callStreaming('library', { service, kind, ...extra }, 90000);
   return Array.isArray(r?.items) ? r.items : [];
@@ -106,7 +106,7 @@ export function detectItemProviders(item) {
 
   const checkProvider = (p) => {
     const norm = String(p || '').toLowerCase();
-    if (['bandcamp', 'soundcloud', 'discogs', 'spotify', 'applemusic', 'tidal'].includes(norm)) {
+    if (['bandcamp', 'soundcloud', 'discogs', 'spotify', 'applemusic', 'tidal', 'youtube'].includes(norm)) {
       found.add(norm);
     }
   };
@@ -123,6 +123,7 @@ export function detectItemProviders(item) {
   if (/^sp(ab|pl|-al|-pl)?-|^spotify[-:]/i.test(id) || /^sp(ab|-al)?-|^spotify[-:]/i.test(albumId) || item.spotifyId || String(item.uri || '').startsWith('spotify:')) found.add('spotify');
   if (/^am-(alb-|al-|pl-)?|^applemusic-/i.test(id) || /^am-(alb-|al-)?|^applemusic-/i.test(albumId) || item.appleMusicId) found.add('applemusic');
   if (/^td(ab|pl|-al|-pl)?-|^tidal[-:]/i.test(id) || /^td(ab|-al)?-|^tidal[-:]/i.test(albumId) || item.tidalId || String(item.uri || '').startsWith('tidal:')) found.add('tidal');
+  if (/^yt(-pl|-al)?-|^youtube-/i.test(id) || /^yt-al-|^youtube-/i.test(albumId) || item.videoId || item.replay?.videoId || item.origin?.videoId) found.add('youtube');
 
   for (const u of urls) {
     if (u.includes('bandcamp.com') && !u.includes('bcbits.com')) found.add('bandcamp');
@@ -131,6 +132,7 @@ export function detectItemProviders(item) {
     if (u.includes('spotify.com') || u.startsWith('spotify:')) found.add('spotify');
     if (u.includes('music.apple.com') || u.includes('itunes.apple.com')) found.add('applemusic');
     if (u.includes('tidal.com') || u.startsWith('tidal:')) found.add('tidal');
+    if (u.includes('youtube.com') || u.includes('youtu.be')) found.add('youtube');
   }
 
   return Array.from(found);
@@ -153,8 +155,8 @@ export async function syncProviderLike(item, liked = true) {
   const title = String(item.title || item.name || '');
   const artist = String(item.artistName || item.artist || '');
   const album = String(item.album || item.albumName || item.releaseTitle || '');
-  const isPlaylistKind = item.kind === 'playlist' || item.entityType === 'playlist' || /^(sc(-?pl)|sp(-?pl)|td(-?pl)|am-pl)-/i.test(id);
-  const isAlbumKind = item.kind === 'album' || item.entityType === 'album' || item.entityType === 'release' || /^(sp(ab|-al)|td(ab|-al)|am-(alb|al))-/i.test(id);
+  const isPlaylistKind = item.kind === 'playlist' || item.entityType === 'playlist' || /^(sc(-?pl)|sp(-?pl)|td(-?pl)|am-pl|yt-pl)-/i.test(id);
+  const isAlbumKind = item.kind === 'album' || item.entityType === 'album' || item.entityType === 'release' || /^(sp(ab|-al)|td(ab|-al)|am-(alb|al)|yt-al)-/i.test(id);
   const baseKind = isPlaylistKind ? 'playlist' : (isAlbumKind ? 'album' : 'track');
 
   const urls = [
@@ -199,6 +201,12 @@ export async function syncProviderLike(item, liked = true) {
       itemId = String(item.tidalId || (item.replay?.provider === 'tidal' ? item.replay?.itemId : '') || (/^td|^tidal/i.test(id) ? id : (/^td|^tidal/i.test(albumId) ? albumId : id)));
       if (url.includes('/playlist/') || url.includes(':playlist:') || /^td(-?pl)-/i.test(itemId)) kind = 'playlist';
       else if (url.includes('/album/') || url.includes(':album:') || /^td(ab|-al)-/i.test(itemId)) kind = 'album';
+    } else if (service === 'youtube') {
+      url = urls.find((u) => u.includes('youtube.com') || u.includes('youtu.be')) || '';
+      const vid = item.videoId || item.replay?.videoId || item.origin?.videoId || (item.provider === 'youtube' ? item.providerItemId : '');
+      itemId = String(vid ? `yt-${String(vid).replace(/^yt-|^youtube-/, '')}` : (/^yt-|^youtube-/i.test(id) ? id : id));
+      if (url.includes('playlist?list=') || /^yt-pl-/i.test(id)) kind = 'playlist';
+      else if (/^yt-al-|^MPREb_/i.test(id) || /^yt-al-|^MPREb_/i.test(albumId)) kind = 'album';
     }
 
     // Notify listeners for instant optimistic update

@@ -20,6 +20,16 @@ const TABS = {
     { key: 'collection', label: 'Collection' },
     { key: 'wishlist',   label: 'Wishlist' },
   ],
+  discogs: [
+    { key: 'collection', label: 'Collection' },
+    { key: 'wishlist',   label: 'Wishlist' },
+  ],
+  youtube: [
+    { key: 'likes',     label: 'Likes' },
+    { key: 'albums',    label: 'Albums' },
+    { key: 'playlists', label: 'Playlists' },
+    { key: 'following', label: 'Following' },
+  ],
   tidal: [
     { key: 'likes',     label: 'Likes' },
     { key: 'albums',    label: 'Albums' },

@@ -37,6 +37,7 @@ function serviceLine(service, s) {
   if (ACCOUNT_SERVICES.includes(service)) {
     if (!s.connected) {
       if (service === 'soundcloud') return 'Sign in to see your likes, playlists and follows in Kyoyu';
+      if (service === 'youtube') return 'Sign in to see your YouTube Music likes, albums, playlists and follows in Kyoyu';
       if (service === 'discogs') return 'Sign in to see your collection and wishlist in Kyoyu';
       return 'Sign in to see your collection, purchases and wishlist in Kyoyu';
     }

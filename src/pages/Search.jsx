@@ -1134,6 +1134,9 @@ export default function Search() {
       ...(acct?.bandcamp?.playlists || []),
       ...(acct?.soundcloud?.likes || []),
       ...(acct?.soundcloud?.playlists || []),
+      ...(acct?.youtube?.likes || []),
+      ...(acct?.youtube?.albums || []),
+      ...(acct?.youtube?.playlists || []),
       ...(acct?.spotify?.likes || []),
       ...(acct?.spotify?.albums || []),
       ...(acct?.spotify?.playlists || []),
@@ -1236,13 +1239,20 @@ export default function Search() {
       return;
     }
     if (item._libType === 'playlist' || item.kind === 'playlist') {
+      let tracks = raw.tracks || [];
+      if (!tracks.length && isStreamingAvailable() && raw.provider && (raw.playlistId || raw.url)) {
+        try {
+          tracks = await fetchAccountLibrary(raw.provider, 'playlistTracks', { playlistId: raw.playlistId, playlistUrl: raw.url });
+          raw.tracks = tracks;
+        } catch {}
+      }
       setPlaylistSheet({
         id: raw.id,
         title: raw.title || raw.name || 'Playlist',
         artistName: raw.artistName || raw.creator || user?.displayName || 'You',
         artworkUrl: raw.artworkUrl || raw.cover || null,
         provider: raw.provider || null,
-        tracks: raw.tracks || [],
+        tracks,
       });
       return;
     }
@@ -1274,13 +1284,20 @@ export default function Search() {
           } catch {}
           return;
         }
+        let tracks = raw.tracks || [];
+        if (!tracks.length && isStreamingAvailable() && raw.provider && (raw.playlistId || raw.url)) {
+          try {
+            tracks = await fetchAccountLibrary(raw.provider, 'playlistTracks', { playlistId: raw.playlistId, playlistUrl: raw.url });
+            raw.tracks = tracks;
+          } catch {}
+        }
         openNativeAlbumFast({
           id: raw.id,
           title: raw.title,
           artist: raw.artistName || raw.artist || '',
           cover: raw.artworkUrl || raw.cover || '',
           provider: raw.provider || null,
-          tracks: raw.tracks || [],
+          tracks,
         });
         return;
       }
