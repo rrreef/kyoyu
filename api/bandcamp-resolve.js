@@ -149,42 +149,102 @@ export default async function handler(req, res) {
         fetchUrl = fetchUrl.replace(/\/$/, '') + '/music';
       }
       const htmlRes = await fetch(fetchUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' } });
-      if (!htmlRes.ok) return res.status(200).json({ releases: [], bio: '' });
+      if (!htmlRes.ok) return res.status(200).json({ releases: [], bio: '', location: '', imageUrl: '', links: [] });
       const html = await htmlRes.text();
       const releases = [];
-      const unescapeHtml = (str) => str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+      const unescapeHtml = (str) => (str || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
       const olMatch = html.match(/<ol[^>]*id="music-grid"[^>]*>([\s\S]*?)<\/ol>/i) || html.match(/<ul[^>]*class="[^"]*music-grid[^"]*"[^>]*>([\s\S]*?)<\/ul>/i);
       if (olMatch) {
         const listHtml = olMatch[1];
-        const itemRegex = /<a href="([^"]+)">([\s\S]*?)<img[^>]*src="([^"]+)"[\s\S]*?<p class="title">\s*(.*?)\s*<br>\s*<span class="artist-override">\s*(.*?)\s*<\/span>|<a href="([^"]+)">([\s\S]*?)<img[^>]*src="([^"]+)"[\s\S]*?<p class="title">\s*(.*?)\s*<\/p>/gi;
-        let match;
-        while ((match = itemRegex.exec(listHtml)) !== null) {
-          if (match[1]) releases.push({ url: new URL(unescapeHtml(match[1]), url).toString(), artworkUrl: match[3], title: unescapeHtml(match[4].trim()), artist: unescapeHtml(match[5].trim()) });
-          else if (match[6]) releases.push({ url: new URL(unescapeHtml(match[6]), url).toString(), artworkUrl: match[8], title: unescapeHtml(match[9].trim()), artist: '' });
+        const liBlocks = listHtml.match(/<li[^>]*class="[^"]*music-grid-item[^"]*"[^>]*>[\s\S]*?<\/li>/gi) || [];
+        for (const li of liBlocks) {
+          const hrefMatch = li.match(/<a[^>]*href="([^"]+)"/i);
+          if (!hrefMatch) continue;
+          const relUrl = new URL(unescapeHtml(hrefMatch[1]), url).toString();
+          const imgOriginal = li.match(/<img[^>]*data-original="([^"]+)"/i);
+          const imgSrc = li.match(/<img[^>]*src="([^"]+)"/i);
+          let artworkUrl = (imgOriginal && imgOriginal[1]) || (imgSrc && !imgSrc[1].includes('0.gif') ? imgSrc[1] : '');
+          const pMatch = li.match(/<p[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+          let title = '';
+          let artist = '';
+          if (pMatch) {
+            const pInner = pMatch[1];
+            const artistMatch = pInner.match(/<span[^>]*class="[^"]*artist-override[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+            if (artistMatch) {
+              artist = unescapeHtml(artistMatch[1].replace(/<[^>]+>/g, '').trim());
+            }
+            const titlePart = pInner.split(/<br\s*\/?>|<span[^>]*class="[^"]*artist-override/i)[0];
+            title = unescapeHtml(titlePart.replace(/<[^>]+>/g, '').trim());
+          }
+          if (title) {
+            releases.push({ url: relUrl, artworkUrl, title, artist });
+          }
+        }
+        // Fallback regex if liBlocks didn't match
+        if (releases.length === 0) {
+          const itemRegex = /<a href="([^"]+)">([\s\S]*?)<img[^>]*src="([^"]+)"[\s\S]*?<p class="title">\s*(.*?)\s*<br>\s*<span class="artist-override">\s*(.*?)\s*<\/span>|<a href="([^"]+)">([\s\S]*?)<img[^>]*src="([^"]+)"[\s\S]*?<p class="title">\s*(.*?)\s*<\/p>/gi;
+          let match;
+          while ((match = itemRegex.exec(listHtml)) !== null) {
+            if (match[1]) releases.push({ url: new URL(unescapeHtml(match[1]), url).toString(), artworkUrl: match[3], title: unescapeHtml(match[4].trim()), artist: unescapeHtml(match[5].trim()) });
+            else if (match[6]) releases.push({ url: new URL(unescapeHtml(match[6]), url).toString(), artworkUrl: match[8], title: unescapeHtml(match[9].trim()), artist: '' });
+          }
         }
       }
 
-      // Fetch main page for bio (if music page is different from main)
-      let bio = '';
-      const mainUrl = url.replace(/\/music\/?$/, '').replace(/\/$/, '');
-      try {
-        const bioRes = await fetch(mainUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        if (bioRes.ok) {
-          const bioHtml = await bioRes.text();
-          // Try bio from band-description
-          const bioMatch = bioHtml.match(/<p[^>]*class="[^"]*band-description[^"]*"[^>]*>([\s\S]*?)<\/p>/i)
-            || bioHtml.match(/<meta\s+name="description"\s+content="([^"]+)"/i)
-            || bioHtml.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
-          if (bioMatch) {
-            bio = bioMatch[1]
-              .replace(/<[^>]+>/g, '')
-              .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-              .trim();
+      const parseMetaFromHtml = (pageHtml) => {
+        let bioText = '';
+        const bioMatch = pageHtml.match(/<p[^>]*id="bio-text"[^>]*>([\s\S]*?)<\/p>/i)
+          || pageHtml.match(/<div[^>]*class="[^"]*signed-out-artists-bio-text[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
+          || pageHtml.match(/<p[^>]*class="[^"]*band-description[^"]*"[^>]*>([\s\S]*?)<\/p>/i)
+          || pageHtml.match(/<meta\s+name="description"\s+content="([^"]+)"/i)
+          || pageHtml.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
+        if (bioMatch) {
+          bioText = unescapeHtml(bioMatch[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim());
+        }
+        let loc = '';
+        const locMatch = pageHtml.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+        if (locMatch) {
+          loc = unescapeHtml(locMatch[1].replace(/<[^>]+>/g, '').trim());
+        }
+        let img = '';
+        const bandPhotoMatch = pageHtml.match(/<img[^>]*class="[^"]*band-photo[^"]*"[^>]*src="([^"]+)"/i)
+          || pageHtml.match(/<a[^>]*class="[^"]*popupImage[^"]*"[^>]*href="([^"]+)"/i)
+          || pageHtml.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
+        if (bandPhotoMatch) {
+          img = bandPhotoMatch[1];
+        }
+        const extractedLinks = [];
+        const bandLinksMatch = pageHtml.match(/<ol[^>]*id="band-links"[^>]*>([\s\S]*?)<\/ol>/i) || pageHtml.match(/<ul[^>]*id="band-links"[^>]*>([\s\S]*?)<\/ul>/i);
+        if (bandLinksMatch) {
+          const linkRegex = /<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+          let lm;
+          while ((lm = linkRegex.exec(bandLinksMatch[1])) !== null) {
+            const href = unescapeHtml(lm[1].trim());
+            if (href && /^https?:\/\//i.test(href)) extractedLinks.push(href);
           }
         }
-      } catch (e) {}
+        return { bioText, loc, img, extractedLinks };
+      };
 
-      return res.status(200).json({ releases: releases.slice(0, 50), bio });
+      let { bioText: bio, loc: location, img: imageUrl, extractedLinks: links } = parseMetaFromHtml(html);
+
+      const mainUrl = url.replace(/\/music\/?$/, '').replace(/\/$/, '');
+      if ((!bio || !location || links.length === 0) && mainUrl !== fetchUrl.replace(/\/$/, '')) {
+        try {
+          const bioRes = await fetch(mainUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          if (bioRes.ok) {
+            const bioHtml = await bioRes.text();
+            const m2 = parseMetaFromHtml(bioHtml);
+            if (!bio && m2.bioText) bio = m2.bioText;
+            if (!location && m2.loc) location = m2.loc;
+            if (!imageUrl && m2.img) imageUrl = m2.img;
+            if (m2.extractedLinks.length > 0) links = Array.from(new Set([...links, ...m2.extractedLinks]));
+          }
+        } catch (e) {}
+      }
+
+      const finalLinks = Array.from(new Set([mainUrl, ...links])).filter(Boolean);
+      return res.status(200).json({ releases: releases.slice(0, 120), bio, location, imageUrl, links: finalLinks });
     } catch (err) { return res.status(500).json({ error: 'Failed to fetch label' }); }
   }
 

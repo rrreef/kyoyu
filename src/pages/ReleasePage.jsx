@@ -59,9 +59,9 @@ export default function ReleasePage() {
             </button>
           </div>
 
-          {/* Buy Vinyl / Download */}
-          <div className="release-commerce">
-            {release.vinylPrice && (
+          {/* Buy Vinyl */}
+          {release.vinylPrice && (
+            <div className="release-commerce">
               <div className="release-buy-option glass-sm">
                 <ShoppingBag size={16} />
                 <div>
@@ -70,16 +70,8 @@ export default function ReleasePage() {
                 </div>
                 <button className="buy-btn">Add to Cart</button>
               </div>
-            )}
-            <div className="release-buy-option glass-sm">
-              <Download size={16} />
-              <div>
-                <div className="buy-opt-label">DJ Download</div>
-                <div className="buy-opt-price">€{release.downloadPrice.toFixed(2)} / track · WAV, FLAC, AIFF, MP3</div>
-              </div>
-              <Link to={`/dj-download/${release.id}`} className="buy-btn">Download</Link>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

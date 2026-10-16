@@ -328,8 +328,7 @@ export default function Home() {
       {showFeatured && featuredAlbums.length > 0 && (
         <section className="home-section featured-hero-section">
           <div className="section-title">
-            <span>Featured</span>
-            <Link to="/all-releases">See All <ArrowRight size={12} /></Link>
+            <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Featured</span>
           </div>
 
           <div
@@ -407,6 +406,22 @@ export default function Home() {
           return Math.max(0, Number(rows) || 0) * HOME_TITLES_PER_ROW;
         };
 
+        const openLibrarySection = (provider, category) => {
+          window.__kyoyuLibraryProvider = provider || null;
+          window.__kyoyuLibraryCategory = category || null;
+          window.dispatchEvent(new CustomEvent('kyoyu-library-state', {
+            detail: { provider: provider || null, category: category || null }
+          }));
+          try {
+            window.webkit?.messageHandlers?.player?.postMessage({
+              cmd: 'open_library_section',
+              provider: provider || '',
+              category: category || '',
+            });
+          } catch (e) {}
+          navigate('/library');
+        };
+
         const likedUploads = getLikedUploads(user?.id) || [];
         const ytLikesMax = limitFor('youtube-likes');
         const ytPlMax = limitFor('youtube-pl');
@@ -421,33 +436,33 @@ export default function Home() {
 
         const sectionsByProvider = {
           bandcamp: [
-            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', items: (acct.bandcamp?.collection || []).slice(0, limitFor('bandcamp-col')),  type: 'acct' },
-            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   items: (acct.bandcamp?.wishlist || []).slice(0, limitFor('bandcamp-wish')),   type: 'acct' },
-            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  items: (acct.bandcamp?.playlists || []).slice(0, limitFor('bandcamp-pl')),    type: 'acct' },
+            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: (acct.bandcamp?.collection || []).slice(0, limitFor('bandcamp-col')),  type: 'acct' },
+            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: (acct.bandcamp?.wishlist || []).slice(0, limitFor('bandcamp-wish')),   type: 'acct' },
+            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: (acct.bandcamp?.playlists || []).slice(0, limitFor('bandcamp-pl')),    type: 'acct' },
           ],
           discogs: [
-            { key: 'discogs-col',   title: 'Discogs · Collection',  items: (acct.discogs?.collection || []).slice(0, limitFor('discogs-col')),   type: 'acct' },
-            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    items: (acct.discogs?.wishlist || []).slice(0, limitFor('discogs-wish')),    type: 'acct' },
+            { key: 'discogs-col',   title: 'Discogs · Collection',  provider: 'discogs',  category: 'purchases', items: (acct.discogs?.collection || []).slice(0, limitFor('discogs-col')),   type: 'acct' },
+            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    provider: 'discogs',  category: 'wishlist',  items: (acct.discogs?.wishlist || []).slice(0, limitFor('discogs-wish')),    type: 'acct' },
           ],
           soundcloud: [
-            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     items: (acct.soundcloud?.likes || []).slice(0, limitFor('soundcloud-likes')),     type: 'acct' },
-            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', items: (acct.soundcloud?.playlists || []).slice(0, limitFor('soundcloud-pl')),    type: 'acct' },
+            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     provider: 'soundcloud', category: 'titles',    items: (acct.soundcloud?.likes || []).slice(0, limitFor('soundcloud-likes')),     type: 'acct' },
+            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: (acct.soundcloud?.playlists || []).slice(0, limitFor('soundcloud-pl')),    type: 'acct' },
           ],
           youtube: [
-            { key: 'youtube-likes', title: 'YouTube · Likes',     items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
-            { key: 'youtube-pl',    title: 'YouTube · Playlists', items: ytPlaylists,                                         type: 'acct' },
+            { key: 'youtube-likes', title: 'YouTube · Likes',     provider: 'youtube', category: 'titles',    items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
+            { key: 'youtube-pl',    title: 'YouTube · Playlists', provider: 'youtube', category: 'playlists', items: ytPlaylists,                                         type: 'acct' },
           ],
           spotify: [
-            { key: 'spotify-likes', title: 'Spotify · Likes',     items: (acct.spotify?.likes || []).slice(0, limitFor('spotify-likes')),     type: 'acct' },
-            { key: 'spotify-pl',    title: 'Spotify · Playlists', items: (acct.spotify?.playlists || []).slice(0, limitFor('spotify-pl')),    type: 'acct' },
+            { key: 'spotify-likes', title: 'Spotify · Likes',     provider: 'spotify', category: 'titles',    items: (acct.spotify?.likes || []).slice(0, limitFor('spotify-likes')),     type: 'acct' },
+            { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: (acct.spotify?.playlists || []).slice(0, limitFor('spotify-pl')),    type: 'acct' },
           ],
           applemusic: [
-            { key: 'applemusic-likes', title: 'Apple Music · Likes',     items: (acct.applemusic?.likes || []).slice(0, limitFor('applemusic-likes')),     type: 'acct' },
-            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', items: (acct.applemusic?.playlists || []).slice(0, limitFor('applemusic-pl')),    type: 'acct' },
+            { key: 'applemusic-likes', title: 'Apple Music · Likes',     provider: 'applemusic', category: 'titles',    items: (acct.applemusic?.likes || []).slice(0, limitFor('applemusic-likes')),     type: 'acct' },
+            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: (acct.applemusic?.playlists || []).slice(0, limitFor('applemusic-pl')),    type: 'acct' },
           ],
           tidal: [
-            { key: 'tidal-likes', title: 'TIDAL · Likes',     items: (acct.tidal?.likes || []).slice(0, limitFor('tidal-likes')),     type: 'acct' },
-            { key: 'tidal-pl',    title: 'TIDAL · Playlists', items: (acct.tidal?.playlists || []).slice(0, limitFor('tidal-pl')),    type: 'acct' },
+            { key: 'tidal-likes', title: 'TIDAL · Likes',     provider: 'tidal', category: 'titles',    items: (acct.tidal?.likes || []).slice(0, limitFor('tidal-likes')),     type: 'acct' },
+            { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: (acct.tidal?.playlists || []).slice(0, limitFor('tidal-pl')),    type: 'acct' },
           ],
         };
 
@@ -464,8 +479,7 @@ export default function Home() {
             {orderedSections.map(sec => (
               <section key={sec.key} className="home-section">
                 <div className="section-title">
-                  <span>{sec.title}</span>
-                  <Link to="/library">See All <ArrowRight size={12} /></Link>
+                  <span onClick={() => openLibrarySection(sec.provider, sec.category)} style={{ cursor: 'pointer' }}>{sec.title}</span>
                 </div>
                 {sec.type === 'uploads' ? (
                   viewMode === 'list'
@@ -532,8 +546,7 @@ export default function Home() {
       {showReleases && (
         <section className="home-section">
           <div className="section-title">
-            <span>Releases</span>
-            <Link to="/all-releases">See All <ArrowRight size={12} /></Link>
+            <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Releases</span>
           </div>
           {publicAlbums.length === 0 ? (
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>

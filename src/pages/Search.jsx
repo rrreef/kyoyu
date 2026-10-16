@@ -5,7 +5,7 @@ import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs
 import { fetchAccountLibrary, isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
-import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast } from '../components/ui/AlbumSheet';
+import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast, openRichArtistSheet, openRichLabelSheet, openReleaseFromSheet } from '../components/ui/AlbumSheet';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -146,7 +146,21 @@ function BandcampLabelResult({ label, onPlay, onGo }) {
   return (
     <div className="search-label-group" style={{ marginBottom: '16px' }}>
       <div className="search-result-row search-artist-row search-external-row"
-        onClick={() => window.open(label.trackUrl, '_blank')}>
+        style={{ cursor: 'pointer' }}
+        onClick={() => openRichLabelSheet({
+          name: label.title,
+          trackUrl: label.trackUrl,
+          artworkUrl: label.artworkUrl,
+          provider: 'bandcamp',
+          topReleases: (releases || []).map((rel, idx) => ({
+            id: `bc-lbl-${idx}`,
+            title: rel.title,
+            artist: rel.artist || label.title,
+            artworkUrl: rel.artworkUrl,
+            trackUrl: rel.url,
+            provider: 'bandcamp',
+          })),
+        })}>
         <div className="search-result-art artist-avatar discogs-art">
           {label.artworkUrl ? (
             <img src={label.artworkUrl} alt={label.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
@@ -175,14 +189,15 @@ function BandcampLabelResult({ label, onPlay, onGo }) {
         ) : releases && releases.length > 0 ? (
           releases.map((rel, idx) => (
             <div key={idx} className="search-result-row search-external-row"
-              onClick={() => onPlay({
+              style={{ cursor: 'pointer' }}
+              onClick={() => openReleaseFromSheet({
                 id: `bc-lbl-${idx}-${Date.now()}`,
                 title: rel.title,
-                artistName: rel.artist || label.title,
+                artist: rel.artist || label.title,
+                label: label.title,
                 artworkUrl: rel.artworkUrl,
-                duration: 0,
+                trackUrl: rel.url,
                 provider: 'bandcamp',
-                providerItemId: rel.url,
               })}>
               <div className="search-result-art discogs-art" style={{ borderRadius: '4px', width: '36px', height: '36px' }}>
                 {rel.artworkUrl ? (
@@ -307,6 +322,13 @@ export default function Search() {
   const { playTrack, playYouTube, playSoundCloud, setSearchQueue, playSearchItem, playSaved, playRelease } = usePlayer();
   const { user } = useAuth();
   const acct = useConnectedLibrary();
+
+  useEffect(() => {
+    try { window.webkit?.messageHandlers?.overlay?.postMessage(!!playlistSheet); } catch (e) {}
+    return () => {
+      try { window.webkit?.messageHandlers?.overlay?.postMessage(false); } catch (e) {}
+    };
+  }, [playlistSheet]);
 
   // Load history from localStorage
   useEffect(() => {
@@ -1005,7 +1027,12 @@ export default function Search() {
     const name = track.profileName || track.artist;
 
     return (
-      <div key={`artist-${aid}`} className="search-result-row search-artist-row">
+      <div
+        key={`artist-${aid}`}
+        className="search-result-row search-artist-row"
+        style={{ cursor: 'pointer' }}
+        onClick={() => openRichArtistSheet({ id: aid, name, cover: avatar })}
+      >
         <div className="search-result-art artist-avatar circle">
           {avatar ? <img src={avatar} alt="" /> : <div className="search-result-art-placeholder circle" />}
         </div>
@@ -1014,7 +1041,11 @@ export default function Search() {
           <span className="search-result-artist">Artist</span>
         </div>
         <div className="search-result-actions">
-          <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(aid)}>
+          <button
+            className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`}
+            title="Follow"
+            onClick={(e) => { e.stopPropagation(); toggleFollow(aid); }}
+          >
             {following ? <UserCheck size={16} strokeWidth={2.5} /> : <UserPlus size={16} strokeWidth={2.5} />}
           </button>
         </div>
@@ -1027,7 +1058,12 @@ export default function Search() {
     const following = isFollowing(lid);
 
     return (
-      <div key={`label-${lid}`} className="search-result-row search-artist-row">
+      <div
+        key={`label-${lid}`}
+        className="search-result-row search-artist-row"
+        style={{ cursor: 'pointer' }}
+        onClick={() => openRichLabelSheet({ id: lid, name: track.label, cover: track.cover })}
+      >
         <div className="search-result-art artist-avatar circle">
           {track.cover ? <img src={track.cover} alt="" /> : <div className="search-result-art-placeholder circle" />}
         </div>
@@ -1036,7 +1072,11 @@ export default function Search() {
           <span className="search-result-artist">Label</span>
         </div>
         <div className="search-result-actions">
-          <button className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`} title="Follow" onClick={() => toggleFollow(lid)}>
+          <button
+            className={`search-action-btn search-follow-btn ${following ? 'following' : ''}`}
+            title="Follow"
+            onClick={(e) => { e.stopPropagation(); toggleFollow(lid); }}
+          >
             {following ? <UserCheck size={16} strokeWidth={2.5} /> : <UserPlus size={16} strokeWidth={2.5} />}
           </button>
         </div>
@@ -1488,83 +1528,19 @@ export default function Search() {
                       });
                     } catch (e) { /* ignore */ }
                   } else if (isArtist) {
-                    try {
-                      let artistId = null;
-                      if (item.provider === 'discogs') artistId = item.id;
-                      
-                      let artistData = {
-                          id: item.id || `local-${Math.random()}`,
-                          name: item.artistName || item.title || 'Unknown Artist',
-                          realname: null,
-                          profile: null,
-                          urls: item.url ? [item.url] : [],
-                          aliases: [],
-                          images: (item.profileAvatar || item.cover) ? [item.profileAvatar || item.cover] : [],
-                          topReleases: [],
-                          provider: item.provider,
-                          providerItemId: item.id
-                      };
-
-                      try {
-                        const r = await fetch('/api/discogs-search', {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'artist-profile', artistId, artistName: item.artistName || item.title }),
-                        });
-                        if (r.ok) {
-                          const profile = await r.json();
-                          if (profile && !profile.error) {
-                            artistData = {
-                               ...artistData,
-                               ...profile,
-                               images: profile.images?.length ? profile.images : artistData.images,
-                               urls: profile.urls?.length ? profile.urls : artistData.urls,
-                            };
-                          }
-                        }
-                      } catch (err) { console.error('Discogs fallback error', err); }
-                      
-                      openNativeArtistFast(artistData);
-                    } catch (e) { 
-                      console.error('Artist sheet fallback failed', e);
-                    }
+                    openRichArtistSheet({
+                      ...item,
+                      name: item.title || item.artistName || 'Unknown Artist',
+                      cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || item.profileAvatar || item.cover || '',
+                      url: item.trackUrl || item.url || '',
+                    });
                   } else if (isLabel) {
-                    try {
-                      let labelId = null;
-                      if (item.provider === 'discogs') labelId = item.id;
-                      
-                      let labelData = {
-                          id: item.id || `local-${Math.random()}`,
-                          name: item.artistName || item.title || 'Unknown Label',
-                          profile: null,
-                          urls: item.url ? [item.url] : [],
-                          images: (item.profileAvatar || item.cover) ? [item.profileAvatar || item.cover] : [],
-                          topReleases: [],
-                          provider: item.provider,
-                          providerItemId: item.id
-                      };
-
-                      try {
-                        const r = await fetch('/api/discogs-search', {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'label-profile', labelId, labelName: item.artistName || item.title }),
-                        });
-                        if (r.ok) {
-                          const profile = await r.json();
-                          if (profile && !profile.error) {
-                            labelData = {
-                               ...labelData,
-                               ...profile,
-                               images: profile.images?.length ? profile.images : labelData.images,
-                               urls: profile.urls?.length ? profile.urls : labelData.urls,
-                            };
-                          }
-                        }
-                      } catch (err) { console.error('Discogs fallback error', err); }
-                      
-                      openNativeLabelFast(labelData);
-                    } catch (e) { 
-                      console.error('Label sheet fallback failed', e);
-                    }
+                    openRichLabelSheet({
+                      ...item,
+                      name: item.title || item.artistName || 'Unknown Label',
+                      cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || item.profileAvatar || item.cover || '',
+                      url: item.trackUrl || item.url || '',
+                    });
                   } else if (isRelease) {
                     // Universal Album Sheet: fetch tracks from provider, info from Discogs
                     try {

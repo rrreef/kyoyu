@@ -616,7 +616,7 @@ async function handleLabelProfile(body, res) {
 
   if (!labelId && labelName) {
     try {
-      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(labelName)}&type=label&per_page=5`, { headers: DISCOGS_HEADERS });
+      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(labelName)}&type=label&per_page=8`, { headers: DISCOGS_HEADERS });
       if (r.ok) {
         const d = await r.json();
         const hit = (d.results || []).find(a => normName(a.title) === normName(labelName)) || (d.results || [])[0];
@@ -626,8 +626,8 @@ async function handleLabelProfile(body, res) {
   }
   if (!labelId) return res.status(200).json({ error: 'Label not found on Discogs' });
 
-  const cacheKey = `label-profile|${labelId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 1);
+  const cacheKey = `label-profile-v2|${labelId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 2);
   if (cached) return res.status(200).json(cached);
 
   let profileData = {};
@@ -636,39 +636,120 @@ async function handleLabelProfile(body, res) {
     if (r.ok) profileData = await r.json();
   } catch (e) {}
 
-  // Fetch top releases for label
+  // Fetch releases for label (up to 100, deduplicated by title+artist)
   let topReleases = [];
   try {
-    const r = await fetch(`https://api.discogs.com/labels/${labelId}/releases?sort=year&sort_order=desc&per_page=10`, { headers: DISCOGS_HEADERS });
+    const r = await fetch(`https://api.discogs.com/labels/${labelId}/releases?sort=year&sort_order=desc&per_page=100`, { headers: DISCOGS_HEADERS });
     if (r.ok) {
-        const d = await r.json();
-        topReleases = (d.releases || []).map(r => ({
-            id: `discogs-l-${r.type || 'release'}-${r.id}`,
-            discogsId: r.id,
-            type: r.type || 'release',
-            title: r.title || '',
-            artistName: r.artist || '',
-            year: r.year || null,
-            thumb: r.thumb || '',
-            coverImage: r.thumb || '',
-            entityType: 'release',
-            provider: 'discogs'
-        }));
+      const d = await r.json();
+      const seen = new Set();
+      for (const rel of (d.releases || [])) {
+        const cleanArtist = stripArtistSuffix(rel.artist || '');
+        const cleanTitle = (rel.title || '').trim();
+        const dedupKey = `${normName(cleanArtist)}::${normName(cleanTitle)}`;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
+        topReleases.push({
+          id: `discogs-l-${rel.type || 'release'}-${rel.id}`,
+          discogsId: String(rel.id || ''),
+          type: rel.type || 'release',
+          title: cleanTitle,
+          artist: cleanArtist,
+          artistName: cleanArtist,
+          label: profileData.name || labelName || '',
+          catno: rel.catno || '',
+          format: rel.format || '',
+          year: rel.year || null,
+          thumb: rel.thumb || '',
+          coverImage: rel.thumb || '',
+          entityType: 'release',
+          provider: 'discogs'
+        });
+      }
     }
-  } catch(e) {}
+  } catch (e) {}
+
+  const discogsUrl = profileData.uri || `https://www.discogs.com/label/${labelId}`;
+  const rawUrls = Array.isArray(profileData.urls) ? profileData.urls : [];
+  const allUrls = Array.from(new Set([discogsUrl, ...rawUrls])).filter(Boolean);
 
   const result = {
-    _v: 1,
+    _v: 2,
     id: labelId,
-    name: profileData.name || labelName || '',
+    name: stripArtistSuffix(profileData.name || labelName || ''),
     profile: profileData.profile || '',
-    urls: profileData.urls || [],
-    images: (profileData.images || []).map(i => i.uri),
+    contactInfo: profileData.contact_info || '',
+    parentLabel: profileData.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '',
+    parentLabelId: profileData.parent_label?.id || null,
+    sublabels: (profileData.sublabels || []).map(s => stripArtistSuffix(s.name || '')).filter(Boolean),
+    discogsUrl,
+    urls: allUrls,
+    images: (profileData.images || []).map(i => i.uri || i.resource_url).filter(Boolean),
     topReleases
   };
 
   await cacheSet(supabase, cacheKey, result);
   return res.status(200).json(result);
+}
+
+async function handleReleaseDetails(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  const { releaseId, releaseType } = body || {};
+  if (!releaseId) return res.status(400).json({ error: 'Missing releaseId' });
+
+  const isMaster = releaseType === 'master';
+  const cacheKey = `release-details|${isMaster ? 'm' : 'r'}|${releaseId}`;
+  const cached = await cacheGet(supabase, cacheKey, 7 * 24 * 60 * 60 * 1000, 1);
+  if (cached) return res.status(200).json(cached);
+
+  try {
+    const endpoint = isMaster
+      ? `https://api.discogs.com/masters/${encodeURIComponent(releaseId)}`
+      : `https://api.discogs.com/releases/${encodeURIComponent(releaseId)}`;
+    const r = await fetch(endpoint, { headers: DISCOGS_HEADERS });
+    if (!r.ok) return res.status(200).json({ error: 'Release not found on Discogs' });
+    const d = await r.json();
+    const artist = (d.artists || []).map(a => stripArtistSuffix(a.name || '')).filter(Boolean).join(', ');
+    const label = (d.labels || []).map(l => stripArtistSuffix(l.name || '')).filter(Boolean)[0] || '';
+    const cover = (d.images || [])[0]?.uri || (d.images || [])[0]?.resource_url || d.thumb || '';
+    const genres = [...(d.styles || []), ...(d.genres || [])].slice(0, 4).join(', ');
+    const tracks = (d.tracklist || [])
+      .filter(t => t.type_ !== 'heading')
+      .map((t, idx) => {
+        const trackArtist = (t.artists || []).map(a => stripArtistSuffix(a.name || '')).filter(Boolean).join(', ') || artist;
+        let durSec = 0;
+        if (t.duration && /^\d+:\d+$/.test(t.duration.trim())) {
+          const [mm, ss] = t.duration.trim().split(':').map(Number);
+          durSec = (mm || 0) * 60 + (ss || 0);
+        }
+        return {
+          id: `discogs-trk-${releaseId}-${idx}`,
+          title: t.title || `Track ${idx + 1}`,
+          artist: trackArtist,
+          position: t.position || String(idx + 1),
+          duration: durSec,
+          durationStr: t.duration || '',
+        };
+      });
+
+    const result = {
+      _v: 1,
+      id: String(d.id || releaseId),
+      title: d.title || '',
+      artist,
+      label,
+      year: d.year ? String(d.year) : '',
+      genre: genres,
+      cover,
+      notes: d.notes || '',
+      uri: d.uri || '',
+      tracks,
+    };
+    await cacheSet(supabase, cacheKey, result);
+    return res.status(200).json(result);
+  } catch (e) {
+    return res.status(200).json({ error: 'Failed to fetch release details' });
+  }
 }
 
 export default async function handler(req, res) {
@@ -704,6 +785,11 @@ export default async function handler(req, res) {
   // ==== ACTION: label-profile ====
   if (action === 'label-profile') {
     return handleLabelProfile(body, res);
+  }
+
+  // ==== ACTION: release-details ====
+  if (action === 'release-details') {
+    return handleReleaseDetails(body, res);
   }
 
   // ==== ACTION: track-info ====

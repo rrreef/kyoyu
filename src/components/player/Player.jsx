@@ -602,6 +602,7 @@ export default function Player({ hideMini = false }) {
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
         artist: currentTrack.artistName || currentTrack.artist || '',
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
+        label: currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         provider: provider || 'native',
         sourceProvider: badgeProviderOf(provider, currentTrack),

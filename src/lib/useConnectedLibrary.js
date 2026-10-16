@@ -4,7 +4,31 @@ import { fetchAccountLibrary, isStreamingAvailable, onStreamingEvent, useStreami
 /* Library data from connected SoundCloud / Bandcamp accounts, fetched automatically as soon as an account is
    connected, cached for the session and refreshed in the background (so the Library is always up to date). */
 
+const BC_FAST_CACHE_KEY = 'kyoyu-bc-fast-cache-v1';
+
 let cache = { soundcloud: {}, bandcamp: {}, spotify: {}, applemusic: {}, tidal: {}, discogs: {}, youtube: {} };      // service → kind → items
+try {
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(BC_FAST_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.collection) && parsed.collection.length) cache.bandcamp.collection = parsed.collection;
+        if (Array.isArray(parsed.wishlist) && parsed.wishlist.length) cache.bandcamp.wishlist = parsed.wishlist;
+      }
+    }
+  }
+} catch (_) {}
+
+function saveFastBandcampCache() {
+  try {
+    if (typeof window === 'undefined') return;
+    const col = Array.isArray(cache.bandcamp?.collection) ? cache.bandcamp.collection.slice(0, 36) : [];
+    const wish = Array.isArray(cache.bandcamp?.wishlist) ? cache.bandcamp.wishlist.slice(0, 36) : [];
+    localStorage.setItem(BC_FAST_CACHE_KEY, JSON.stringify({ collection: col, wishlist: wish, ts: Date.now() }));
+  } catch (_) {}
+}
+
 let errors = {};                                    // "service:kind" → message of the last failed load
 const fetchedAt = {};                               // "service:kind" → ms
 const inflight = new Map();
@@ -14,14 +38,21 @@ const emit = () => listeners.forEach((fn) => fn());
 
 async function ensure(service, kind, force = false) {
   const k = `${service}:${kind}`;
-  if (!force && cache[service]?.[kind] && Date.now() - (fetchedAt[k] || 0) < STALE_MS) return;
-  if (inflight.has(k)) return;
+  if (!force && cache[service]?.[kind] && fetchedAt[k] && Date.now() - (fetchedAt[k] || 0) < STALE_MS) return;
+  if (inflight.has(k)) return inflight.get(k);
   const p = fetchAccountLibrary(service, kind)
     .then((items) => {
       if (!cache[service]) cache[service] = {};
-      cache[service][kind] = items;
+      const existing = cache[service][kind];
+      // Do not overwrite if background progressive stream already populated a larger set during this tick
+      if (!Array.isArray(existing) || items.length >= existing.length || force) {
+        cache[service][kind] = items;
+      }
       fetchedAt[k] = Date.now();
       delete errors[k];
+      if (service === 'bandcamp' && (kind === 'collection' || kind === 'wishlist')) {
+        saveFastBandcampCache();
+      }
     })
     .catch((e) => {
       errors[k] = e?.message || 'Could not load';
@@ -30,6 +61,7 @@ async function ensure(service, kind, force = false) {
     })
     .finally(() => { inflight.delete(k); emit(); });
   inflight.set(k, p);
+  return p;
 }
 
 function extractDiscogsRelId(str = '') {
@@ -90,7 +122,17 @@ export function isItemInConnectedLikes(idOrItem) {
 if (typeof window !== 'undefined') {
   onStreamingEvent((evt) => {
     if (!evt) return;
-    if (evt.type === 'libraryOptimistic' && evt.service) {
+    if (evt.type === 'libraryPartial' && evt.service && evt.kind && Array.isArray(evt.items)) {
+      const s = evt.service;
+      const k = evt.kind;
+      if (!cache[s]) cache[s] = {};
+      cache[s][k] = evt.items;
+      fetchedAt[`${s}:${k}`] = Date.now();
+      if (s === 'bandcamp' && (k === 'collection' || k === 'wishlist')) {
+        saveFastBandcampCache();
+      }
+      emit();
+    } else if (evt.type === 'libraryOptimistic' && evt.service) {
       const s = evt.service;
       const bucket =
         s === 'bandcamp' ? 'wishlist' :
@@ -163,8 +205,11 @@ export function useConnectedLibrary() {
   useEffect(() => {
     if (!isStreamingAvailable()) return;
     if (bc) {
-      ensure('bandcamp', 'collection'); ensure('bandcamp', 'wishlist'); ensure('bandcamp', 'following'); ensure('bandcamp', 'playlists');
-    } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; emit(); }
+      Promise.all([ensure('bandcamp', 'collection'), ensure('bandcamp', 'wishlist')]).finally(() => {
+        ensure('bandcamp', 'following');
+        ensure('bandcamp', 'playlists');
+      });
+    } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; try { localStorage.removeItem(BC_FAST_CACHE_KEY); } catch (_) {} emit(); }
     if (sc) {
       ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); ensure('soundcloud', 'following');
     } else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; emit(); }
