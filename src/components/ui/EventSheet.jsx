@@ -193,14 +193,14 @@ export default function EventSheet({ events, initialIndex, onClose }) {
               <button 
                 onClick={handlePrev} 
                 disabled={currentIndex === 0} 
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '100px', padding: '6px 14px', color: '#fff', fontSize: '0.8rem', opacity: currentIndex === 0 ? 0.3 : 1 }}
+                style={{ background: 'var(--glass-bg-active)', border: 'none', borderRadius: '100px', padding: '6px 14px', color: 'var(--text-primary)', fontSize: '0.8rem', opacity: currentIndex === 0 ? 0.3 : 1 }}
               >
                 Previous
               </button>
               <button 
                 onClick={handleNext} 
                 disabled={currentIndex === events.length - 1} 
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '100px', padding: '6px 14px', color: '#fff', fontSize: '0.8rem', opacity: currentIndex === events.length - 1 ? 0.3 : 1 }}
+                style={{ background: 'var(--glass-bg-active)', border: 'none', borderRadius: '100px', padding: '6px 14px', color: 'var(--text-primary)', fontSize: '0.8rem', opacity: currentIndex === events.length - 1 ? 0.3 : 1 }}
               >
                 Next
               </button>
@@ -213,14 +213,14 @@ export default function EventSheet({ events, initialIndex, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {Object.keys(currentEvent.timetable).map(floor => (
                 <div key={floor}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '6px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '6px' }}>
                     {floor}
                   </h3>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {currentEvent.timetable[floor].map((set, i) => (
-                      <li key={i} style={{ display: 'flex', gap: '16px', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)', width: '50px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{set.time}</span>
-                        <span style={{ fontSize: '1rem', color: '#fff', fontWeight: 500 }}>{set.artist}</span>
+                      <li key={i} style={{ display: 'flex', gap: '16px', padding: '10px 0', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', width: '50px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{set.time}</span>
+                        <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>{set.artist}</span>
                       </li>
                     ))}
                   </ul>

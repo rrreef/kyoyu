@@ -533,7 +533,7 @@ export default function Home() {
         <section className="home-section">
           <div className="section-title">
             <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.3)'}}>{myUploads.length} tracks</span>
+            <span style={{fontSize:'.72rem',color:'var(--text-muted)'}}>{myUploads.length} tracks</span>
           </div>
           {homeLayout.mode === 'list'
             ? <UploadExpandedList uploads={myUploads}/>

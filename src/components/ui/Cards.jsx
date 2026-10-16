@@ -151,7 +151,7 @@ export function LongFormCard({ item }) {
             className="card-play-btn"
             onClick={() => playTrack({ id: item.id, title: item.title, releaseCover: item.cover, releaseTitle: item.title, artistName: item.artist, duration: item.duration })}
           >
-            <Play size={18} fill="white" />
+            <Play size={18} fill="currentColor" />
           </button>
         </div>
         <div className="longform-type-badge">{item.type === 'djset' ? 'DJ Set' : 'Podcast'}</div>

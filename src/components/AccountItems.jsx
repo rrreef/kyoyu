@@ -225,10 +225,10 @@ function Art({ item, src, round }) {
   return (
     <div style={{
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
-      background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-           : <Music2 size={22} color="rgba(255,255,255,.3)" />}
+           : <Music2 size={22} color="var(--text-dim)" />}
     </div>
   );
 }
@@ -241,7 +241,7 @@ function Row({ item, onClick, right, sub, round }) {
     >
       <Art item={item} src={item.artworkUrl} round={round} isPlaylist={item.kind === 'playlist'} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+        <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub ?? item.artistName}</div>
       </div>
       {right && <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>{right}</div>}
@@ -438,7 +438,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
                 item={it}
                 sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
                 onClick={onItemClick(it)}
-                right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />}
+                right={<Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />}
               />
             );
           }
@@ -451,7 +451,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
             <Row key={it.id} item={it}
                  sub={`${it.artistName}${it.kind === 'track' && it.duration ? ` · ${fmt(it.duration)}` : ''}`}
                  onClick={onItemClick(it)}
-                 right={<Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />} />
+                 right={<Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />} />
           );
         })
       )}

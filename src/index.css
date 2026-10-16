@@ -18,71 +18,71 @@ input, textarea, select {
   font-size: 16px !important;
 }
 
-/* ===== KYO — iOS 26 Liquid Glass Design System ===== */
+/* ===== KYO — iOS 26 Liquid Glass Design System (Light Default) ===== */
 :root {
-  --bg-primary: #060608;
-  --bg-secondary: #0a0a0d;
-  --bg-tertiary: #111116;
-  --bg-card: #0c0c10;
+  --bg-primary: #f8f8fc;
+  --bg-secondary: #f0f0f7;
+  --bg-tertiary: #e8e8f2;
+  --bg-card: #ffffff;
 
-  /* ─── Liquid Glass fills — near-zero opacity ─── */
-  --glass-bg:           rgba(255, 255, 255, 0.022);
-  --glass-bg-hover:     rgba(255, 255, 255, 0.048);
-  --glass-bg-active:    rgba(255, 255, 255, 0.10);
-  --glass-bg-elevated:  rgba(255, 255, 255, 0.038);
+  /* ─── Liquid Glass fills — light theme ─── */
+  --glass-bg:           rgba(255, 255, 255, 0.78);
+  --glass-bg-hover:     rgba(255, 255, 255, 0.92);
+  --glass-bg-active:    rgba(0, 0, 0, 0.08);
+  --glass-bg-elevated:  rgba(255, 255, 255, 0.94);
 
   /* ─── Glass borders ─── */
-  --glass-border:        rgba(255, 255, 255, 0.09);
-  --glass-border-light:  rgba(255, 255, 255, 0.18);
-  --glass-border-hover:  rgba(255, 255, 255, 0.22);
-  --glass-border-subtle: rgba(255, 255, 255, 0.05);
+  --glass-border:        rgba(0, 0, 0, 0.09);
+  --glass-border-light:  rgba(0, 0, 0, 0.16);
+  --glass-border-hover:  rgba(0, 0, 0, 0.18);
+  --glass-border-subtle: rgba(0, 0, 0, 0.06);
 
   /* ─── Specular highlights ─── */
-  --glass-shine:         rgba(255, 255, 255, 0.11);
-  --glass-shine-strong:  rgba(255, 255, 255, 0.20);
+  --glass-shine:         rgba(255, 255, 255, 0.90);
+  --glass-shine-strong:  rgba(255, 255, 255, 0.98);
 
   /* ─── Blur layers — iOS 26 style ─── */
-  --glass-blur:    blur(44px) saturate(180%) brightness(1.06);
-  --glass-blur-sm: blur(22px) saturate(160%) brightness(1.04);
-  --glass-blur-lg: blur(64px) saturate(200%) brightness(1.08) contrast(1.02);
+  --glass-blur:    blur(32px) saturate(140%) brightness(1.01);
+  --glass-blur-sm: blur(16px) saturate(130%) brightness(1.01);
+  --glass-blur-lg: blur(48px) saturate(150%) brightness(1.02);
 
-  /* ─── Neutral palette (was orange — now B&W system UI) ─── */
-  --orange-50:  rgba(255, 255, 255, 0.04);
-  --orange-100: rgba(255, 255, 255, 0.08);
-  --orange-200: rgba(255, 255, 255, 0.92);  /* bright text */
-  --orange-300: rgba(255, 255, 255, 0.80);  /* secondary text / hover */
-  --orange-400: rgba(255, 255, 255, 0.14);  /* active state bg / icon */
-  --orange-500: rgba(255, 255, 255, 0.14);  /* primary btn bg */
-  --orange-600: rgba(255, 255, 255, 0.10);  /* darker btn / pressed */
-  --orange-glow:    rgba(255, 255, 255, 0.06);
-  --orange-glow-sm: rgba(255, 255, 255, 0.04);
-  --orange-glow-xs: rgba(255, 255, 255, 0.02);
+  /* ─── Neutral palette for light theme ─── */
+  --orange-50:  rgba(0, 0, 0, 0.03);
+  --orange-100: rgba(0, 0, 0, 0.07);
+  --orange-200: rgba(15, 15, 26, 0.92);
+  --orange-300: rgba(15, 15, 26, 0.75);
+  --orange-400: rgba(0, 0, 0, 0.11);
+  --orange-500: rgba(0, 0, 0, 0.11);
+  --orange-600: rgba(0, 0, 0, 0.08);
+  --orange-glow:    rgba(0, 0, 0, 0.06);
+  --orange-glow-sm: rgba(0, 0, 0, 0.04);
+  --orange-glow-xs: rgba(0, 0, 0, 0.02);
 
-  /* ─── Text ─── */
-  --text-heading:   #ffffff;
-  --text-primary:   #ffffff;
-  --text-title:     rgba(255, 255, 255, 0.92);
-  --text-category:  rgba(255, 255, 255, 0.70);
-  --text-subtitle:  rgba(255, 255, 255, 0.80);
-  --text-secondary: rgba(255, 255, 255, 0.77);
-  --text-muted:     rgba(255, 255, 255, 0.55);
-  --text-dim:       rgba(255, 255, 255, 0.33);
+  /* ─── Text (Inverted for Light Theme) ─── */
+  --text-heading:   #0f0f1a;
+  --text-primary:   #0f0f1a;
+  --text-title:     rgba(15, 15, 26, 0.92);
+  --text-category:  rgba(15, 15, 26, 0.68);
+  --text-subtitle:  rgba(15, 15, 26, 0.75);
+  --text-secondary: rgba(15, 15, 26, 0.74);
+  --text-muted:     rgba(15, 15, 26, 0.52);
+  --text-dim:       rgba(15, 15, 26, 0.42);
 
-  --grey-100: #f0f0f0;
-  --grey-200: #d0d0d0;
-  --grey-300: #aaaaaa;
-  --grey-400: #808080;
-  --grey-500: #555555;
-  --grey-600: #363636;
-  --grey-700: #202020;
-  --grey-800: #161618;
-  --grey-900: #0d0d10;
+  --grey-100: #1a1a22;
+  --grey-200: #2e2e3a;
+  --grey-300: #4a4a5a;
+  --grey-400: #6e6e80;
+  --grey-500: #8e8ea0;
+  --grey-600: #b8b8c8;
+  --grey-700: #dcdce6;
+  --grey-800: #e8e8f0;
+  --grey-900: #f0f0f6;
 
   /* ─── Accent ─── */
   --accent:        var(--orange-400);
   --accent-bright: var(--orange-300);
-  --accent-dim:    rgba(255, 255, 255, 0.7);
-  --accent-subtle: rgba(255, 255, 255, 0.12);
+  --accent-dim:    rgba(15, 15, 26, 0.7);
+  --accent-subtle: rgba(15, 15, 26, 0.10);
 
   /* ─── Spacing ─── */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
@@ -97,14 +97,14 @@ input, textarea, select {
   --font-body:    'Inter', sans-serif;
 
   /* ─── Shadows — layered, ambient ─── */
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.45),
-               0 0 0 0.5px rgba(255,255,255,0.04);
-  --shadow-md: 0 4px 24px rgba(0,0,0,0.55),
-               0 1px 0 rgba(255,255,255,0.06) inset;
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.65),
-               0 1px 0 rgba(255,255,255,0.08) inset;
-  --shadow-xl: 0 20px 60px rgba(0,0,0,0.75),
-               0 1px 0 rgba(255,255,255,0.10) inset;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06),
+               0 0 0 0.5px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.08),
+               0 1px 0 rgba(255,255,255,0.98) inset;
+  --shadow-lg: 0 8px 36px rgba(0,0,0,0.11),
+               0 1px 0 rgba(255,255,255,0.98) inset;
+  --shadow-xl: 0 20px 56px rgba(0,0,0,0.14),
+               0 1px 0 rgba(255,255,255,0.98) inset;
   --shadow-glow:    0 0 40px var(--orange-glow);
   --shadow-glow-sm: 0 0 20px var(--orange-glow-sm);
   --shadow-glow-xs: 0 0 10px var(--orange-glow-xs);
@@ -120,14 +120,62 @@ input, textarea, select {
   --topbar-height: 0px;   /* bar removed — float cluster is used instead */
   --mobile-nav-height: 60px;
 
-  /* ── Primary action button tokens (no orange) ── */
+  /* ── Primary action button tokens ── */
+  --btn-primary-bg:     rgba(15, 15, 26, 0.88);
+  --btn-primary-hover:  rgba(15, 15, 26, 0.96);
+  --btn-primary-text:   #ffffff;
+  --btn-primary-glow:   rgba(0, 0, 0, 0.08);
+  --btn-primary-border: rgba(0, 0, 0, 0.18);
+
+  /* ── Interactive accent (active states, progress, toggles) ── */
+  --accent-interactive:       rgba(15, 15, 26, 0.82);
+  --accent-interactive-dim:   rgba(0, 0, 0, 0.11);
+  --accent-interactive-glow:  rgba(0, 0, 0, 0.05);
+}
+
+/* ══ Dark theme ══════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --bg-primary: #060608;
+  --bg-secondary: #0a0a0d;
+  --bg-tertiary: #111116;
+  --bg-card: #0c0c10;
+  --glass-bg:           rgba(255, 255, 255, 0.022);
+  --glass-bg-hover:     rgba(255, 255, 255, 0.048);
+  --glass-bg-active:    rgba(255, 255, 255, 0.10);
+  --glass-bg-elevated:  rgba(255, 255, 255, 0.038);
+  --glass-border:        rgba(255, 255, 255, 0.09);
+  --glass-border-light:  rgba(255, 255, 255, 0.18);
+  --glass-border-hover:  rgba(255, 255, 255, 0.22);
+  --glass-border-subtle: rgba(255, 255, 255, 0.05);
+  --glass-shine:         rgba(255, 255, 255, 0.11);
+  --glass-shine-strong:  rgba(255, 255, 255, 0.20);
+  --orange-50:  rgba(255, 255, 255, 0.04);
+  --orange-100: rgba(255, 255, 255, 0.08);
+  --orange-200: rgba(255, 255, 255, 0.92);
+  --orange-300: rgba(255, 255, 255, 0.80);
+  --orange-400: rgba(255, 255, 255, 0.14);
+  --orange-500: rgba(255, 255, 255, 0.14);
+  --orange-600: rgba(255, 255, 255, 0.10);
+  --text-heading:   #ffffff;
+  --text-primary:   #ffffff;
+  --text-title:     rgba(255, 255, 255, 0.92);
+  --text-category:  rgba(255, 255, 255, 0.70);
+  --text-subtitle:  rgba(255, 255, 255, 0.80);
+  --text-secondary: rgba(255, 255, 255, 0.77);
+  --text-muted:     rgba(255, 255, 255, 0.55);
+  --text-dim:       rgba(255, 255, 255, 0.33);
+  --grey-100: #f0f0f0;
+  --grey-200: #d0d0d0;
+  --grey-300: #aaaaaa;
+  --grey-400: #808080;
+  --grey-500: #555555;
+  --grey-600: #363636;
+  --grey-700: #202020;
+  --grey-800: #161618;
+  --grey-900: #0d0d10;
   --btn-primary-bg:     rgba(255, 255, 255, 0.88);
   --btn-primary-hover:  rgba(255, 255, 255, 1);
   --btn-primary-text:   #0f0f1a;
-  --btn-primary-glow:   rgba(255, 255, 255, 0.12);
-  --btn-primary-border: rgba(255, 255, 255, 0.20);
-
-  /* ── Interactive accent (active states, progress, toggles) ── */
   --accent-interactive:       rgba(255, 255, 255, 0.82);
   --accent-interactive-dim:   rgba(255, 255, 255, 0.15);
   --accent-interactive-glow:  rgba(255, 255, 255, 0.08);
@@ -181,8 +229,10 @@ input, textarea, select {
 
   --glass-bg:           rgba(255, 255, 255, 0.72);
   --glass-bg-hover:     rgba(255, 255, 255, 0.88);
+  --glass-bg-active:    rgba(0, 0, 0, 0.07);
   --glass-bg-elevated:  rgba(255, 255, 255, 0.90);
   --glass-border:        rgba(0, 0, 0, 0.09);
+  --glass-border-light:  rgba(0, 0, 0, 0.14);
   --glass-border-hover:  rgba(0, 0, 0, 0.12);
   --glass-border-subtle: rgba(0, 0, 0, 0.06);
   --glass-shine:         rgba(255, 255, 255, 0.90);
@@ -199,6 +249,17 @@ input, textarea, select {
   --text-dim:       rgba(15, 15, 26, 0.35);
   --text-title:     rgba(15, 15, 26, 0.85);
   --text-subtitle:  rgba(15, 15, 26, 0.70);
+  --text-category:  rgba(15, 15, 26, 0.50);
+
+  --grey-100: #1a1a22;
+  --grey-200: #333340;
+  --grey-300: #555566;
+  --grey-400: #777788;
+  --grey-500: #9999aa;
+  --grey-600: #bbbbcc;
+  --grey-700: #dcdce6;
+  --grey-800: #e8e8f0;
+  --grey-900: #f0f0f6;
 
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 20px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,0.98) inset;
@@ -608,4 +669,356 @@ img {
     -webkit-backdrop-filter: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLOBAL LIGHT THEME OVERRIDES across all components & pages
+   Ensures all hardcoded white text (#fff / rgba(255,255,255,...)) and dark
+   surfaces are inverted cleanly in light mode while preserving dark mode.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── UploadShelf (Home & Library) ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-grid-title,
+[data-theme="white"] .upl-grid-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-grid-cell.active .upl-grid-title,
+[data-theme="white"] .upl-grid-cell.active .upl-grid-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-title,
+[data-theme="white"] .upl-exp-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-sheet-album,
+[data-theme="white"] .upl-sheet-album,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-track-title,
+[data-theme="white"] .upl-track-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-track-row.playing .upl-track-title,
+[data-theme="white"] .upl-track-row.playing .upl-track-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-title,
+[data-theme="white"] .upl-edit-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-field input,
+[data-theme="white"] .upl-edit-field input {
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-grid-artist,
+[data-theme="white"] .upl-grid-artist,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-sheet-artist,
+[data-theme="white"] .upl-sheet-artist,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-track-sub,
+[data-theme="white"] .upl-track-sub,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-field label,
+[data-theme="white"] .upl-edit-field label {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-sheet-count,
+[data-theme="white"] .upl-sheet-count,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-track-n,
+[data-theme="white"] .upl-track-n,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-grid-art-ph,
+[data-theme="white"] .upl-grid-art-ph,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-art-ph,
+[data-theme="white"] .upl-exp-art-ph {
+  color: var(--text-dim);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-grid-art,
+[data-theme="white"] .upl-grid-art,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-art-ph,
+[data-theme="white"] .upl-exp-art-ph {
+  background: rgba(0, 0, 0, 0.06);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-play,
+[data-theme="white"] .upl-exp-play {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-more,
+[data-theme="white"] .upl-exp-more,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-exp-heart,
+[data-theme="white"] .upl-exp-heart {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-sort-pill,
+[data-theme="white"] .upl-sort-pill {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-sort-pill.active,
+[data-theme="white"] .upl-sort-pill.active {
+  background: rgba(0, 0, 0, 0.09);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-fullscreen,
+[data-theme="white"] .upl-fullscreen {
+  background: rgba(248, 248, 252, 0.96);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-ctrl-primary,
+[data-theme="white"] .upl-ctrl-primary,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-save,
+[data-theme="white"] .upl-edit-save {
+  background: #0f0f1a;
+  color: #ffffff;
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-ctrl-secondary,
+[data-theme="white"] .upl-ctrl-secondary {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-track-row,
+[data-theme="white"] .upl-track-row {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-sheet,
+[data-theme="white"] .upl-edit-sheet {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .upl-edit-field,
+[data-theme="white"] .upl-edit-field {
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom-color: rgba(0, 0, 0, 0.07);
+}
+
+/* ── Search Page ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-result-title,
+[data-theme="white"] .search-result-title {
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-result-art,
+[data-theme="white"] .search-result-art,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-result-art-placeholder,
+[data-theme="white"] .search-result-art-placeholder {
+  background: rgba(0, 0, 0, 0.06);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-filter-chip,
+[data-theme="white"] .search-filter-chip {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-filter-chip:hover,
+[data-theme="white"] .search-filter-chip:hover {
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.16);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-filter-chip.active,
+[data-theme="white"] .search-filter-chip.active {
+  background: #0f0f1a;
+  color: #ffffff;
+  border-color: #0f0f1a;
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-history-item,
+[data-theme="white"] .search-history-item {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-action-btn:hover,
+[data-theme="white"] .search-action-btn:hover,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-play-btn:hover,
+[data-theme="white"] .search-play-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-section-title,
+[data-theme="white"] .search-section-title {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-follow-btn,
+[data-theme="white"] .search-follow-btn {
+  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-follow-btn.following,
+[data-theme="white"] .search-follow-btn.following {
+  background: rgba(0, 0, 0, 0.10);
+  border-color: rgba(0, 0, 0, 0.22);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-load-more-btn,
+[data-theme="white"] .search-load-more-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.09);
+  color: var(--text-secondary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .search-load-more-btn:hover,
+[data-theme="white"] .search-load-more-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+/* ── Home Page ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .featured-dot,
+[data-theme="white"] .featured-dot {
+  background: rgba(0, 0, 0, 0.18);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .berghain-event-card,
+[data-theme="white"] .berghain-event-card {
+  background-color: #efeff6;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .berghain-event-card:hover,
+[data-theme="white"] .berghain-event-card:hover {
+  background-color: #e6e6f0;
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .berghain-event-date,
+[data-theme="white"] .berghain-event-date {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .berghain-event-date span,
+[data-theme="white"] .berghain-event-date span,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .berghain-event-title,
+[data-theme="white"] .berghain-event-title {
+  color: var(--text-primary);
+}
+
+/* ── Library Page ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-tab.active,
+[data-theme="white"] .lib-tab.active,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-title,
+[data-theme="white"] .lib-upl-title {
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-sub,
+[data-theme="white"] .lib-upl-sub {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-sort,
+[data-theme="white"] .lib-upl-sort {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-sort.active,
+[data-theme="white"] .lib-upl-sort.active {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-art-ph,
+[data-theme="white"] .lib-upl-art-ph {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-dim);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .lib-upl-del,
+[data-theme="white"] .lib-upl-del {
+  color: var(--text-dim);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .modal-overlay,
+[data-theme="white"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.32);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .modal-box,
+[data-theme="white"] .modal-box {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(0, 0, 0, 0.10);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
+}
+
+/* ── AlbumSheet ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .album-sheet,
+[data-theme="white"] .album-sheet {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 0, 0, 0.10);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-handle,
+[data-theme="white"] .as-handle {
+  background: rgba(0, 0, 0, 0.18);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-close,
+[data-theme="white"] .as-close {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-secondary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-art,
+[data-theme="white"] .as-art {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-dim);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-album-title,
+[data-theme="white"] .as-album-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track-title,
+[data-theme="white"] .as-track-title {
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-artist,
+[data-theme="white"] .as-artist,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track-artist,
+[data-theme="white"] .as-track-artist {
+  color: var(--text-muted);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-badge,
+[data-theme="white"] .as-badge,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track-num,
+[data-theme="white"] .as-track-num,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track-dur,
+[data-theme="white"] .as-track-dur {
+  color: var(--text-dim);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-play-all,
+[data-theme="white"] .as-play-all {
+  background: rgba(15, 15, 26, 0.08);
+  border-color: rgba(15, 15, 26, 0.14);
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-divider,
+[data-theme="white"] .as-divider,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track + .as-track::before,
+[data-theme="white"] .as-track + .as-track::before {
+  background: rgba(0, 0, 0, 0.07);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-track-play,
+[data-theme="white"] .as-track-play {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-primary);
+}
+
+/* ── Account, Profile, Settings, AppSettings, Shop, Marketplace, Subscription, Events, UserUploads ── */
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .acc-header-name,
+[data-theme="white"] .acc-header-name,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .acc-item-label,
+[data-theme="white"] .acc-item-label,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .acc-stat-val,
+[data-theme="white"] .acc-stat-val,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .prof-name,
+[data-theme="white"] .prof-name,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .prof-stat-val,
+[data-theme="white"] .prof-stat-val,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .s-row-label,
+[data-theme="white"] .s-row-label,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .s-title,
+[data-theme="white"] .s-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-row-label,
+[data-theme="white"] .as-row-label,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-header-title,
+[data-theme="white"] .as-header-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .uu-title,
+[data-theme="white"] .uu-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .uu-item-title,
+[data-theme="white"] .uu-item-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .event-card-title,
+[data-theme="white"] .event-card-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .shop-item-title,
+[data-theme="white"] .shop-item-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .mp-item-title,
+[data-theme="white"] .mp-item-title,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .sub-plan-name,
+[data-theme="white"] .sub-plan-name,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .sub-price,
+[data-theme="white"] .sub-price {
+  color: var(--text-primary);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .acc-group,
+[data-theme="white"] .acc-group,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .s-group,
+[data-theme="white"] .s-group,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .as-group,
+[data-theme="white"] .as-group {
+  background: var(--bg-card);
+  border-color: var(--glass-border);
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .s-toggle.on .s-toggle-thumb,
+[data-theme="white"] .s-toggle.on .s-toggle-thumb {
+  background: #ffffff;
+}
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .player-bar,
+[data-theme="white"] .player-bar,
+:root:not([data-theme="dark"]):not([data-theme="grey"]) .inline-player,
+[data-theme="white"] .inline-player {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 0, 0, 0.09);
+  color: var(--text-primary);
+}
+
 

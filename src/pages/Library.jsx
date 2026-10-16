@@ -87,7 +87,7 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
       <div className="shelf-card-art">
         {cover
           ? <img src={cover} alt={title}/>
-          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,.06)'}}>{fallback||<Music2 size={22} color="rgba(255,255,255,.3)"/>}</div>
+          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--grey-800)'}}>{fallback||<Music2 size={22} color="var(--text-dim)"/>}</div>
         }
         {badge&&<div className="shelf-card-badge">{BadgeIcon&&<BadgeIcon size={9}/>}<span>{badge}</span></div>}
       </div>
@@ -108,18 +108,18 @@ function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) 
     >
       <div style={{
         width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
-        background: 'rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-             : <Music2 size={22} color="rgba(255,255,255,.3)" />}
+             : <Music2 size={22} color="var(--text-dim)" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+        <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub || ''}</div>
       </div>
       {showPlay && (
         <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
-          <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+          <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
         </div>
       )}
     </div>
@@ -1019,7 +1019,7 @@ export default function Library() {
                   padding: '4px 12px',
                   borderRadius: '16px',
                   background: eventsFilter === f ? 'var(--text-primary)' : 'var(--glass-bg)',
-                  color: eventsFilter === f ? '#000' : 'var(--text-primary)',
+                  color: eventsFilter === f ? 'var(--bg-primary)' : 'var(--text-primary)',
                   fontSize: '0.8rem',
                   border: 'none',
                   cursor: 'pointer'

@@ -178,7 +178,7 @@ function BandcampLabelResult({ label, onPlay, onGo }) {
       <div className="search-label-releases" style={{ 
         paddingLeft: '16px', 
         marginLeft: '24px', 
-        borderLeft: '2px solid rgba(255,255,255,0.1)', 
+        borderLeft: '2px solid var(--glass-border)', 
         marginTop: '8px',
         display: 'flex',
         flexDirection: 'column',
@@ -1018,7 +1018,7 @@ export default function Search() {
         </span>
       </div>
       <div className="search-result-actions">
-        <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+        <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
       </div>
     </div>
   );
@@ -1033,7 +1033,7 @@ export default function Search() {
         <span className="search-result-artist">{track.artist}</span>
       </div>
       <div className="search-result-actions">
-        <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+        <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
       </div>
     </div>
   );
@@ -1424,7 +1424,7 @@ export default function Search() {
                     </span>
                   </div>
                   <div className="search-result-actions">
-                    <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+                    <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
                   </div>
                 </div>
               );
@@ -1479,7 +1479,7 @@ export default function Search() {
       {/* Loading state */}
       {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && (
         <div className="search-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
-          <Loader2 className="spin-icon" size={28} color="rgba(255,255,255,0.4)" />
+          <Loader2 className="spin-icon" size={28} color="var(--text-muted)" />
           <span>{providerRetrying ? 'Loading results...' : 'Searching...'}</span>
         </div>
       )}
@@ -1493,7 +1493,7 @@ export default function Search() {
       {!isQueryEmpty && rankedAll.length > 0 && (
         <div className="search-results-list search-external-section">
           {rankedAll.map(item => {
-            const pColor = providerColors[item.provider] || '#fff';
+            const pColor = providerColors[item.provider] || 'var(--text-primary)';
             const isPlaylist = item.entityType === 'playlist';
             const isArtist = item.entityType === 'artist';
             const isLabel = item.entityType === 'label';
@@ -1762,7 +1762,7 @@ export default function Search() {
                 </div>
                 {!isArtist && !isLabel && (
                   <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
-                    <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+                    <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
                   </div>
                 )}
               </div>
@@ -1773,7 +1773,7 @@ export default function Search() {
 
 
       {!isQueryEmpty && rankedAll.length > 0 && hasMoreToShow && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 0', color: 'rgba(255,255,255,0.4)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 0', color: 'var(--text-muted)' }}>
           {isLoadingMore ? <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : null}
         </div>
       )}
@@ -1781,13 +1781,13 @@ export default function Search() {
       {playlistSheet && (
         <div className="search-playlist-sheet" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+          background: 'var(--glass-bg-elevated)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
           display: 'flex', flexDirection: 'column', padding: '60px 16px 20px',
           overflowY: 'auto',
         }}>
           <button onClick={() => setPlaylistSheet(null)} style={{
-            position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)',
-            border: 'none', borderRadius: '50%', width: 36, height: 36, color: '#fff',
+            position: 'absolute', top: 16, right: 16, background: 'var(--glass-bg-active)',
+            border: 'none', borderRadius: '50%', width: 36, height: 36, color: 'var(--text-primary)',
             fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>✕</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -1795,8 +1795,8 @@ export default function Search() {
               <img src={playlistSheet.artworkUrl} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />
             )}
             <div>
-              <div style={{ color: '#fff', fontSize: 18, fontWeight: 600 }}>{playlistSheet.title}</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>{playlistSheet.artistName} · {playlistSheet.trackCount} tracks</div>
+              <div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 600 }}>{playlistSheet.title}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{playlistSheet.artistName} · {playlistSheet.trackCount} tracks</div>
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -1818,7 +1818,7 @@ export default function Search() {
                   {t.artworkUrl ? (
                     <img src={t.artworkUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.07)', borderRadius: 'inherit' }} />
+                    <div style={{ width: '100%', height: '100%', background: 'var(--grey-800)', borderRadius: 'inherit' }} />
                   )}
                 </div>
                 <div className="search-result-info">
@@ -1826,7 +1826,7 @@ export default function Search() {
                   <span className="search-result-artist">{t.artistName}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
-                  <Play size={20} color="rgba(255,255,255,.6)" fill="rgba(255,255,255,.6)" />
+                  <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />
                 </div>
               </div>
             ))}

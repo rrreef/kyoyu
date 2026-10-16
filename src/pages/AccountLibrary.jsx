@@ -64,7 +64,7 @@ export default function AccountLibrary() {
   return (
     <div className="page library-page animate-in">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button onClick={() => navigate(-1)} data-kyoyu-injected="1" style={{ background: 'none', border: 'none', color: '#fff', padding: 0, cursor: 'pointer' }}>
+        <button onClick={() => navigate(-1)} data-kyoyu-injected="1" style={{ background: 'none', border: 'none', color: 'var(--text-primary)', padding: 0, cursor: 'pointer' }}>
           <ChevronLeft size={22} />
         </button>
         <div>
@@ -93,7 +93,7 @@ export default function AccountLibrary() {
                 style={{
                   padding: '5px 14px', borderRadius: 16, border: 'none', fontSize: '0.8rem', cursor: 'pointer',
                   background: tab === t.key ? 'var(--text-primary)' : 'var(--glass-bg)',
-                  color: tab === t.key ? '#000' : 'var(--text-primary)',
+                  color: tab === t.key ? 'var(--bg-primary)' : 'var(--text-primary)',
                 }}
               >{t.label}</button>
             ))}

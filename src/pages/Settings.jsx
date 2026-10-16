@@ -272,7 +272,7 @@ function AccountPanel({ user }) {
             {avatarMenu && (
               <div
                 className="s-avatar-popover"
-                style={{ background: '#0f0f12', backdropFilter: 'none' }}
+                style={{ background: 'var(--bg-card)', backdropFilter: 'none' }}
                 onClick={e => e.stopPropagation()}
               >
                 <button className="s-avatar-popover-item" onClick={() => { avatarFileRef.current.click(); setAvatarMenu(false); }}>
