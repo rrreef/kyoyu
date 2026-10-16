@@ -564,6 +564,11 @@ export function openNativeLabelFast(label) {
     parentLabel: label.parentLabel ? String(label.parentLabel) : null,
     sublabels: Array.isArray(label.sublabels) ? label.sublabels.filter(Boolean).map(String) : [],
     contactInfo: label.contactInfo ? String(label.contactInfo) : null,
+    foundedYear: label.foundedYear ? String(label.foundedYear) : null,
+    founders: Array.isArray(label.founders) ? label.founders.filter(Boolean).map(String) : [],
+    labelType: label.labelType ? String(label.labelType) : null,
+    labelCode: label.labelCode ? String(label.labelCode) : null,
+    aliases: Array.isArray(label.aliases) ? label.aliases.filter(Boolean).map(String) : [],
     country: label.country ? String(label.country) : null,
     location: label.location ? String(label.location) : null,
     genres: Array.isArray(label.genres) ? label.genres.filter(Boolean).map(String) : [],
@@ -598,12 +603,85 @@ export function openNativeLabelFast(label) {
 }
 
 const _normStr = (s) => String(s || '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const _normLabelCore = (s) => {
+  const full = _normStr(s);
+  const stripped = full.replace(/\b(records|recordings|record|label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/g, '').replace(/\s+/g, ' ').trim();
+  return stripped || full;
+};
+
+function _prioritizeAndDedupeLinks(rawUrls) {
+  const cleaned = [];
+  const seenKey = new Set();
+  const seenPlatform = new Set();
+
+  const platformOf = (u) => {
+    const l = u.toLowerCase();
+    if (l.includes('discogs.com')) return 'discogs';
+    if (l.includes('musicbrainz.org')) return 'musicbrainz';
+    if (l.includes('instagram.com')) return 'instagram';
+    if (l.includes('bandcamp.com')) return 'bandcamp';
+    if (l.includes('soundcloud.com')) return 'soundcloud';
+    if (l.includes('ra.co') || l.includes('residentadvisor.')) return 'ra';
+    if (l.includes('youtube.com') || l.includes('youtu.be')) return 'youtube';
+    if (l.includes('facebook.com')) return 'facebook';
+    if (l.includes('twitter.com') || l.includes('x.com')) return 'twitter';
+    if (l.includes('wikidata.org') || l.includes('wikipedia.org')) return 'wiki';
+    return null;
+  };
+
+  const rankOf = (u) => {
+    const p = platformOf(u);
+    if (p === 'discogs') return 1;
+    if (p === 'musicbrainz') return 2;
+    if (p === 'instagram') return 3;
+    if (p === 'bandcamp') return 4;
+    if (p === 'soundcloud') return 5;
+    if (p === 'ra') return 6;
+    if (p === 'youtube') return 7;
+    if (!p) return 8; // Official website
+    if (p === 'facebook') return 9;
+    if (p === 'twitter') return 10;
+    return 11;
+  };
+
+  for (const raw of (rawUrls || [])) {
+    if (!raw || typeof raw !== 'string') continue;
+    let u = raw.trim().replace(/[.,;]+$/, '');
+    if (!/^https?:\/\//i.test(u)) continue;
+    // Upgrade http -> https for known platforms
+    u = u.replace(/^http:\/\//i, 'https://');
+    if (u.includes('bandcamp.com')) {
+      u = u.replace(/\/music\/?$/i, '');
+    }
+    const normKey = u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+    if (!normKey || seenKey.has(normKey)) continue;
+    const plat = platformOf(u);
+    // Keep only one link per major platform (e.g., avoid two Discogs or two Bandcamp links)
+    if (plat && ['discogs', 'musicbrainz', 'instagram', 'bandcamp', 'soundcloud', 'ra'].includes(plat)) {
+      if (seenPlatform.has(plat)) continue;
+      seenPlatform.add(plat);
+    }
+    seenKey.add(normKey);
+    cleaned.push(u);
+  }
+
+  return cleaned.sort((a, b) => rankOf(a) - rankOf(b));
+}
 
 export async function openRichArtistSheet(artistInput) {
   const isObj = artistInput && typeof artistInput === 'object';
   const rawName = isObj ? (artistInput.name || artistInput.artistName || artistInput.title || '') : String(artistInput || '');
   const cleanName = String(rawName).replace(/\s*\(\d+\)\s*$/, '').trim();
   if (!cleanName) return;
+
+  // If the item is already marked as a label or its name clearly indicates a record label, open the Label Sheet directly
+  if (isObj && (artistInput.entityType === 'label' || artistInput.type === 'label')) {
+    return openRichLabelSheet(artistInput);
+  }
+  const hasExplicitArtistDiscogsId = isObj && artistInput.provider === 'discogs' && artistInput.entityType === 'artist' && /^\d+$/.test(String(artistInput.discogsId || artistInput.id || ''));
+  if (!hasExplicitArtistDiscogsId && /\b(records|recordings|record label|disques|schallplatten)\b/i.test(cleanName)) {
+    return openRichLabelSheet(artistInput);
+  }
 
   const initialArtist = {
     id: (isObj && artistInput.id) ? String(artistInput.id) : `artist-${_normStr(cleanName)}`,
@@ -633,8 +711,22 @@ export async function openRichArtistSheet(artistInput) {
     });
     if (r.ok) {
       const profile = await r.json();
+      // If Discogs determined that this name is actually a Record Label (not an artist), switch to Label Sheet immediately!
+      if (profile && profile.isLabel) {
+        return openRichLabelSheet({
+          ...(isObj ? artistInput : {}),
+          id: profile.labelId || initialArtist.id,
+          discogsId: profile.labelId || null,
+          name: profile.labelName || cleanName,
+          provider: 'discogs',
+        });
+      }
       if (profile && !profile.error) {
-        const mergedUrls = Array.from(new Set([...(initialArtist.urls || []), ...(profile.urls || []), profile.id ? `https://www.discogs.com/artist/${profile.id}` : ''])).filter(Boolean);
+        const mergedUrls = _prioritizeAndDedupeLinks([
+          ...(initialArtist.urls || []),
+          ...(profile.urls || []),
+          profile.id ? `https://www.discogs.com/artist/${profile.id}` : '',
+        ]);
         const mergedImages = (profile.images && profile.images.length) ? profile.images : initialArtist.images;
         const mergedReleases = (profile.topReleases || []).map(rel => ({
           ...rel,
@@ -691,11 +783,20 @@ export async function openRichLabelSheet(labelInput) {
     parentLabel: isObj ? (labelInput.parentLabel || null) : null,
     sublabels: isObj && Array.isArray(labelInput.sublabels) ? labelInput.sublabels : [],
     contactInfo: isObj ? (labelInput.contactInfo || null) : null,
+    foundedYear: isObj ? (labelInput.foundedYear || null) : null,
+    founders: isObj && Array.isArray(labelInput.founders) ? labelInput.founders : [],
+    labelType: isObj ? (labelInput.labelType || null) : null,
+    labelCode: isObj ? (labelInput.labelCode || null) : null,
+    aliases: isObj && Array.isArray(labelInput.aliases) ? labelInput.aliases : [],
     country: isObj ? (labelInput.country || null) : null,
     location: isObj ? (labelInput.location || null) : null,
     genres: isObj && Array.isArray(labelInput.genres) ? labelInput.genres : [],
-    sources: isObj && labelInput.provider ? [String(labelInput.provider)] : [],
-    urls: Array.from(new Set(initialUrls)).filter(Boolean),
+    sources: isObj && labelInput.provider ? [
+      labelInput.provider === 'discogs' ? 'Discogs'
+      : labelInput.provider === 'bandcamp' ? 'Bandcamp'
+      : String(labelInput.provider)
+    ] : [],
+    urls: _prioritizeAndDedupeLinks(initialUrls),
     images: Array.from(new Set(initialImages)).filter(Boolean),
     topReleases: isObj && Array.isArray(labelInput.topReleases) ? labelInput.topReleases : [],
   };
@@ -709,7 +810,7 @@ export async function openRichLabelSheet(labelInput) {
 
   let bcUrl = initialUrls.find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
 
-  // 1. Fetch Discogs label profile & releases, and Bandcamp search in parallel
+  // 1. Fetch Discogs + MusicBrainz label profile & releases, and Bandcamp search in parallel
   const discogsPromise = fetch('/api/discogs-search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -726,18 +827,28 @@ export async function openRichLabelSheet(labelInput) {
 
   const [discogsData, bcSearchData] = await Promise.all([discogsPromise, bcSearchPromise]);
 
-  // Discover Bandcamp URL from Discogs urls or Bandcamp search results if not yet known
-  if (!bcUrl && discogsData && Array.isArray(discogsData.urls)) {
-    bcUrl = discogsData.urls.find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
+  // Discover Bandcamp URL from Discogs/MusicBrainz urls or Bandcamp search results if not yet known
+  if (!bcUrl && discogsData) {
+    if (discogsData.bandcampUrl) bcUrl = discogsData.bandcampUrl;
+    else if (Array.isArray(discogsData.urls)) {
+      bcUrl = discogsData.urls.find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
+    }
   }
-  if (!bcUrl && bcSearchData && Array.isArray(bcSearchData.results)) {
+  if (bcSearchData && Array.isArray(bcSearchData.results)) {
     const targetNorm = _normStr(cleanName);
+    const targetCore = _normLabelCore(cleanName);
     const bcHit = bcSearchData.results.find(item =>
       (item.type === 'label' || item.type === 'artist') &&
-      (_normStr(item.title) === targetNorm || _normStr(item.artistName) === targetNorm || _normStr(item.title).includes(targetNorm))
+      (_normStr(item.title) === targetNorm ||
+       _normLabelCore(item.title) === targetCore ||
+       _normStr(item.artistName) === targetNorm ||
+       _normStr(item.title).includes(targetCore) ||
+       targetCore.includes(_normLabelCore(item.title)))
     );
-    if (bcHit && (bcHit.trackUrl || bcHit.url)) {
-      bcUrl = bcHit.trackUrl || bcHit.url;
+    if (bcHit) {
+      if (!bcUrl && (bcHit.trackUrl || bcHit.url)) {
+        bcUrl = bcHit.trackUrl || bcHit.url;
+      }
       if (bcHit.artworkUrl && !currentLabel.images.includes(bcHit.artworkUrl)) {
         currentLabel.images.push(bcHit.artworkUrl);
       }
@@ -747,38 +858,58 @@ export async function openRichLabelSheet(labelInput) {
     }
   }
 
-  // Merge Discogs data right away and push an intermediate update
+  // Merge Discogs + MusicBrainz + Bandcamp data and emit to native LabelSheetView
   const mergeAndEmit = (dc, bc) => {
     const sources = new Set(currentLabel.sources || []);
-    const urls = new Set(currentLabel.urls || []);
+    const rawUrls = [...(currentLabel.urls || [])];
     const images = new Set(currentLabel.images || []);
     const genres = new Set(currentLabel.genres || []);
 
     let profileParts = [];
     if (dc && !dc.error) {
-      sources.add('Discogs');
+      if (Array.isArray(dc.sources) && dc.sources.length) {
+        dc.sources.forEach(s => sources.add(s));
+      } else {
+        sources.add('Discogs');
+      }
       if (dc.profile) profileParts.push(dc.profile.trim());
-      (dc.urls || []).forEach(u => urls.add(u));
-      if (dc.discogsUrl) urls.add(dc.discogsUrl);
+      if (dc.discogsUrl) rawUrls.push(dc.discogsUrl);
+      if (dc.mbUrl) rawUrls.push(dc.mbUrl);
+      if (dc.bandcampUrl) rawUrls.push(dc.bandcampUrl);
+      (dc.urls || []).forEach(u => rawUrls.push(u));
       (dc.images || []).forEach(img => images.add(img));
+      (dc.genres || []).forEach(g => genres.add(g));
     }
     if (bc && !bc.error) {
       sources.add('Bandcamp');
-      if (bc.bio && (!profileParts[0] || !profileParts[0].toLowerCase().includes(bc.bio.slice(0, 40).toLowerCase()))) {
-        profileParts.push(bc.bio.trim());
+      if (bc.bio) {
+        const bcBioClean = bc.bio.trim();
+        const alreadyIncluded = profileParts.some(p =>
+          p.toLowerCase().includes(bcBioClean.slice(0, 45).toLowerCase()) ||
+          bcBioClean.toLowerCase().includes(p.slice(0, 45).toLowerCase())
+        );
+        if (!alreadyIncluded) {
+          profileParts.push(bcBioClean);
+        } else if (bcBioClean.length > (profileParts[0]?.length || 0)) {
+          profileParts[0] = bcBioClean;
+        }
       }
       if (bc.imageUrl) images.add(bc.imageUrl);
-      (bc.links || []).forEach(u => urls.add(u));
+      (bc.links || []).forEach(u => rawUrls.push(u));
     }
-    if (bcUrl) urls.add(bcUrl.replace(/\/music\/?$/, ''));
+    if (bcUrl) {
+      sources.add('Bandcamp');
+      rawUrls.push(bcUrl.replace(/\/music\/?$/, ''));
+    }
 
-    // Merge releases from Discogs and Bandcamp (deduplicated by title)
+    const canonicalLabelName = (dc && dc.name) ? dc.name : ((bc && bc.name) ? bc.name : currentLabel.name);
+
+    // Merge releases from Discogs and Bandcamp (deduplicated by normalized title)
     const releaseMap = new Map();
     const addRelease = (rel) => {
       if (!rel || !rel.title) return;
       let titleStr = String(rel.title).trim();
       let artistStr = String(rel.artist || rel.artistName || '').trim();
-      // Sometimes Bandcamp title is "Artist - Title" when artist is empty
       if (!artistStr && titleStr.includes(' - ')) {
         const parts = titleStr.split(' - ');
         artistStr = parts[0].trim();
@@ -791,8 +922,8 @@ export async function openRichLabelSheet(labelInput) {
         releaseMap.set(key, {
           id: String(rel.id || `rel-${key}-${Math.random()}`),
           title: titleStr,
-          artist: artistStr || cleanName,
-          label: cleanName,
+          artist: artistStr || canonicalLabelName,
+          label: canonicalLabelName,
           catno: rel.catno || null,
           format: rel.format || null,
           provider: rel.provider || 'discogs',
@@ -804,7 +935,6 @@ export async function openRichLabelSheet(labelInput) {
           type: rel.type || 'release',
         });
       } else {
-        // Enrich existing release with Bandcamp URL / high-res artwork or Discogs year/catno
         if (!existing.trackUrl && (rel.trackUrl || rel.url)) {
           existing.trackUrl = rel.trackUrl || rel.url;
           existing.provider = 'bandcamp';
@@ -820,7 +950,7 @@ export async function openRichLabelSheet(labelInput) {
         if (!existing.catno && rel.catno) existing.catno = rel.catno;
         if (!existing.format && rel.format) existing.format = rel.format;
         if (!existing.discogsId && rel.discogsId) existing.discogsId = String(rel.discogsId);
-        if ((!existing.artist || existing.artist === cleanName) && artistStr) existing.artist = artistStr;
+        if ((!existing.artist || existing.artist === canonicalLabelName) && artistStr) existing.artist = artistStr;
       }
     };
 
@@ -828,7 +958,8 @@ export async function openRichLabelSheet(labelInput) {
       bc.releases.forEach(r => addRelease({
         id: `bc-lbl-${_normStr(r.title)}`,
         title: r.title,
-        artist: r.artist || cleanName,
+        artist: r.artist || canonicalLabelName,
+        year: r.year || null,
         artworkUrl: r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '',
         trackUrl: r.url,
         provider: 'bandcamp',
@@ -842,19 +973,40 @@ export async function openRichLabelSheet(labelInput) {
 
     const mergedReleases = Array.from(releaseMap.values());
 
+    // If label has no profile image yet, fall back to the first release's cover
+    const finalImages = Array.from(images).filter(Boolean);
+    if (finalImages.length === 0 && mergedReleases.length > 0) {
+      const firstCover = mergedReleases.find(r => r.coverImage || r.thumb)?.coverImage;
+      if (firstCover) finalImages.push(firstCover);
+    }
+
+    // Order sources cleanly: Discogs, MusicBrainz, Bandcamp
+    const sourceOrder = ['Discogs', 'MusicBrainz', 'Bandcamp'];
+    const orderedSources = Array.from(sources).sort((a, b) => {
+      const ia = sourceOrder.indexOf(a);
+      const ib = sourceOrder.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
     currentLabel = {
       ...currentLabel,
       id: (dc && dc.id) ? String(dc.id) : currentLabel.id,
-      name: (dc && dc.name) ? dc.name : currentLabel.name,
+      name: canonicalLabelName,
       profile: profileParts.filter(Boolean).join('\n\n') || currentLabel.profile || null,
       parentLabel: (dc && dc.parentLabel) ? dc.parentLabel : currentLabel.parentLabel,
       sublabels: (dc && Array.isArray(dc.sublabels) && dc.sublabels.length) ? dc.sublabels : currentLabel.sublabels,
       contactInfo: (dc && dc.contactInfo) ? dc.contactInfo : currentLabel.contactInfo,
-      location: (bc && bc.location) ? bc.location : currentLabel.location,
+      foundedYear: (dc && dc.foundedYear) ? String(dc.foundedYear) : currentLabel.foundedYear,
+      founders: (dc && Array.isArray(dc.founders) && dc.founders.length) ? dc.founders : currentLabel.founders,
+      labelType: (dc && dc.labelType) ? dc.labelType : currentLabel.labelType,
+      labelCode: (dc && dc.labelCode) ? dc.labelCode : currentLabel.labelCode,
+      aliases: (dc && Array.isArray(dc.aliases) && dc.aliases.length) ? dc.aliases : currentLabel.aliases,
+      country: (dc && dc.country) ? dc.country : currentLabel.country,
+      location: (bc && bc.location) ? bc.location : ((dc && dc.location) ? dc.location : currentLabel.location),
       genres: Array.from(genres),
-      sources: Array.from(sources),
-      urls: Array.from(urls).filter(Boolean),
-      images: Array.from(images).filter(Boolean),
+      sources: orderedSources,
+      urls: _prioritizeAndDedupeLinks(rawUrls),
+      images: finalImages,
       topReleases: mergedReleases,
     };
 

@@ -200,6 +200,7 @@ export default async function handler(req, res) {
       }
     }
 
+    const LABEL_NAME_RE = /\b(records|recordings|label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/i;
     const results = items
       .map(item => {
         let artworkUrl = item.img || '';
@@ -209,7 +210,8 @@ export default async function handler(req, res) {
           artworkUrl = `https://f4.bcbits.com/img/00${item.img_id}_23.jpg`;
         }
         
-        const type = item.type === 'b' ? (item.is_label ? 'label' : 'artist') : item.type === 'a' ? 'album' : item.type === 'f' ? 'fan' : 'track';
+        const looksLikeLabel = item.type === 'b' && (item.is_label || LABEL_NAME_RE.test(item.name || ''));
+        const type = item.type === 'b' ? (looksLikeLabel ? 'label' : 'artist') : item.type === 'a' ? 'album' : item.type === 'f' ? 'fan' : 'track';
 
         return {
           trackId: item.id,
@@ -217,9 +219,11 @@ export default async function handler(req, res) {
           title: item.name || '',
           artistName: item.band_name || (type === 'artist' || type === 'label' ? item.name : ''),
           artworkUrl,
-          trackUrl: item.item_url_path || item.item_url_root || '',
+          trackUrl: item.item_url_path || item.item_url_root || item.url || '',
           albumName: item.album_name || (type === 'album' ? item.name : ''),
           albumId: item.album_id || null,
+          location: item.location || '',
+          genre: item.genre_name || '',
         };
       });
 

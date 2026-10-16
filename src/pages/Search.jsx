@@ -733,6 +733,22 @@ export default function Search() {
   // Tag every item with its provider and normalize fields
   // Category filtering is applied to the final ordered list (see orderedAll)
   const bcItems = externalResults.bandcamp || [];
+  const _normEntityName = (s) => String(s || '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const discogsLabelNormSet = new Set((externalResults.labels || []).map(l => _normEntityName(l.name || l.title)).filter(Boolean));
+  const discogsArtistNormSet = new Set((externalResults.artists || []).map(a => _normEntityName(a.name || a.title)).filter(Boolean));
+  const _isLikelyLabelEntity = (nameStr, rawType) => {
+    if (rawType === 'label') return true;
+    if (rawType !== 'artist') return false;
+    const n = _normEntityName(nameStr);
+    if (!n) return false;
+    if (/\b(records|recordings|record label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/i.test(nameStr || '')) {
+      return true;
+    }
+    if (discogsLabelNormSet.has(n) && !discogsArtistNormSet.has(n)) {
+      return true;
+    }
+    return false;
+  };
 
   const allExternal = [
     ...(providerMatch('youtube') ? (externalResults.youtube || []).filter(yt => /^[\w-]{11}$/.test(yt.videoId || '') && yt.entityType !== 'playlist' && yt.entityType !== 'artist').map(yt => ({
@@ -744,9 +760,13 @@ export default function Search() {
     ...(providerMatch('soundcloud') ? (externalResults.soundcloudPlaylists || []).map(pl => ({
       ...pl, entityType: 'playlist', provider: 'soundcloud',
     })) : []),
-    ...(providerMatch('bandcamp') ? bcItems.map(bc => ({
-      ...bc, entityType: bc.entityType || bc.type || 'track', provider: bc.provider || 'bandcamp',
-    })) : []),
+    ...(providerMatch('bandcamp') ? bcItems.map(bc => {
+      const rawType = bc.entityType || bc.type || 'track';
+      const resolvedType = _isLikelyLabelEntity(bc.title || bc.artistName, rawType) ? 'label' : rawType;
+      return {
+        ...bc, entityType: resolvedType, provider: bc.provider || 'bandcamp',
+      };
+    }) : []),
     ...(providerMatch('spotify') ? (externalResults.spotify || []).map(sp => ({
       ...sp, entityType: sp.entityType || 'track', provider: sp.provider || 'spotify',
     })) : []),
@@ -828,17 +848,29 @@ export default function Search() {
     // Sort by strict score
     scored.sort((a, b) => b._rawScore - a._rawScore);
 
-    // Dedupe
-    const seen = new Set();
-    scored = scored.filter(r => {
-      const title = (r.title || '').toLowerCase().trim();
-      const artist = (r.artistName || r.channelTitle || '').toLowerCase().trim();
+    // Dedupe (and enrich merged artist/label items with cross-provider IDs/URLs)
+    const seenMap = new Map();
+    const deduped = [];
+    for (const r of scored) {
+      const title = _normEntityName(r.title || '');
+      const artist = _normEntityName(r.artistName || r.channelTitle || '');
       const kind = r.entityType || 'track';
-      const key = `${kind}|${title}|${artist}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+      const key = (kind === 'label' || kind === 'artist') ? `${kind}|${title}` : `${kind}|${title}|${artist}`;
+      const existing = seenMap.get(key);
+      if (existing) {
+        if (!existing.discogsId && r.discogsId) existing.discogsId = r.discogsId;
+        if (!existing.trackUrl && r.trackUrl) existing.trackUrl = r.trackUrl;
+        if (!existing.artworkUrl && (r.artworkUrl || r.coverImage || r.thumb)) {
+          existing.artworkUrl = r.artworkUrl || r.coverImage || r.thumb;
+        }
+        if (!existing.location && r.location) existing.location = r.location;
+        continue;
+      }
+      const copy = { ...r };
+      seenMap.set(key, copy);
+      deduped.push(copy);
+    }
+    scored = deduped;
 
     // Apply Filter constraints
     if (activeFilter !== 'all') {
@@ -846,26 +878,12 @@ export default function Search() {
       // Rules B & C: show exactly 33 items (or as many as possible)
       return categoryOnly.slice(0, 33);
     } else {
-      // Filter == 'all'
-      if (activeProvider !== 'all') {
-        // Rule A: Specific provider, NO category -> 3 artists, 10 albums, 20 titles
-        const artists = scored.filter(i => categoryOf(i) === 'artists').slice(0, 3);
-        const albums = scored.filter(i => categoryOf(i) === 'albums').slice(0, 10);
-        const titles = scored.filter(i => categoryOf(i) === 'titles').slice(0, 20);
-        
-        // If ratios are off, we could backfill, but user said "reduce and respect ratio", 
-        // meaning strict limits per category are fine.
-        return [...artists, ...albums, ...titles].sort((a, b) => b._rawScore - a._rawScore);
-      } else {
-        // No Provider, No Category -> Use intelligent orchestrator or just ratio?
-        // "this will define what result come first when user doesn't filter a provider"
-        // Let's use the same ratio logic for consistency, or just return top results.
-        // I will return top 3 artists, top 10 albums, top 20 titles to be safe.
-        const artists = scored.filter(i => categoryOf(i) === 'artists').slice(0, 3);
-        const albums = scored.filter(i => categoryOf(i) === 'albums').slice(0, 10);
-        const titles = scored.filter(i => categoryOf(i) === 'titles').slice(0, 20);
-        return [...artists, ...albums, ...titles].sort((a, b) => b._rawScore - a._rawScore);
-      }
+      // Filter == 'all': include top artists, top labels, top albums, and top titles
+      const artists = scored.filter(i => categoryOf(i) === 'artists').slice(0, 3);
+      const extLabels = scored.filter(i => categoryOf(i) === 'labels').slice(0, 3);
+      const albums = scored.filter(i => categoryOf(i) === 'albums').slice(0, 10);
+      const titles = scored.filter(i => categoryOf(i) === 'titles').slice(0, 20);
+      return [...artists, ...extLabels, ...albums, ...titles].sort((a, b) => b._rawScore - a._rawScore);
     }
   })();
 

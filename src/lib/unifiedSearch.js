@@ -247,6 +247,7 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
       trackUrl: r.trackUrl,
       albumName: r.albumName,
       genre: r.genre,
+      location: r.location || '',
       released: r.released,
       isExternal: true,
       provider: 'bandcamp',

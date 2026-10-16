@@ -561,24 +561,285 @@ async function handleTrackRelease(body, res) {
 
 // ── Main handler ──
 
+const LABEL_KEYWORD_RE = /\b(records|recordings|record label|label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/i;
+
+const normLabelName = (s) => {
+  const full = normName(s);
+  const stripped = full
+    .replace(/\b(records|recordings|record|label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped || full;
+};
+
+async function findDiscogsLabelHit(labelName) {
+  if (!labelName) return null;
+  const queries = [labelName.trim()];
+  const stripped = stripArtistSuffix(labelName)
+    .replace(/\b(records|recordings|label|disques|tapes|recs)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (stripped && stripped.toLowerCase() !== labelName.trim().toLowerCase()) {
+    queries.push(stripped);
+  } else if (!/\brecords\b/i.test(labelName)) {
+    queries.push(`${labelName.trim()} Records`);
+  }
+
+  const wantExact = normName(labelName);
+  const wantCore = normLabelName(labelName);
+
+  for (const q of queries) {
+    try {
+      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(q)}&type=label&per_page=10`, { headers: DISCOGS_HEADERS });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const results = d.results || [];
+      if (!results.length) continue;
+      const exact = results.find(a => normName(a.title) === wantExact);
+      if (exact) return exact;
+      const coreMatch = results.find(a => normLabelName(a.title) === wantCore);
+      if (coreMatch) return coreMatch;
+      const prefixMatch = results.find(a => normName(a.title).startsWith(wantCore) || wantCore.startsWith(normLabelName(a.title)));
+      if (prefixMatch) return prefixMatch;
+      if (q === queries[0]) return results[0];
+    } catch (e) {}
+  }
+  return null;
+}
+
+async function resolveDiscogsTextAndMeta(rawText) {
+  if (!rawText) return { cleanText: '', extractedUrls: [], founders: [], foundedYear: '' };
+  let work = String(rawText);
+
+  const extractedUrls = [];
+  // Extract [url=...] links
+  const urlTagRegex = /\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi;
+  let um;
+  while ((um = urlTagRegex.exec(work)) !== null) {
+    const u = um[1].trim();
+    if (/^https?:\/\//i.test(u)) extractedUrls.push(u);
+    else if (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(u)) extractedUrls.push(`https://${u}`);
+  }
+
+  // Resolve numeric tags [a12345], [l12345], [r12345], [m12345]
+  const tagRegex = /\[([alrm])(\d+)\]/gi;
+  let tm;
+  const toFetch = [];
+  while ((tm = tagRegex.exec(work)) !== null) {
+    toFetch.push({ full: tm[0], type: tm[1].toLowerCase(), id: tm[2] });
+  }
+  if (toFetch.length > 0) {
+    const uniqueTags = [...new Map(toFetch.map(item => [item.full.toLowerCase(), item])).values()];
+    await Promise.all(uniqueTags.slice(0, 8).map(async (tag) => {
+      try {
+        const endpoint = tag.type === 'l' ? `labels/${tag.id}`
+          : tag.type === 'a' ? `artists/${tag.id}`
+          : tag.type === 'r' ? `releases/${tag.id}`
+          : tag.type === 'm' ? `masters/${tag.id}` : '';
+        if (!endpoint) return;
+        const res = await fetch(`https://api.discogs.com/${endpoint}`, { headers: DISCOGS_HEADERS });
+        if (res.ok) {
+          const json = await res.json();
+          const name = stripArtistSuffix(json.name || json.title || '');
+          if (name) {
+            const replacement = tag.type === 'a' ? `[a=${name}]` : name;
+            work = work.replace(new RegExp(`\\[${tag.type}${tag.id}\\]`, 'gi'), replacement);
+          }
+        }
+      } catch (e) {}
+    }));
+  }
+
+  // Extract founders from [a=Artist Name] when near founder/owner context
+  const founders = [];
+  const founderClauseRegex = /(?:founded|run|owned|started|established|headed|operated|curated|created|launched|managed|set up|imprint of|label of)[^.\n;]{0,80}/gi;
+  let fm;
+  while ((fm = founderClauseRegex.exec(work)) !== null) {
+    const clause = fm[0];
+    const artistTagRegex = /\[a=([^\]]+)\]/gi;
+    let am;
+    while ((am = artistTagRegex.exec(clause)) !== null) {
+      const fName = stripArtistSuffix(am[1]);
+      if (fName && !founders.includes(fName)) founders.push(fName);
+    }
+  }
+
+  // Extract founded year
+  let foundedYear = '';
+  const yearMatch = work.match(/(?:founded|established|started|launched|formed|active since|est\.?)\s+(?:in\s+)?((?:19|20)\d{2})\b/i);
+  if (yearMatch) foundedYear = yearMatch[1];
+
+  // Clean Discogs markup for display
+  let cleanText = work
+    .replace(/\[a=([^\]]+)\]/gi, (_, n) => stripArtistSuffix(n))
+    .replace(/\[l=([^\]]+)\]/gi, (_, n) => stripArtistSuffix(n))
+    .replace(/\[r=([^\]]+)\]/gi, '$1')
+    .replace(/\[m=([^\]]+)\]/gi, '$1')
+    .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
+    .replace(/\[\/?(?:b|i|u)\]/gi, '')
+    .replace(/\[[alrm]\d+\]/gi, '')
+    .trim();
+
+  // Extract any raw URLs or social handles from text
+  const rawHttp = cleanText.match(/https?:\/\/[^\s\])"<>]+/gi) || [];
+  rawHttp.forEach(u => extractedUrls.push(u.replace(/[.,;]+$/, '')));
+  const bareSocial = cleanText.match(/(?:instagram\.com|soundcloud\.com|facebook\.com|ra\.co\/labels|residentadvisor\.net\/record-label\.aspx\?id=|[a-z0-9_-]+\.bandcamp\.com)[a-zA-Z0-9_.\-\/?=&]*/gi) || [];
+  bareSocial.forEach(b => {
+    const cleaned = b.replace(/[.,;]+$/, '');
+    extractedUrls.push(/^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`);
+  });
+
+  return { cleanText, extractedUrls, founders, foundedYear };
+}
+
+async function fetchMusicBrainzLabel(labelName, discogsId) {
+  if (!labelName && !discogsId) return null;
+  try {
+    let mbid = '';
+    const wantExact = normName(labelName || '');
+    const wantCore = normLabelName(labelName || '');
+
+    // 1. Try exact Discogs URL relation lookup on MusicBrainz + name search in parallel
+    const urlLookupPromise = discogsId
+      ? fetch(`https://musicbrainz.org/ws/2/url?resource=${encodeURIComponent(`https://www.discogs.com/label/${discogsId}`)}&inc=label-rels&fmt=json`, { headers: MB_HEADERS })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const searchPromise = labelName
+      ? fetch(`https://musicbrainz.org/ws/2/label/?query=${encodeURIComponent(labelName)}&fmt=json&limit=8`, { headers: MB_HEADERS })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const [urlRelData, searchData] = await Promise.all([urlLookupPromise, searchPromise]);
+
+    if (urlRelData && Array.isArray(urlRelData.relations)) {
+      const lblRel = urlRelData.relations.find(r => r.label?.id);
+      if (lblRel?.label?.id) mbid = lblRel.label.id;
+    }
+
+    if (!mbid && searchData && Array.isArray(searchData.labels) && searchData.labels.length > 0) {
+      const labels = searchData.labels;
+      const exact = labels.find(l => normName(l.name) === wantExact)
+        || labels.find(l => normLabelName(l.name) === wantCore)
+        || labels.find(l => (l.aliases || []).some(a => normLabelName(a.name) === wantCore))
+        || (labels[0].score >= 85 && (normName(labels[0].name).includes(wantCore) || wantCore.includes(normLabelName(labels[0].name))) ? labels[0] : null);
+      if (exact) mbid = exact.id;
+    }
+
+    // Fallback search with stripped label suffix (e.g. "Semantica" instead of "Semantica Records")
+    if (!mbid && wantCore && wantCore !== wantExact) {
+      try {
+        const r2 = await fetch(`https://musicbrainz.org/ws/2/label/?query=${encodeURIComponent(wantCore)}&fmt=json&limit=5`, { headers: MB_HEADERS });
+        if (r2.ok) {
+          const d2 = await r2.json();
+          const hit2 = (d2.labels || []).find(l => normLabelName(l.name) === wantCore);
+          if (hit2) mbid = hit2.id;
+        }
+      } catch (e) {}
+    }
+
+    if (!mbid) return null;
+
+    const detailRes = await fetch(`https://musicbrainz.org/ws/2/label/${mbid}?inc=url-rels+label-rels+artist-rels+aliases+tags+annotation&fmt=json`, { headers: MB_HEADERS });
+    if (!detailRes.ok) return { mbid, mbUrl: `https://musicbrainz.org/label/${mbid}`, urls: [`https://musicbrainz.org/label/${mbid}`] };
+    const data = await detailRes.json();
+
+    const mbUrl = `https://musicbrainz.org/label/${data.id || mbid}`;
+    const urls = [mbUrl];
+    const founders = [];
+    let parentLabel = '';
+    const sublabels = [];
+
+    for (const rel of (data.relations || [])) {
+      if (rel.url?.resource) {
+        urls.push(rel.url.resource);
+      }
+      if (rel['target-type'] === 'artist' && rel.artist?.name) {
+        const fName = stripArtistSuffix(rel.artist.name);
+        if (fName && !founders.includes(fName)) founders.push(fName);
+      }
+      if (rel['target-type'] === 'label' && rel.label?.name) {
+        const lName = stripArtistSuffix(rel.label.name);
+        if (rel.direction === 'backward' && !parentLabel) parentLabel = lName;
+        else if (rel.direction === 'forward' && lName && !sublabels.includes(lName)) sublabels.push(lName);
+      }
+    }
+
+    const annotation = (data.annotation || '')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+      .replace(/'''|''/g, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+
+    return {
+      mbid: data.id || mbid,
+      mbUrl,
+      name: data.name || '',
+      labelType: data.type || '',
+      labelCode: data['label-code'] ? `LC-${String(data['label-code']).padStart(5, '0')}` : '',
+      country: data.area?.name || data.country || '',
+      foundedYear: data['life-span']?.begin ? String(data['life-span'].begin).slice(0, 4) : '',
+      disambiguation: data.disambiguation || '',
+      annotation,
+      aliases: (data.aliases || []).map(a => a.name).filter(Boolean),
+      genres: (data.tags || []).sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 10).map(t => t.name).filter(Boolean),
+      founders,
+      parentLabel,
+      sublabels,
+      urls: Array.from(new Set(urls)).filter(Boolean),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function handleArtistProfile(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
   let { artistId, artistName } = body || {};
 
+  // Guard: If no explicit artistId and artistName has obvious label keywords, check if it's actually a label on Discogs
+  if (!artistId && artistName && LABEL_KEYWORD_RE.test(artistName)) {
+    const labelHit = await findDiscogsLabelHit(artistName);
+    if (labelHit && normLabelName(labelHit.title) === normLabelName(artistName)) {
+      return res.status(200).json({
+        isLabel: true,
+        labelId: labelHit.id,
+        labelName: stripArtistSuffix(labelHit.title || artistName),
+      });
+    }
+  }
+
   if (!artistId && artistName) {
     try {
-      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(artistName)}&type=artist&per_page=5`, { headers: DISCOGS_HEADERS });
+      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(artistName)}&type=artist&per_page=8`, { headers: DISCOGS_HEADERS });
       if (r.ok) {
         const d = await r.json();
-        const hit = (d.results || []).find(a => normName(a.title) === normName(artistName)) || (d.results || [])[0];
-        if (hit) artistId = hit.id;
+        const want = normName(artistName);
+        const results = d.results || [];
+        // Only match an artist whose name actually matches artistName (never blindly take results[0] which may be a label founder whose bio mentions the label!)
+        const exactHit = results.find(a => normName(a.title) === want)
+          || results.find(a => normName(a.title).includes(want) || want.includes(normName(a.title)));
+        if (exactHit) {
+          artistId = exactHit.id;
+        } else {
+          // Check if artistName is actually a label on Discogs
+          const labelHit = await findDiscogsLabelHit(artistName);
+          if (labelHit && (normLabelName(labelHit.title) === normLabelName(artistName) || normName(labelHit.title).includes(want))) {
+            return res.status(200).json({
+              isLabel: true,
+              labelId: labelHit.id,
+              labelName: stripArtistSuffix(labelHit.title || artistName),
+            });
+          }
+          if (results[0]) artistId = results[0].id;
+        }
       }
     } catch (e) {}
   }
   if (!artistId) return res.status(200).json({ error: 'Artist not found on Discogs' });
 
-  const cacheKey = `artist-profile|${artistId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 1);
+  const cacheKey = `artist-profile-v2|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 2);
   if (cached) return res.status(200).json(cached);
 
   let profileData = {};
@@ -586,6 +847,8 @@ async function handleArtistProfile(body, res) {
     const r = await fetch(`https://api.discogs.com/artists/${artistId}`, { headers: DISCOGS_HEADERS });
     if (r.ok) profileData = await r.json();
   } catch (e) {}
+
+  const { cleanText: cleanBio, extractedUrls } = await resolveDiscogsTextAndMeta(profileData.profile || '');
 
   // Fetch top releases by reusing the artist-top-releases logic internally
   let topReleases = [];
@@ -595,14 +858,14 @@ async function handleArtistProfile(body, res) {
   } catch(e) {}
 
   const result = {
-    _v: 1,
+    _v: 2,
     id: artistId,
-    name: profileData.name || artistName || '',
+    name: stripArtistSuffix(profileData.name || artistName || ''),
     realname: profileData.realname || '',
-    profile: profileData.profile || '',
-    urls: profileData.urls || [],
-    aliases: (profileData.aliases || []).map(a => a.name),
-    images: (profileData.images || []).map(i => i.uri),
+    profile: cleanBio || profileData.profile || '',
+    urls: Array.from(new Set([...(profileData.urls || []), ...extractedUrls])).filter(Boolean),
+    aliases: (profileData.aliases || []).map(a => stripArtistSuffix(a.name)),
+    images: (profileData.images || []).map(i => i.uri).filter(Boolean),
     topReleases
   };
 
@@ -614,41 +877,92 @@ async function handleLabelProfile(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
   let { labelId, labelName } = body || {};
 
+  // 1. Find Discogs label ID if not provided
   if (!labelId && labelName) {
-    try {
-      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(labelName)}&type=label&per_page=8`, { headers: DISCOGS_HEADERS });
-      if (r.ok) {
-        const d = await r.json();
-        const hit = (d.results || []).find(a => normName(a.title) === normName(labelName)) || (d.results || [])[0];
-        if (hit) labelId = hit.id;
-      }
-    } catch (e) {}
+    const hit = await findDiscogsLabelHit(labelName);
+    if (hit) labelId = hit.id;
   }
-  if (!labelId) return res.status(200).json({ error: 'Label not found on Discogs' });
 
-  const cacheKey = `label-profile-v2|${labelId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 2);
+  const cacheKey = `label-profile-v3|${labelId || normLabelName(labelName || '')}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 3);
   if (cached) return res.status(200).json(cached);
 
-  let profileData = {};
-  try {
-    const r = await fetch(`https://api.discogs.com/labels/${labelId}`, { headers: DISCOGS_HEADERS });
-    if (r.ok) profileData = await r.json();
-  } catch (e) {}
+  // 2. Fetch MusicBrainz label data in parallel with Discogs label data
+  const mbPromise = fetchMusicBrainzLabel(labelName || '', labelId);
 
-  // Fetch releases for label (up to 100, deduplicated by title+artist)
+  const dcProfilePromise = labelId
+    ? fetch(`https://api.discogs.com/labels/${labelId}`, { headers: DISCOGS_HEADERS }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+    : Promise.resolve({});
+
+  let [mbData, profileData] = await Promise.all([mbPromise, dcProfilePromise]);
+
+  // If Discogs labelId wasn't found initially, check if MusicBrainz has a Discogs label URL!
+  if (!labelId && mbData && Array.isArray(mbData.urls)) {
+    const dcUrlFromMb = mbData.urls.find(u => /discogs\.com\/label\/(\d+)/i.test(u));
+    if (dcUrlFromMb) {
+      const m = dcUrlFromMb.match(/discogs\.com\/label\/(\d+)/i);
+      if (m && m[1]) {
+        labelId = m[1];
+        try {
+          const r = await fetch(`https://api.discogs.com/labels/${labelId}`, { headers: DISCOGS_HEADERS });
+          if (r.ok) profileData = await r.json();
+        } catch (e) {}
+      }
+    }
+  }
+
+  // If MusicBrainz was queried without Discogs canonical name and missed, retry with Discogs canonical label name
+  if (!mbData && profileData?.name && normName(profileData.name) !== normName(labelName || '')) {
+    mbData = await fetchMusicBrainzLabel(stripArtistSuffix(profileData.name), labelId);
+  }
+
+  const resolvedLabelName = stripArtistSuffix(profileData?.name || mbData?.name || labelName || '');
+
+  // 3. Fetch Discogs label releases + release search (for high-res artwork & genres/styles) in parallel
   let topReleases = [];
-  try {
-    const r = await fetch(`https://api.discogs.com/labels/${labelId}/releases?sort=year&sort_order=desc&per_page=100`, { headers: DISCOGS_HEADERS });
-    if (r.ok) {
-      const d = await r.json();
+  const dcGenres = new Map();
+  let dcCountry = '';
+
+  if (labelId) {
+    const [relListRes, relSearchRes] = await Promise.all([
+      fetch(`https://api.discogs.com/labels/${labelId}/releases?sort=year&sort_order=desc&per_page=100`, { headers: DISCOGS_HEADERS })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      resolvedLabelName
+        ? fetch(`https://api.discogs.com/database/search?label=${encodeURIComponent(resolvedLabelName)}&type=release&per_page=25`, { headers: DISCOGS_HEADERS })
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    // Extract high-res covers, genres, styles, and country from Discogs search results
+    const hiResCovers = new Map();
+    if (relSearchRes && Array.isArray(relSearchRes.results)) {
+      const countryCounts = new Map();
+      for (const sr of relSearchRes.results) {
+        if (sr.country) countryCounts.set(sr.country, (countryCounts.get(sr.country) || 0) + 1);
+        for (const g of [...(sr.style || []), ...(sr.genre || [])]) {
+          if (g) dcGenres.set(g, (dcGenres.get(g) || 0) + 1);
+        }
+        if (sr.cover_image && !sr.cover_image.includes('spacer.gif')) {
+          const parts = (sr.title || '').split(' - ');
+          const rTitle = parts.length >= 2 ? parts.slice(1).join(' - ').trim() : (sr.title || '');
+          if (rTitle) hiResCovers.set(normName(rTitle), sr.cover_image);
+          if (sr.id) hiResCovers.set(`id:${sr.id}`, sr.cover_image);
+        }
+      }
+      if (countryCounts.size > 0) {
+        dcCountry = [...countryCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      }
+    }
+
+    if (relListRes && Array.isArray(relListRes.releases)) {
       const seen = new Set();
-      for (const rel of (d.releases || [])) {
+      for (const rel of relListRes.releases) {
         const cleanArtist = stripArtistSuffix(rel.artist || '');
         const cleanTitle = (rel.title || '').trim();
         const dedupKey = `${normName(cleanArtist)}::${normName(cleanTitle)}`;
         if (seen.has(dedupKey)) continue;
         seen.add(dedupKey);
+        const hiRes = hiResCovers.get(`id:${rel.id}`) || hiResCovers.get(normName(cleanTitle)) || rel.thumb || '';
         topReleases.push({
           id: `discogs-l-${rel.type || 'release'}-${rel.id}`,
           discogsId: String(rel.id || ''),
@@ -656,35 +970,130 @@ async function handleLabelProfile(body, res) {
           title: cleanTitle,
           artist: cleanArtist,
           artistName: cleanArtist,
-          label: profileData.name || labelName || '',
+          label: resolvedLabelName,
           catno: rel.catno || '',
           format: rel.format || '',
           year: rel.year || null,
-          thumb: rel.thumb || '',
-          coverImage: rel.thumb || '',
+          thumb: rel.thumb || hiRes || '',
+          coverImage: hiRes || rel.thumb || '',
           entityType: 'release',
           provider: 'discogs'
         });
       }
     }
-  } catch (e) {}
+  }
 
-  const discogsUrl = profileData.uri || `https://www.discogs.com/label/${labelId}`;
-  const rawUrls = Array.isArray(profileData.urls) ? profileData.urls : [];
-  const allUrls = Array.from(new Set([discogsUrl, ...rawUrls])).filter(Boolean);
+  // 4. Clean and resolve Discogs profile and contact_info markup
+  const [profileResolved, contactResolved] = await Promise.all([
+    resolveDiscogsTextAndMeta(profileData?.profile || ''),
+    resolveDiscogsTextAndMeta(profileData?.contact_info || ''),
+  ]);
+
+  const discogsUrl = labelId ? (profileData?.uri || `https://www.discogs.com/label/${labelId}`) : '';
+  const mbUrl = mbData?.mbUrl || '';
+  const rawUrls = [
+    discogsUrl,
+    mbUrl,
+    ...(Array.isArray(profileData?.urls) ? profileData.urls : []),
+    ...profileResolved.extractedUrls,
+    ...contactResolved.extractedUrls,
+    ...(mbData?.urls || []),
+  ].filter(Boolean);
+
+  // 5. If Bandcamp URL is not yet in rawUrls, query Bandcamp autocomplete for the label
+  let bcDiscoveredUrl = rawUrls.find(u => /bandcamp\.com/i.test(u)) || '';
+  let bcDiscoveredImg = '';
+  let bcDiscoveredLoc = '';
+  if (!bcDiscoveredUrl && resolvedLabelName) {
+    try {
+      const bcRes = await fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        body: JSON.stringify({ search_text: resolvedLabelName, search_filter: 'b', full_page: false, fan_id: 0 }),
+      });
+      if (bcRes.ok) {
+        const bcJson = await bcRes.json();
+        const wantCore = normLabelName(resolvedLabelName);
+        const bcHit = (bcJson?.auto?.results || []).find(item =>
+          item.type === 'b' && (normLabelName(item.name) === wantCore || normName(item.name).includes(wantCore))
+        );
+        if (bcHit) {
+          bcDiscoveredUrl = bcHit.item_url_root || bcHit.item_url_path || bcHit.url || '';
+          if (bcDiscoveredUrl) rawUrls.push(bcDiscoveredUrl);
+          if (bcHit.img_id) bcDiscoveredImg = `https://f4.bcbits.com/img/00${bcHit.img_id}_23.jpg`;
+          else if (bcHit.img) bcDiscoveredImg = bcHit.img;
+          if (bcHit.location) bcDiscoveredLoc = bcHit.location;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Combine biography from Discogs + MusicBrainz
+  const bioParts = [];
+  if (profileResolved.cleanText) bioParts.push(profileResolved.cleanText);
+  if (mbData?.annotation && (!profileResolved.cleanText || !profileResolved.cleanText.toLowerCase().includes(mbData.annotation.slice(0, 40).toLowerCase()))) {
+    bioParts.push(mbData.annotation);
+  }
+  if (bioParts.length === 0 && mbData?.disambiguation) {
+    bioParts.push(mbData.disambiguation);
+  }
+
+  // Combine genres from Discogs release styles/genres + MusicBrainz tags
+  const sortedDcGenres = [...dcGenres.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g);
+  const mbGenres = (mbData?.genres || []).map(g => g.replace(/\b\w/g, c => c.toUpperCase()));
+  const combinedGenres = [];
+  const seenGenreNorm = new Set();
+  for (const g of [...sortedDcGenres, ...mbGenres]) {
+    const gn = g.toLowerCase().trim();
+    if (!gn || seenGenreNorm.has(gn)) continue;
+    seenGenreNorm.add(gn);
+    combinedGenres.push(g);
+  }
+
+  // Combine founders, parent label, sublabels
+  const founders = Array.from(new Set([...profileResolved.founders, ...(mbData?.founders || [])])).filter(Boolean);
+  const foundedYear = mbData?.foundedYear || profileResolved.foundedYear || '';
+  const parentLabel = (profileData?.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '') || mbData?.parentLabel || '';
+  const sublabels = Array.from(new Set([
+    ...(profileData?.sublabels || []).map(s => stripArtistSuffix(s.name || '')),
+    ...(mbData?.sublabels || []),
+  ])).filter(Boolean);
+
+  const sources = [];
+  if (labelId || profileData?.name) sources.push('Discogs');
+  if (mbData?.mbid) sources.push('MusicBrainz');
+  if (bcDiscoveredUrl) sources.push('Bandcamp');
+
+  const images = Array.from(new Set([
+    ...(profileData?.images || []).map(i => i.uri || i.resource_url),
+    bcDiscoveredImg,
+  ])).filter(Boolean);
+
+  const allUrls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   const result = {
-    _v: 2,
-    id: labelId,
-    name: stripArtistSuffix(profileData.name || labelName || ''),
-    profile: profileData.profile || '',
-    contactInfo: profileData.contact_info || '',
-    parentLabel: profileData.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '',
-    parentLabelId: profileData.parent_label?.id || null,
-    sublabels: (profileData.sublabels || []).map(s => stripArtistSuffix(s.name || '')).filter(Boolean),
+    _v: 3,
+    id: labelId || mbData?.mbid || `label-${normLabelName(resolvedLabelName)}`,
+    name: resolvedLabelName,
+    profile: bioParts.join('\n\n'),
+    contactInfo: contactResolved.cleanText || '',
+    parentLabel,
+    parentLabelId: profileData?.parent_label?.id || null,
+    sublabels,
+    foundedYear,
+    founders,
+    labelType: mbData?.labelType || '',
+    labelCode: mbData?.labelCode || '',
+    aliases: mbData?.aliases || [],
+    country: mbData?.country || dcCountry || '',
+    location: bcDiscoveredLoc || mbData?.country || dcCountry || '',
+    genres: combinedGenres.slice(0, 12),
+    sources,
     discogsUrl,
+    mbUrl,
+    bandcampUrl: bcDiscoveredUrl,
     urls: allUrls,
-    images: (profileData.images || []).map(i => i.uri || i.resource_url).filter(Boolean),
+    images,
     topReleases
   };
 
