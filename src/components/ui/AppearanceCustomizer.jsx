@@ -132,7 +132,15 @@ export default function AppearanceCustomizer({ compact = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 14 : 18, width: '100%' }}>
       {/* 1. Top-level Mode Selector: Light / Dark / Customized */}
-      <div className="s-theme-grid" style={{ gap: compact ? 8 : 12, width: '100%' }}>
+      <div
+        className="s-theme-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: compact ? 8 : 10,
+          width: '100%',
+        }}
+      >
         {THEMES.map(({ id, label }) => {
           const p = MODE_PREVIEWS[id] || MODE_PREVIEWS.white;
           const active = mode === id;
@@ -146,8 +154,8 @@ export default function AppearanceCustomizer({ compact = false }) {
               style={{
                 '--th-bg': p.bg,
                 '--th-surface': p.surface,
-                flex: 1,
-                minWidth: compact ? 88 : 110,
+                minWidth: 0,
+                width: '100%',
                 borderColor: active
                   ? (cardTintPreview || 'var(--text-primary)')
                   : 'var(--glass-border)',

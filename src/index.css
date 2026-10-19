@@ -18,71 +18,72 @@ input, textarea, select {
   font-size: 16px !important;
 }
 
-/* ===== KYO — iOS 26 Liquid Glass Design System (Light Default) ===== */
-:root {
-  --bg-primary: #f8f8fc;
-  --bg-secondary: #f0f0f7;
-  --bg-tertiary: #e8e8f2;
-  --bg-card: #ffffff;
+/* ===== KYO — iOS 26 Liquid Glass Design System ===== */
+:root,
+[data-theme="dark"] {
+  --bg-primary: #060608;
+  --bg-secondary: #0a0a0d;
+  --bg-tertiary: #111116;
+  --bg-card: #0c0c10;
 
-  /* ─── Liquid Glass fills — light theme ─── */
-  --glass-bg:           rgba(255, 255, 255, 0.78);
-  --glass-bg-hover:     rgba(255, 255, 255, 0.92);
-  --glass-bg-active:    rgba(0, 0, 0, 0.08);
-  --glass-bg-elevated:  rgba(255, 255, 255, 0.94);
+  /* ─── Liquid Glass fills — near-zero opacity ─── */
+  --glass-bg:           rgba(255, 255, 255, 0.022);
+  --glass-bg-hover:     rgba(255, 255, 255, 0.048);
+  --glass-bg-active:    rgba(255, 255, 255, 0.10);
+  --glass-bg-elevated:  rgba(255, 255, 255, 0.038);
 
   /* ─── Glass borders ─── */
-  --glass-border:        rgba(0, 0, 0, 0.09);
-  --glass-border-light:  rgba(0, 0, 0, 0.16);
-  --glass-border-hover:  rgba(0, 0, 0, 0.18);
-  --glass-border-subtle: rgba(0, 0, 0, 0.06);
+  --glass-border:        rgba(255, 255, 255, 0.09);
+  --glass-border-light:  rgba(255, 255, 255, 0.18);
+  --glass-border-hover:  rgba(255, 255, 255, 0.22);
+  --glass-border-subtle: rgba(255, 255, 255, 0.05);
 
   /* ─── Specular highlights ─── */
-  --glass-shine:         rgba(255, 255, 255, 0.90);
-  --glass-shine-strong:  rgba(255, 255, 255, 0.98);
+  --glass-shine:         rgba(255, 255, 255, 0.11);
+  --glass-shine-strong:  rgba(255, 255, 255, 0.20);
 
   /* ─── Blur layers — iOS 26 style ─── */
-  --glass-blur:    blur(32px) saturate(140%) brightness(1.01);
-  --glass-blur-sm: blur(16px) saturate(130%) brightness(1.01);
-  --glass-blur-lg: blur(48px) saturate(150%) brightness(1.02);
+  --glass-blur:    blur(44px) saturate(180%) brightness(1.06);
+  --glass-blur-sm: blur(22px) saturate(160%) brightness(1.04);
+  --glass-blur-lg: blur(64px) saturate(200%) brightness(1.08) contrast(1.02);
 
-  /* ─── Neutral palette for light theme ─── */
-  --orange-50:  rgba(0, 0, 0, 0.03);
-  --orange-100: rgba(0, 0, 0, 0.07);
-  --orange-200: rgba(15, 15, 26, 0.92);
-  --orange-300: rgba(15, 15, 26, 0.75);
-  --orange-400: rgba(0, 0, 0, 0.11);
-  --orange-500: rgba(0, 0, 0, 0.11);
-  --orange-600: rgba(0, 0, 0, 0.08);
-  --orange-glow:    rgba(0, 0, 0, 0.06);
-  --orange-glow-sm: rgba(0, 0, 0, 0.04);
-  --orange-glow-xs: rgba(0, 0, 0, 0.02);
+  /* ─── Neutral palette (was orange — now B&W system UI) ─── */
+  --orange-50:  rgba(255, 255, 255, 0.04);
+  --orange-100: rgba(255, 255, 255, 0.08);
+  --orange-200: rgba(255, 255, 255, 0.92);  /* bright text */
+  --orange-300: rgba(255, 255, 255, 0.80);  /* secondary text / hover */
+  --orange-400: rgba(255, 255, 255, 0.14);  /* active state bg / icon */
+  --orange-500: rgba(255, 255, 255, 0.14);  /* primary btn bg */
+  --orange-600: rgba(255, 255, 255, 0.10);  /* darker btn / pressed */
+  --orange-glow:    rgba(255, 255, 255, 0.06);
+  --orange-glow-sm: rgba(255, 255, 255, 0.04);
+  --orange-glow-xs: rgba(255, 255, 255, 0.02);
 
-  /* ─── Text (Inverted for Light Theme) ─── */
-  --text-heading:   #0f0f1a;
-  --text-primary:   #0f0f1a;
-  --text-title:     rgba(15, 15, 26, 0.92);
-  --text-category:  rgba(15, 15, 26, 0.68);
-  --text-subtitle:  rgba(15, 15, 26, 0.75);
-  --text-secondary: rgba(15, 15, 26, 0.74);
-  --text-muted:     rgba(15, 15, 26, 0.52);
-  --text-dim:       rgba(15, 15, 26, 0.42);
+  /* ─── Text ─── */
+  --text-heading:   #ffffff;
+  --text-primary:   #ffffff;
+  --text-title:     rgba(255, 255, 255, 0.92);
+  --text-category:  rgba(255, 255, 255, 0.70);
+  --text-subtitle:  rgba(255, 255, 255, 0.80);
+  --text-secondary: rgba(255, 255, 255, 0.77);
+  --text-muted:     rgba(255, 255, 255, 0.55);
+  --text-dim:       rgba(255, 255, 255, 0.33);
 
-  --grey-100: #1a1a22;
-  --grey-200: #2e2e3a;
-  --grey-300: #4a4a5a;
-  --grey-400: #6e6e80;
-  --grey-500: #8e8ea0;
-  --grey-600: #b8b8c8;
-  --grey-700: #dcdce6;
-  --grey-800: #e8e8f0;
-  --grey-900: #f0f0f6;
+  --grey-100: #f0f0f0;
+  --grey-200: #d0d0d0;
+  --grey-300: #aaaaaa;
+  --grey-400: #808080;
+  --grey-500: #555555;
+  --grey-600: #363636;
+  --grey-700: #202020;
+  --grey-800: #161618;
+  --grey-900: #0d0d10;
 
   /* ─── Accent ─── */
   --accent:        var(--orange-400);
   --accent-bright: var(--orange-300);
-  --accent-dim:    rgba(15, 15, 26, 0.7);
-  --accent-subtle: rgba(15, 15, 26, 0.10);
+  --accent-dim:    rgba(255, 255, 255, 0.7);
+  --accent-subtle: rgba(255, 255, 255, 0.12);
 
   /* ─── Spacing ─── */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
@@ -97,14 +98,14 @@ input, textarea, select {
   --font-body:    'Inter', sans-serif;
 
   /* ─── Shadows — layered, ambient ─── */
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06),
-               0 0 0 0.5px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.08),
-               0 1px 0 rgba(255,255,255,0.98) inset;
-  --shadow-lg: 0 8px 36px rgba(0,0,0,0.11),
-               0 1px 0 rgba(255,255,255,0.98) inset;
-  --shadow-xl: 0 20px 56px rgba(0,0,0,0.14),
-               0 1px 0 rgba(255,255,255,0.98) inset;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.45),
+               0 0 0 0.5px rgba(255,255,255,0.04);
+  --shadow-md: 0 4px 24px rgba(0,0,0,0.55),
+               0 1px 0 rgba(255,255,255,0.06) inset;
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.65),
+               0 1px 0 rgba(255,255,255,0.08) inset;
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.75),
+               0 1px 0 rgba(255,255,255,0.10) inset;
   --shadow-glow:    0 0 40px var(--orange-glow);
   --shadow-glow-sm: 0 0 20px var(--orange-glow-sm);
   --shadow-glow-xs: 0 0 10px var(--orange-glow-xs);
@@ -120,62 +121,14 @@ input, textarea, select {
   --topbar-height: 0px;   /* bar removed — float cluster is used instead */
   --mobile-nav-height: 60px;
 
-  /* ── Primary action button tokens ── */
-  --btn-primary-bg:     rgba(15, 15, 26, 0.88);
-  --btn-primary-hover:  rgba(15, 15, 26, 0.96);
-  --btn-primary-text:   #ffffff;
-  --btn-primary-glow:   rgba(0, 0, 0, 0.08);
-  --btn-primary-border: rgba(0, 0, 0, 0.18);
-
-  /* ── Interactive accent (active states, progress, toggles) ── */
-  --accent-interactive:       rgba(15, 15, 26, 0.82);
-  --accent-interactive-dim:   rgba(0, 0, 0, 0.11);
-  --accent-interactive-glow:  rgba(0, 0, 0, 0.05);
-}
-
-/* ══ Dark theme ══════════════════════════════════════════════ */
-[data-theme="dark"] {
-  --bg-primary: #060608;
-  --bg-secondary: #0a0a0d;
-  --bg-tertiary: #111116;
-  --bg-card: #0c0c10;
-  --glass-bg:           rgba(255, 255, 255, 0.022);
-  --glass-bg-hover:     rgba(255, 255, 255, 0.048);
-  --glass-bg-active:    rgba(255, 255, 255, 0.10);
-  --glass-bg-elevated:  rgba(255, 255, 255, 0.038);
-  --glass-border:        rgba(255, 255, 255, 0.09);
-  --glass-border-light:  rgba(255, 255, 255, 0.18);
-  --glass-border-hover:  rgba(255, 255, 255, 0.22);
-  --glass-border-subtle: rgba(255, 255, 255, 0.05);
-  --glass-shine:         rgba(255, 255, 255, 0.11);
-  --glass-shine-strong:  rgba(255, 255, 255, 0.20);
-  --orange-50:  rgba(255, 255, 255, 0.04);
-  --orange-100: rgba(255, 255, 255, 0.08);
-  --orange-200: rgba(255, 255, 255, 0.92);
-  --orange-300: rgba(255, 255, 255, 0.80);
-  --orange-400: rgba(255, 255, 255, 0.14);
-  --orange-500: rgba(255, 255, 255, 0.14);
-  --orange-600: rgba(255, 255, 255, 0.10);
-  --text-heading:   #ffffff;
-  --text-primary:   #ffffff;
-  --text-title:     rgba(255, 255, 255, 0.92);
-  --text-category:  rgba(255, 255, 255, 0.70);
-  --text-subtitle:  rgba(255, 255, 255, 0.80);
-  --text-secondary: rgba(255, 255, 255, 0.77);
-  --text-muted:     rgba(255, 255, 255, 0.55);
-  --text-dim:       rgba(255, 255, 255, 0.33);
-  --grey-100: #f0f0f0;
-  --grey-200: #d0d0d0;
-  --grey-300: #aaaaaa;
-  --grey-400: #808080;
-  --grey-500: #555555;
-  --grey-600: #363636;
-  --grey-700: #202020;
-  --grey-800: #161618;
-  --grey-900: #0d0d10;
+  /* ── Primary action button tokens (no orange) ── */
   --btn-primary-bg:     rgba(255, 255, 255, 0.88);
   --btn-primary-hover:  rgba(255, 255, 255, 1);
   --btn-primary-text:   #0f0f1a;
+  --btn-primary-glow:   rgba(255, 255, 255, 0.12);
+  --btn-primary-border: rgba(255, 255, 255, 0.20);
+
+  /* ── Interactive accent (active states, progress, toggles) ── */
   --accent-interactive:       rgba(255, 255, 255, 0.82);
   --accent-interactive-dim:   rgba(255, 255, 255, 0.15);
   --accent-interactive-glow:  rgba(255, 255, 255, 0.08);
@@ -194,6 +147,7 @@ input, textarea, select {
   --glass-bg-elevated:  rgba(88, 88, 98, 0.92);
   --glass-border:        rgba(255, 255, 255, 0.22);
   --glass-border-light:  rgba(255, 255, 255, 0.34);
+  --glass-border-hover:  rgba(255, 255, 255, 0.36);
   --glass-border-subtle: rgba(255, 255, 255, 0.14);
   --glass-shine:         rgba(255, 255, 255, 0.22);
   --glass-shine-strong:  rgba(255, 255, 255, 0.32);
@@ -217,8 +171,10 @@ input, textarea, select {
   --grey-800: #4c4c56;
   --grey-900: #3e3e48;
 
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(255,255,255,0.12);
   --shadow-md: 0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.16) inset;
   --shadow-lg: 0 8px 40px rgba(0,0,0,0.32), 0 1px 0 rgba(255,255,255,0.20) inset;
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.40), 0 1px 0 rgba(255,255,255,0.22) inset;
 
   --btn-primary-bg:     rgba(255, 255, 255, 0.92);
   --btn-primary-hover:  rgba(255, 255, 255, 1);
@@ -234,20 +190,20 @@ input, textarea, select {
   color: var(--text-primary);
 }
 
-/* ══ White theme ═════════════════════════════════════════════ */
+/* ══ White (Light) theme ═════════════════════════════════════ */
 [data-theme="white"] {
   --bg-primary:   #f8f8fc;
   --bg-secondary: #f0f0f7;
   --bg-tertiary:  #e8e8f2;
-  --bg-card:      #f3f3fa;
+  --bg-card:      #ffffff;
 
-  --glass-bg:           rgba(255, 255, 255, 0.72);
-  --glass-bg-hover:     rgba(255, 255, 255, 0.88);
-  --glass-bg-active:    rgba(0, 0, 0, 0.07);
-  --glass-bg-elevated:  rgba(255, 255, 255, 0.90);
+  --glass-bg:           rgba(255, 255, 255, 0.78);
+  --glass-bg-hover:     rgba(255, 255, 255, 0.92);
+  --glass-bg-active:    rgba(0, 0, 0, 0.08);
+  --glass-bg-elevated:  rgba(255, 255, 255, 0.94);
   --glass-border:        rgba(0, 0, 0, 0.09);
-  --glass-border-light:  rgba(0, 0, 0, 0.14);
-  --glass-border-hover:  rgba(0, 0, 0, 0.12);
+  --glass-border-light:  rgba(0, 0, 0, 0.16);
+  --glass-border-hover:  rgba(0, 0, 0, 0.18);
   --glass-border-subtle: rgba(0, 0, 0, 0.06);
   --glass-shine:         rgba(255, 255, 255, 0.90);
   --glass-shine-strong:  rgba(255, 255, 255, 0.98);
@@ -256,35 +212,40 @@ input, textarea, select {
   --glass-blur-sm: blur(16px) saturate(130%) brightness(1.01);
   --glass-blur-lg: blur(48px) saturate(150%) brightness(1.02);
 
-  --text-heading:   rgba(15, 15, 26, 0.90);
+  --text-heading:   #0f0f1a;
   --text-primary:   #0f0f1a;
-  --text-secondary: rgba(15, 15, 26, 0.72);
-  --text-muted:     rgba(15, 15, 26, 0.50);
-  --text-dim:       rgba(15, 15, 26, 0.35);
-  --text-title:     rgba(15, 15, 26, 0.85);
-  --text-subtitle:  rgba(15, 15, 26, 0.70);
-  --text-category:  rgba(15, 15, 26, 0.50);
+  --text-title:     rgba(15, 15, 26, 0.92);
+  --text-category:  rgba(15, 15, 26, 0.68);
+  --text-subtitle:  rgba(15, 15, 26, 0.75);
+  --text-secondary: rgba(15, 15, 26, 0.74);
+  --text-muted:     rgba(15, 15, 26, 0.52);
+  --text-dim:       rgba(15, 15, 26, 0.42);
 
   --grey-100: #1a1a22;
-  --grey-200: #333340;
-  --grey-300: #555566;
-  --grey-400: #777788;
-  --grey-500: #9999aa;
-  --grey-600: #bbbbcc;
+  --grey-200: #2e2e3a;
+  --grey-300: #4a4a5a;
+  --grey-400: #6e6e80;
+  --grey-500: #8e8ea0;
+  --grey-600: #b8b8c8;
   --grey-700: #dcdce6;
   --grey-800: #e8e8f0;
   --grey-900: #f0f0f6;
 
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,0.98) inset;
-  --shadow-lg: 0 8px 36px rgba(0,0,0,0.13), 0 1px 0 rgba(255,255,255,0.98) inset;
-  --shadow-xl: 0 20px 56px rgba(0,0,0,0.16), 0 1px 0 rgba(255,255,255,0.98) inset;
+  --accent:        var(--orange-400);
+  --accent-bright: var(--orange-300);
+  --accent-dim:    rgba(15, 15, 26, 0.7);
+  --accent-subtle: rgba(15, 15, 26, 0.10);
+
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 0.5px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.98) inset;
+  --shadow-lg: 0 8px 36px rgba(0,0,0,0.11), 0 1px 0 rgba(255,255,255,0.98) inset;
+  --shadow-xl: 0 20px 56px rgba(0,0,0,0.14), 0 1px 0 rgba(255,255,255,0.98) inset;
 
   /* Neutral palette for white theme — dark values */
   --orange-50:  rgba(0, 0, 0, 0.03);
   --orange-100: rgba(0, 0, 0, 0.07);
-  --orange-200: rgba(15, 15, 26, 0.88);
-  --orange-300: rgba(15, 15, 26, 0.72);
+  --orange-200: rgba(15, 15, 26, 0.92);
+  --orange-300: rgba(15, 15, 26, 0.75);
   --orange-400: rgba(0, 0, 0, 0.11);  /* active state bg */
   --orange-500: rgba(0, 0, 0, 0.11);  /* primary btn bg */
   --orange-600: rgba(0, 0, 0, 0.08);
@@ -292,12 +253,12 @@ input, textarea, select {
   --orange-glow-sm: rgba(0, 0, 0, 0.04);
   --orange-glow-xs: rgba(0, 0, 0, 0.02);
 
-  --btn-primary-bg:     rgba(0, 0, 0, 0.82);
-  --btn-primary-hover:  rgba(0, 0, 0, 0.92);
+  --btn-primary-bg:     rgba(15, 15, 26, 0.88);
+  --btn-primary-hover:  rgba(15, 15, 26, 0.96);
   --btn-primary-text:   #ffffff;
   --btn-primary-glow:   rgba(0, 0, 0, 0.08);
   --btn-primary-border: rgba(0, 0, 0, 0.18);
-  --accent-interactive:       rgba(0, 0, 0, 0.75);
+  --accent-interactive:       rgba(15, 15, 26, 0.82);
   --accent-interactive-dim:   rgba(0, 0, 0, 0.11);
   --accent-interactive-glow:  rgba(0, 0, 0, 0.05);
 }
@@ -1035,14 +996,13 @@ img {
   color: var(--text-primary);
 }
 
-/* ── Automatically invert dark provider icons in Dark & Gray themes ── */
-[data-theme="dark"] img[src*="_dark_24x24"],
-[data-theme="grey"] img[src*="_dark_24x24"] {
-  filter: invert(1) brightness(1.8);
+/* ── Automatically invert white provider icons in Light theme ── */
+[data-theme="white"] img[src*="_light_24x24"] {
+  filter: invert(1) brightness(0.15);
 }
 
 /* ── Discreet Glass Lens UI Tint (Customized Appearance) ── */
-html[data-glass-tint="true"] {
+html[data-theme="white"][data-glass-tint="true"] {
   --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 16%, rgba(255, 255, 255, 0.72));
   --glass-bg-hover:    color-mix(in srgb, var(--glass-tint-color) 22%, rgba(255, 255, 255, 0.86));
   --glass-bg-elevated: color-mix(in srgb, var(--glass-tint-color) 18%, rgba(255, 255, 255, 0.90));

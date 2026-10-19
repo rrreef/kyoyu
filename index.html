@@ -29,8 +29,22 @@
     <meta property="og:image" content="https://ree.fm/icon-512.png" />
     <link rel="canonical" href="https://ree.fm" />
     <title>Reef — ree.fm</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('kyoyu-theme') || 'white';
+          document.documentElement.setAttribute('data-theme', t);
+          var m = localStorage.getItem('kyoyu-theme-mode') || (t === 'grey' ? 'custom' : t);
+          var gt = localStorage.getItem('kyoyu-glass-tint') || '';
+          if (m === 'custom' && gt) {
+            document.documentElement.style.setProperty('--glass-tint-color', gt);
+            document.documentElement.setAttribute('data-glass-tint', 'true');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body style="background:#f8f8fc; color:#0f0f1a; margin:0;">
+  <body style="margin:0;">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -504,14 +504,15 @@
 
 /* ── Appearance / Theme picker ─────────────────────────────── */
 .s-theme-grid {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
 }
 
 .s-theme-card {
   flex: 1;
-  min-width: 120px;
+  min-width: 0;
   border-radius: var(--radius-lg);
   border: 2px solid var(--glass-border);
   background: var(--glass-bg);
