@@ -25,9 +25,15 @@ const THEME_BG_MAP = {
 };
 
 function readStoredAppearance() {
-  const savedMode = localStorage.getItem(LS_MODE_KEY) || 'white';
-  const mode = ['white', 'dark', 'custom'].includes(savedMode) ? savedMode : 'white';
-  const savedBase = localStorage.getItem(LS_BASE_KEY) || 'grey';
+  const savedTheme = localStorage.getItem(LS_THEME_KEY) || 'white';
+  const rawMode = localStorage.getItem(LS_MODE_KEY);
+  let mode = ['white', 'dark', 'custom'].includes(rawMode)
+    ? rawMode
+    : (savedTheme === 'grey' ? 'custom' : savedTheme);
+  if (mode !== 'custom' && (savedTheme === 'dark' || savedTheme === 'white') && mode !== savedTheme) {
+    mode = savedTheme;
+  }
+  const savedBase = localStorage.getItem(LS_BASE_KEY) || (savedTheme === 'grey' ? 'grey' : 'grey');
   const customBase = ['white', 'grey', 'dark'].includes(savedBase) ? savedBase : 'grey';
   const glassTint = localStorage.getItem(LS_TINT_KEY) || '';
   let tintPos = { x: 0.58, y: 0.45 };
