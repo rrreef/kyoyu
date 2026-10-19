@@ -19,9 +19,9 @@ const LS_TINT_KEY  = 'kyoyu-glass-tint';
 const LS_POS_KEY   = 'kyoyu-glass-tint-pos';
 
 const THEME_BG_MAP = {
-  white: { bg: '#f8f8fc', fg: '#0f0f1a' },
-  grey:  { bg: '#7c7c84', fg: '#ffffff' },
-  dark:  { bg: '#060608', fg: '#ffffff' },
+  white: { bg: '#f8f8f8', fg: '#0f0f0f' },
+  grey:  { bg: '#7c7c7c', fg: '#ffffff' },
+  dark:  { bg: '#060606', fg: '#ffffff' },
 };
 
 function readStoredAppearance() {

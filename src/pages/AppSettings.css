@@ -55,7 +55,7 @@
 }
 .appsettings-toggle.on .appsettings-thumb {
   left: 21px;
-  background: var(--bg-primary, #060608);
+  background: var(--bg-primary, #060606);
 }
 
 /* Language picker */

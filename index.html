@@ -22,7 +22,7 @@
 
     <!-- SEO & Social -->
     <meta name="description" content="REEF — A fair music platform combining streaming, DJ downloads, vinyl commerce, and intelligent discovery. Stream fairly. Buy directly. Discover deeply." />
-    <meta name="theme-color" content="#f8f8fc" />
+    <meta name="theme-color" content="#f8f8f8" />
     <meta property="og:title" content="REEF — Fair Music Platform" />
     <meta property="og:description" content="Stream fairly. Buy directly. Discover deeply." />
     <meta property="og:url" content="https://ree.fm" />
@@ -34,7 +34,7 @@
         try {
           var t = localStorage.getItem('kyoyu-theme') || 'white';
           document.documentElement.setAttribute('data-theme', t);
-          var m = localStorage.getItem('kyoyu-theme-mode') || (t === 'grey' ? 'custom' : t);
+          var m = localStorage.getItem('kyoyu-appearance-mode') || (t === 'grey' ? 'custom' : t);
           var gt = localStorage.getItem('kyoyu-glass-tint') || '';
           if (m === 'custom' && gt) {
             document.documentElement.style.setProperty('--glass-tint-color', gt);

@@ -1,17 +1,17 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { Check, Sparkles, RotateCcw } from 'lucide-react';
+import { Check, RotateCcw } from 'lucide-react';
 import { useTheme, THEMES, CUSTOM_BASE_THEMES } from '../../hooks/useTheme';
 
 const MODE_PREVIEWS = {
-  white:  { bg: '#f8f8fc', surface: 'rgba(0,0,0,0.07)',       bar: 'rgba(0,0,0,0.05)' },
-  dark:   { bg: '#060608', surface: 'rgba(255,255,255,0.09)', bar: 'rgba(255,255,255,0.06)' },
-  custom: { bg: 'linear-gradient(135deg, #060608 0%, #7c7c84 50%, #f8f8fc 100%)', surface: 'rgba(255,255,255,0.22)', bar: 'rgba(255,255,255,0.16)' },
+  white:  { bg: '#f8f8f8', surface: 'rgba(0,0,0,0.07)',       bar: 'rgba(0,0,0,0.05)' },
+  dark:   { bg: '#060606', surface: 'rgba(255,255,255,0.09)', bar: 'rgba(255,255,255,0.06)' },
+  custom: { bg: 'linear-gradient(135deg, #060606 0%, #7c7c7c 50%, #f8f8f8 100%)', surface: 'rgba(255,255,255,0.22)', bar: 'rgba(255,255,255,0.16)' },
 };
 
 const BASE_PREVIEWS = {
-  white: { bg: '#f8f8fc', fg: '#0f0f1a', border: 'rgba(0,0,0,0.14)',       sub: 'Bright & crisp' },
-  grey:  { bg: '#7c7c84', fg: '#ffffff', border: 'rgba(255,255,255,0.24)', sub: 'Exact midpoint' },
-  dark:  { bg: '#060608', fg: '#ffffff', border: 'rgba(255,255,255,0.16)', sub: 'Deep obsidian'  },
+  white: { bg: '#f8f8f8', fg: '#0f0f0f', border: 'rgba(0,0,0,0.14)',       sub: 'Bright & crisp' },
+  grey:  { bg: '#7c7c7c', fg: '#ffffff', border: 'rgba(255,255,255,0.24)', sub: 'Exact midpoint' },
+  dark:  { bg: '#060606', fg: '#ffffff', border: 'rgba(255,255,255,0.16)', sub: 'Deep obsidian'  },
 };
 
 function hslToHex(h, s, l) {
@@ -149,6 +149,7 @@ export default function AppearanceCustomizer({ compact = false }) {
             <button
               key={id}
               type="button"
+              data-kyoyu-injected="1"
               className={`s-theme-card ${active ? 'active' : ''}`}
               onClick={() => setMode(id)}
               style={{
@@ -207,7 +208,7 @@ export default function AppearanceCustomizer({ compact = false }) {
                   color: active ? 'var(--text-primary)' : 'var(--text-muted)',
                 }}
               >
-                {active ? <Check size={11} strokeWidth={3} /> : id === 'custom' ? <Sparkles size={11} /> : null}
+                {active ? <Check size={11} strokeWidth={3} /> : null}
                 {label}
               </div>
             </button>
@@ -255,6 +256,7 @@ export default function AppearanceCustomizer({ compact = false }) {
                   <button
                     key={id}
                     type="button"
+                    data-kyoyu-injected="1"
                     onClick={() => setCustomBase(id)}
                     style={{
                       flex: 1,
@@ -336,6 +338,7 @@ export default function AppearanceCustomizer({ compact = false }) {
               {glassTint && (
                 <button
                   type="button"
+                  data-kyoyu-injected="1"
                   onClick={() => setGlassTint('', tintPos)}
                   style={{
                     display: 'inline-flex',
