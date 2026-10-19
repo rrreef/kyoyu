@@ -9,7 +9,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useDashboardPrefs } from '../hooks/useDashboardPrefs';
 import { setVIState, useVIStore } from '../lib/visualIdentityStore';
-import { useTheme, THEMES } from '../hooks/useTheme';
+import { useTheme } from '../hooks/useTheme';
+import AppearanceCustomizer from '../components/ui/AppearanceCustomizer';
 import { supabase } from '../lib/supabase';
 import './Settings.css';
 import '../components/nav/Sidebar.css'; // sidebar-logout class
@@ -351,47 +352,16 @@ function AccountPanel({ user }) {
 }
 
 /* ── Appearance panel ───────────────────────────────────────── */
-const THEME_PREVIEWS = {
-  dark:  { bg: '#060608', surface: 'rgba(255,255,255,0.05)', text: '#ffffff' },
-  grey:  { bg: '#16161e', surface: 'rgba(255,255,255,0.08)', text: '#eeeef8' },
-  white: { bg: '#f0f0f5', surface: 'rgba(255,255,255,0.85)', text: '#0f0f1a' },
-};
-
 function AppearancePanel() {
-  const [theme, setTheme] = useTheme();
   return (
     <div className="s-panel">
       <div className="s-panel-header">
         <h2>Appearance</h2>
-        <p>Choose your preferred interface theme</p>
+        <p>Choose your preferred interface theme and glass lens UI tint</p>
       </div>
       <div className="s-card glass">
-        <SectionHeading>Theme</SectionHeading>
-        <div className="s-theme-grid">
-          {THEMES.map(({ id, label }) => {
-            const p = THEME_PREVIEWS[id];
-            const active = theme === id;
-            return (
-              <button
-                key={id}
-                className={`s-theme-card ${active ? 'active' : ''}`}
-                onClick={() => setTheme(id)}
-                style={{ '--th-bg': p.bg, '--th-surface': p.surface, '--th-text': p.text }}
-              >
-                {/* Mini preview */}
-                <div className="s-theme-preview">
-                  <div className="s-theme-preview-bar" />
-                  <div className="s-theme-preview-card" />
-                  <div className="s-theme-preview-card s-theme-preview-card--2" />
-                </div>
-                <div className="s-theme-label">
-                  {active && <Check size={11} strokeWidth={3} />}
-                  {label}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <SectionHeading>Theme & Glass Lens UI</SectionHeading>
+        <AppearanceCustomizer />
       </div>
     </div>
   );

@@ -1,18 +1,9 @@
-
-import { Check, Paintbrush2, LayoutGrid, List } from 'lucide-react';
-import { useTheme, THEMES } from '../hooks/useTheme';
+import { Paintbrush2, LayoutGrid, List } from 'lucide-react';
+import { useTheme } from '../hooks/useTheme';
+import AppearanceCustomizer from '../components/ui/AppearanceCustomizer';
 import { useDisplay } from '../contexts/DisplayContext';
 import './Settings.css';
 import './AppSettings.css';
-
-const isNativeApp = !!window.webkit?.messageHandlers?.player;
-
-
-const THEME_PREVIEWS = {
-  dark:  { bg: '#060608', surface: 'rgba(255,255,255,0.05)' },
-  grey:  { bg: '#16161e', surface: 'rgba(255,255,255,0.08)' },
-  white: { bg: '#f0f0f5', surface: 'rgba(255,255,255,0.85)' },
-};
 
 const LAYOUT_OPTIONS = [
   { id: 'list', label: 'List' },
@@ -46,7 +37,7 @@ function LayoutPicker({ value, onChange }) {
 
 
 export default function ListenerSettings() {
-  const [theme, setTheme] = useTheme();
+  useTheme();
   const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
 
   return (
@@ -59,38 +50,15 @@ export default function ListenerSettings() {
               <p>Customize your Reef experience</p>
             </div>
 
-            {/* Theme */}
+            {/* Theme & Glass Lens UI Tint */}
             <div className="s-card glass">
               <div className="s-section-heading">
                 <Paintbrush2 size={13} style={{ opacity: 0.6 }} /> Appearance
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: 16 }}>
-                Choose your preferred interface theme
+                Choose your preferred interface theme and glass lens UI tint
               </p>
-              <div className="s-theme-grid">
-                {THEMES.map(({ id, label }) => {
-                  const p = THEME_PREVIEWS[id];
-                  const active = theme === id;
-                  return (
-                    <button
-                      key={id}
-                      className={`s-theme-card ${active ? 'active' : ''}`}
-                      onClick={() => setTheme(id)}
-                      style={{ '--th-bg': p.bg, '--th-surface': p.surface }}
-                    >
-                      <div className="s-theme-preview">
-                        <div className="s-theme-preview-bar" />
-                        <div className="s-theme-preview-card" />
-                        <div className="s-theme-preview-card s-theme-preview-card--2" />
-                      </div>
-                      <div className="s-theme-label">
-                        {active && <Check size={11} strokeWidth={3} />}
-                        {label}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <AppearanceCustomizer />
             </div>
 
             {/* Display layout */}

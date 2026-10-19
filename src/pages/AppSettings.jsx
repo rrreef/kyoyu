@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Bell, Cpu, Eye, Globe, Zap, RefreshCw, Check, Paintbrush2, LayoutGrid, List, LogOut, Music, Maximize2, CreditCard } from 'lucide-react';
-import { useTheme, THEMES } from '../hooks/useTheme';
+import { useTheme } from '../hooks/useTheme';
+import AppearanceCustomizer from '../components/ui/AppearanceCustomizer';
 import { useDisplay } from '../contexts/DisplayContext';
 import { useAuth } from '../contexts/AuthContext';
+import './Settings.css';
 import './AppSettings.css';
 
 const isNativeApp = !!window.webkit?.messageHandlers?.player;
@@ -15,12 +17,6 @@ const QUALITIES  = [
   { id:'high',    label:'High',    sub:'~320 kbps' },
   { id:'lossless',label:'Lossless',sub:'FLAC / ALAC — best quality' },
 ];
-
-const THEME_PREVIEWS = {
-  dark:  { bg: '#060608', surface: 'rgba(255,255,255,0.05)' },
-  grey:  { bg: '#16161e', surface: 'rgba(255,255,255,0.08)' },
-  white: { bg: '#f0f0f5', surface: 'rgba(255,255,255,0.85)' },
-};
 
 const LAYOUT_OPTIONS = [
   { id: 'list', label: 'List' },
@@ -64,7 +60,7 @@ function LayoutPicker({ value, onChange }) {
 export default function AppSettings() {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const [theme, setTheme] = useTheme();
+  useTheme();
   const { homeLayout, setHomeLayout, libraryLayout, setLibraryLayout } = useDisplay();
   const [notifications,  setNotifications]  = useState(true);
   const [dynamicIsland,  setDynamicIsland]  = useState(true);
@@ -104,45 +100,15 @@ export default function AppSettings() {
         <h1>Settings</h1>
       </div>
 
-      {/* Appearance — Theme */}
+      {/* Appearance — Theme & Glass Lens UI Tint */}
       <div className="appsettings-section">
         <div className="appsettings-label">Appearance</div>
         <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Paintbrush2 size={14} style={{ color: 'var(--text-muted)' }} />
-            <span className="appsettings-row-title">Theme</span>
+            <span className="appsettings-row-title">Theme & Glass Lens UI</span>
           </div>
-          <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-            {THEMES.map(({ id, label }) => {
-              const p = THEME_PREVIEWS[id] || THEME_PREVIEWS.dark;
-              const active = theme === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setTheme(id)}
-                  style={{
-                    flex: 1, border: 'none', cursor: 'pointer', padding: '8px 0',
-                    borderRadius: 10,
-                    background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
-                    outline: active ? '1.5px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                    transition: 'all .15s',
-                  }}
-                >
-                  <div style={{
-                    width: 36, height: 24, borderRadius: 6,
-                    background: p.bg, border: '1px solid rgba(255,255,255,0.12)',
-                    position: 'relative', overflow: 'hidden',
-                  }}>
-                    <div style={{ position: 'absolute', bottom: 4, left: 4, right: 4, height: 5, borderRadius: 2, background: p.surface }} />
-                  </div>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? '#fff' : 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                    {active && <Check size={9} strokeWidth={3} />}{label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <AppearanceCustomizer compact />
         </div>
       </div>
 
@@ -164,14 +130,14 @@ export default function AppSettings() {
                   style={{
                     flex: 1, border: 'none', cursor: 'pointer', padding: '10px 0',
                     borderRadius: 10,
-                    background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
-                    outline: active ? '1.5px solid rgba(255,255,255,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                    background: active ? 'var(--glass-bg-active)' : 'var(--glass-bg)',
+                    outline: active ? '1.5px solid var(--glass-border-light)' : '1px solid var(--glass-border)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                     transition: 'all .15s',
                   }}
                 >
-                  <Icon size={18} strokeWidth={1.8} style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)' }} />
-                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? '#fff' : 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Icon size={18} strokeWidth={1.8} style={{ color: active ? 'var(--text-primary)' : 'var(--text-muted)' }} />
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                     {active && <Check size={9} strokeWidth={3} />}{label}
                   </span>
                 </button>

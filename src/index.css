@@ -181,43 +181,57 @@ input, textarea, select {
   --accent-interactive-glow:  rgba(255, 255, 255, 0.08);
 }
 
-/* ══ Grey theme ══════════════════════════════════════════════ */
+/* ══ Grey theme (Exact midpoint between Dark #060608 and Light #f8f8fc) ══ */
 [data-theme="grey"] {
-  --bg-primary:   #23232e;
-  --bg-secondary: #2a2a38;
-  --bg-tertiary:  #313142;
-  --bg-card:      #27273a;
+  --bg-primary:   #7c7c84;
+  --bg-secondary: #72727a;
+  --bg-tertiary:  #686870;
+  --bg-card:      #6e6e78;
 
-  --glass-bg:           rgba(255, 255, 255, 0.07);
-  --glass-bg-hover:     rgba(255, 255, 255, 0.11);
-  --glass-bg-elevated:  rgba(255, 255, 255, 0.09);
-  --glass-border:        rgba(255, 255, 255, 0.13);
-  --glass-border-light:  rgba(255, 255, 255, 0.24);
-  --glass-border-subtle: rgba(255, 255, 255, 0.09);
-  --glass-shine:         rgba(255, 255, 255, 0.15);
-  --glass-shine-strong:  rgba(255, 255, 255, 0.24);
+  --glass-bg:           rgba(255, 255, 255, 0.14);
+  --glass-bg-hover:     rgba(255, 255, 255, 0.20);
+  --glass-bg-active:    rgba(255, 255, 255, 0.22);
+  --glass-bg-elevated:  rgba(88, 88, 98, 0.92);
+  --glass-border:        rgba(255, 255, 255, 0.22);
+  --glass-border-light:  rgba(255, 255, 255, 0.34);
+  --glass-border-subtle: rgba(255, 255, 255, 0.14);
+  --glass-shine:         rgba(255, 255, 255, 0.22);
+  --glass-shine-strong:  rgba(255, 255, 255, 0.32);
 
-  --text-heading:   rgba(15, 15, 26, 0.90);
-  --text-primary:   #eeeef8;
-  --text-secondary: rgba(238, 238, 248, 0.75);
-  --text-muted:     rgba(238, 238, 248, 0.52);
-  --text-dim:       rgba(238, 238, 248, 0.32);
-  --text-title:     rgba(15, 15, 26, 0.85);
-  --text-subtitle:  rgba(15, 15, 26, 0.70);
+  --text-heading:   #ffffff;
+  --text-primary:   #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+  --text-muted:     rgba(255, 255, 255, 0.68);
+  --text-dim:       rgba(255, 255, 255, 0.50);
+  --text-title:     rgba(255, 255, 255, 0.95);
+  --text-subtitle:  rgba(255, 255, 255, 0.82);
+  --text-category:  rgba(255, 255, 255, 0.72);
 
-  --shadow-md: 0 4px 24px rgba(0,0,0,0.40), 0 1px 0 rgba(255,255,255,0.07) inset;
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.50), 0 1px 0 rgba(255,255,255,0.09) inset;
+  --grey-100: #ffffff;
+  --grey-200: #f0f0f5;
+  --grey-300: #dcdce4;
+  --grey-400: #c4c4d0;
+  --grey-500: #9e9eaa;
+  --grey-600: #666672;
+  --grey-700: #585864;
+  --grey-800: #4c4c56;
+  --grey-900: #3e3e48;
 
-  --btn-primary-bg:     rgba(255, 255, 255, 0.88);
+  --shadow-md: 0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.16) inset;
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.32), 0 1px 0 rgba(255,255,255,0.20) inset;
+
+  --btn-primary-bg:     rgba(255, 255, 255, 0.92);
   --btn-primary-hover:  rgba(255, 255, 255, 1);
   --btn-primary-text:   #0f0f1a;
-  --accent-interactive:       rgba(255, 255, 255, 0.82);
-  --accent-interactive-dim:   rgba(255, 255, 255, 0.15);
-  --accent-interactive-glow:  rgba(255, 255, 255, 0.08);
+  --accent-interactive:       rgba(255, 255, 255, 0.88);
+  --accent-interactive-dim:   rgba(255, 255, 255, 0.22);
+  --accent-interactive-glow:  rgba(255, 255, 255, 0.12);
 }
 
-[data-theme="grey"] body {
+[data-theme="grey"] body,
+[data-theme="dark"] body {
   background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 /* ══ White theme ═════════════════════════════════════════════ */
@@ -1020,5 +1034,42 @@ img {
   border-color: rgba(0, 0, 0, 0.09);
   color: var(--text-primary);
 }
+
+/* ── Automatically invert dark provider icons in Dark & Gray themes ── */
+[data-theme="dark"] img[src*="_dark_24x24"],
+[data-theme="grey"] img[src*="_dark_24x24"] {
+  filter: invert(1) brightness(1.8);
+}
+
+/* ── Discreet Glass Lens UI Tint (Customized Appearance) ── */
+html[data-glass-tint="true"] {
+  --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 16%, rgba(255, 255, 255, 0.72));
+  --glass-bg-hover:    color-mix(in srgb, var(--glass-tint-color) 22%, rgba(255, 255, 255, 0.86));
+  --glass-bg-elevated: color-mix(in srgb, var(--glass-tint-color) 18%, rgba(255, 255, 255, 0.90));
+  --glass-border:      color-mix(in srgb, var(--glass-tint-color) 35%, rgba(0, 0, 0, 0.10));
+}
+html[data-theme="dark"][data-glass-tint="true"] {
+  --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 16%, rgba(20, 20, 28, 0.65));
+  --glass-bg-hover:    color-mix(in srgb, var(--glass-tint-color) 22%, rgba(30, 30, 40, 0.75));
+  --glass-bg-elevated: color-mix(in srgb, var(--glass-tint-color) 18%, rgba(18, 18, 24, 0.92));
+  --glass-border:      color-mix(in srgb, var(--glass-tint-color) 38%, rgba(255, 255, 255, 0.12));
+}
+html[data-theme="grey"][data-glass-tint="true"] {
+  --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 18%, rgba(255, 255, 255, 0.16));
+  --glass-bg-hover:    color-mix(in srgb, var(--glass-tint-color) 24%, rgba(255, 255, 255, 0.22));
+  --glass-bg-elevated: color-mix(in srgb, var(--glass-tint-color) 20%, rgba(88, 88, 98, 0.92));
+  --glass-border:      color-mix(in srgb, var(--glass-tint-color) 40%, rgba(255, 255, 255, 0.24));
+}
+html[data-glass-tint="true"] .bottom-dock-pill,
+html[data-glass-tint="true"] .topbar-pill,
+html[data-glass-tint="true"] .upl-sheet-card,
+html[data-glass-tint="true"] .event-sheet-card,
+html[data-glass-tint="true"] .search-playlist-sheet,
+html[data-glass-tint="true"] #kyoyu-fbar button,
+html[data-glass-tint="true"] #kpl-sh {
+  background: var(--glass-bg-elevated) !important;
+  border-color: var(--glass-border) !important;
+}
+
 
 
