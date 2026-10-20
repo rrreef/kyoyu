@@ -1108,6 +1108,9 @@ export function PlayerProvider({ children }) {
       } catch (e) { console.warn('Prefetch info error:', e); }
     };
 
+    // Expose current track getter for native/web genre & artist sheets
+    window.__kyoyuGetCurrentTrack = () => stateRef.current.currentTrack;
+
     // Get cached info: called when user opens info panel — returns instantly
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
       try {

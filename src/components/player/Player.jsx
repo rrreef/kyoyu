@@ -1,8 +1,10 @@
-import { useRef, useEffect, useState, useCallback, memo } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
 import { callStreaming, isStreamingProvider, onStreamingEvent } from '../../lib/streaming';
+import { classifyTrackGenre } from '../../lib/genreIntelligence';
+import { openRichGenreSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X } from 'lucide-react';
 import './Player.css';
@@ -230,7 +232,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch, onNext }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev }) {
+function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev, genreInfo }) {
   const ytRef = useRef(null);
   const scRef = useRef(null);
   const fpRef    = useRef(null);
@@ -401,7 +403,42 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
           <div className="fp-meta">
             <div className="fp-meta-text">
               <div className="fp-title">{track.title}</div>
-              <div className="fp-artist">{track.artistName||'—'}</div>
+              <div
+                className="fp-artist"
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  const a = track.artistName || track.artist;
+                  if (a) openRichArtistSheet(a);
+                }}
+              >
+                {track.artistName || track.artist || '—'}
+              </div>
+              {genreInfo && genreInfo.primaryGenre && (
+                <div className="fp-genre-row">
+                  {[genreInfo.primaryGenre, ...(genreInfo.secondaryGenres || []).slice(0, 2)].map((g, idx) => (
+                    <button
+                      key={g}
+                      type="button"
+                      className={`fp-genre-chip${idx === 0 ? ' fp-genre-chip--primary' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRichGenreSheet(g, {
+                          currentArtist: track.artistName || track.artist || '',
+                          currentTitle: track.title || '',
+                          currentLabel: track.label || track.labelName || track.releaseLabel || '',
+                          currentCover: track.releaseCover || track.artworkUrl || track.cover || '',
+                          secondaryGenres: genreInfo.secondaryGenres || [],
+                          confidence: genreInfo.confidence,
+                          evidence: genreInfo.evidence || [],
+                        });
+                      }}
+                    >
+                      <span className="fp-genre-dot" />
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              )}
               {provider && provider !== 'native' && (
                 <div className="fp-source-badge">
                   {provider === 'youtube' && <span className="fp-source-yt">Playing via YouTube</span>}
@@ -418,6 +455,224 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   );
 }
 
+/* ── Web Genre Sheet Modal (Musicmap Discovery Panel on Web) ── */
+function WebGenreSheetModal() {
+  const [genre, setGenre] = useState(null);
+
+  useEffect(() => {
+    const onOpen = (e) => {
+      if (e.detail) setGenre(e.detail);
+    };
+    window.addEventListener('kyoyu-open-web-genre', onOpen);
+    return () => window.removeEventListener('kyoyu-open-web-genre', onOpen);
+  }, []);
+
+  if (!genre) return null;
+
+  return (
+    <div className="wgs-backdrop" onClick={() => setGenre(null)}>
+      <div className="wgs-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="wgs-handle-wrap" onClick={() => setGenre(null)}>
+          <div className="wgs-handle" />
+        </div>
+        <button className="wgs-close" onClick={() => setGenre(null)} aria-label="Close">
+          <X size={18} />
+        </button>
+        <div className="wgs-scroll">
+          {/* Header: Super-Genre + Canonical Genre + Origin */}
+          <div className="wgs-header">
+            <div className="wgs-badges">
+              {genre.superGenre && (
+                <span
+                  className="wgs-super-badge"
+                  onClick={() => openRichGenreSheet(genre.superGenre)}
+                >
+                  {genre.superGenre.toUpperCase()} FAMILY
+                </span>
+              )}
+              {genre.secondarySuperGenre && (
+                <span
+                  className="wgs-super-badge wgs-super-badge--hybrid"
+                  onClick={() => openRichGenreSheet(genre.secondarySuperGenre)}
+                >
+                  × {genre.secondarySuperGenre.toUpperCase()}
+                </span>
+              )}
+              {genre.originDecade && (
+                <span className="wgs-origin-badge">{genre.originDecade}</span>
+              )}
+            </div>
+            <h2 className="wgs-title">{genre.name}</h2>
+            {(genre.aliases?.length > 0 || genre.siblingGroup) && (
+              <div className="wgs-aliases">
+                {genre.aliases?.length > 0 && (
+                  <span>Also known as: {genre.aliases.join(' / ')}</span>
+                )}
+                {genre.siblingGroup && (
+                  <span> · Cluster: {genre.siblingGroup}</span>
+                )}
+              </div>
+            )}
+            {(genre.originPlace || genre.bpmRange || genre.rhythmProfile) && (
+              <div className="wgs-traits-bar">
+                {genre.originPlace && <span>📍 {genre.originPlace}</span>}
+                {genre.bpmRange && <span>⏱ {genre.bpmRange}</span>}
+                {genre.rhythmProfile && <span>🥁 {genre.rhythmProfile}</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Sonic Traits */}
+          {genre.sonicTraits?.length > 0 && (
+            <div className="wgs-chip-list">
+              {genre.sonicTraits.map((t) => (
+                <span key={t} className="wgs-trait-pill">{t}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Description */}
+          {genre.description && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">HISTORY & SOUND</div>
+              <p className="wgs-desc">{genre.description}</p>
+            </div>
+          )}
+
+          {/* Genealogy / Musicmap Graph */}
+          {(genre.parentGenres?.length > 0 || genre.adjacentGenres?.length > 0 || genre.subgenres?.length > 0) && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">GENEALOGY & CONNECTIONS</div>
+              {genre.parentGenres?.length > 0 && (
+                <div className="wgs-graph-group">
+                  <span className="wgs-graph-label">Historic Roots</span>
+                  <div className="wgs-chip-list">
+                    {genre.parentGenres.map((g) => (
+                      <button key={g} className="wgs-genre-link" onClick={() => openRichGenreSheet(g)}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {genre.adjacentGenres?.length > 0 && (
+                <div className="wgs-graph-group">
+                  <span className="wgs-graph-label">Often Mixed With / Adjacent</span>
+                  <div className="wgs-chip-list">
+                    {genre.adjacentGenres.map((g) => (
+                      <button key={g} className="wgs-genre-link" onClick={() => openRichGenreSheet(g)}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {genre.subgenres?.length > 0 && (
+                <div className="wgs-graph-group">
+                  <span className="wgs-graph-label">Offshoots & Subgenres</span>
+                  <div className="wgs-chip-list">
+                    {genre.subgenres.map((g) => (
+                      <button key={g} className="wgs-genre-link" onClick={() => openRichGenreSheet(g)}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Similar Titles in the Same Genre */}
+          {genre.similarTracks?.length > 0 && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">SIMILAR TITLES IN {genre.name.toUpperCase()}</div>
+              <div className="wgs-tracks-list">
+                {genre.similarTracks.slice(0, 14).map((t) => (
+                  <div
+                    key={t.id}
+                    className="wgs-track-row"
+                    onClick={() => playGenreTrack(t)}
+                  >
+                    {t.cover ? (
+                      <img src={t.cover} className="wgs-track-art" alt="" />
+                    ) : (
+                      <div className="wgs-track-art wgs-track-art--ph"><Music2 size={16} /></div>
+                    )}
+                    <div className="wgs-track-info">
+                      <div className="wgs-track-title">{t.title}</div>
+                      <div className="wgs-track-sub">
+                        {t.artist}{t.label ? ` · ${t.label}` : ''}{t.year ? ` (${t.year})` : ''}
+                      </div>
+                    </div>
+                    <Play size={15} className="wgs-track-play" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pioneer Artists & Collaborators */}
+          {(genre.pioneerArtists?.length > 0 || genre.collaboratorArtists?.length > 0) && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">PIONEERS & SCENE ARTISTS</div>
+              <div className="wgs-chip-list">
+                {[...(genre.collaboratorArtists || []), ...(genre.pioneerArtists || [])]
+                  .filter((v, i, a) => v && a.indexOf(v) === i)
+                  .slice(0, 16)
+                  .map((artist) => (
+                    <button
+                      key={artist}
+                      className="wgs-entity-chip"
+                      onClick={() => {
+                        setGenre(null);
+                        openRichArtistSheet(artist);
+                      }}
+                    >
+                      {artist}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Key Labels */}
+          {genre.classicLabels?.length > 0 && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">KEY LABELS</div>
+              <div className="wgs-chip-list">
+                {genre.classicLabels.slice(0, 14).map((lbl) => (
+                  <button
+                    key={lbl}
+                    className="wgs-entity-chip"
+                    onClick={() => {
+                      setGenre(null);
+                      openRichLabelSheet(lbl);
+                    }}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Club / Festival / Scene Contexts */}
+          {genre.eventContexts?.length > 0 && (
+            <div className="wgs-section">
+              <div className="wgs-section-title">ICONIC CLUBS, FESTIVALS & SCENES</div>
+              <div className="wgs-chip-list">
+                {genre.eventContexts.map((ev) => (
+                  <span key={ev} className="wgs-trait-pill">{ev}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 import { useLibrary } from '../../contexts/LibraryContext';
 
 /* ── Root ── */
@@ -426,6 +681,15 @@ export default function Player({ hideMini = false }) {
   const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume, restoredPending } = state;
+  const [resolvedGenre, setResolvedGenre] = useState(null);
+
+  const activeGenreInfo = useMemo(() => {
+    if (!currentTrack) return null;
+    if (resolvedGenre && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}`) {
+      return resolvedGenre;
+    }
+    return classifyTrackGenre(currentTrack, { provider: badgeProviderOf(provider, currentTrack) });
+  }, [resolvedGenre, currentTrack, provider]);
 
   // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
   const handleNext = useCallback(() => {
@@ -604,6 +868,9 @@ export default function Player({ hideMini = false }) {
         albumName: currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '',
         label: currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '',
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
+        genre: activeGenreInfo?.primaryGenre || '',
+        secondaryGenres: activeGenreInfo?.secondaryGenres || [],
+        superGenre: activeGenreInfo?.superGenre || '',
         provider: provider || 'native',
         sourceProvider: badgeProviderOf(provider, currentTrack),
         trackUrl: currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.replay?.url || '',
@@ -612,7 +879,84 @@ export default function Player({ hideMini = false }) {
     } else {
       postNative({ visible: false, playing: false });
     }
-  }, [currentTrack, isPlaying, provider, likedUploads, likedTracks]);
+  }, [currentTrack, isPlaying, provider, likedUploads, likedTracks, activeGenreInfo]);
+
+  // Universal Multi-Signal Genre Determination (Musicmap Classifier + Discogs / MusicBrainz / Bandcamp enrichment)
+  useEffect(() => {
+    if (!currentTrack) {
+      setResolvedGenre(null);
+      return;
+    }
+    let cancelled = false;
+    const trackKey = `${currentTrack.id || ''}:${currentTrack.title || ''}`;
+    const srcProv = badgeProviderOf(provider, currentTrack);
+    const title = currentTrack.title || '';
+    const artist = currentTrack.artistName || currentTrack.artist || '';
+    const album = currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '';
+    const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+
+    // 1. Check if we already have cached track-info
+    const cachedInfo = window.__kyoyuInfoCache?.[cacheKey];
+    const initial = classifyTrackGenre(currentTrack, {
+      ...(cachedInfo || {}),
+      provider: srcProv,
+    });
+    setResolvedGenre({ ...initial, _trackKey: trackKey });
+    postNative({
+      genre: initial.primaryGenre,
+      secondaryGenres: initial.secondaryGenres,
+      superGenre: initial.superGenre,
+    });
+
+    if (cachedInfo) return;
+
+    // 2. Asynchronously query /api/discogs-search (action: 'track-info') to refine genre, label, and year for EVERY provider
+    (async () => {
+      try {
+        const res = await fetch('/api/discogs-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'track-info',
+            title,
+            artist,
+            album,
+            provider: srcProv,
+            trackId: String(currentTrack.id || ''),
+          }),
+        });
+        if (!res.ok || cancelled) return;
+        const infoData = await res.json();
+        if (cancelled || !infoData) return;
+
+        window.__kyoyuInfoCache = window.__kyoyuInfoCache || {};
+        window.__kyoyuInfoCache[cacheKey] = infoData;
+
+        const refined = classifyTrackGenre(currentTrack, {
+          ...infoData,
+          provider: srcProv,
+        });
+        setResolvedGenre({ ...refined, _trackKey: trackKey });
+
+        const nativePatch = {
+          genre: refined.primaryGenre,
+          secondaryGenres: refined.secondaryGenres,
+          superGenre: refined.superGenre,
+        };
+        if (infoData.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
+          nativePatch.label = infoData.label;
+        }
+        if (infoData.year && !(currentTrack.year || currentTrack.releaseYear)) {
+          nativePatch.year = String(infoData.year);
+        }
+        postNative(nativePatch);
+      } catch (e) {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artistName, currentTrack?.artist, provider]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');
@@ -796,10 +1140,13 @@ export default function Player({ hideMini = false }) {
       )}
       {/* Web FullPlayer — skip on native iOS since native sheet handles UI */}
       {!isNative() && (
-        <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
-          open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
-          provider={provider} providerItemId={providerItemId} volume={volume}
-          onNext={handleNext} onPrev={handlePrev}/>
+        <>
+          <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
+            open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
+            provider={provider} providerItemId={providerItemId} volume={volume}
+            onNext={handleNext} onPrev={handlePrev} genreInfo={activeGenreInfo}/>
+          <WebGenreSheetModal />
+        </>
       )}
     </>
   );

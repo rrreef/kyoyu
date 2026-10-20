@@ -31,7 +31,7 @@ function makeLookupKey(artist, album, title) {
   return [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
 }
 
-async function fetchDiscogsRelease(query, explicitReleaseId = null) {
+async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArtist = '') {
   try {
     let best = null;
     let explicitType = 'release';
@@ -56,6 +56,18 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null) {
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         best = searchData.results?.[0];
+      }
+      // Fallback: if exact track/album wasn't on Discogs (e.g. SoundCloud/Spotify/YouTube exclusive),
+      // query the artist's releases on Discogs so we still determine accurate artist styles & genres!
+      if (!best && fallbackArtist && fallbackArtist.trim().length > 1) {
+        const artistRes = await fetch(
+          `https://api.discogs.com/database/search?q=${encodeURIComponent(fallbackArtist.trim())}&type=release&per_page=5`,
+          { headers: DISCOGS_HEADERS }
+        );
+        if (artistRes.ok) {
+          const artistData = await artistRes.json();
+          best = artistData.results?.[0];
+        }
       }
     }
     if (!best) return null;
@@ -83,10 +95,14 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null) {
     const labels = (detail?.labels || []).map(l => ({ name: l.name?.replace(/\s\(\d+\)$/, '') || '', catno: l.catno || '', id: l.id }));
     // Series = sub-imprints (e.g., "Mantis" under "Delsin")
     const series = (detail?.series || []).map(s => ({ name: s.name?.replace(/\s\(\d+\)$/, '') || '', catno: s.catno || '', id: s.id }));
+    const rawStyles = detail?.styles || best.style || [];
+    const rawGenres = detail?.genres || best.genre || [];
     return {
       title: detail?.title || best.title || '',
       year: detail?.year || best.year || '',
-      genre: [...(detail?.genres || best.genre || []), ...(detail?.styles || best.style || [])].join(', '),
+      styles: rawStyles,
+      genres: rawGenres,
+      genre: [...rawStyles, ...rawGenres].join(', '),
       labels, series, country: detail?.country || '',
       description: (detail?.notes || '').replace(/Track durations and BPM are not provided on the record\.?/gi, '').replace(/\[a=([^\]]+)\]/g, '$1').replace(/\[l=([^\]]+)\]/g, '$1').replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1').replace(/\[b\]|\[\/b\]|\[i\]|\[\/i\]/g, ''),
       formats: (detail?.formats || []).map(f => {
@@ -263,7 +279,7 @@ async function handleTrackInfo(body, res) {
 
   // Fetch sources
   const searchQuery = [artist, album || title].filter(Boolean).join(' ');
-  const [discogs, mb] = await Promise.all([fetchDiscogsRelease(searchQuery, discogsReleaseId), fetchMusicBrainz(title || '', artist || '')]);
+  const [discogs, mb] = await Promise.all([fetchDiscogsRelease(searchQuery, discogsReleaseId, artist || ''), fetchMusicBrainz(title || '', artist || '')]);
   const [discogsArtist, mbArtist, labelInfo] = await Promise.all([
     fetchDiscogsArtistFull(discogs?.primaryArtistId),
     fetchMusicBrainzArtist(mb?.artistMbid),
@@ -307,7 +323,7 @@ async function handleTrackInfo(body, res) {
   if (mbArtist?.beginDate) artistBio += ` Active since ${mbArtist.beginDate}.`;
 
   if (discogs?.discogsUrl) links.push({ name: 'Release on Discogs', url: discogs.discogsUrl });
-  if (labelInfo?.discogsUrl) links.push({ name: 'Label on Discogs', url: labelInfo.discogsUrl });
+  if (labelInfo?.discogsUrl) links.push({ name: 'Label on Discogs', url: discogs.discogsUrl });
   if (discogsArtist?.discogsUrl) links.push({ name: 'Artist on Discogs', url: discogsArtist.discogsUrl });
   if (mb?.recordingId) links.push({ name: 'MusicBrainz', url: `https://musicbrainz.org/recording/${mb.recordingId}` });
   // Bandcamp fallback if missing
@@ -337,11 +353,14 @@ async function handleTrackInfo(body, res) {
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
   
   const result = {
-    _v: 7,
+    _v: 8,
     album: discogs?.title || album || '', artist: artist || '',
     year: String(discogs?.year || mb?.year || ''),
     label: labelDisplay, labelProfile: labelInfo?.profile || '',
     genre: discogs?.genre || (mb?.tags || []).join(', ') || '',
+    styles: discogs?.styles || [],
+    genres: discogs?.genres || [],
+    mbTags: mb?.tags || [],
     formats: discogs?.formats || [], country: discogs?.country || mbArtist?.area || '',
     description: discogs?.description || '', tracklist: discogs?.tracklist || [],
     credits: { mixing: credits.filter(c => /mix/i.test(c.role)).map(c => c.name), mastering: credits.filter(c => /master/i.test(c.role)).map(c => c.name), other: credits.filter(c => !/mix|master/i.test(c.role)) },
@@ -1161,6 +1180,52 @@ async function handleReleaseDetails(body, res) {
   }
 }
 
+async function handleGenreExplore(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  const { genre, artist } = body || {};
+  if (!genre) return res.status(400).json({ error: 'Missing genre' });
+
+  // Clean style term for Discogs query (e.g. "UK Garage / 2-Step" -> "UK Garage", "Hypnotic Techno" -> "Techno")
+  const primaryTerm = String(genre).split(/[\/&]/)[0].trim();
+  const cacheKey = `genre-explore|${primaryTerm.toLowerCase()}|${String(artist || '').trim().toLowerCase()}`;
+  const cached = await cacheGet(supabase, cacheKey, 7 * 24 * 60 * 60 * 1000, 1);
+  if (cached) return res.status(200).json(cached);
+
+  try {
+    const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(primaryTerm)}&type=release&per_page=14`;
+    const r = await fetch(searchUrl, { headers: DISCOGS_HEADERS });
+    let items = [];
+    if (r.ok) {
+      const d = await r.json();
+      items = (d.results || []).map(item => {
+        const rawTitle = String(item.title || '');
+        const parts = rawTitle.split(' - ');
+        const itemArtist = stripArtistSuffix(parts.length > 1 ? parts[0] : (artist || 'Various'));
+        const itemTitle = parts.length > 1 ? parts.slice(1).join(' - ').trim() : rawTitle;
+        const lbl = Array.isArray(item.label) ? stripArtistSuffix(item.label[0] || '') : '';
+        return {
+          id: `discogs-g-${item.type || 'release'}-${item.id}`,
+          discogsId: String(item.id || ''),
+          type: item.type || 'release',
+          title: itemTitle,
+          artist: itemArtist,
+          label: lbl,
+          year: item.year ? String(item.year) : '',
+          coverImage: item.cover_image || item.thumb || '',
+          thumb: item.thumb || item.cover_image || '',
+          styles: item.style || [],
+          genres: item.genre || [],
+        };
+      });
+    }
+    const result = { _v: 1, genre: primaryTerm, releases: items };
+    await cacheSet(supabase, cacheKey, result);
+    return res.status(200).json(result);
+  } catch (e) {
+    return res.status(200).json({ genre: primaryTerm, releases: [] });
+  }
+}
+
 export default async function handler(req, res) {
   const origin = req.headers.origin;
   if (ALLOWED_ORIGINS.includes(origin)) {
@@ -1185,6 +1250,11 @@ export default async function handler(req, res) {
   }
 
   const { query, type, page, perPage, action } = body || {};
+
+  // ==== ACTION: genre-explore ====
+  if (action === 'genre-explore') {
+    return handleGenreExplore(body, res);
+  }
 
   // ==== ACTION: artist-profile ====
   if (action === 'artist-profile') {

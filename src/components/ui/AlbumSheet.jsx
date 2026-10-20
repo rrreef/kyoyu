@@ -3,6 +3,7 @@ import { usePlayer, historyReplayInfo, trackIdentity } from '../../contexts/Play
 import { useLibrary } from '../../contexts/LibraryContext';
 import { syncProviderLike } from '../../lib/streaming';
 import { isItemInConnectedLikes } from '../../lib/useConnectedLibrary';
+import { buildInitialGenreSheetPayload, resolveGenreNode } from '../../lib/genreIntelligence';
 
 const FRESH_STREAM_MS = 10 * 60 * 1000;
 
@@ -1166,9 +1167,232 @@ export async function openReleaseFromSheet(releaseObj) {
   }
 }
 
+export function openNativeGenreFast(genreObj) {
+  if (!genreObj) return null;
+  const ts = Date.now();
+  window.__lastFastOpenGenreTs = ts;
+
+  const safeGenre = {
+    id: String(genreObj.id || `genre-${Math.random()}`),
+    name: String(genreObj.name || 'Electronic'),
+    superGenre: String(genreObj.superGenre || 'Electronic'),
+    secondarySuperGenre: genreObj.secondarySuperGenre ? String(genreObj.secondarySuperGenre) : null,
+    aliases: Array.isArray(genreObj.aliases) ? genreObj.aliases.filter(Boolean).map(String) : [],
+    siblingGroup: genreObj.siblingGroup ? String(genreObj.siblingGroup) : null,
+    originYear: String(genreObj.originYear || ''),
+    originPlace: String(genreObj.originPlace || ''),
+    bpmRange: String(genreObj.bpmRange || ''),
+    rhythmProfile: String(genreObj.rhythmProfile || ''),
+    sonicTraits: Array.isArray(genreObj.sonicTraits) ? genreObj.sonicTraits.filter(Boolean).map(String) : [],
+    description: String(genreObj.description || ''),
+    parentGenres: Array.isArray(genreObj.parentGenres) ? genreObj.parentGenres.filter(Boolean).map(String) : [],
+    influences: Array.isArray(genreObj.influences) ? genreObj.influences.filter(Boolean).map(String) : [],
+    subgenres: Array.isArray(genreObj.subgenres) ? genreObj.subgenres.filter(Boolean).map(String) : [],
+    adjacentGenres: Array.isArray(genreObj.adjacentGenres) ? genreObj.adjacentGenres.filter(Boolean).map(String) : [],
+    backlashAgainst: Array.isArray(genreObj.backlashAgainst) ? genreObj.backlashAgainst.filter(Boolean).map(String) : [],
+    pioneerArtists: Array.isArray(genreObj.pioneerArtists) ? genreObj.pioneerArtists.filter(Boolean).map(String) : [],
+    classicLabels: Array.isArray(genreObj.classicLabels) ? genreObj.classicLabels.filter(Boolean).map(String) : [],
+    eventContexts: Array.isArray(genreObj.eventContexts) ? genreObj.eventContexts.filter(Boolean).map(String) : [],
+    provenance: Array.isArray(genreObj.provenance) ? genreObj.provenance.filter(Boolean).map(String) : [],
+    contextTrackTitle: genreObj.contextTrackTitle ? String(genreObj.contextTrackTitle) : null,
+    contextArtistName: genreObj.contextArtistName ? String(genreObj.contextArtistName) : null,
+    similarTracks: (Array.isArray(genreObj.similarTracks) ? genreObj.similarTracks : []).map(t => ({
+      id: String(t.id || Math.random()),
+      title: String(t.title || 'Unknown'),
+      artist: t.artist || t.artistName ? String(t.artist || t.artistName) : null,
+      label: t.label ? String(t.label) : null,
+      catno: t.catno ? String(t.catno) : null,
+      format: t.format ? String(t.format) : null,
+      provider: t.provider ? String(t.provider) : null,
+      trackUrl: t.trackUrl || t.url ? String(t.trackUrl || t.url) : null,
+      discogsId: t.discogsId ? String(t.discogsId) : null,
+      year: t.year ? String(t.year) : null,
+      thumb: t.thumb || t.cover ? String(t.thumb || t.cover) : null,
+      coverImage: t.coverImage || t.cover || t.artworkUrl || t.thumb ? String(t.coverImage || t.cover || t.artworkUrl || t.thumb) : null,
+      type: t.type ? String(t.type) : 'track',
+    })),
+  };
+
+  try {
+    window.webkit?.messageHandlers?.player?.postMessage({
+      cmd: 'open_native_genre',
+      genre: safeGenre,
+    });
+  } catch (e) {
+    console.error('Failed to open native genre sheet', e);
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('kyoyu-open-web-genre', { detail: safeGenre }));
+  } catch (e) {}
+  return safeGenre;
+}
+
+export async function openRichGenreSheet(genreInput, contextInput = null) {
+  const isObj = genreInput && typeof genreInput === 'object';
+  const rawGenre = isObj ? (genreInput.name || genreInput.genre || '') : String(genreInput || '');
+  const cleanGenre = String(rawGenre).trim();
+  if (!cleanGenre) return;
+
+  // Gather active track context if not explicitly provided
+  const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack)
+    ? window.__kyoyuGetCurrentTrack()
+    : null;
+  const ctxArtist = (contextInput && contextInput.artist) || (isObj && genreInput.artist) || curTrack?.artistName || curTrack?.artist || '';
+  const ctxTitle = (contextInput && contextInput.title) || (isObj && genreInput.title) || curTrack?.title || '';
+  const ctxAlbum = (contextInput && contextInput.album) || curTrack?.releaseTitle || curTrack?.album || '';
+  let ctxLabel = (contextInput && contextInput.label) || curTrack?.label || curTrack?.labelName || '';
+
+  // Check cached track-info for collaborators, remixers, label, and aliases
+  const collaborators = [];
+  const cacheKey = [ctxArtist, ctxAlbum || ctxTitle].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+  const cachedInfo = (typeof window !== 'undefined' && window.__kyoyuInfoCache && cacheKey)
+    ? window.__kyoyuInfoCache[cacheKey]
+    : null;
+  if (cachedInfo) {
+    if (!ctxLabel && cachedInfo.label) ctxLabel = cachedInfo.label;
+    (cachedInfo.releaseArtists || []).forEach(a => collaborators.push(a));
+    (cachedInfo.artistMembers || []).forEach(m => collaborators.push(m));
+    (cachedInfo.artistAliases || []).forEach(al => collaborators.push(al));
+    (cachedInfo.credits?.mixing || []).forEach(m => collaborators.push(m));
+    (cachedInfo.credits?.mastering || []).forEach(m => collaborators.push(m));
+  }
+
+  let currentPayload = buildInitialGenreSheetPayload(cleanGenre, {
+    artist: ctxArtist,
+    title: ctxTitle,
+    label: ctxLabel,
+    collaborators,
+  });
+
+  // 1. Open immediately (0ms latency) with rich ontology + current context
+  openNativeGenreFast(currentPayload);
+
+  // 2. Enrich asynchronously from Discogs genre-explore + Bandcamp search
+  try {
+    const node = resolveGenreNode(cleanGenre);
+    const searchGenreTerm = node.name.split(/[\/&]/)[0].trim();
+
+    const [dcGenreRes, bcSearchRes] = await Promise.all([
+      fetch('/api/discogs-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'genre-explore', genre: searchGenreTerm, artist: ctxArtist }),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/bandcamp-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `${searchGenreTerm} ${node.classicLabels?.[0] || ''}`.trim() }),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+
+    const mergedTracks = [];
+    const seenTrackKeys = new Set();
+    const addSimilar = (item) => {
+      if (!item || !item.title) return;
+      const key = `${_normStr(item.artist || '')}|${_normStr(item.title || '')}`;
+      if (!key || seenTrackKeys.has(key)) return;
+      seenTrackKeys.add(key);
+      mergedTracks.push(item);
+    };
+
+    // Add Bandcamp playable cuts first (since they have direct artwork & Bandcamp URLs)
+    if (bcSearchRes && Array.isArray(bcSearchRes.results)) {
+      bcSearchRes.results
+        .filter(r => r.type === 'track' || r.type === 'album')
+        .slice(0, 6)
+        .forEach((r, idx) => {
+          addSimilar({
+            id: `bc-genre-${idx}-${Date.now()}`,
+            title: r.title || 'Unknown',
+            artist: r.artistName || r.artist || '',
+            label: r.labelName || r.albumTitle || '',
+            year: r.year ? String(r.year) : '',
+            trackUrl: r.trackUrl || r.url || '',
+            coverImage: r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '',
+            thumb: r.artworkUrl || '',
+            provider: 'bandcamp',
+            type: r.type || 'track',
+          });
+        });
+    }
+
+    // Add Discogs genre releases (with cover images & labels)
+    const discoveredLabels = new Set(currentPayload.classicLabels || []);
+    const discoveredArtists = new Set(currentPayload.pioneerArtists || []);
+    if (dcGenreRes && Array.isArray(dcGenreRes.releases)) {
+      dcGenreRes.releases.forEach(rel => {
+        if (rel.label && !/not on label/i.test(rel.label)) discoveredLabels.add(rel.label);
+        if (rel.artist && !/various/i.test(rel.artist)) discoveredArtists.add(rel.artist);
+        addSimilar({
+          id: rel.id || `dc-genre-${Math.random()}`,
+          discogsId: rel.discogsId || '',
+          title: rel.title || 'Unknown',
+          artist: rel.artist || '',
+          label: rel.label || '',
+          year: rel.year ? String(rel.year) : '',
+          trackUrl: `resolve:${rel.artist || ''} ${rel.title || ''}`.trim(),
+          coverImage: rel.coverImage || rel.thumb || '',
+          thumb: rel.thumb || rel.coverImage || '',
+          provider: 'discogs',
+          type: rel.type || 'release',
+        });
+      });
+    }
+
+    // Keep canonical reference tracks as well
+    (currentPayload.similarTracks || []).forEach(rt => addSimilar(rt));
+
+    currentPayload = {
+      ...currentPayload,
+      pioneerArtists: Array.from(discoveredArtists).slice(0, 20),
+      classicLabels: Array.from(discoveredLabels).slice(0, 20),
+      similarTracks: mergedTracks.slice(0, 18),
+    };
+
+    openNativeGenreFast(currentPayload);
+  } catch (err) {
+    console.warn('[openRichGenreSheet] enrich error:', err);
+  }
+}
+
+export async function playGenreTrack(trackItem) {
+  if (!trackItem) return;
+  const obj = typeof trackItem === 'string' ? JSON.parse(trackItem) : trackItem;
+  const title = obj.title || '';
+  const artist = obj.artist || obj.artistName || '';
+  const cover = obj.coverImage || obj.thumb || obj.cover || '';
+  const trackUrl = obj.trackUrl || obj.url || '';
+
+  // If it's a Bandcamp album or Discogs release with a discogsId, we can play it immediately via playSaved
+  // OR if user tapped a track/reference cut, resolve and play via __kyoyuPlaySaved
+  const playable = {
+    id: obj.id || `genre-play-${Date.now()}`,
+    title,
+    artist,
+    artistName: artist,
+    releaseCover: cover,
+    artworkUrl: cover,
+    cover,
+    src: '',
+    audioUrl: '',
+    url: trackUrl && !trackUrl.startsWith('resolve:') ? trackUrl : `resolve:${artist} ${title}`.trim(),
+    provider: obj.provider === 'bandcamp' ? 'bandcamp' : '',
+    providerItemId: obj.provider === 'bandcamp' ? trackUrl : undefined,
+  };
+
+  if (window.__kyoyuPlaySaved) {
+    window.__kyoyuPlaySaved(playable, [playable]);
+  } else if (window.__kyoyuGlobalPlayTrack) {
+    window.__kyoyuGlobalPlayTrack(playable, [playable]);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.__kyoyuOpenArtist = openRichArtistSheet;
   window.__kyoyuOpenLabel = openRichLabelSheet;
+  window.__kyoyuOpenGenre = openRichGenreSheet;
+  window.__kyoyuPlayGenreTrack = playGenreTrack;
   window.__kyoyuOpenReleaseFromSheet = openReleaseFromSheet;
 }
+
 
