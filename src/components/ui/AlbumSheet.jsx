@@ -3,7 +3,7 @@ import { usePlayer, historyReplayInfo, trackIdentity } from '../../contexts/Play
 import { useLibrary } from '../../contexts/LibraryContext';
 import { syncProviderLike } from '../../lib/streaming';
 import { isItemInConnectedLikes } from '../../lib/useConnectedLibrary';
-import { buildInitialGenreSheetPayload, resolveGenreNode } from '../../lib/genreIntelligence';
+import { buildInitialGenreSheetPayload, resolveGenreNode, select5050GenreTracks, buildInitialSceneSheetPayload } from '../../lib/genreIntelligence';
 
 const FRESH_STREAM_MS = 10 * 60 * 1000;
 
@@ -1227,11 +1227,17 @@ export function openNativeGenreFast(genreObj) {
   return safeGenre;
 }
 
-export async function openRichGenreSheet(genreInput, contextInput = null) {
+export async function openRichGenreSheet(genreInput, contextInput = null, refreshSeed = 0) {
   const isObj = genreInput && typeof genreInput === 'object';
   const rawGenre = isObj ? (genreInput.name || genreInput.genre || '') : String(genreInput || '');
   const cleanGenre = String(rawGenre).trim();
   if (!cleanGenre) return;
+
+  if (typeof window !== 'undefined') {
+    window.__kyoyuGenreRefreshSeed = window.__kyoyuGenreRefreshSeed || {};
+    window.__kyoyuGenrePayloadCache = window.__kyoyuGenrePayloadCache || {};
+    window.__kyoyuGenreExternalPool = window.__kyoyuGenreExternalPool || {};
+  }
 
   // Gather active track context if not explicitly provided
   const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack)
@@ -1262,14 +1268,19 @@ export async function openRichGenreSheet(genreInput, contextInput = null) {
     title: ctxTitle,
     label: ctxLabel,
     collaborators,
-  });
+  }, refreshSeed);
 
-  // 1. Open immediately (0ms latency) with rich ontology + current context
+  if (typeof window !== 'undefined') {
+    window.__kyoyuGenrePayloadCache[currentPayload.name.toLowerCase()] = currentPayload;
+    window.__kyoyuLastOpenedGenreName = currentPayload.name;
+  }
+
+  // 1. Open immediately (0ms latency) with rich ontology + 50% Classic / 50% Deep Niche tracks
   openNativeGenreFast(currentPayload);
 
-  // 2. Enrich asynchronously from Discogs genre-explore + Bandcamp search
+  // 2. Enrich asynchronously from Discogs genre-explore + Bandcamp search (for artwork & live underground cuts)
   try {
-    const node = resolveGenreNode(cleanGenre);
+    const node = resolveGenreNode(cleanGenre, { forSheet: true });
     const searchGenreTerm = node.name.split(/[\/&]/)[0].trim();
 
     const [dcGenreRes, bcSearchRes] = await Promise.all([
@@ -1281,34 +1292,32 @@ export async function openRichGenreSheet(genreInput, contextInput = null) {
       fetch('/api/bandcamp-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: `${searchGenreTerm} ${node.classicLabels?.[0] || ''}`.trim() }),
+        body: JSON.stringify({ query: `${searchGenreTerm} ${node.classicLabels?.[refreshSeed % Math.max(1, (node.classicLabels || []).length)] || ''}`.trim() }),
       }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
-    const mergedTracks = [];
-    const seenTrackKeys = new Set();
-    const addSimilar = (item) => {
-      if (!item || !item.title) return;
-      const key = `${_normStr(item.artist || '')}|${_normStr(item.title || '')}`;
-      if (!key || seenTrackKeys.has(key)) return;
-      seenTrackKeys.add(key);
-      mergedTracks.push(item);
-    };
+    // Guard against race condition if the user tapped another genre while fetching
+    if (typeof window !== 'undefined' && window.__kyoyuLastOpenedGenreName && window.__kyoyuLastOpenedGenreName !== currentPayload.name) {
+      return;
+    }
 
-    // Add Bandcamp playable cuts first (since they have direct artwork & Bandcamp URLs)
+    const externalTracks = [];
+    const coverByTitleArtist = new Map();
+
     if (bcSearchRes && Array.isArray(bcSearchRes.results)) {
       bcSearchRes.results
         .filter(r => r.type === 'track' || r.type === 'album')
-        .slice(0, 6)
+        .slice(0, 8)
         .forEach((r, idx) => {
-          addSimilar({
+          const cleanCover = r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '';
+          externalTracks.push({
             id: `bc-genre-${idx}-${Date.now()}`,
             title: r.title || 'Unknown',
             artist: r.artistName || r.artist || '',
             label: r.labelName || r.albumTitle || '',
-            year: r.year ? String(r.year) : '',
+            year: r.year ? String(r.year) : '2020',
             trackUrl: r.trackUrl || r.url || '',
-            coverImage: r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '',
+            coverImage: cleanCover,
             thumb: r.artworkUrl || '',
             provider: 'bandcamp',
             type: r.type || 'track',
@@ -1316,14 +1325,17 @@ export async function openRichGenreSheet(genreInput, contextInput = null) {
         });
     }
 
-    // Add Discogs genre releases (with cover images & labels)
     const discoveredLabels = new Set(currentPayload.classicLabels || []);
     const discoveredArtists = new Set(currentPayload.pioneerArtists || []);
     if (dcGenreRes && Array.isArray(dcGenreRes.releases)) {
       dcGenreRes.releases.forEach(rel => {
         if (rel.label && !/not on label/i.test(rel.label)) discoveredLabels.add(rel.label);
         if (rel.artist && !/various/i.test(rel.artist)) discoveredArtists.add(rel.artist);
-        addSimilar({
+        const cov = rel.coverImage || rel.thumb || '';
+        if (cov && rel.title) {
+          coverByTitleArtist.set(_normStr(rel.title), cov);
+        }
+        externalTracks.push({
           id: rel.id || `dc-genre-${Math.random()}`,
           discogsId: rel.discogsId || '',
           title: rel.title || 'Unknown',
@@ -1331,28 +1343,140 @@ export async function openRichGenreSheet(genreInput, contextInput = null) {
           label: rel.label || '',
           year: rel.year ? String(rel.year) : '',
           trackUrl: `resolve:${rel.artist || ''} ${rel.title || ''}`.trim(),
-          coverImage: rel.coverImage || rel.thumb || '',
-          thumb: rel.thumb || rel.coverImage || '',
+          coverImage: cov,
+          thumb: rel.thumb || cov,
           provider: 'discogs',
           type: rel.type || 'release',
         });
       });
     }
 
-    // Keep canonical reference tracks as well
-    (currentPayload.similarTracks || []).forEach(rt => addSimilar(rt));
+    if (typeof window !== 'undefined') {
+      const prevPool = window.__kyoyuGenreExternalPool[currentPayload.name.toLowerCase()] || [];
+      window.__kyoyuGenreExternalPool[currentPayload.name.toLowerCase()] = [...externalTracks, ...prevPool].slice(0, 30);
+    }
+
+    // Re-build 50% Essential Classics / 50% Deep Niche Cuts with external tracks & covers merged
+    const balanced5050 = select5050GenreTracks(node, externalTracks, refreshSeed).map(t => {
+      if (!t.coverImage && coverByTitleArtist.has(_normStr(t.title))) {
+        const c = coverByTitleArtist.get(_normStr(t.title));
+        return { ...t, coverImage: c, thumb: c };
+      }
+      return t;
+    });
 
     currentPayload = {
       ...currentPayload,
       pioneerArtists: Array.from(discoveredArtists).slice(0, 20),
       classicLabels: Array.from(discoveredLabels).slice(0, 20),
-      similarTracks: mergedTracks.slice(0, 18),
+      similarTracks: balanced5050,
     };
+
+    if (typeof window !== 'undefined') {
+      window.__kyoyuGenrePayloadCache[currentPayload.name.toLowerCase()] = currentPayload;
+    }
 
     openNativeGenreFast(currentPayload);
   } catch (err) {
     console.warn('[openRichGenreSheet] enrich error:', err);
   }
+}
+
+export function refreshGenreSheetTracks(genreNameInput) {
+  const gName = String(genreNameInput || (typeof window !== 'undefined' ? window.__kyoyuLastOpenedGenreName : '') || '').trim();
+  if (!gName) return;
+  const key = gName.toLowerCase();
+  if (typeof window !== 'undefined') {
+    window.__kyoyuGenreRefreshSeed = window.__kyoyuGenreRefreshSeed || {};
+    const nextSeed = (window.__kyoyuGenreRefreshSeed[key] || 0) + 1;
+    window.__kyoyuGenreRefreshSeed[key] = nextSeed;
+
+    const cachedPayload = window.__kyoyuGenrePayloadCache?.[key];
+    const cachedExt = window.__kyoyuGenreExternalPool?.[key] || [];
+    const node = resolveGenreNode(gName, { forSheet: true });
+    const nextTracks = select5050GenreTracks(node, cachedExt, nextSeed);
+
+    if (cachedPayload) {
+      const updated = {
+        ...cachedPayload,
+        similarTracks: nextTracks,
+      };
+      window.__kyoyuGenrePayloadCache[key] = updated;
+      openNativeGenreFast(updated);
+      return;
+    }
+    openRichGenreSheet(gName, null, nextSeed);
+  }
+}
+
+export function openNativeSceneFast(sceneObj) {
+  if (!sceneObj) return null;
+  const pastEvs = (Array.isArray(sceneObj.pastEvents) ? sceneObj.pastEvents : (Array.isArray(sceneObj.pastLandmarkEvents) ? sceneObj.pastLandmarkEvents : [])).map((ev, idx) => ({
+    id: `past-${idx}-${Date.now()}`,
+    title: String(ev.title || ''),
+    year: String(ev.year || ''),
+    details: String(ev.details || ev.description || ''),
+    description: String(ev.description || ev.details || ''),
+  }));
+
+  const safeScene = {
+    id: String(sceneObj.id || `scene-${Date.now()}`),
+    name: String(sceneObj.name || 'Iconic Club & Scene'),
+    category: String(sceneObj.category || sceneObj.entityType || 'Iconic Club & Scene'),
+    entityType: String(sceneObj.entityType || sceneObj.category || 'Iconic Club & Scene'),
+    location: String(sceneObj.location || ''),
+    address: sceneObj.address ? String(sceneObj.address) : null,
+    openedDate: String(sceneObj.openedDate || ''),
+    closedHistory: String(sceneObj.closedHistory || ''),
+    status: sceneObj.status ? String(sceneObj.status) : null,
+    capacity: sceneObj.capacity ? String(sceneObj.capacity) : null,
+    soundSystem: sceneObj.soundSystem ? String(sceneObj.soundSystem) : null,
+    description: String(sceneObj.description || sceneObj.definingHistory || ''),
+    definingHistory: String(sceneObj.definingHistory || sceneObj.description || ''),
+    politicalEthos: String(sceneObj.politicalEthos || sceneObj.politicalAndCulturalEthos || ''),
+    politicalAndCulturalEthos: String(sceneObj.politicalAndCulturalEthos || sceneObj.politicalEthos || ''),
+    strugglesAndFights: Array.isArray(sceneObj.strugglesAndFights)
+      ? sceneObj.strugglesAndFights.filter(Boolean).map(String)
+      : (sceneObj.fightsAndIssues ? [String(sceneObj.fightsAndIssues)] : []),
+    fightsAndIssues: String(sceneObj.fightsAndIssues || ''),
+    landmarkMoments: Array.isArray(sceneObj.landmarkMoments)
+      ? sceneObj.landmarkMoments.filter(Boolean).map(String)
+      : [],
+    genresPlayed: Array.isArray(sceneObj.genresPlayed) ? sceneObj.genresPlayed.filter(Boolean).map(String) : [],
+    keyActors: Array.isArray(sceneObj.keyActors) ? sceneObj.keyActors.filter(Boolean).map(String) : [],
+    associatedLabels: Array.isArray(sceneObj.associatedLabels) ? sceneObj.associatedLabels.filter(Boolean).map(String) : [],
+    upcomingEvents: (Array.isArray(sceneObj.upcomingEvents) ? sceneObj.upcomingEvents : []).map((ev, idx) => ({
+      id: `up-${idx}-${Date.now()}`,
+      title: String(ev.title || ''),
+      date: String(ev.date || ''),
+      lineup: String(ev.lineup || ''),
+    })),
+    pastEvents: pastEvs,
+    pastLandmarkEvents: pastEvs,
+  };
+
+  try {
+    window.webkit?.messageHandlers?.player?.postMessage({
+      cmd: 'open_native_scene',
+      scene: safeScene,
+    });
+  } catch (e) {
+    console.error('Failed to open native scene sheet', e);
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('kyoyu-open-web-scene', { detail: safeScene }));
+  } catch (e) {}
+  return safeScene;
+}
+
+export function openRichSceneSheet(sceneNameInput, contextInput = null) {
+  const rawName = typeof sceneNameInput === 'object' ? (sceneNameInput?.name || '') : String(sceneNameInput || '');
+  const cleanName = rawName.trim();
+  if (!cleanName) return;
+  const payload = buildInitialSceneSheetPayload(cleanName, {
+    genre: (contextInput && contextInput.genre) || (typeof window !== 'undefined' ? window.__kyoyuLastOpenedGenreName : '') || '',
+  });
+  return openNativeSceneFast(payload);
 }
 
 export async function playGenreTrack(trackItem) {
@@ -1363,8 +1487,6 @@ export async function playGenreTrack(trackItem) {
   const cover = obj.coverImage || obj.thumb || obj.cover || '';
   const trackUrl = obj.trackUrl || obj.url || '';
 
-  // If it's a Bandcamp album or Discogs release with a discogsId, we can play it immediately via playSaved
-  // OR if user tapped a track/reference cut, resolve and play via __kyoyuPlaySaved
   const playable = {
     id: obj.id || `genre-play-${Date.now()}`,
     title,
@@ -1391,6 +1513,8 @@ if (typeof window !== 'undefined') {
   window.__kyoyuOpenArtist = openRichArtistSheet;
   window.__kyoyuOpenLabel = openRichLabelSheet;
   window.__kyoyuOpenGenre = openRichGenreSheet;
+  window.__kyoyuRefreshGenreTracks = refreshGenreSheetTracks;
+  window.__kyoyuOpenScene = openRichSceneSheet;
   window.__kyoyuPlayGenreTrack = playGenreTrack;
   window.__kyoyuOpenReleaseFromSheet = openReleaseFromSheet;
 }

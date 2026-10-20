@@ -4,9 +4,9 @@ import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
 import { callStreaming, isStreamingProvider, onStreamingEvent } from '../../lib/streaming';
 import { classifyTrackGenre } from '../../lib/genreIntelligence';
-import { openRichGenreSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
+import { openRichGenreSheet, refreshGenreSheetTracks, openRichSceneSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
-         Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X } from 'lucide-react';
+         Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X, RefreshCw } from 'lucide-react';
 import './Player.css';
 
 function fmt(s) {
@@ -455,17 +455,159 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   );
 }
 
-/* ── Web Genre Sheet Modal (Musicmap Discovery Panel on Web) ── */
+/* ── Web Genre & Scene Sheet Modal (Musicmap Discovery Panel on Web) ── */
 function WebGenreSheetModal() {
   const [genre, setGenre] = useState(null);
+  const [scene, setScene] = useState(null);
 
   useEffect(() => {
-    const onOpen = (e) => {
-      if (e.detail) setGenre(e.detail);
+    const onOpenGenre = (e) => {
+      if (e.detail) {
+        setScene(null);
+        setGenre(e.detail);
+      }
     };
-    window.addEventListener('kyoyu-open-web-genre', onOpen);
-    return () => window.removeEventListener('kyoyu-open-web-genre', onOpen);
+    const onOpenScene = (e) => {
+      if (e.detail) {
+        setGenre(null);
+        setScene(e.detail);
+      }
+    };
+    window.addEventListener('kyoyu-open-web-genre', onOpenGenre);
+    window.addEventListener('kyoyu-open-web-scene', onOpenScene);
+    return () => {
+      window.removeEventListener('kyoyu-open-web-genre', onOpenGenre);
+      window.removeEventListener('kyoyu-open-web-scene', onOpenScene);
+    };
   }, []);
+
+  if (scene) {
+    return (
+      <div className="wgs-backdrop" onClick={() => setScene(null)}>
+        <div className="wgs-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="wgs-handle-wrap" onClick={() => setScene(null)}>
+            <div className="wgs-handle" />
+          </div>
+          <button className="wgs-close" onClick={() => setScene(null)} aria-label="Close">
+            <X size={18} />
+          </button>
+          <div className="wgs-scroll">
+            <div className="wgs-header">
+              <div className="wgs-badges">
+                {scene.category && <span className="wgs-super-badge">{scene.category.toUpperCase()}</span>}
+                {scene.openedDate && <span className="wgs-origin-badge">Opened: {scene.openedDate}</span>}
+              </div>
+              <h2 className="wgs-title">{scene.name}</h2>
+              {scene.location && (
+                <div className="wgs-aliases">📍 {scene.location}{scene.address ? ` · ${scene.address}` : ''}</div>
+              )}
+              {scene.status && (
+                <div className="wgs-traits-bar"><span>Status: {scene.status}</span></div>
+              )}
+            </div>
+
+            {scene.description && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">HISTORY & CULTURAL LEGACY</div>
+                <p className="wgs-desc">{scene.description}</p>
+              </div>
+            )}
+
+            {scene.closedHistory && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">CLOSURES, RELOCATIONS & TURNING POINTS</div>
+                <p className="wgs-desc">{scene.closedHistory}</p>
+              </div>
+            )}
+
+            {scene.politicalEthos && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">POLITICAL ETHOS, VALUES & SOCIAL CONTEXT</div>
+                <p className="wgs-desc">{scene.politicalEthos}</p>
+              </div>
+            )}
+
+            {scene.strugglesAndFights?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">FIGHTS WITH THE CITY, STATE & STRUGGLES TO STAY OPEN</div>
+                {scene.strugglesAndFights.map((f, i) => (
+                  <p key={i} className="wgs-desc" style={{ marginBottom: 8 }}>• {f}</p>
+                ))}
+              </div>
+            )}
+
+            {scene.landmarkMoments?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">DEFINING MOMENTS & HISTORIC NIGHTS</div>
+                {scene.landmarkMoments.map((m, i) => (
+                  <p key={i} className="wgs-desc" style={{ marginBottom: 8 }}>• {m}</p>
+                ))}
+              </div>
+            )}
+
+            {scene.genresPlayed?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">GENRES PLAYED & FORGED HERE</div>
+                <div className="wgs-chip-list">
+                  {scene.genresPlayed.map((g) => (
+                    <button key={g} className="wgs-genre-link" onClick={() => openRichGenreSheet(g)}>{g}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {scene.keyActors?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">KEY ACTORS, RESIDENTS & FOUNDERS</div>
+                <div className="wgs-chip-list">
+                  {scene.keyActors.map((a) => (
+                    <button
+                      key={a}
+                      className="wgs-entity-chip"
+                      onClick={() => {
+                        setScene(null);
+                        openRichArtistSheet(a.split('(')[0].trim());
+                      }}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {scene.upcomingEvents?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">UPCOMING EVENTS & PROGRAMMING</div>
+                {scene.upcomingEvents.map((ev, i) => (
+                  <div key={i} className="wgs-track-row" style={{ cursor: 'default' }}>
+                    <div className="wgs-track-info">
+                      <div className="wgs-track-title">{ev.title} · {ev.date}</div>
+                      <div className="wgs-track-sub">{ev.lineup}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {scene.pastEvents?.length > 0 && (
+              <div className="wgs-section">
+                <div className="wgs-section-title">HISTORIC & LANDMARK PAST EVENTS</div>
+                {scene.pastEvents.map((pev, i) => (
+                  <div key={i} className="wgs-track-row" style={{ cursor: 'default' }}>
+                    <div className="wgs-track-info">
+                      <div className="wgs-track-title">{pev.title} ({pev.year})</div>
+                      <div className="wgs-track-sub">{pev.details}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!genre) return null;
 
@@ -498,8 +640,8 @@ function WebGenreSheetModal() {
                   × {genre.secondarySuperGenre.toUpperCase()}
                 </span>
               )}
-              {genre.originDecade && (
-                <span className="wgs-origin-badge">{genre.originDecade}</span>
+              {(genre.originYear || genre.originDecade) && (
+                <span className="wgs-origin-badge">{genre.originYear || genre.originDecade}</span>
               )}
             </div>
             <h2 className="wgs-title">{genre.name}</h2>
@@ -540,7 +682,7 @@ function WebGenreSheetModal() {
           )}
 
           {/* Genealogy / Musicmap Graph */}
-          {(genre.parentGenres?.length > 0 || genre.adjacentGenres?.length > 0 || genre.subgenres?.length > 0) && (
+          {(genre.parentGenres?.length > 0 || genre.adjacentGenres?.length > 0 || genre.subgenres?.length > 0 || genre.backlashAgainst?.length > 0) && (
             <div className="wgs-section">
               <div className="wgs-section-title">GENEALOGY & CONNECTIONS</div>
               {genre.parentGenres?.length > 0 && (
@@ -579,13 +721,38 @@ function WebGenreSheetModal() {
                   </div>
                 </div>
               )}
+              {genre.backlashAgainst?.length > 0 && (
+                <div className="wgs-graph-group">
+                  <span className="wgs-graph-label">Counter-Current / Backlash To</span>
+                  <div className="wgs-chip-list">
+                    {genre.backlashAgainst.map((g) => (
+                      <button key={g} className="wgs-genre-link" onClick={() => openRichGenreSheet(g)}>
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Similar Titles in the Same Genre */}
+          {/* Similar Titles in the Same Genre (50% Classics / 50% Deep Cuts + Refresh) */}
           {genre.similarTracks?.length > 0 && (
             <div className="wgs-section">
-              <div className="wgs-section-title">SIMILAR TITLES IN {genre.name.toUpperCase()}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div>
+                  <div className="wgs-section-title" style={{ marginBottom: 2 }}>SIMILAR TITLES IN {genre.name.toUpperCase()}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.48)' }}>50% Essential Classics · 50% Deep Niche Cuts</div>
+                </div>
+                <button
+                  className="wgs-genre-link"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  onClick={() => refreshGenreSheetTracks(genre.name)}
+                >
+                  <RefreshCw size={12} />
+                  <span>Refresh</span>
+                </button>
+              </div>
               <div className="wgs-tracks-list">
                 {genre.similarTracks.slice(0, 14).map((t) => (
                   <div
@@ -593,8 +760,8 @@ function WebGenreSheetModal() {
                     className="wgs-track-row"
                     onClick={() => playGenreTrack(t)}
                   >
-                    {t.cover ? (
-                      <img src={t.cover} className="wgs-track-art" alt="" />
+                    {(t.coverImage || t.thumb || t.cover) ? (
+                      <img src={t.coverImage || t.thumb || t.cover} className="wgs-track-art" alt="" />
                     ) : (
                       <div className="wgs-track-art wgs-track-art--ph"><Music2 size={16} /></div>
                     )}
@@ -604,7 +771,7 @@ function WebGenreSheetModal() {
                         {t.artist}{t.label ? ` · ${t.label}` : ''}{t.year ? ` (${t.year})` : ''}
                       </div>
                     </div>
-                    <Play size={15} className="wgs-track-play" />
+                    <Play size={18} fill="currentColor" className="wgs-track-play" />
                   </div>
                 ))}
               </div>
@@ -656,13 +823,19 @@ function WebGenreSheetModal() {
             </div>
           )}
 
-          {/* Club / Festival / Scene Contexts */}
+          {/* Club / Festival / Scene Contexts — Tappable to open Scene Sheet */}
           {genre.eventContexts?.length > 0 && (
             <div className="wgs-section">
               <div className="wgs-section-title">ICONIC CLUBS, FESTIVALS & SCENES</div>
               <div className="wgs-chip-list">
                 {genre.eventContexts.map((ev) => (
-                  <span key={ev} className="wgs-trait-pill">{ev}</span>
+                  <button
+                    key={ev}
+                    className="wgs-entity-chip"
+                    onClick={() => openRichSceneSheet(ev)}
+                  >
+                    {ev}
+                  </button>
                 ))}
               </div>
             </div>

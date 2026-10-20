@@ -5,7 +5,8 @@ import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs
 import { fetchAccountLibrary, isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
-import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast, openRichArtistSheet, openRichLabelSheet, openReleaseFromSheet } from '../components/ui/AlbumSheet';
+import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast, openRichArtistSheet, openRichLabelSheet, openRichGenreSheet, playGenreTrack, openReleaseFromSheet } from '../components/ui/AlbumSheet';
+import { matchGenreSearchQuery } from '../lib/genreIntelligence';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -462,16 +463,53 @@ export default function Search() {
     };
 
     debounceRef.current = setTimeout(() => {
-      unifiedSearch(q)
-        .then(({ nativeTracks, external, pagination, failed }) => {
+      const gMatch = matchGenreSearchQuery(q);
+      // When searching a broad single-word genre (like "house" or "techno"), contextualize provider query
+      // so streaming providers return genuine tracks/albums of that genre rather than pop songs with that word in the title
+      const effectiveProviderQuery = (gMatch && /^(house|techno|dub|bass|trance|electro|ambient|funk|soul|disco|rock|indie|jungle|grime|dubstep|breakbeat|downtempo)$/i.test(q))
+        ? `${gMatch.primaryGenre.name} ${gMatch.curatedLabels?.[0] || 'classic'}`.trim()
+        : q;
+
+      const genreExplorePromise = gMatch
+        ? fetch('/api/discogs-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'genre-explore',
+              genre: gMatch.primaryGenre.name.split(/[\/&]/)[0].trim(),
+              artist: gMatch.curatedArtists?.[0] || '',
+            }),
+          }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+        : Promise.resolve(null);
+
+      Promise.all([unifiedSearch(effectiveProviderQuery), genreExplorePromise])
+        .then(([{ nativeTracks, external, pagination, failed }, genreExploreData]) => {
           if (ignore) return;
+          const mergedExternal = { ...external };
+          if (genreExploreData && Array.isArray(genreExploreData.similarTracks) && genreExploreData.similarTracks.length > 0) {
+            const extraReleases = genreExploreData.similarTracks.map((t, idx) => ({
+              id: t.id || `dc-gsearch-rel-${idx}`,
+              discogsId: t.discogsId || '',
+              title: t.title || 'Unknown',
+              releaseName: t.title || 'Unknown',
+              artistName: t.artist || '',
+              year: t.year || '',
+              label: t.label || '',
+              coverImage: t.coverImage || t.thumb || '',
+              thumb: t.thumb || t.coverImage || '',
+              entityType: 'release',
+              provider: 'discogs',
+              _isGenreMatched: true,
+            }));
+            mergedExternal.releases = [...extraReleases, ...(mergedExternal.releases || [])];
+          }
           setResults(nativeTracks);
-          setExternalResults(external);
+          setExternalResults(mergedExternal);
           setVisibleCount(10);
           setPaginationCursors(pagination || { youtube: {}, soundcloud: {} });
           if (failed?.length) {
             console.warn('[Search] retrying providers that failed:', failed);
-            retryMissing(failed, { nativeTracks, external, pagination });
+            retryMissing(failed, { nativeTracks, external: mergedExternal, pagination });
           }
         })
         .catch(() => {
@@ -750,7 +788,62 @@ export default function Search() {
     return false;
   };
 
+  const matchedGenreSearch = !isQueryEmpty ? matchGenreSearchQuery(query) : null;
+  const fallbackGenreProvider = activeProvider === 'all' ? 'discogs' : activeProvider.split(',')[0];
+
   const allExternal = [
+    ...(matchedGenreSearch ? [
+      // Curated 50/50 Classic & Deep Cut Tracks for this genre
+      ...(matchedGenreSearch.curatedTracks || []).map((t, idx) => ({
+        id: `genre-curated-track-${matchedGenreSearch.primaryGenre.id}-${idx}`,
+        title: t.title,
+        artistName: t.artist,
+        year: t.year || '',
+        label: t.label || '',
+        artworkUrl: t.coverImage || t.thumb || '',
+        coverImage: t.coverImage || t.thumb || '',
+        url: t.trackUrl || t.url || `resolve:${t.artist || ''} ${t.title || ''}`.trim(),
+        trackUrl: t.trackUrl || t.url || `resolve:${t.artist || ''} ${t.title || ''}`.trim(),
+        entityType: 'track',
+        provider: fallbackGenreProvider,
+        _isGenreCuratedTrack: true,
+        _isGenreMatched: true,
+      })),
+      // Curated Albums / Releases for this genre
+      ...(matchedGenreSearch.curatedTracks || []).slice(0, 8).map((t, idx) => ({
+        id: `genre-curated-rel-${matchedGenreSearch.primaryGenre.id}-${idx}`,
+        title: t.title,
+        releaseName: t.title,
+        artistName: t.artist,
+        year: t.year || '',
+        label: t.label || '',
+        artworkUrl: t.coverImage || t.thumb || '',
+        coverImage: t.coverImage || t.thumb || '',
+        entityType: 'release',
+        provider: fallbackGenreProvider,
+        _isGenreMatched: true,
+      })),
+      // Pioneer & Key Artists for this genre
+      ...(matchedGenreSearch.curatedArtists || []).map((artistName, idx) => ({
+        id: `genre-curated-artist-${matchedGenreSearch.primaryGenre.id}-${idx}`,
+        title: artistName,
+        name: artistName,
+        artistName: `${matchedGenreSearch.primaryGenre.name} · Pioneer Artist`,
+        entityType: 'artist',
+        provider: fallbackGenreProvider,
+        _isGenreMatched: true,
+      })),
+      // Classic & Defining Labels for this genre
+      ...(matchedGenreSearch.curatedLabels || []).map((labelName, idx) => ({
+        id: `genre-curated-label-${matchedGenreSearch.primaryGenre.id}-${idx}`,
+        title: labelName,
+        name: labelName,
+        artistName: `${matchedGenreSearch.primaryGenre.name} · Defining Label`,
+        entityType: 'label',
+        provider: fallbackGenreProvider,
+        _isGenreMatched: true,
+      })),
+    ] : []),
     ...(providerMatch('youtube') ? (externalResults.youtube || []).filter(yt => /^[\w-]{11}$/.test(yt.videoId || '') && yt.entityType !== 'playlist' && yt.entityType !== 'artist').map(yt => ({
       ...yt, artistName: yt.channelTitle || yt.artistName, entityType: 'track', provider: 'youtube',
     })) : []),
@@ -824,6 +917,13 @@ export default function Search() {
     return idx !== -1 ? (100 - idx * 10) : 0; // Higher is better
   };
 
+  const genreKnownArtistsNorm = new Set(
+    (matchedGenreSearch?.curatedArtists || []).map(a => _normEntityName(a.replace(/\s*\(.*?\)\s*/g, '')))
+  );
+  const genreKnownLabelsNorm = new Set(
+    (matchedGenreSearch?.curatedLabels || []).map(l => _normEntityName(l.replace(/\s*\(.*?\)\s*/g, '')))
+  );
+
   const orderedAll = (() => {
     // Score all results strictly using searchRanker, plus our dynamic provider priority
     let scored = allExternal.map(r => {
@@ -831,11 +931,23 @@ export default function Search() {
       const qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');
       const tNorm = (r.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const aNorm = (r.artistName || r.channelTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const entityNameNorm = _normEntityName(r.title || '');
+      const artistEntityNorm = _normEntityName(r.artistName || r.channelTitle || '');
       
       let textScore = 0;
-      if (tNorm === qNorm || aNorm === qNorm) textScore += 1000;
-      else if (tNorm.includes(qNorm) || aNorm.includes(qNorm)) textScore += 500;
-      else {
+      if (r._isGenreMatched) {
+        textScore += 3200;
+      } else if (matchedGenreSearch && (
+        genreKnownArtistsNorm.has(entityNameNorm) ||
+        genreKnownArtistsNorm.has(artistEntityNorm) ||
+        genreKnownLabelsNorm.has(entityNameNorm)
+      )) {
+        textScore += 2800;
+      } else if (tNorm === qNorm || aNorm === qNorm) {
+        textScore += matchedGenreSearch ? 400 : 1000;
+      } else if (tNorm.includes(qNorm) || aNorm.includes(qNorm)) {
+        textScore += matchedGenreSearch ? 300 : 500;
+      } else {
         const words = query.toLowerCase().split(' ').filter(Boolean);
         const matches = words.filter(w => (r.title || '').toLowerCase().includes(w) || (r.artistName || '').toLowerCase().includes(w));
         textScore += (matches.length / (words.length || 1)) * 100;
@@ -859,9 +971,10 @@ export default function Search() {
       const existing = seenMap.get(key);
       if (existing) {
         if (!existing.discogsId && r.discogsId) existing.discogsId = r.discogsId;
-        if (!existing.trackUrl && r.trackUrl) existing.trackUrl = r.trackUrl;
+        if (!existing.trackUrl && r.trackUrl && !String(r.trackUrl).startsWith('resolve:')) existing.trackUrl = r.trackUrl;
         if (!existing.artworkUrl && (r.artworkUrl || r.coverImage || r.thumb)) {
           existing.artworkUrl = r.artworkUrl || r.coverImage || r.thumb;
+          existing.coverImage = existing.artworkUrl;
         }
         if (!existing.location && r.location) existing.location = r.location;
         continue;
@@ -879,8 +992,8 @@ export default function Search() {
       return categoryOnly.slice(0, 33);
     } else {
       // Filter == 'all': include top artists, top labels, top albums, and top titles
-      const artists = scored.filter(i => categoryOf(i) === 'artists').slice(0, 3);
-      const extLabels = scored.filter(i => categoryOf(i) === 'labels').slice(0, 3);
+      const artists = scored.filter(i => categoryOf(i) === 'artists').slice(0, 4);
+      const extLabels = scored.filter(i => categoryOf(i) === 'labels').slice(0, 4);
       const albums = scored.filter(i => categoryOf(i) === 'albums').slice(0, 10);
       const titles = scored.filter(i => categoryOf(i) === 'titles').slice(0, 20);
       return [...artists, ...extLabels, ...albums, ...titles].sort((a, b) => b._rawScore - a._rawScore);
@@ -1398,6 +1511,121 @@ export default function Search() {
         </div>
       )}
 
+      {/* Pinned Genre Results (1 Primary Genre + 4 Related Genres) — Always remains on top while a genre is in the search bar */}
+      {!isQueryEmpty && matchedGenreSearch && (
+        <div className="search-results-list" style={{ marginBottom: 18 }}>
+          <div className="search-section">
+            <div className="search-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Genres</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(251, 127, 51, 0.85)', textTransform: 'none', letterSpacing: 0 }}>
+                Tap any genre to open its intelligence sheet
+              </span>
+            </div>
+
+            {/* #1 Primary Matched Genre Result */}
+            {(() => {
+              const g = matchedGenreSearch.primaryGenre;
+              return (
+                <div
+                  key={`genre-primary-${g.id}`}
+                  className="search-result-row"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'rgba(251, 127, 51, 0.09)',
+                    border: '1px solid rgba(251, 127, 51, 0.28)',
+                    borderRadius: 12,
+                    padding: '8px 10px',
+                    marginBottom: 8,
+                  }}
+                  onClick={() => openRichGenreSheet(g.name)}
+                >
+                  <div
+                    className="search-result-art"
+                    style={{
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, rgba(251, 127, 51, 0.32), rgba(251, 127, 51, 0.12))',
+                      border: '1px solid rgba(251, 127, 51, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Disc size={22} color="#fb7f33" />
+                  </div>
+                  <div className="search-result-info">
+                    <span className="search-result-title" style={{ color: '#fb7f33', fontWeight: 700 }}>
+                      {g.name}
+                    </span>
+                    <span className="search-result-artist">
+                      Genre · {g.superGenre || 'Electronic'}
+                      {g.originYear ? ` · ${g.originYear}` : ''}
+                      {g.bpmRange ? ` · ${g.bpmRange}` : ''}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 6, flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#fb7f33',
+                      background: 'rgba(251, 127, 51, 0.16)',
+                      padding: '4px 9px',
+                      borderRadius: 999,
+                    }}>
+                      Genre Sheet
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* #2–#5: 4 Related Genre Results directly underneath */}
+            {(matchedGenreSearch.relatedGenres || []).slice(0, 4).map((relG) => (
+              <div
+                key={`genre-rel-${relG.id}`}
+                className="search-result-row"
+                style={{ cursor: 'pointer' }}
+                onClick={() => openRichGenreSheet(relG.name)}
+              >
+                <div
+                  className="search-result-art"
+                  style={{
+                    borderRadius: 10,
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Disc size={19} color="rgba(251, 127, 51, 0.8)" />
+                </div>
+                <div className="search-result-info">
+                  <span className="search-result-title">{relG.name}</span>
+                  <span className="search-result-artist">
+                    Related Genre · {relG.superGenre || 'Electronic'}
+                    {relG.bpmRange ? ` · ${relG.bpmRange}` : relG.originYear ? ` · ${relG.originYear}` : ''}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', paddingRight: 10, flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: 'var(--text-secondary)',
+                    background: 'rgba(255,255,255,0.06)',
+                    padding: '3px 8px',
+                    borderRadius: 999,
+                  }}>
+                    Related
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* First Search Results Category: Library (1–10 matching items already in Library) */}
       {!isQueryEmpty && hasLibraryMatches && (
         <div className="search-results-list" style={{ marginBottom: 18 }}>
@@ -1477,7 +1705,7 @@ export default function Search() {
       )}
 
       {/* Loading state */}
-      {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && (
+      {(loading || providerRetrying) && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && !matchedGenreSearch && (
         <div className="search-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
           <Loader2 className="spin-icon" size={28} color="var(--text-muted)" />
           <span>{providerRetrying ? 'Loading results...' : 'Searching...'}</span>
@@ -1485,7 +1713,7 @@ export default function Search() {
       )}
 
       {/* No results */}
-      {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && (
+      {!loading && !providerRetrying && query.length > 0 && !hasResults && !hasExternal && !hasLibraryMatches && !matchedGenreSearch && (
         <div className="search-empty">No results found</div>
       )}
 
@@ -1722,6 +1950,17 @@ export default function Search() {
                         tracks: tracks,
                       });
                     } catch (e) { /* ignore */ }
+                  } else if (item._isGenreCuratedTrack || String(item.url || '').startsWith('resolve:')) {
+                    playGenreTrack({
+                      id: item.id,
+                      title: item.title,
+                      artist: item.artistName,
+                      label: item.label,
+                      year: item.year,
+                      trackUrl: item.trackUrl || item.url,
+                      coverImage: item.artworkUrl || item.coverImage,
+                    });
+                    window.__kyoyuPlayerCmd?.('expand');
                   } else if (!isArtist && !isLabel) {
                     handleSearchPlay({
                       id: item.id || `${item.provider}-${item.trackId || item.videoId}`,

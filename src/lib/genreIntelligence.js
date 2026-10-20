@@ -1421,15 +1421,962 @@ const LABEL_GENRE_GRAPH = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. ONTOLOGY RESOLVER & DYNAMIC SYNTHESIZER
+// 2B. EXTENDED CLASSIC TRACKS (50%) & DEEP NICHE CUTS (50%) POOLS PER GENRE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EXTENDED_CLASSIC_TRACKS = {
+  'detroit-techno': [
+    { title: 'Sharevari', artist: 'A Number Of Names', year: '1981', label: 'Capriccio' },
+    { title: 'Alleys of Your Mind', artist: 'Cybotron', year: '1981', label: 'Deep Space' },
+    { title: 'Big Fun', artist: 'Inner City', year: '1988', label: 'KMS' },
+    { title: 'Nude Photo', artist: 'Rhythim Is Rhythim', year: '1987', label: 'Transmat' },
+    { title: 'Minimal Nation', artist: 'Robert Hood', year: '1994', label: 'Axis' },
+    { title: 'Jupiter Jazz', artist: 'Underground Resistance', year: '1992', label: 'Underground Resistance' },
+    { title: 'Wavejumper', artist: 'Drexciya', year: '1995', label: 'Underground Resistance' },
+    { title: 'Bug in the Bassbin', artist: 'Innerzone Orchestra', year: '1992', label: 'Planet E' },
+  ],
+  'dub-techno': [
+    { title: 'Quadrant Dub I', artist: 'Basic Channel', year: '1994', label: 'Basic Channel' },
+    { title: 'Domina (Maurizio Mix)', artist: 'Maurizio', year: '1993', label: 'Maurizio' },
+    { title: 'Starlight', artist: 'Model 500', year: '1995', label: 'R&S / Echocord' },
+    { title: 'Liumin', artist: 'DeepChord presents Echospace', year: '2010', label: 'Modern Love' },
+    { title: 'Submerged', artist: 'Fluxion', year: '1999', label: 'Chain Reaction' },
+    { title: 'King in My Empire', artist: 'Rhythm & Sound w/ Cornell Campbell', year: '2001', label: 'Burial Mix' },
+    { title: 'Rhythm', artist: 'Tikiman & Basic Channel', year: '1996', label: 'Main Street' },
+  ],
+  'hypnotic-techno': [
+    { title: 'Subzero', artist: 'Ben Klock', year: '2009', label: 'Ostgut Ton' },
+    { title: 'the bells (Jeff Mills)', artist: 'Jeff Mills', year: '1996', label: 'Purpose Maker' },
+    { title: 'Hunting Ground', artist: 'Sandwell District', year: '2010', label: 'Sandwell District' },
+    { title: 'Phobos', artist: 'Speedy J & Chris Liebing', year: '2002', label: 'CLR' },
+    { title: 'Prowler', artist: 'Surgeon', year: '1997', label: 'Downwards' },
+    { title: 'Anaconda', artist: 'Oscar Mulero', year: '2004', label: 'Warm Up' },
+    { title: 'spastik', artist: 'Plastikman', year: '1993', label: 'Plus 8' },
+  ],
+  'minimal-techno': [
+    { title: 'Spastik', artist: 'Plastikman', year: '1993', label: 'Plus 8' },
+    { title: 'Tessio', artist: 'Luomo', year: '2000', label: 'Force Tracks' },
+    { title: 'Decks, EFX & 909', artist: 'Richie Hawtin', year: '1999', label: 'Minus' },
+    { title: 'Silbersee', artist: 'Wolfgang Voigt', year: '1997', label: 'Profan' },
+    { title: 'Alcachofa', artist: 'Ricardo Villalobos', year: '2003', label: 'Playhouse' },
+    { title: 'Dancer', artist: 'Robert Hood', year: '1994', label: 'M-Plant' },
+  ],
+  'industrial-techno': [
+    { title: 'Why They Hide Their Bodies Under My Garage?', artist: 'Blawan', year: '2012', label: 'Hinge Finger' },
+    { title: 'Speak To Me', artist: 'Regis', year: '1996', label: 'Downwards' },
+    { title: 'Destroy All Monsters', artist: 'Perc', year: '2014', label: 'Perc Trax' },
+    { title: 'Join in the Chant', artist: 'Nitzer Ebb', year: '1987', label: 'Mute' },
+    { title: 'Headhunter', artist: 'Front 242', year: '1988', label: 'RRE' },
+  ],
+  'acid-techno': [
+    { title: 'Acperience 1', artist: 'Hardfloor', year: '1992', label: 'Harthouse' },
+    { title: 'Energy Flash', artist: 'Joey Beltram', year: '1990', label: 'R&S Records' },
+    { title: 'One Night in Hackney', artist: 'Dave The Drummer & Chris Liberator', year: '2000', label: 'Stay Up Forever' },
+    { title: 'Acid Eiffel', artist: 'Choice (Laurent Garnier)', year: '1993', label: 'Fnac Music' },
+    { title: '101', artist: 'Aphex Twin', year: '1992', label: 'R&S' },
+  ],
+  'ambient-techno': [
+    { title: 'Xtal', artist: 'Aphex Twin', year: '1992', label: 'Apollo / R&S' },
+    { title: 'Papua New Guinea', artist: 'The Future Sound of London', year: '1991', label: 'Jumpin\' & Pumpin\'' },
+    { title: 'Halcyon + On + On', artist: 'Orbital', year: '1992', label: 'Internal' },
+    { title: '28 Gun Bad Boy', artist: 'Autechre', year: '1993', label: 'Warp' },
+    { title: 'clear', artist: 'B12', year: '1993', label: 'Warp' },
+  ],
+  'chicago-house': [
+    { title: 'Your Love', artist: 'Frankie Knuckles & Jamie Principle', year: '1987', label: 'Trax Records' },
+    { title: 'Move Your Body', artist: 'Marshall Jefferson', year: '1986', label: 'Trax Records' },
+    { title: 'On and On', artist: 'Jesse Saunders', year: '1984', label: 'Jes Say' },
+    { title: 'French Kiss', artist: 'Lil Louis', year: '1989', label: 'Diamond Records' },
+    { title: 'Promised Land', artist: 'Joe Smooth', year: '1987', label: 'DJ International' },
+    { title: 'Music Sounds Better With You', artist: 'Stardust', year: '1998', label: 'Roulé' },
+  ],
+  'deep-house': [
+    { title: 'Can You Feel It', artist: 'Mr. Fingers (Larry Heard)', year: '1986', label: 'Trax Records' },
+    { title: 'Mystery of Love', artist: 'Fingers Inc.', year: '1985', label: 'DJ International' },
+    { title: 'Shades of Jae', artist: 'Moodymann', year: '1999', label: 'KDJ' },
+    { title: 'Show Me Love', artist: 'Robin S.', year: '1993', label: 'Big Beat' },
+    { title: 'Brighter Days (Underground Goodies Mix)', artist: 'Cajmere ft. Dajae', year: '1992', label: 'Cajual' },
+    { title: 'Gypsy Woman (She\'s Homeless)', artist: 'Crystal Waters', year: '1991', label: 'Mercury' },
+    { title: 'Rose Rouge', artist: 'St Germain', year: '2000', label: 'Blue Note' },
+  ],
+  'acid-house': [
+    { title: 'Acid Tracks', artist: 'Phuture', year: '1987', label: 'Trax Records' },
+    { title: 'Voodoo Ray', artist: 'A Guy Called Gerald', year: '1988', label: 'Rham!' },
+    { title: 'Washing Machine', artist: 'Mr. Fingers', year: '1986', label: 'Trax' },
+    { title: 'Stakker Humanoid', artist: 'Humanoid', year: '1988', label: 'Westside' },
+    { title: 'Pacific State', artist: '808 State', year: '1989', label: 'ZTT' },
+  ],
+  'tech-house': [
+    { title: 'Bells of Brighton', artist: 'Mr. C', year: '1996', label: 'End Recordings' },
+    { title: 'Cola', artist: 'CamelPhat & Elderbrook', year: '2017', label: 'Defected' },
+    { title: 'plastic dreams', artist: 'Jaydee', year: '1992', label: 'R&S' },
+    { title: 'Born Slippy', artist: 'Underworld', year: '1995', label: 'Junior Boy\'s Own' },
+  ],
+  'electro': [
+    { title: 'Clear', artist: 'Cybotron', year: '1983', label: 'Fantasy' },
+    { title: 'Planet Rock', artist: 'Afrika Bambaataa & The Soul Sonic Force', year: '1982', label: 'Tommy Boy' },
+    { title: 'Numbers', artist: 'Kraftwerk', year: '1981', label: 'Kling Klang' },
+    { title: 'Andrea Parker — Melodious Thunk', artist: 'Andrea Parker', year: '1995', label: 'Mo\' Wax' },
+    { title: 'Space Invaders Are Smoking Grass', artist: 'I-F', year: '1997', label: 'Interdimensional Transmissions' },
+  ],
+  'jungle': [
+    { title: 'Original Nuttah', artist: 'UK Apachi & Shy FX', year: '1994', label: 'SOUR' },
+    { title: 'Inner City Life', artist: 'Goldie', year: '1994', label: 'Metalheadz' },
+    { title: 'Valley of the Shadows', artist: 'Origin Unknown', year: '1993', label: 'RAM Records' },
+    { title: 'Super Sharp Shooter', artist: 'DJ Zinc', year: '1995', label: 'Parousia' },
+    { title: 'Renegade Snares (Foul Play VIP)', artist: 'Omni Trio', year: '1993', label: 'Moving Shadow' },
+    { title: 'Atlantis (I Need You)', artist: 'LTJ Bukem', year: '1993', label: 'Good Looking' },
+  ],
+  'drum-n-bass': [
+    { title: 'Alien Girl', artist: 'Ed Rush, Optical & Fierce', year: '1998', label: 'Prototype' },
+    { title: 'LK ( Carolina Carol Bela )', artist: 'DJ Marky & XRS', year: '2002', label: 'V Recordings' },
+    { title: 'Mr. Majestic', artist: 'Calibre & High Contrast', year: '2004', label: 'Signature' },
+    { title: 'The Nine', artist: 'Bad Company UK', year: '1998', label: 'BC Recordings' },
+    { title: 'Shadow Boxing', artist: 'Nasty Habits (Doc Scott)', year: '1996', label: '31 Records' },
+    { title: 'Brown Paper Bag', artist: 'Roni Size / Reprazent', year: '1997', label: 'Talkin\' Loud' },
+  ],
+  'uk-garage-2-step': [
+    { title: 'Sincere', artist: 'MJ Cole', year: '1998', label: 'Talkin\' Loud' },
+    { title: 'RipGroove', artist: 'Double 99', year: '1997', label: 'Satellite' },
+    { title: 'Flowers', artist: 'Sweet Female Attitude', year: '2000', label: 'Milkk' },
+    { title: 'Gabriel', artist: 'Roy Davis Jr. ft. Peven Everett', year: '1996', label: 'Large Music' },
+    { title: '21 Seconds', artist: 'So Solid Crew', year: '2001', label: 'Relentless' },
+  ],
+  'dubstep': [
+    { title: 'Anti-War Dub', artist: 'Digital Mystikz (Mala)', year: '2006', label: 'DMZ' },
+    { title: 'Midnight Request Line', artist: 'Skream', year: '2005', label: 'Tempa' },
+    { title: 'Archangel', artist: 'Burial', year: '2007', label: 'Hyperdub' },
+    { title: 'Night', artist: 'Benga & Coki', year: '2008', label: 'Tempa' },
+    { title: 'Horror Show', artist: 'Loefah', year: '2004', label: 'DMZ' },
+  ],
+  'footwork-juke': [
+    { title: 'Battle', artist: 'RP Boo', year: '2013', label: 'Planet Mu' },
+    { title: 'In Da Getto', artist: 'DJ Rashad & DJ Spinn', year: '2013', label: 'Hyperdub' },
+    { title: 'Work It', artist: 'DJ Clent', year: '2006', label: 'Dance Mania' },
+    { title: 'Burn That Kush', artist: 'DJ Manny', year: '2017', label: 'Teklife' },
+  ],
+  'uk-bass-leftfield-bass': [
+    { title: 'CMYK', artist: 'James Blake', year: '2010', label: 'R&S' },
+    { title: 'percussion lab', artist: 'Peverelist', year: '2009', label: 'Punch Drunk' },
+    { title: 'Drum Pan Sound', artist: 'Pangaea', year: '2012', label: 'Hessle Audio' },
+    { title: 'Subtextures', artist: 'Batu', year: '2018', label: 'Timedance' },
+  ],
+  'breakbeat': [
+    { title: 'Beat Dis', artist: 'Bomb The Bass', year: '1988', label: 'Mister-Ron' },
+    { title: 'Block Rockin\' Beats', artist: 'The Chemical Brothers', year: '1997', label: 'Virgin' },
+    { title: 'Smack My Bitch Up', artist: 'The Prodigy', year: '1997', label: 'XL Recordings' },
+    { title: 'Rez / Cowgirl', artist: 'Underworld', year: '1993', label: 'Junior Boy\'s Own' },
+  ],
+  'idm-braindance': [
+    { title: 'Windowlicker', artist: 'Aphex Twin', year: '1999', label: 'Warp' },
+    { title: 'Roygbiv', artist: 'Boards of Canada', year: '1998', label: 'Warp / Skam' },
+    { title: '4', artist: 'Aphex Twin', year: '1996', label: 'Warp' },
+    { title: 'Red Currant', artist: 'Squarepusher', year: '1997', label: 'Warp' },
+    { title: 'Flim', artist: 'Aphex Twin', year: '1997', label: 'Warp' },
+  ],
+  'ambient': [
+    { title: '1/1 (Music for Airports)', artist: 'Brian Eno', year: '1978', label: 'Polydor' },
+    { title: '#3 (Rhubarb)', artist: 'Aphex Twin', year: '1994', label: 'Warp' },
+    { title: 'Structures from Silence', artist: 'Steve Roach', year: '1984', label: 'Fortuna' },
+    { title: 'Through Hollow Lands', artist: 'Brian Eno', year: '1977', label: 'Island' },
+  ],
+  'downtempo': [
+    { title: 'Teardrop', artist: 'Massive Attack', year: '1998', label: 'Virgin' },
+    { title: 'Glory Box', artist: 'Portishead', year: '1994', label: 'Go! Beat' },
+    { title: 'La Femme d\'Argent', artist: 'Air', year: '1998', label: 'Source' },
+    { title: 'Lebanese Blonde', artist: 'Thievery Corporation', year: '1998', label: 'ESL Music' },
+  ],
+  'trance': [
+    { title: 'Cafe Del Mar', artist: 'Energy 52', year: '1993', label: 'Eye Q' },
+    { title: 'For An Angel', artist: 'Paul van Dyk', year: '1994', label: 'MFS' },
+    { title: 'Universal Nation', artist: 'Push', year: '1998', label: 'Bonzai' },
+    { title: 'Greece 2000', artist: 'Three Drives On A Vinyl', year: '1997', label: 'Massive Drive' },
+  ],
+  'dub': [
+    { title: 'King Tubby Meets Rockers Uptown', artist: 'Augustus Pablo & King Tubby', year: '1974', label: 'Yard Music' },
+    { title: 'Chase The Devil', artist: 'Max Romeo & The Upsetters', year: '1976', label: 'Island' },
+    { title: 'Declaration of Dub', artist: 'King Tubby', year: '1975', label: 'Clocktower' },
+    { title: 'Fistful of Dollars', artist: 'Scientist', year: '1981', label: 'Greensleeves' },
+  ],
+  'roots-reggae': [
+    { title: 'Police and Thieves', artist: 'Junior Murvin', year: '1976', label: 'Island' },
+    { title: 'Marcus Garvey', artist: 'Burning Spear', year: '1975', label: 'Island' },
+    { title: 'Two Sevens Clash', artist: 'Culture', year: '1977', label: 'Joe Gibbs' },
+    { title: 'Bam Bam', artist: 'Sister Nancy', year: '1982', label: 'Techniques' },
+  ],
+  'hip-hop-boom-bap': [
+    { title: 'Shook Ones (Part II)', artist: 'Mobb Deep', year: '1995', label: 'Loud' },
+    { title: 'N.Y. State of Mind', artist: 'Nas', year: '1994', label: 'Columbia' },
+    { title: 'C.R.E.A.M.', artist: 'Wu-Tang Clan', year: '1993', label: 'Loud' },
+    { title: 'Electric Relaxation', artist: 'A Tribe Called Quest', year: '1993', label: 'Jive' },
+  ],
+  'trap-cloud-rap-drill': [
+    { title: 'March Madness', artist: 'Future', year: '2015', label: 'Freebandz' },
+    { title: 'Welcome to the Party', artist: 'Pop Smoke', year: '2019', label: 'Victor Victor' },
+    { title: 'Ginseng Strip 2002', artist: 'Yung Lean', year: '2013', label: 'Sad Boys' },
+    { title: 'XO Tour Llif3', artist: 'Lil Uzi Vert', year: '2017', label: 'Generation Now' },
+  ],
+  'grime': [
+    { title: 'I Luv U', artist: 'Dizzee Rascal', year: '2003', label: 'XL Recordings' },
+    { title: 'Functions on the Low', artist: 'Ruff Sqwad (XTC)', year: '2004', label: 'White Label' },
+    { title: 'Shutdown', artist: 'Skepta', year: '2015', label: 'Boy Better Know' },
+    { title: 'Pulse X', artist: 'Youngstar', year: '2002', label: 'DDJs' },
+  ],
+  'jazz-spiritual-jazz-fusion': [
+    { title: 'So What', artist: 'Miles Davis', year: '1959', label: 'Columbia' },
+    { title: 'The Creator Has a Master Plan', artist: 'Pharoah Sanders', year: '1969', label: 'Impulse!' },
+    { title: 'Chameleon', artist: 'Herbie Hancock', year: '1973', label: 'Columbia' },
+    { title: 'Giant Steps', artist: 'John Coltrane', year: '1960', label: 'Atlantic' },
+  ],
+  'soul-funk-boogie': [
+    { title: 'What\'s Going On', artist: 'Marvin Gaye', year: '1971', label: 'Tamla / Motown' },
+    { title: 'Flash Light', artist: 'Parliament', year: '1977', label: 'Casablanca' },
+    { title: 'Never Too Much', artist: 'Luther Vandross', year: '1981', label: 'Epic' },
+    { title: 'Keep On Movin\'', artist: 'Soul II Soul', year: '1989', label: '10 Records' },
+  ],
+  'post-punk-coldwave-synth-pop': [
+    { title: 'Blue Monday', artist: 'New Order', year: '1983', label: 'Factory' },
+    { title: 'A Forest', artist: 'The Cure', year: '1980', label: 'Fiction' },
+    { title: 'Das Model', artist: 'Kraftwerk', year: '1978', label: 'Kling Klang' },
+    { title: 'Warm Leatherette', artist: 'The Normal', year: '1978', label: 'Mute' },
+  ],
+  'krautrock-kosmische': [
+    { title: 'Hallogallo', artist: 'NEU!', year: '1972', label: 'Brain' },
+    { title: 'Trans-Europe Express', artist: 'Kraftwerk', year: '1977', label: 'Kling Klang' },
+    { title: 'Phaedra', artist: 'Tangerine Dream', year: '1974', label: 'Virgin' },
+    { title: 'E2-E4', artist: 'Manuel Göttsching', year: '1984', label: 'Inteam' },
+  ],
+  'alternative-indie-shoegaze': [
+    { title: 'When You Sleep', artist: 'My Bloody Valentine', year: '1991', label: 'Creation' },
+    { title: 'Alison', artist: 'Slowdive', year: '1993', label: 'Creation' },
+    { title: 'Everything In Its Right Place', artist: 'Radiohead', year: '2000', label: 'Parlophone' },
+    { title: 'Disorder', artist: 'Joy Division', year: '1979', label: 'Factory' },
+  ],
+  'afrobeat-global-groove': [
+    { title: 'Water No Get Enemy', artist: 'Fela Kuti', year: '1975', label: 'Expensive' },
+    { title: 'Love & Death', artist: 'Ebo Taylor', year: '2010', label: 'Strut' },
+    { title: 'Wede Harer Guzo', artist: 'Hailu Mergia & Dahlak Band', year: '1978', label: 'Kaifa / Awesome Tapes' },
+    { title: 'Ayonha', artist: 'Hamid Al Shaeri', year: '1982', label: 'Slam / Habibi Funk' },
+  ],
+};
+
+const DEEP_NICHE_TRACKS = {
+  'detroit-techno': [
+    { title: 'Solitary', artist: 'Convextion', year: '2006', label: 'Down Low Music' },
+    { title: 'Beyond the Dance (Cult Mix)', artist: 'Rhythim Is Rhythim', year: '1989', label: 'Transmat' },
+    { title: 'The Theory', artist: '69 (Carl Craig)', year: '1991', label: 'Planet E' },
+    { title: 'Star Dancer', artist: 'Red Planet (The Martian)', year: '1993', label: 'Red Planet' },
+    { title: 'Vortex', artist: 'Kenny Larkin', year: '1994', label: 'Warp / Plus 8' },
+    { title: 'Hydro Theory', artist: 'Drexciya', year: '1999', label: 'Tresor' },
+    { title: 'Metropolis', artist: 'Jeff Mills', year: '2000', label: 'Tresor' },
+    { title: 'Untold', artist: ' Claude Young', year: '1995', label: 'Utensil' },
+    { title: 'Sonic Sunset', artist: 'Suburban Knight', year: '1990', label: 'Transmat' },
+    { title: 'Mind Rich', artist: 'Psyche (Carl Craig)', year: '1990', label: 'Transmat' },
+  ],
+  'dub-techno': [
+    { title: '2556', artist: 'Convextion', year: '2016', label: 'Mojuba' },
+    { title: 'Substrat', artist: 'Vainqueur', year: '1996', label: 'Chain Reaction' },
+    { title: 'Largo', artist: 'Fluxion', year: '1998', label: 'Chain Reaction' },
+    { title: 'Rican Beach', artist: 'Vladislav Delay', year: '2000', label: 'Chain Reaction' },
+    { title: 'Snowflake #2', artist: 'Yagya', year: '2009', label: 'Subwax Bcn' },
+    { title: 'Intrusion Dub', artist: 'Intrusion (cv313)', year: '2008', label: 'echospace [detroit]' },
+    { title: 'Untitled B1 (Styrax Leaves 05)', artist: 'Silent Servant', year: '2006', label: 'Styrax Leaves' },
+    { title: 'Gutter', artist: 'Prince of Denmark', year: '2013', label: 'Forum' },
+    { title: 'Cyan', artist: 'Monolake', year: '1996', label: 'Chain Reaction' },
+    { title: 'Echoes of Silence', artist: 'Quantec', year: '2008', label: 'Echocord' },
+  ],
+  'hypnotic-techno': [
+    { title: 'System', artist: 'Forest Drive West', year: '2018', label: 'Livity Sound' },
+    { title: 'Parallel Mains', artist: 'Forest Drive West', year: '2021', label: 'Rupture / Ilian Tape' },
+    { title: 'Spirals', artist: 'Luigi Tozzi', year: '2016', label: 'Hypnus Records' },
+    { title: 'K', artist: 'Donato Dozzy', year: '2013', label: 'Further Records' },
+    { title: 'Zemlya', artist: 'Abdulla Rashim', year: '2012', label: 'Abdulla Rashim Records' },
+    { title: '012', artist: 'Claudio PRC', year: '2012', label: 'Prologue' },
+    { title: 'Pentagon', artist: 'Rrose', year: '2013', label: 'Eaux' },
+    { title: 'Nautilus', artist: 'Cio D\'Or', year: '2009', label: 'Prologue' },
+    { title: 'Immolare', artist: 'Silent Servant', year: '2012', label: 'Hospital Productions' },
+    { title: 'Surgeon — Floorshow Pt. 1', artist: 'Surgeon', year: '2005', label: 'Counterbalance' },
+  ],
+  'minimal-techno': [
+    { title: 'Bells (000003)', artist: 'baby ford & the ifach collective', year: '2000', label: 'Ifach' },
+    { title: 'Picanha', artist: 'Perlon / Pantytec', year: '2002', label: 'Perlon' },
+    { title: 'Snap', artist: 'DBX (Daniel Bell)', year: '1994', label: 'Accelerate' },
+    { title: 'Point', artist: 'Rhadoo', year: '2011', label: '[a:rpia:r]' },
+    { title: 'My Black Sheep', artist: 'Len Faki', year: '2007', label: 'Podium' },
+    { title: 'Korn', artist: 'Studio 1 (Wolfgang Voigt)', year: '1996', label: 'Studio 1' },
+    { title: 'Mirage', artist: 'Petre Inspirescu', year: '2009', label: 'Yojik ConCon' },
+    { title: 'Minimal 4', artist: 'Thomas Brinkmann', year: '1998', label: 'Ernst' },
+  ],
+  'industrial-techno': [
+    { title: 'adolescence', artist: 'British Murder Boys', year: '2003', label: 'Downwards' },
+    { title: 'Bite', artist: 'Ancient Methods', year: '2007', label: 'Ancient Methods' },
+    { title: 'Vatican Shadow — Kneeling Soldiers', artist: 'Vatican Shadow', year: '2011', label: 'Hospital Productions' },
+    { title: 'In the Dark', artist: 'Paula Temple', year: '2014', label: 'Noise Manifesto' },
+    { title: 'Flesh & Bone', artist: 'Orphx', year: '2015', label: 'Sonic Groove' },
+    { title: 'Cold Witness', artist: 'Phase Fatale', year: '2018', label: 'Ostgut Ton' },
+    { title: 'Tantrum', artist: 'Ansome', year: '2016', label: 'Perc Trax' },
+    { title: 'No Escape', artist: 'Tzusing', year: '2017', label: 'L.I.E.S.' },
+  ],
+  'acid-techno': [
+    { title: '303 Power', artist: 'Tin Man', year: '2014', label: 'Acid Test' },
+    { title: 'Acid Track B2', artist: 'TM404 (Andreas Tilliander)', year: '2013', label: 'Kontra-Musik' },
+    { title: 'Jack', artist: 'Recondite', year: '2012', label: 'Acid Test' },
+    { title: 'Universal Indicator Red A1', artist: 'Mike Dred & Aphex Twin', year: '1992', label: 'Rephlex' },
+    { title: 'Stasis — Point of No Return', artist: 'Boston 168', year: '2016', label: 'Involve' },
+    { title: 'The Prophet', artist: 'CJ Bolland', year: '1996', label: 'Internal' },
+    { title: 'Mental Overdrive', artist: 'Woody McBride', year: '1994', label: 'Communique' },
+    { title: '923', artist: 'paranoid london', year: '2012', label: 'Paranoid London' },
+  ],
+  'ambient-techno': [
+    { title: 'Firescope', artist: 'B12', year: '1993', label: 'Warp' },
+    { title: 'Vril — Torus XXXII', artist: 'Vril', year: '2014', label: 'Giegling' },
+    { title: '2 The Sky', artist: 'DJ Metatron', year: '2016', label: 'Giegling' },
+    { title: 'Lichen', artist: 'Aphex Twin', year: '1994', label: 'Warp' },
+    { title: 'Bochum', artist: 'Plaid', year: '1997', label: 'Warp' },
+    { title: 'Skee Mask — Dial 274', artist: 'Skee Mask', year: '2018', label: 'Ilian Tape' },
+    { title: 'Neptune', artist: 'Stasis', year: '1993', label: 'Peacefrog' },
+    { title: 'Sun Electric — O\'Locco', artist: 'Sun Electric', year: '1990', label: 'R&S' },
+  ],
+  'chicago-house': [
+    { title: 'Track 4', artist: 'Armando', year: '1988', label: 'Warehouse' },
+    { title: 'No Way Back', artist: 'Adonis', year: '1986', label: 'Trax Records' },
+    { title: 'Work It to the Bone', artist: 'LNR', year: '1987', label: 'House Jam' },
+    { title: 'Percolator', artist: 'Cajmere', year: '1992', label: 'Cajual' },
+    { title: 'Video Clash', artist: 'Lil Louis', year: '1988', label: 'Dance Mania' },
+    { title: 'Bango', artist: 'Boo Williams', year: '1996', label: 'Relief' },
+    { title: 'House Nation', artist: 'The House Master Boyz', year: '1986', label: 'Dance Mania' },
+    { title: 'Lost in the Groove', artist: 'Glenn Underground', year: '1996', label: 'Peacefrog' },
+  ],
+  'deep-house': [
+    { title: '3 Chairs Theme', artist: '3 Chairs (Rick Wilhite, Marcellus Pittman, Theo Parrish, Moodymann)', year: '2004', label: 'Three Chairs' },
+    { title: 'sketches', artist: 'Galcher Lustwerk', year: '2013', label: 'Lustwerk Music' },
+    { title: 'Missing You', artist: 'Larry Heard', year: '1996', label: 'Track Mode' },
+    { title: 'Solitary Flight', artist: 'Theo Parrish', year: '2002', label: 'Sound Signature' },
+    { title: 'What U Do', artist: 'Motor City Drum Ensemble', year: '2008', label: 'MCDE' },
+    { title: 'Everywhere You Go', artist: 'Fred P (Black Jazz Consortium)', year: '2009', label: 'Soul People Music' },
+    { title: 'Tribute', artist: 'Mood Hut / Jack J', year: '2015', label: 'Mood Hut' },
+    { title: 'Deep Burnt', artist: 'Pepe Bradock', year: '1999', label: 'Kif Recordings' },
+    { title: 'Jus Dance', artist: 'Mr. G', year: '2010', label: 'Rekids' },
+    { title: 'Red Nail', artist: 'Omar-S', year: '2009', label: 'FXHE' },
+  ],
+  'acid-house': [
+    { title: 'In the Mix', artist: 'Bam Bam', year: '1988', label: 'Westbrook' },
+    { title: 'I\'ve Lost Control', artist: 'Sleezy D.', year: '1986', label: 'Trax Records' },
+    { title: 'Box Energy', artist: 'DJ Pierre', year: '1988', label: 'Trax Records' },
+    { title: 'Dream Girl', artist: 'Pierre\'s Pfantasy Club', year: '1988', label: 'Sutra' },
+    { title: 'Eating Glue', artist: 'Paranoid London', year: '2013', label: 'Paranoid London' },
+    { title: '151', artist: 'Armando', year: '1988', label: 'Warehouse' },
+  ],
+  'tech-house': [
+    { title: 'Layo & Bushwacka! — Low Life', artist: 'Layo & Bushwacka!', year: '1999', label: 'End Recordings' },
+    { title: 'As Pure As Snow', artist: 'Terry Lee Brown Jr.', year: '1997', label: 'Plastic City' },
+    { title: 'Gidge —The Time Complex', artist: 'Timewriter', year: '1998', label: 'Plastic City' },
+    { title: 'Erotic Discourse', artist: 'Paul Woolford', year: '2006', label: '20:20 Vision' },
+    { title: 'Gamble', artist: 'Pearson Sound', year: '2013', label: 'Night Slugs' },
+    { title: 'Wiggle', artist: 'Nathan Coles & Terry Francis', year: '1998', label: 'Wiggle' },
+  ],
+  'electro': [
+    { title: '20000 Leagues Under the Sea', artist: 'Drexciya', year: '1999', label: 'Tresor' },
+    { title: 'Vainqueur — Lyot (Maurizio Mix)', artist: 'E.R.P. (Gerard Hanson)', year: '2005', label: 'Frustrated Funk' },
+    { title: 'Ghetto Bass', artist: 'Aux 88', year: '1996', label: 'Direct Beat' },
+    { title: 'Freq', artist: 'Dopplereffekt', year: '1999', label: 'Dataphysix' },
+    { title: 'Altered State', artist: 'Carl Finlow', year: '2002', label: '20:20 Vision' },
+    { title: '02', artist: 'Cultek', year: '2018', label: 'CPU' },
+    { title: 'Microchip', artist: 'DMX Krew', year: '1999', label: 'Rephlex' },
+    { title: 'Arpanet — Wireless Internet', artist: 'Arpanet (Gerald Donald)', year: '2002', label: 'Record Makers' },
+  ],
+  'jungle': [
+    { title: 'Pulp Fiction', artist: 'Alex Reece', year: '1995', label: 'Metalheadz' },
+    { title: 'The Angels Fell', artist: 'Dillinja', year: '1995', label: 'Metalheadz' },
+    { title: 'Ni Ten Ichi Ryu', artist: 'Photek', year: '1997', label: 'Science' },
+    { title: 'SoVain', artist: 'Source Direct', year: '1995', label: 'Metalheadz' },
+    { title: 'Ruffige', artist: 'Sully', year: '2020', label: 'Astrophonica' },
+    { title: 'Babylon', artist: 'Splash', year: '1995', label: 'Dee Jay Recordings' },
+    { title: 'jah know ya big', artist: 'Dillinja', year: '1995', label: 'Metalheadz' },
+    { title: '5ives', artist: 'Sully', year: '2021', label: 'Over/Shadow' },
+    { title: 'Mantra — Lucid', artist: 'Mantra & Decibella', year: '2021', label: 'RuptureLDN' },
+  ],
+  'drum-n-bass': [
+    { title: 'Bleach', artist: 'dBridge & Instra:mental', year: '2009', label: 'Autonomic' },
+    { title: 'Drop It Down', artist: 'Calibre ft. Singing Fats', year: '2004', label: 'Signature' },
+    { title: 'Empty Streets', artist: 'Cyantific', year: '2010', label: 'Hospital' },
+    { title: 'Cutslo (Lokuste Mix)', artist: 'Ed Rush, Optical & Fierce', year: '1998', label: 'Prototype' },
+    { title: 'Samurai Dub', artist: 'Presha / Paradox', year: '2018', label: 'Samurai Music' },
+    { title: 'No Reality', artist: 'ASC', year: '2011', label: 'Nonplus' },
+    { title: 'True Romance', artist: 'dBridge & Vegas', year: '2004', label: 'Metalheadz Platinum' },
+    { title: 'Metropolis', artist: 'Adam F', year: '1997', label: 'Metalheadz' },
+  ],
+  'uk-garage-2-step': [
+    { title: 'Joy', artist: 'El-B ft. Juiceman', year: '2001', label: 'Ghost Recordings' },
+    { title: 'Battle', artist: 'Wookie', year: '2000', label: 'S2S' },
+    { title: 'neighbourhood', artist: 'Zed Bias', year: '2000', label: 'Locked On' },
+    { title: '138 Trek', artist: 'DJ Zinc', year: '2000', label: 'Bingo Beats' },
+    { title: 'Buck & Bury', artist: 'El-B', year: '2000', label: 'Ghost' },
+    { title: 'Over Here', artist: 'Menta (Artwork & Danny J)', year: '2002', label: 'Sounds of Da Future' },
+    { title: 'Overload', artist: 'Interplanetary Criminal', year: '2021', label: 'Time Is Now' },
+  ],
+  'dubstep': [
+    { title: 'Mud', artist: 'Loefah', year: '2006', label: 'DMZ' },
+    { title: 'Alicia', artist: 'Mala', year: '2007', label: 'White Label' },
+    { title: 'Bury Da Bwoy', artist: 'Kahn & Neek', year: '2012', label: 'Bandulu' },
+    { title: 'Roll With the Punches', artist: 'Peverelist', year: '2007', label: 'Punch Drunk' },
+    { title: 'Qawwali', artist: 'Pinch', year: '2006', label: 'Planet Mu' },
+    { title: 'Fat Larry\'s Skank', artist: 'Kode9 & The Spaceape', year: '2006', label: 'Hyperdub' },
+    { title: 'Spongebob', artist: 'Coki', year: '2007', label: 'DMZ' },
+    { title: 'Abattoir', artist: 'Kahn', year: '2014', label: 'Deep Medi' },
+  ],
+  'footwork-juke': [
+    { title: '187', artist: 'RP Boo', year: '2013', label: 'Planet Mu' },
+    { title: 'Ghost', artist: 'Jlin', year: '2015', label: 'Planet Mu' },
+    { title: 'I Don\'t Give A Fuck', artist: 'DJ Earl', year: '2016', label: 'Teklife' },
+    { title: 'Space Juke', artist: 'DJ Roc', year: '2010', label: 'Planet Mu' },
+    { title: 'All Night', artist: 'DJ Taye', year: '2018', label: 'Hyperdub' },
+    { title: '11-47-99', artist: 'RP Boo', year: '1999', label: 'Dance Mania' },
+  ],
+  'uk-bass-leftfield-bass': [
+    { title: 'Sublow', artist: 'Lurka', year: '2014', label: 'Black Acre' },
+    { title: 'Tumble', artist: 'Peverelist & Kowton', year: '2012', label: 'Livity Sound' },
+    { title: 'Ploy — Ramos', artist: 'Ploy', year: '2018', label: 'Timedance' },
+    { title: 'Sigha & Hodge — Percussion', artist: 'Hodge', year: '2015', label: 'Livity Sound' },
+    { title: 'Vex', artist: 'Pearson Sound', year: '2011', label: 'Hessle Audio' },
+    { title: 'Cavity', artist: 'Objekt', year: '2012', label: 'Hessle Audio' },
+    { title: 'Azimuth', artist: 'Bruce', year: '2016', label: 'Timedance' },
+  ],
+  'breakbeat': [
+    { title: 'Tekno Jam', artist: 'Bicep', year: '2017', label: 'Ninja Tune' },
+    { title: 'Coma Cat', artist: 'Stanton Warriors', year: '2001', label: 'Punks' },
+    { title: 'Musak (Wonderland Avenue)', artist: 'Trisco', year: '2001', label: 'Positiva' },
+    { title: 'Xpander (Breaks Mix)', artist: 'Sasha', year: '1999', label: 'Deconstruction' },
+    { title: 'Fear', artist: 'Adam Freeland', year: '2003', label: 'Marine Parade' },
+    { title: 'Two Months Off', artist: 'Overmono', year: '2022', label: 'XL Recordings' },
+  ],
+  'idm-braindance': [
+    { title: 'Gantz Graf', artist: 'Autechre', year: '2002', label: 'Warp' },
+    { title: 'charlie\'s family', artist: 'Bogdan Raczynski', year: '1999', label: 'Rephlex' },
+    { title: 'Fenix Funk 5', artist: 'AFX (Aphex Twin)', year: '2005', label: 'Rephlex' },
+    { title: 'Aquarius', artist: 'Boards of Canada', year: '1998', label: 'Warp' },
+    { title: 'cvalda', artist: 'Oval', year: '1995', label: 'Mille Plateaux' },
+    { title: 'Tri Repetae — Eutow', artist: 'Autechre', year: '1995', label: 'Warp' },
+    { title: 'My Red Hot Car', artist: 'Squarepusher', year: '2001', label: 'Warp' },
+  ],
+  'ambient': [
+    { title: 'Watermusic I', artist: 'William Basinski', year: '2001', label: '2062' },
+    { title: 'Clearing', artist: 'Grouper', year: '2013', label: 'Kranky' },
+    { title: 'Mizu No Naka No Bagatelle', artist: 'Hiroshi Yoshimura', year: '1986', label: 'Air' },
+    { title: 'Kankyo', artist: 'Midori Takada', year: '1983', label: 'RCA Red Seal' },
+    { title: 'Pop 4', artist: 'GAS (Wolfgang Voigt)', year: '2000', label: 'Mille Plateaux' },
+    { title: 'Substrata — Sphere', artist: 'Biosphere', year: '1997', label: 'All Saints' },
+  ],
+  'downtempo': [
+    { title: 'Building Steam With a Grain of Salt', artist: 'DJ Shadow', year: '1996', label: 'Mo\' Wax' },
+    { title: 'Les Nuits', artist: 'Nightmares on Wax', year: '1999', label: 'Warp' },
+    { title: 'Sofa Rockers (Richard Dorfmeister Mix)', artist: 'Kruder & Dorfmeister', year: '1998', label: 'G-Stone' },
+    { title: 'Pacific Coliseum — Ocean City', artist: 'Pacific Coliseum', year: '2017', label: 'Coastal Haze' },
+    { title: 'At the River', artist: 'Groove Armada', year: '1997', label: 'Pepper' },
+    { title: 'Nautical Dub', artist: 'Roots Manuva', year: '1999', label: 'Big Dada' },
+  ],
+  'trance': [
+    { title: 'Stella', artist: 'Jam & Spoon', year: '1992', label: 'R&S' },
+    { title: 'The Age of Love (Jam & Spoon Watch Out For Stella Mix)', artist: 'Age of Love', year: '1992', label: 'DiKi' },
+    { title: 'L\'Esperanza', artist: 'Sven Väth', year: '1993', label: 'Eye Q' },
+    { title: 'Mahadeva', artist: 'Astral Projection', year: '1995', label: 'Trust in Trance' },
+    { title: 'LSD', artist: 'Hallucinogen', year: '1995', label: 'Dragonfly' },
+    { title: 'Gamemaster', artist: 'Lost Tribe', year: '1997', label: 'Hooj Choons' },
+  ],
+  'dub': [
+    { title: 'Auffer', artist: 'Rhythm & Sound', year: '2003', label: 'Rhythm & Sound' },
+    { title: 'Version Galore', artist: 'King Tubby & The Aggrovators', year: '1975', label: 'Jackpot' },
+    { title: 'Satta Amassa Gana Dub', artist: 'The Abyssinians', year: '1976', label: 'Clinch' },
+    { title: 'Victory', artist: 'Jah Shaka', year: '1984', label: 'Jah Shaka Music' },
+    { title: 'Dub Syndicate — Pounding System', artist: 'Adrian Sherwood / On-U Sound', year: '1982', label: 'On-U Sound' },
+    { title: 'Steppers Dub', artist: 'Iration Steppas', year: '1996', label: 'Subdub' },
+  ],
+  'roots-reggae': [
+    { title: 'Fade Away', artist: 'Junior Byles', year: '1975', label: 'Channel One' },
+    { title: 'Heart Made of Stone', artist: 'The Viceroys', year: '1980', label: 'Linval Thompson' },
+    { title: 'Satta Massagana', artist: 'The Abyssinians', year: '1969', label: 'Studio One' },
+    { title: 'Silly Games', artist: 'Janet Kay', year: '1979', label: 'Scope' },
+    { title: 'Here I Come', artist: 'Barrington Levy', year: '1985', label: 'Time 1' },
+    { title: 'Tempo', artist: 'Anthony Red Rose', year: '1985', label: 'Firehouse' },
+  ],
+  'hip-hop-boom-bap': [
+    { title: 'Accordion', artist: 'Madvillain (MF DOOM & Madlib)', year: '2004', label: 'Stones Throw' },
+    { title: 'Workinonit', artist: 'J Dilla', year: '2006', label: 'Stones Throw' },
+    { title: '93 \'Til Infinity', artist: 'Souls of Mischief', year: '1993', label: 'Jive' },
+    { title: 'Respiration', artist: 'Black Star (Mos Def & Talib Kweli)', year: '1998', label: 'Rawkus' },
+    { title: 'Survival of the Fittest', artist: 'Mobb Deep', year: '1995', label: 'Loud' },
+    { title: 'Feather', artist: 'Nujabes', year: '2005', label: 'Hydeout Productions' },
+  ],
+  'trap-cloud-rap-drill': [
+    { title: 'Be Nice 2 Me', artist: 'Bladee', year: '2018', label: 'YEAR0001' },
+    { title: 'location', artist: 'Playboi Carti (prod. Harry Fraud)', year: '2017', label: 'AWGE' },
+    { title: 'Kennington Where It Started', artist: 'Harlem Spartans', year: '2017', label: 'HS' },
+    { title: 'Calcium', artist: 'Ecco2k', year: '2019', label: 'YEAR0001' },
+    { title: 'keep it G', artist: 'SpaceGhostPurrp', year: '2012', label: '4AD' },
+    { title: 'Broke Boi', artist: 'Playboi Carti', year: '2015', label: 'Awful Records' },
+  ],
+  'grime': [
+    { title: 'Eskimo', artist: 'Wiley', year: '2002', label: 'Wiley Kat' },
+    { title: 'Morgue', artist: 'Wiley', year: '2003', label: 'White Label' },
+    { title: 'Pied Piper', artist: 'Ruff Sqwad', year: '2005', label: 'No Hats No Hoods' },
+    { title: 'Spartan', artist: 'Spooky Bizzle', year: '2010', label: 'Oil Gang' },
+    { title: 'Buck', artist: 'Plastician', year: '2005', label: 'Terrorrhythm' },
+    { title: 'Take Time', artist: 'Preditah', year: '2011', label: 'Earth616' },
+  ],
+  'jazz-spiritual-jazz-fusion': [
+    { title: 'Journey in Satchidananda', artist: 'Alice Coltrane ft. Pharoah Sanders', year: '1971', label: 'Impulse!' },
+    { title: 'Expansions', artist: 'Lonnie Liston Smith', year: '1975', label: 'Flying Dutchman' },
+    { title: 'Places and Spaces', artist: 'Donald Byrd', year: '1975', label: 'Blue Note' },
+    { title: 'Truth and Lies', artist: 'Kamaal Williams (Henry Wu)', year: '2018', label: 'Black Focus' },
+    { title: 'Fyah', artist: 'Theon Cross', year: '2019', label: 'Gearbox' },
+    { title: 'Strasbourg / St. Denis', artist: 'Roy Hargrove Quintet', year: '2008', label: 'EmArcy' },
+  ],
+  'soul-funk-boogie': [
+    { title: 'I Can\'t Help It', artist: 'Michael Jackson (Stevie Wonder & Quincy Jones)', year: '1979', label: 'Epic' },
+    { title: 'Don\'t Look Any Further', artist: 'Dennis Edwards', year: '1984', label: 'Gordy' },
+    { title: 'SpottieOttieDopaliscious', artist: 'OutKast', year: '1998', label: 'LaFace' },
+    { title: 'Inside My Love', artist: 'Minnie Riperton', year: '1975', label: 'Epic' },
+    { title: 'You\'re the One for Me', artist: 'D. Train', year: '1981', label: 'Prelude' },
+    { title: 'Untitled (How Does It Feel)', artist: 'D\'Angelo', year: '2000', label: 'Virgin' },
+  ],
+  'post-punk-coldwave-synth-pop': [
+    { title: 'Warm Leatherette', artist: 'The Normal', year: '1978', label: 'Mute' },
+    { title: 'la photographie', artist: 'Deux', year: '1983', label: 'Minimal Wave' },
+    { title: 'cavity — first communion', artist: 'Christian Death', year: '1982', label: 'Frontier' },
+    { title: 'Bela Lugosi\'s Dead', artist: 'Bauhaus', year: '1979', label: 'Small Wonder' },
+    { title: 'Fade to Grey', artist: 'Visage', year: '1980', label: 'Polydor' },
+    { title: 'She\'s in Parties', artist: 'Bauhaus', year: '1983', label: 'Beggars Banquet' },
+  ],
+  'krautrock-kosmische': [
+    { title: 'Vitamin C', artist: 'CAN', year: '1972', label: 'United Artists' },
+    { title: 'Halleluwah', artist: 'CAN', year: '1971', label: 'United Artists' },
+    { title: 'negativland', artist: 'NEU!', year: '1972', label: 'Brain' },
+    { title: 'zuckerzeit — Hollywood', artist: 'Cluster', year: '1974', label: 'Brain' },
+    { title: 'Tanzmusik', artist: 'Harmonia', year: '1973', label: 'Brain' },
+    { title: 'Rubycon Pt. 1', artist: 'Tangerine Dream', year: '1975', label: 'Virgin' },
+  ],
+  'alternative-indie-shoegaze': [
+    { title: 'Only Shallow', artist: 'My Bloody Valentine', year: '1991', label: 'Creation' },
+    { title: 'Heaven or Las Vegas', artist: 'Cocteau Twins', year: '1990', label: '4AD' },
+    { title: 'Vapour Trail', artist: 'Ride', year: '1990', label: 'Creation' },
+    { title: 'Good Morning, Captain', artist: 'Slint', year: '1991', label: 'Touch and Go' },
+    { title: 'Svefn-g-englar', artist: 'Sigur Rós', year: '1999', label: 'FatCat' },
+    { title: 'Katy Song', artist: 'Red House Painters', year: '1993', label: '4AD' },
+  ],
+  'afrobeat-global-groove': [
+    { title: 'Gentleman', artist: 'Fela Kuti', year: '1973', label: 'EMI Nigeria' },
+    { title: 'Atomic Bomb', artist: 'William Onyeabor', year: '1978', label: 'Wilfilms' },
+    { title: 'Yegelle Tezeta', artist: 'Mulatu Astatke', year: '1970', label: 'Amha' },
+    { title: 'Heaven', artist: 'Ebo Taylor', year: '1977', label: 'Essiebons' },
+    { title: 'Sweet Mother', artist: 'Prince Nico Mbarga', year: '1976', label: 'Rogers All Stars' },
+    { title: 'Space Echo', artist: 'Analog Africa Collective', year: '2016', label: 'Analog Africa' },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2C. SPECIALIZED SUBGENRE, OFFSHOOT & ROOT NODES (FOR GENEALOGY & CONNECTIONS)
+// ─────────────────────────────────────────────────────────────────────────────
+// Guarantees that EVERY single genre chip under Historic Roots, Adjacent Genres,
+// Offshoots & Subgenres, and Counter-Currents opens its own distinct, complete sheet!
+
+const SPECIALIZED_SUBGENRE_NODES = {
+  'hardgroove': {
+    name: 'Hardgroove',
+    parent: 'Detroit Techno',
+    superGenre: 'Techno',
+    secondarySuperGenre: 'House',
+    originYear: 'Late 1990s – Early 2000s (Revival 2020s)',
+    originPlace: 'UK, Benelux, Detroit & Global Club Circuit',
+    bpmRange: '136–144 BPM',
+    rhythmProfile: 'Fast, percussive, funk-sampled tribal and conga loops locked over driving 3-deck TR-909 techno kicks.',
+    sonicTraits: ['Funk & Disco Loop Chops', 'Tribal Conga Drive', '3-Deck Tool Mixing', 'High-Energy Swing', '909 Ride Cymbals'],
+    description: 'Coined and championed by Ben Sims, Mark Broom, and Dave Clarke in the late 1990s, Hardgroove fuses the relentless velocity of 3-deck Detroit and UK techno with short, infectious funk, Latin, and disco percussion loops. Experiencing a massive global resurgence in the 2020s, it prioritizes swinging, physical groove and turntablist dexterity over dark industrial minimalism.',
+    parentGenres: ['Detroit Techno', 'Chicago House', 'Tribal House'],
+    subgenres: ['Tribal Techno', 'Funky Techno', 'Schranz'],
+    adjacentGenres: ['Hypnotic Techno', 'Tech House', 'Acid Techno'],
+    backlashAgainst: ['Static Minimalism', 'Commercial EDM'],
+    pioneerArtists: ['Ben Sims', 'Mark Broom', 'Dave Clarke', 'DJ Rush', 'Marco Bailey', 'Truncate', 'Stef Mendesidis', 'Marcal', 'Chlär', 'Alarico'],
+    classicLabels: ['Hardgroove', 'Theory Recordings', 'Primate Recordings', 'Mutual Rytm', 'Symbolism', 'Pure Plastic'],
+    eventContexts: ['Berghain (Berlin)', 'Vault Sessions (Amsterdam)', 'Fuse (Brussels)', 'Fabric (London)'],
+    referenceTracks: [
+      { title: 'Manipulated (Adam Beyer Remix)', artist: 'Ben Sims', year: '1999', label: 'Primate Recordings' },
+      { title: ' Angie\'s Groove', artist: 'Mark Broom', year: '1996', label: 'Pure Plastic' },
+      { title: 'Red 2 (Wisdom to the Wise)', artist: 'Dave Clarke', year: '1994', label: 'Bush' },
+      { title: ' drum major', artist: 'Truncate', year: '2011', label: 'Truncate' },
+    ],
+    nicheTracks: [
+      { title: 'Cybernetic', artist: 'Marcal', year: '2022', label: 'Enemy Records' },
+      { title: 'Groove Tool 03', artist: 'Ben Sims', year: '2001', label: 'Hardgroove' },
+      { title: 'Senzo', artist: 'Stef Mendesidis', year: '2019', label: 'Klockworks' },
+      { title: 'Funky Ass', artist: 'Chlär', year: '2022', label: 'Mutual Rytm' },
+    ],
+  },
+  'ambient-dub': {
+    name: 'Ambient Dub',
+    parent: 'Dub Techno',
+    superGenre: 'Downtempo / Ambient',
+    secondarySuperGenre: 'Jamaican / Reggae',
+    originYear: 'Early 1990s (c. 1990–1994)',
+    originPlace: 'Birmingham / London, UK & Berlin, Germany',
+    bpmRange: '70–112 BPM',
+    rhythmProfile: 'Slow-motion sub-bass meditations, beatless or half-time dubwise echoes, and oceanic environmental textures.',
+    sonicTraits: ['Infinite Tape Feedback', 'Sub-Bass Drone', 'Beatless Space', 'Hydrophone Field Recordings', 'King Tubby Delay Matrix'],
+    description: 'Coined by Birmingham\'s Beyond Records in 1992 and deepened by The Orb, Bill Laswell, Chain Reaction, and Echospace, Ambient Dub strips away the club 4/4 kick to let Jamaican dub\'s spatial architecture float in weightless ambient space. Sub-bass tremors, spring reverb splashes, and endless tape feedback loops turn the mixing desk into a meditative environmental instrument.',
+    parentGenres: ['Dub', 'Ambient', 'Dub Techno'],
+    subgenres: ['Illbient', 'Psydub', 'Drift Ambient'],
+    adjacentGenres: ['Dub Techno', 'Ambient Techno', 'Downtempo'],
+    backlashAgainst: ['High-Tempo Rave Fatigue'],
+    pioneerArtists: ['The Orb', 'DeepChord', 'Rod Modell', 'Bill Laswell', 'Fluxion', 'Higher Intelligence Agency', 'Vladislav Delay', 'Deadbeat'],
+    classicLabels: ['Beyond Records', 'Chain Reaction', 'Echospace [Detroit]', 'Silent Season', 'Axiom', 'FAX +49-69/450464'],
+    eventContexts: ['Labyrinth Chill Tent', 'Atonal Berlin', 'Big Chill Festival (UK)'],
+    referenceTracks: [
+      { title: 'A Huge Ever Growing Pulsating Brain That Rules from the Centre of the Ultraworld', artist: 'The Orb', year: '1989', label: 'Wau! Mr. Modo' },
+      { title: 'B1 (Biokinetics)', artist: 'Porter Ricks', year: '1996', label: 'Chain Reaction' },
+      { title: 'Incense & Black Light', artist: 'Rod Modell', year: '2007', label: 'Windimoto' },
+      { title: 'Multila', artist: 'Vladislav Delay', year: '2000', label: 'Chain Reaction' },
+    ],
+    nicheTracks: [
+      { title: ' kettenreaktion', artist: 'Vainqueur', year: '1997', label: 'Chain Reaction' },
+      { title: ' Campfire', artist: 'Silent Season Collective', year: '2012', label: 'Silent Season' },
+      { title: 'Wilderness of North', artist: 'Deadbeat', year: '2002', label: ' ~scape' },
+      { title: 'Colourform', artist: 'Higher Intelligence Agency', year: '1993', label: 'Beyond' },
+    ],
+  },
+  'deep-techno': {
+    name: 'Deep Techno',
+    parent: 'Hypnotic Techno',
+    superGenre: 'Techno',
+    secondarySuperGenre: 'Downtempo / Ambient',
+    originYear: 'Mid-2000s – Present',
+    originPlace: 'Rome, Berlin, Stockholm & Tokyo',
+    bpmRange: '122–130 BPM',
+    rhythmProfile: 'Submerged, warm sub-bass grooves with organic polyrhythms, liquid pads, and subterranean atmospheric depth.',
+    sonicTraits: ['Subterranean Sub-Bass', 'Liquid Pads', 'Shamanic Percussion', 'Warm Tape Saturation', 'Extended Introspection'],
+    description: 'Championed by the Italian school (Donato Dozzy, Neel, Voices From The Lake, Luigi Tozzi, Claudio PRC, Dino Sabatini) alongside labels like Prologue, Hypnus, and Semantica, Deep Techno slows techno down into a warm, liquid, almost shamanic state. It blends the spatial depth of Dub Techno with organic polyrhythms and enveloping ambient pads.',
+    parentGenres: ['Dub Techno', 'Hypnotic Techno', 'Ambient Techno'],
+    subgenres: ['Shamanic Techno', 'Aquatic Techno', 'Subterranean Techno'],
+    adjacentGenres: ['Hypnotic Techno', 'Dub Techno', 'Ambient', 'Minimal Techno'],
+    backlashAgainst: ['Aggressive Hard Techno', 'Commercial Peak-Time Techno'],
+    pioneerArtists: ['Donato Dozzy', 'Voices From The Lake', 'Luigi Tozzi', 'Claudio PRC', 'Neel', 'Dino Sabatini', 'Cio D\'Or', 'Ntogn', 'Ness'],
+    classicLabels: ['Prologue', 'Hypnus Records', 'Semantica Records', 'The Gods Planet', 'Delsin', 'Mantis', 'Outis Music'],
+    eventContexts: ['Labyrinth Festival (Japan)', 'Monument Festival (Norway)', 'Berghain Panorama / Halle', 'Parallel Festival'],
+    referenceTracks: [
+      { title: 'Involve', artist: 'Voices From The Lake', year: '2012', label: 'Prologue' },
+      { title: 'Deep Blue', artist: 'Luigi Tozzi', year: '2016', label: 'Hypnus Records' },
+      { title: 'Clear', artist: 'Claudio PRC', year: '2011', label: 'Prologue' },
+      { title: 'Vaporware 07', artist: 'Donato Dozzy', year: '2008', label: 'Dozy' },
+    ],
+    nicheTracks: [
+      { title: 'B2 (Mantis 01)', artist: 'Forest Drive West', year: '2020', label: 'Delsin — Mantis' },
+      { title: 'Yggdrasil', artist: 'Ntogn', year: '2015', label: 'Hypnus Records' },
+      { title: 'Phobos', artist: 'Ness', year: '2014', label: 'The Gods Planet' },
+      { title: 'Shaman', artist: 'Dino Sabatini', year: '2012', label: 'Prologue' },
+    ],
+  },
+  'modular-techno': {
+    name: 'Modular Techno',
+    parent: 'Hypnotic Techno',
+    superGenre: 'Techno',
+    originYear: '2000s – Present (Eurorack Era)',
+    originPlace: 'Berlin, Birmingham, Madrid & Portland',
+    bpmRange: '128–138 BPM',
+    rhythmProfile: 'Generative, non-repeating CV/gate analog sequences, Buchla/Eurorack bleeps, and raw voltage-controlled percussion.',
+    sonicTraits: ['Eurorack & Buchla Synthesis', 'Generative Sequences', 'FM Cross-Modulation', 'Live Hardware Improvisation', 'Sci-Fi Bleeps'],
+    description: 'Driven by the Eurorack and Buchla modular synthesizer renaissance and pioneered in clubs by Surgeon, Blawan, Karenn, Steffi, Rrose, and Oscar Mulero, Modular Techno replaces static DAW loops with living, voltage-controlled patches. Every bar subtly mutates through cross-modulation, LFO drift, and analog wavefolding.',
+    parentGenres: ['Hypnotic Techno', 'Detroit Techno', 'Industrial Techno'],
+    subgenres: ['Live Hardware Techno', 'Sci-Fi Bleep Techno'],
+    adjacentGenres: ['Hypnotic Techno', 'Industrial Techno', 'IDM / Braindance', 'Acid Techno'],
+    backlashAgainst: ['Preset Laptop Techno'],
+    pioneerArtists: ['Surgeon', 'Blawan', 'Karenn', 'Rrose', 'Oscar Mulero', 'Colin Benders', 'Steffi', 'Luke Slater', 'Speedy J'],
+    classicLabels: ['Token', 'Voam', 'Warm Up Recordings', 'PoleGroup', 'Mord', 'Dynamic Tension', 'Stroboscopic Artefacts'],
+    eventContexts: ['Superbooth (Berlin)', 'Berghain', 'Awakenings', 'Stoor Live (Speedy J)'],
+    referenceTracks: [
+      { title: 'Clean Skins', artist: 'Karenn (Blawan & Pariah)', year: '2012', label: 'Works The Long Nights' },
+      { title: 'Generator', artist: 'Oscar Mulero', year: '2015', label: 'Warm Up' },
+      { title: 'Radiance', artist: 'Surgeon', year: '2011', label: 'Dynamic Tension' },
+      { title: 'Pentagon', artist: 'Rrose', year: '2013', label: 'Eaux' },
+    ],
+    nicheTracks: [
+      { title: 'Crush on Me', artist: 'Karenn', year: '2019', label: 'Voam' },
+      { title: 'Stoor Session 04', artist: 'Speedy J & Surgeon', year: '2021', label: 'Stoor' },
+      { title: '999', artist: 'Blawan', year: '2018', label: 'Ternesc' },
+      { title: 'Transmutation', artist: 'Stanislav Tolkachev', year: '2016', label: 'Semantica' },
+    ],
+  },
+  'rominimal': {
+    name: 'Rominimal',
+    parent: 'Minimal Techno',
+    superGenre: 'Techno',
+    secondarySuperGenre: 'House',
+    originYear: 'Mid-2000s (c. 2006–Present)',
+    originPlace: 'Bucharest, Romania',
+    bpmRange: '122–128 BPM',
+    rhythmProfile: 'Intricate, elastic micro-percussion, rolling sub-basslines, and organic, classical/folk-tinged melodic fragments.',
+    sonicTraits: ['Micro-Percussion', 'Rolling Sub-Bass', 'Afterhours Hypnosis', 'Vinyl-Only Culture', 'Extended 12-Hour Sets'],
+    description: 'Born in Bucharest through the [a:rpia:r] trio (Rhadoo, Petre Inspirescu, Raresh) and inspired by Ricardo Villalobos, Rominimal evolved Minimal Techno and Microhouse into an intricate, deeply psychedelic afterhours art form defined by elastic sub-bass, subtle acoustic textures, and marathon sunrise sets at Sunwaves.',
+    parentGenres: ['Minimal Techno', 'Deep House'],
+    subgenres: ['Microhouse', 'Dub-Minimal'],
+    adjacentGenres: ['Minimal Techno', 'Dub Techno', 'Tech House'],
+    backlashAgainst: ['Mainstream Big-Room House'],
+    pioneerArtists: ['Rhadoo', 'Petre Inspirescu', 'Raresh', '[a:rpia:r]', 'Barac', 'Priku', 'Cristi Cons', 'Vlad Caia', 'Cezar'],
+    classicLabels: ['[a:rpia:r]', 'Understand', 'Sunrise', 'Amphia', 'Metereze', 'Perlon'],
+    eventContexts: ['Sunwaves Festival (Mamaia)', 'Club Guesthouse (Bucharest)', 'Club Midi (Cluj)', 'Robert Johnson (Offenbach)'],
+    referenceTracks: [
+      { title: 'Point', artist: 'Rhadoo', year: '2011', label: '[a:rpia:r]' },
+      { title: 'Sakadat', artist: 'Petre Inspirescu', year: '2007', label: '[a:rpia:r]' },
+      { title: 'Moment', artist: 'Barac', year: '2014', label: 'Moment' },
+      { title: 'B2 (a:rpia:r 01)', artist: '[a:rpia:r]', year: '2007', label: '[a:rpia:r]' },
+    ],
+    nicheTracks: [
+      { title: 'Amphia 001', artist: 'Cristi Cons & Vlad Caia', year: '2012', label: 'Amphia' },
+      { title: '2007', artist: 'Priku', year: '2015', label: 'Motif' },
+      { title: 'Undeva', artist: 'Raresh', year: '2013', label: 'Metereze' },
+      { title: 'Pahar', artist: 'Cezar', year: '2011', label: 'Understand' },
+    ],
+  },
+  'soulful-house': {
+    name: 'Soulful House',
+    parent: 'Deep House',
+    superGenre: 'House',
+    secondarySuperGenre: 'Rhythm \'n\' Blues (R&B)',
+    originYear: 'Late 1980s – 1990s',
+    originPlace: 'New York, New Jersey & Chicago, USA',
+    bpmRange: '118–125 BPM',
+    rhythmProfile: 'Warm 4/4 garage-house swing with gospel vocals, live Fender Rhodes electric piano, horn sections, and upright/electric bass.',
+    sonicTraits: ['Gospel & Soul Vocals', 'Fender Rhodes Chords', 'Paradise Garage Heritage', 'Live Horns & Percussion', 'Uplifting Spiritual Warmth'],
+    description: 'Rooted in Larry Levan\'s Paradise Garage, Tony Humphries\'s Club Zanzibar in Newark ("Jersey Sound"), and Masters At Work ("Little" Louie Vega & Kenny "Dope" Gonzalez) in New York, Soulful & Garage House elevates house music with full-blooded gospel/R&B vocal performances, lush jazz-soul keyboard harmony, and live Latin/African percussion.',
+    parentGenres: ['Deep House', 'Chicago House', 'Soul / Funk & Boogie'],
+    subgenres: ['Garage House', 'Gospel House', 'Vocal House'],
+    adjacentGenres: ['Deep House', 'Soul / Funk & Boogie', 'UK Garage / 2-Step', 'Jazz / Spiritual Jazz & Fusion'],
+    backlashAgainst: ['Cold Instrumental Minimalism'],
+    pioneerArtists: ['Masters At Work', 'Louie Vega', 'Kenny Dope', 'Kerri Chandler', 'Blaze', 'Tony Humphries', 'Larry Levan', 'Barbara Tucker', 'Osunlade', 'Joe Claussell'],
+    classicLabels: ['Strictly Rhythm', 'Nervous Records', 'MAW Records', 'King Street Sounds', 'Ibadan', 'Spiritual Life Music', 'Yoruba Records'],
+    eventContexts: ['Paradise Garage (NYC)', 'Club Zanzibar (Newark)', 'Body & SOUL (NYC)', 'The Shelter (NYC)'],
+    referenceTracks: [
+      { title: 'The Nervous Track', artist: 'Nuyorican Soul (Masters At Work)', year: '1993', label: 'Nervous Records' },
+      { title: 'Atmosphere (Kerri\'s Foundation Dub)', artist: 'Kerri Chandler', year: '1993', label: 'Shelter' },
+      { title: 'Lovelee Dae', artist: 'Blaze', year: '1997', label: 'Classic' },
+      { title: 'I Get Deep', artist: 'Roland Clark', year: '2000', label: 'Shelter' },
+    ],
+    nicheTracks: [
+      { title: 'Rain', artist: 'Kerri Chandler', year: '1998', label: 'Nervous' },
+      { title: 'Je Ka Jo', artist: 'Joe Claussell', year: '1999', label: 'Spiritual Life' },
+      { title: 'Momma\'s Groove', artist: 'Osunlade', year: '2007', label: 'Yoruba' },
+      { title: 'gypsy woman (basement boyz strip to the bone)', artist: 'Crystal Waters', year: '1991', label: 'Mercury' },
+    ],
+  },
+  'lo-fi-house': {
+    name: 'Lo-Fi House',
+    parent: 'Deep House',
+    superGenre: 'House',
+    originYear: 'Mid-2010s (c. 2014–2018)',
+    originPlace: 'Internet / London, Vancouver, Melbourne & Berlin',
+    bpmRange: '118–126 BPM',
+    rhythmProfile: 'Tape-saturated, bit-crushed TR-909 drum machines, dusty jazz-house vocal loops, and melancholic VHS-era pads.',
+    sonicTraits: ['Cassette Saturation', 'Overdriven 909 Hats', 'Melancholic Pads', 'Dusty Vocal Samples', 'DIY Internet Underground'],
+    description: 'Emerging around 2014–2016 via underground YouTube channels and labels like Lobster Theremin, 1080p, and Shall Not Fade, Lo-Fi House pushed back against hyper-polished commercial club production by running classic 90s deep house and breakbeat tropes through cheap cassette decks, SP-404 samplers, and overdriven analog mixers.',
+    parentGenres: ['Deep House', 'Chicago House', 'Ambient Techno'],
+    subgenres: ['Outsider House', 'Mallsoft House'],
+    adjacentGenres: ['Deep House', 'Dub Techno', 'Breakbeat'],
+    backlashAgainst: ['Hyper-Polished Commercial EDM'],
+    pioneerArtists: ['DJ Seinfeld', 'Mall Grab', 'Ross From Friends', 'DJ Boring', 'Baltra', 'Palms Trax', 'Huerco S.', 'Patricia'],
+    classicLabels: ['Lobster Theremin', '1080p', 'Shall Not Fade', 'L.I.E.S.', 'Mood Hut', 'Opal Tapes'],
+    eventContexts: ['Corsica Studios (London)', 'Phonox (London)', 'Horst Festival'],
+    referenceTracks: [
+      { title: 'Winona', artist: 'DJ Boring', year: '2016', label: 'E-Beamz' },
+      { title: 'Talk to Me You\'ll Understand', artist: 'Ross From Friends', year: '2015', label: 'Breaker Breaker' },
+      { title: 'U', artist: 'DJ Seinfeld', year: '2017', label: 'Lobster Fury' },
+      { title: 'Can\'t (Get You Out of My Mind)', artist: 'Mall Grab', year: '2015', label: '1080p' },
+    ],
+    nicheTracks: [
+      { title: 'Fade Away', artist: 'Baltra', year: '2015', label: 'IDMEMO' },
+      { title: 'Equation', artist: 'Palms Trax', year: '2013', label: 'Lobster Theremin' },
+      { title: 'For Those Of You Who Have Never (And Also Those Who Have)', artist: 'Huerco S.', year: '2016', label: 'Proibito' },
+      { title: 'Spit', artist: 'legowelt', year: '2014', label: 'L.I.E.S.' },
+    ],
+  },
+  'ragga-jungle': {
+    name: 'Ragga Jungle',
+    parent: 'Jungle',
+    superGenre: 'Jungle / Drum \'n\' Bass',
+    secondarySuperGenre: 'Jamaican / Reggae',
+    originYear: 'Early 1990s (c. 1993–1995)',
+    originPlace: 'London & Bristol, UK',
+    bpmRange: '160–172 BPM',
+    rhythmProfile: 'Hyper-chopped Amen and Think breakbeats paired with Jamaican Dancehall patois vocals, sound-clash sirens, and 808 sub-bass.',
+    sonicTraits: ['Jamaican Sound System Patois', 'Amen Break Choppage', 'Dub Sirens & Rewinds', '808 Tearout Bass', 'Soundclash Culture'],
+    description: 'The rawest intersection of Jamaican Dancehall sound-system culture and UK rave breakbeat science. Pioneered by Shy FX, UK Apachi, Remarc, Rebel MC (Congo Natty), and M-Beat between 1993 and 1995, Ragga Jungle pairs rapid-fire Jamaican MC toasting and sound-clash vocal plates with time-stretched Amen breaks and earth-shaking 808 sub-bass.',
+    parentGenres: ['Jungle', 'Roots Reggae', 'Dub'],
+    subgenres: ['Dubwise D&B', 'Raggacore'],
+    adjacentGenres: ['Jungle', 'Drum \'n\' Bass', 'Breakbeat'],
+    backlashAgainst: ['Sanitized Mainstream Dance'],
+    pioneerArtists: ['Shy FX', 'UK Apachi', 'Congo Natty (Rebel MC)', 'Remarc', 'M-Beat', 'General Levy', 'Marvellous Cain', 'Krinjah'],
+    classicLabels: ['SOUR', 'Suburban Base', 'Congo Natty', 'Kemet', 'Tearin\' Vinyl', 'White House'],
+    eventContexts: ['Roast (London)', 'Telepathy', 'Rupture (Corsica Studios)', 'Notting Hill Carnival Sound Systems'],
+    referenceTracks: [
+      { title: 'Original Nuttah', artist: 'UK Apachi & Shy FX', year: '1994', label: 'SOUR' },
+      { title: 'Incredible', artist: 'M-Beat ft. General Levy', year: '1994', label: 'Renk' },
+      { title: 'R.I.P.', artist: 'Remarc', year: '1994', label: 'Suburban Base' },
+      { title: 'The Hitman', artist: 'Marvellous Cain', year: '1994', label: 'IQ Records' },
+    ],
+    nicheTracks: [
+      { title: 'Sound Murderer', artist: 'Remarc', year: '1994', label: 'White House' },
+      { title: 'Junglist', artist: 'Tribe of Issachar ft. Peter Bouncer', year: '1996', label: 'Congo Natty' },
+      { title: 'Limb By Limb (DJ SS Remix)', artist: 'Cutty Ranks', year: '1995', label: 'Suburban Base' },
+      { title: 'Press The Trigger', artist: 'Kemet Crew', year: '1994', label: 'Kemet' },
+    ],
+  },
+  'liquid-funk': {
+    name: 'Liquid Funk',
+    parent: 'Drum \'n\' Bass',
+    superGenre: 'Jungle / Drum \'n\' Bass',
+    secondarySuperGenre: 'Rhythm \'n\' Blues (R&B)',
+    originYear: 'Late 1990s – 2000s (c. 1999–2005)',
+    originPlace: 'London, Manchester, Dublin & São Paulo',
+    bpmRange: '170–175 BPM',
+    rhythmProfile: 'Rolling 2-step Drum \'n\' Bass breaks layered with Rhodes electric piano, jazz-soul samples, acoustic guitars, and warm sub-bass.',
+    sonicTraits: ['Fender Rhodes & Jazz Chords', 'Soulful Vocal Hooks', 'Rolling Sub-Bass', 'Brazilian & Latin Influences', 'Warm Harmonic Flow'],
+    description: 'Coined by Fabio on BBC Radio 1 around 1999–2000 and perfected by Calibre, Marcus Intalex & ST Files, High Contrast, Logistics, and Brazilian pioneers DJ Marky & XRS, Liquid Funk brought deep soul, jazz harmony, disco strings, and bossa nova warmth back into 174 BPM Drum \'n\' Bass.',
+    parentGenres: ['Drum \'n\' Bass', 'Jungle', 'Soul / Funk & Boogie'],
+    subgenres: ['Deep Liquid', 'Sambass', 'Atmospheric D&B'],
+    adjacentGenres: ['Drum \'n\' Bass', 'Deep House', 'Jazz / Spiritual Jazz & Fusion'],
+    backlashAgainst: ['Overly Aggressive Techstep'],
+    pioneerArtists: ['Calibre', 'Marcus Intalex', 'High Contrast', 'Fabio', 'DJ Marky', 'Logistics', 'Nu:Tone', 'London Elektricity', 'Lenzman', 'Alix Perez'],
+    classicLabels: ['Signature Recordings', 'Soul:r', 'Hospital Records', 'Creative Source', 'V Recordings', 'The North Quarter', '1985 Music'],
+    eventContexts: ['Swerve at The End (London)', 'Hospitality (Heaven / Building Six)', 'Sun & Bass (Sardinia)'],
+    referenceTracks: [
+      { title: 'LK (Carolina Carol Bela)', artist: 'DJ Marky & XRS', year: '2002', label: 'V Recordings' },
+      { title: 'Drop It Down', artist: 'Calibre ft. Singing Fats', year: '2004', label: 'Signature' },
+      { title: 'Return of Forever', artist: 'High Contrast', year: '2002', label: 'Hospital' },
+      { title: 'How You Make Me Feel', artist: 'Marcus Intalex & ST Files', year: '2000', label: '31 Records' },
+    ],
+    nicheTracks: [
+      { title: 'Even If', artist: 'Calibre', year: '2010', label: 'Signature' },
+      { title: 'Together', artist: 'Logistics', year: '2004', label: 'Hospital' },
+      { title: '1984', artist: 'Alix Perez', year: '2009', label: 'Shogun Audio' },
+      { title: 'Ever So Slightly', artist: 'Lenzman', year: '2010', label: 'Integral' },
+    ],
+  },
+  'neurofunk': {
+    name: 'Neurofunk',
+    parent: 'Drum \'n\' Bass',
+    superGenre: 'Jungle / Drum \'n\' Bass',
+    secondarySuperGenre: 'Techno',
+    originYear: 'Late 1990s (c. 1997–1999)',
+    originPlace: 'London, UK & Rotterdam / Vienna',
+    bpmRange: '172–176 BPM',
+    rhythmProfile: 'Tightly funk-syncopated, razor-sharp 2-step drum programming paired with heavily resampled, morphing Reese basslines.',
+    sonicTraits: ['Resampled Reese Bass', 'Z-Plane Filter Morphing', 'Sci-Fi Cyberpunk Atmosphere', 'Surgical Funk Drums'],
+    description: 'Pioneered by Ed Rush & Optical on their landmark 1998 album "Wormhole" alongside Matrix, Konflict (Kemal & Rob Data), and later Noisia and Phace, Neurofunk evolved dark Techstep by injecting P-Funk bassline syncopation and E-mu Z-plane filter modulation into futuristic, cyberpunk sound design.',
+    parentGenres: ['Drum \'n\' Bass', 'Techstep', 'Soul / Funk & Boogie'],
+    subgenres: ['Minimal Neuro', 'Halftime Neuro'],
+    adjacentGenres: ['Drum \'n\' Bass', 'Industrial Techno', 'IDM / Braindance'],
+    backlashAgainst: ['Commercial Pop D&B'],
+    pioneerArtists: ['Ed Rush & Optical', 'Konflict', 'Matrix', 'Noisia', 'Phace', 'Misanthrop', 'Black Sun Empire', 'Teebee', 'Calyx'],
+    classicLabels: ['Virus Recordings', 'Renegade Hardware', 'Subtitles', 'Vision Recordings', 'Moving Shadow', 'Critical Music'],
+    eventContexts: ['Renegade Hardware at The End (London)', 'Noisia Invites (Groningen)', 'Let It Roll (Prague)'],
+    referenceTracks: [
+      { title: 'Bacteria', artist: 'Ed Rush & Optical', year: '1999', label: 'Virus' },
+      { title: 'Messiah', artist: 'Konflict', year: '2000', label: 'Renegade Hardware' },
+      { title: 'The Tide', artist: 'Noisia', year: '2005', label: 'Vision' },
+      { title: 'Mute \'98', artist: 'Matrix', year: '1998', label: 'Prototype' },
+    ],
+    nicheTracks: [
+      { title: 'Medicine (Matrix Remix)', artist: 'Ed Rush & Optical', year: '1998', label: 'Virus' },
+      { title: 'Beckoning', artist: 'Konflict', year: '2000', label: 'Renegade Hardware' },
+      { title: 'Dead Limit', artist: 'Noisia & The Upbeats', year: '2015', label: 'Vision' },
+      { title: 'Bioform', artist: 'Teebee', year: '2001', label: 'Subtitles' },
+    ],
+  },
+  'house': {
+    name: 'House',
+    parent: 'Chicago House',
+    superGenre: 'House',
+    secondarySuperGenre: 'Rhythm \'n\' Blues (R&B)',
+    originYear: 'Early 1980s (c. 1981–1986)',
+    originPlace: 'Chicago, New York & Detroit, USA',
+    bpmRange: '118–128 BPM',
+    rhythmProfile: 'Four-on-the-floor kick drum, off-beat open hi-hats, swung 16th-note percussion, and soulful synth or acoustic basslines.',
+    sonicTraits: ['Four-on-the-Floor Pulse', 'TR-909 / TR-808 / TR-707 Drums', 'Disco & Gospel Lineage', 'Soulful Chords & Vocals', 'Club Sanctuary Ethos'],
+    description: 'Born in the early 1980s at Frankie Knuckles\'s Warehouse and Ron Hardy\'s Muzic Box in Chicago and parallel sanctuaries like Larry Levan\'s Paradise Garage in New York, House music transformed disco, gospel, boogie, and European synth-pop into the foundational 4/4 language of modern club culture. From raw machine tracks on Trax and DJ International to the jazz-infused depths of Deep House, Acid House, Soulful House, and Tech House, it remains a global vessel for liberation, groove, and communal joy.',
+    parentGenres: ['Soul / Funk & Boogie', 'Disco', 'Electro'],
+    subgenres: ['Deep House', 'Chicago House', 'Acid House', 'Tech House', 'Soulful House', 'Lo-Fi House'],
+    adjacentGenres: ['Detroit Techno', 'UK Garage / 2-Step', 'Dub Techno', 'Breakbeat'],
+    backlashAgainst: ['Anti-Disco Backlash', 'Commercial Mainstream Pop'],
+    pioneerArtists: ['Frankie Knuckles', 'Larry Heard (Mr. Fingers)', 'Ron Hardy', 'Marshall Jefferson', 'Kerri Chandler', 'Masters At Work', 'Theo Parrish', 'Moodymann', 'Larry Levan', 'Lil Louis'],
+    classicLabels: ['Trax Records', 'DJ International', 'Strictly Rhythm', 'Nervous Records', 'Sound Signature', 'Mahogani Music', 'Alleviated Records', 'Defected'],
+    eventContexts: ['The Warehouse & The Muzic Box (Chicago)', 'Paradise Garage & The Loft (NYC)', 'Panorama Bar (Berlin)', 'Sub Club (Glasgow)'],
+    referenceTracks: [
+      { title: 'Your Love', artist: 'Frankie Knuckles / Jamie Principle', year: '1987', label: 'Trax Records' },
+      { title: 'Can You Feel It', artist: 'Mr. Fingers (Larry Heard)', year: '1986', label: 'Trax Records' },
+      { title: 'Move Your Body', artist: 'Marshall Jefferson', year: '1986', label: 'Trax Records' },
+      { title: 'French Kiss', artist: 'Lil Louis', year: '1989', label: 'Diamond Records' },
+      { title: 'Atmosphere (Kerri\'s Foundation Dub)', artist: 'Kerri Chandler', year: '1993', label: 'Shelter' },
+    ],
+    nicheTracks: [
+      { title: 'Sharevari', artist: 'A Number of Names', year: '1981', label: 'Capriccio' },
+      { title: 'No Way Back', artist: 'Adonis', year: '1986', label: 'Trax Records' },
+      { title: '3 Chairs Theme', artist: '3 Chairs (Rick Wilhite, Marcellus Pittman, Theo Parrish, Moodymann)', year: '2004', label: 'Three Chairs' },
+      { title: 'Deep Burnt', artist: 'Pepe Bradock', year: '1999', label: 'Kif Recordings' },
+      { title: 'What U Do', artist: 'Motor City Drum Ensemble', year: '2008', label: 'MCDE' },
+    ],
+  },
+  'techno': {
+    name: 'Techno',
+    parent: 'Detroit Techno',
+    superGenre: 'Techno',
+    secondarySuperGenre: 'Industrial & Gothic',
+    originYear: 'Mid-1980s (c. 1985–1988)',
+    originPlace: 'Detroit, USA → Berlin, Birmingham & Global',
+    bpmRange: '126–142 BPM',
+    rhythmProfile: 'Propulsive, machine-driven 4/4 or broken polyrhythmic pulse focused on timbral synthesis, tension-and-release, and futuristic sonic architecture.',
+    sonicTraits: ['TR-909 & Modular Synthesis', 'Afrofuturist Machine Soul', 'Hypnotic Repetition', 'Subterranean Sub-Bass', 'Warehouse & Industrial Acoustics'],
+    description: 'Forged in mid-1980s Detroit by The Belleville Three (Juan Atkins, Derrick May, Kevin Saunderson), Jeff Mills, Robert Hood, and Drexciya—who fused Parliament-Funkadelic\'s futurism with Kraftwerk, Electro, and Chicago track culture—Techno quickly became a global movement after the fall of the Berlin Wall. Spanning Detroit machine soul, Berlin\'s Dub and Hypnotic Techno continuum, Birmingham\'s Industrial Techno, and Minimal/Modular explorations, Techno treats the sound system as a portal into the future.',
+    parentGenres: ['Electro', 'Chicago House', 'Krautrock / Kosmische'],
+    subgenres: ['Detroit Techno', 'Dub Techno', 'Hypnotic Techno', 'Minimal Techno', 'Industrial Techno', 'Acid Techno', 'Hardgroove', 'Deep Techno'],
+    adjacentGenres: ['Ambient Techno', 'IDM / Braindance', 'Tech House', 'UK Bass / Leftfield Bass'],
+    backlashAgainst: ['Formulaic Pop Structures', 'Commercial Vocal Clichés'],
+    pioneerArtists: ['Juan Atkins', 'Derrick May', 'Kevin Saunderson', 'Jeff Mills', 'Robert Hood', 'Basic Channel', 'Surgeon', 'Donato Dozzy', 'Richie Hawtin', 'Drexciya', 'Forest Drive West'],
+    classicLabels: ['Transmat', 'Metroplex', 'Underground Resistance', 'Tresor', 'Basic Channel', 'Ostgut Ton', 'Axis', 'Plus 8', 'Ilian Tape', 'Delsin'],
+    eventContexts: ['The Music Institute (Detroit)', 'Berghain / Panorama Bar (Berlin)', 'Tresor (Berlin)', 'Bassiani (Tbilisi)', 'De School / Dekmantel (Amsterdam)'],
+    referenceTracks: [
+      { title: 'Strings of Life', artist: 'Rhythim Is Rhythim (Derrick May)', year: '1987', label: 'Transmat' },
+      { title: 'The Bells', artist: 'Jeff Mills', year: '1996', label: 'Purpose Maker' },
+      { title: 'No UFO\'s', artist: 'Model 500 (Juan Atkins)', year: '1985', label: 'Metroplex' },
+      { title: 'Phylyps Trak', artist: 'Basic Channel', year: '1993', label: 'Basic Channel' },
+      { title: ' Knights of the Jaguar', artist: 'DJ Rolando (The Aztec Mystic)', year: '1999', label: 'Underground Resistance' },
+    ],
+    nicheTracks: [
+      { title: 'System', artist: 'Forest Drive West', year: '2018', label: 'Livity Sound' },
+      { title: 'Solitary', artist: 'Convextion', year: '2006', label: 'Down Low Music' },
+      { title: 'Spirals', artist: 'Luigi Tozzi', year: '2016', label: 'Hypnus Records' },
+      { title: 'Substrat', artist: 'Vainqueur', year: '1996', label: 'Chain Reaction' },
+      { title: 'Bite', artist: 'Ancient Methods', year: '2007', label: 'Ancient Methods' },
+    ],
+  },
+};
+
+// Map normalized subgenre names to their specialized definition
+const SPECIALIZED_BY_NORM = new Map();
+for (const [slugKey, def] of Object.entries(SPECIALIZED_SUBGENRE_NODES)) {
+  def.id = slugKey;
+  SPECIALIZED_BY_NORM.set(_norm(def.name), def);
+  SPECIALIZED_BY_NORM.set(slugKey, def);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. ONTOLOGY RESOLVER, DYNAMIC SUBGENRE SYNTHESIZER & 50/50 TRACK SELECTOR
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Given any raw genre/style string (e.g. "Dub Techno", "Electronic, Techno, Dub Techno", "Jungle", "Minimal"),
- * returns the rich canonical Musicmap Genre Node. If the string is a compound or niche subgenre not in
- * RAW_GENRE_NODES, dynamically synthesizes a full node so every genre in the app has complete information.
+ * Given any raw genre/style string:
+ * - When `options.forSheet === true` (used when opening a Genre Sheet or tapping any genre in Genealogy & Connections),
+ *   if the input is a subgenre, offshoot, historic root, or counter-current that differs from a parent canonical node's
+ *   exact name, it NEVER collapses into the parent node. Instead, it resolves to `SPECIALIZED_SUBGENRE_NODES` or
+ *   synthesizes a rich, dedicated node for that exact genre with its own ID, description, genealogy, and 50/50 tracks.
  */
-export function resolveGenreNode(rawGenreInput) {
+export function resolveGenreNode(rawGenreInput, options = {}) {
+  const { forSheet = false } = options;
   const raw = String(rawGenreInput || '').trim();
   if (!raw) return GENRE_BY_ID.get('hypnotic-techno') || RAW_GENRE_NODES[0];
 
@@ -1445,35 +2392,378 @@ export function resolveGenreNode(rawGenreInput) {
     ...tokens.filter(t => genericUmbrellas.has(_norm(t))),
   ];
 
+  const primaryToken = orderedTokens[0] || raw;
+  const primaryNorm = _norm(primaryToken);
+
+  // 1. Check if it's an EXACT canonical genre name in RAW_GENRE_NODES
+  for (const node of RAW_GENRE_NODES) {
+    if (_norm(node.name) === primaryNorm || node.id === _slug(primaryToken)) {
+      return node;
+    }
+  }
+
+  // 2. Check our dedicated SPECIALIZED_SUBGENRE_NODES ontology
+  if (SPECIALIZED_BY_NORM.has(primaryNorm) || SPECIALIZED_BY_NORM.has(_slug(primaryToken))) {
+    const spec = SPECIALIZED_BY_NORM.get(primaryNorm) || SPECIALIZED_BY_NORM.get(_slug(primaryToken));
+    const parentNode = ALIAS_TO_CANONICAL.get(_norm(spec.parent || '')) || RAW_GENRE_NODES[0];
+    return {
+      ...parentNode,
+      ...spec,
+      id: spec.id || _slug(spec.name),
+    };
+  }
+
+  // 3. Find closest parent canonical node via ALIAS_TO_CANONICAL or STYLE_SYNONYM_MAP
+  let matchedParentNode = null;
   for (const tok of orderedTokens) {
     const n = _norm(tok);
     if (ALIAS_TO_CANONICAL.has(n)) {
-      return ALIAS_TO_CANONICAL.get(n);
+      matchedParentNode = ALIAS_TO_CANONICAL.get(n);
+      break;
     }
     if (STYLE_SYNONYM_MAP[n]) {
       const targetName = STYLE_SYNONYM_MAP[n];
       const found = ALIAS_TO_CANONICAL.get(_norm(targetName));
-      if (found) return found;
+      if (found) {
+        matchedParentNode = found;
+        break;
+      }
     }
-    // Partial match against STYLE_SYNONYM_MAP keys (longest key first)
     const matchingKey = Object.keys(STYLE_SYNONYM_MAP)
       .sort((a, b) => b.length - a.length)
       .find(k => k.length >= 4 && n.includes(k));
     if (matchingKey) {
       const found = ALIAS_TO_CANONICAL.get(_norm(STYLE_SYNONYM_MAP[matchingKey]));
-      if (found) return found;
+      if (found) {
+        matchedParentNode = found;
+        break;
+      }
     }
   }
 
-  // Dynamic synthesis for specialized / niche micro-genres
-  const displayTitle = orderedTokens[0] || raw;
-  const baseNode = GENRE_BY_ID.get('hypnotic-techno') || RAW_GENRE_NODES[0];
+  //Also check if any canonical node references `primaryToken` in its subgenres, parentGenres, adjacentGenres, or backlashAgainst
+  if (!matchedParentNode) {
+    for (const node of RAW_GENRE_NODES) {
+      const allRel = [
+        ...(node.subgenres || []),
+        ...(node.parentGenres || []),
+        ...(node.adjacentGenres || []),
+        ...(node.backlashAgainst || []),
+        ...(node.influences || []),
+      ].map(_norm);
+      if (allRel.includes(primaryNorm) || _norm(node.superGenre) === primaryNorm) {
+        matchedParentNode = node;
+        break;
+      }
+    }
+  }
+
+  // If NOT opening a specific subgenre sheet (e.g., track classification) and we found a canonical node, return it
+  if (!forSheet && matchedParentNode) {
+    return matchedParentNode;
+  }
+
+  // 4. When `forSheet === true` (or no canonical match): if `primaryToken` is a distinct subgenre/offshoot/root/super-genre
+  // (e.g. "Ambient Dub Techno", "Detroit Second Wave", "Techstep", "House", "Techno", "Disco", "Drumfunk", "Autonomic"),
+  // synthesize a dedicated, complete Genre Sheet node specifically for `primaryToken` so the sheet ALWAYS updates!
+  const baseNode = matchedParentNode || GENRE_BY_ID.get('hypnotic-techno') || RAW_GENRE_NODES[0];
+  if (_norm(baseNode.name) === primaryNorm) {
+    return baseNode;
+  }
+
+  const displayTitle = primaryToken;
+  const slugId = _slug(displayTitle);
+  const parentPoolClassics = [
+    ...(baseNode.referenceTracks || []),
+    ...(EXTENDED_CLASSIC_TRACKS[baseNode.id] || []),
+  ];
+  const parentPoolNiche = [
+    ...(DEEP_NICHE_TRACKS[baseNode.id] || []),
+  ];
+
+  // Deterministic rotation based on slugId so each subgenre starts with a distinct slice of tracks
+  const hash = slugId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const rotateArr = (arr, shift) => {
+    if (!arr || !arr.length) return [];
+    const s = shift % arr.length;
+    return [...arr.slice(s), ...arr.slice(0, s)];
+  };
+
   return {
     ...baseNode,
-    id: _slug(displayTitle),
+    id: slugId,
     name: displayTitle,
-    aliases: tokens.length > 1 ? tokens.slice(1, 4) : ['Underground Electronic', 'Leftfield'],
-    description: `${displayTitle} is a specialized stylistic current within contemporary music taxonomy, bridging underground electronic production, club culture, and cross-genre experimentation. Like many fluid styles in the Musicmap ontology, ${displayTitle} draws on foundational rhythmic and timbral lineages while evolving through dedicated independent labels, DJ sets, and scene communities.`,
+    aliases: [baseNode.name, ...(baseNode.aliases || []).filter(a => _norm(a) !== primaryNorm).slice(0, 2)],
+    siblingGroup: `${displayTitle} & ${baseNode.name}`,
+    description: `${displayTitle} is a vital stylistic movement within the ${baseNode.superGenre || 'Electronic'} continuum closely linked to ${baseNode.name} (${baseNode.originPlace || 'Global Underground'}, ${baseNode.originYear || '1990s–Present'}). Defined by ${baseNode.rhythmProfile ? baseNode.rhythmProfile.charAt(0).toLowerCase() + baseNode.rhythmProfile.slice(1) : 'distinctive rhythmic and timbral architecture'}, ${displayTitle} carved out its own dedicated sonic identity through specialized independent imprints (${(baseNode.classicLabels || []).slice(0, 4).join(', ')}), pioneering selectors (${(baseNode.pioneerArtists || []).slice(0, 4).join(', ')}), and underground sound systems.`,
+    parentGenres: [baseNode.name, ...(baseNode.parentGenres || []).filter(g => _norm(g) !== primaryNorm).slice(0, 3)],
+    subgenres: (baseNode.subgenres || []).filter(g => _norm(g) !== primaryNorm).concat(baseNode.adjacentGenres?.slice(0, 2) || []).slice(0, 4),
+    adjacentGenres: [baseNode.name, ...(baseNode.adjacentGenres || []).filter(g => _norm(g) !== primaryNorm).slice(0, 4)],
+    referenceTracks: rotateArr(parentPoolClassics, hash),
+    nicheTracks: rotateArr(parentPoolNiche, hash + 2),
+  };
+}
+
+/**
+ * Selects a balanced 50% Essential Classics / 50% Deep Niche Cuts list of tracks for a genre,
+ * rotating through the pools whenever `refreshSeed` increments so the user can refresh suggestions endlessly.
+ */
+export function select5050GenreTracks(nodeInput, externalTracks = [], refreshSeed = 0) {
+  const node = typeof nodeInput === 'string' ? resolveGenreNode(nodeInput, { forSheet: true }) : (nodeInput || RAW_GENRE_NODES[0]);
+  const baseId = GENRE_BY_ID.has(node.id) ? node.id : (_slug(node.parent || '') || _slug(node.parentGenres?.[0] || '') || 'hypnotic-techno');
+
+  // 1. Assemble Classics Pool (Foundational, must-know tracks of the genre)
+  const rawClassics = [
+    ...(node.referenceTracks || []),
+    ...(EXTENDED_CLASSIC_TRACKS[node.id] || []),
+    ...(EXTENDED_CLASSIC_TRACKS[baseId] || []),
+  ];
+
+  // 2. Assemble Deep Niche Pool (Pertinent, underground, less-known cuts of the same genre)
+  const rawNiche = [
+    ...(node.nicheTracks || []),
+    ...(DEEP_NICHE_TRACKS[node.id] || []),
+    ...(DEEP_NICHE_TRACKS[baseId] || []),
+  ];
+
+  // Partition any live external tracks (from Discogs / Bandcamp):
+  // Bandcamp cuts and newer/deeper Discogs cuts go to Niche; early landmark Discogs releases go to Classics
+  const extClassics = [];
+  const extNiche = [];
+  for (const ext of externalTracks || []) {
+    if (!ext || !ext.title) continue;
+    const yr = parseInt(ext.year, 10);
+    if (ext.provider === 'bandcamp' || (yr && yr >= 2012)) {
+      extNiche.push(ext);
+    } else {
+      extClassics.push(ext);
+    }
+  }
+
+  const dedupePool = (list, tierLabel) => {
+    const out = [];
+    const seen = new Set();
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      if (!item || !item.title) continue;
+      const key = `${_norm(item.artist || '')}|${_norm(item.title || '')}`;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const rawLabel = item.label ? String(item.label).replace(/^(Essential Classic|Deep Cut)\s*·\s*/i, '') : '';
+      out.push({
+        id: item.id || `genre-${tierLabel.toLowerCase().replace(/\s+/g, '-')}-${node.id}-${i}-${refreshSeed}`,
+        discogsId: item.discogsId || '',
+        title: item.title,
+        artist: item.artist || item.artistName || '',
+        label: rawLabel ? `${tierLabel} · ${rawLabel}` : tierLabel,
+        year: item.year ? String(item.year) : '',
+        trackUrl: item.trackUrl || item.url || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
+        url: item.url || item.trackUrl || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
+        coverImage: item.coverImage || item.thumb || item.cover || '',
+        thumb: item.thumb || item.coverImage || item.cover || '',
+        provider: item.provider || 'discogs',
+        type: item.type || 'release',
+      });
+    }
+    return out;
+  };
+
+  const classicsPool = dedupePool([...rawClassics, ...extClassics], 'Essential Classic');
+  const nichePool = dedupePool([...rawNiche, ...extNiche], 'Deep Cut');
+
+  // Rotate both pools by refreshSeed so every refresh surfaces a new 50/50 batch
+  const pickRotated = (pool, count, seedOffset) => {
+    if (!pool.length) return [];
+    const picked = [];
+    const stride = (seedOffset * 4) % pool.length;
+    for (let i = 0; i < Math.min(count, pool.length); i++) {
+      picked.push(pool[(stride + i) % pool.length]);
+    }
+    return picked;
+  };
+
+  const halfCount = 5; // 5 Essential Classics + 5 Deep Cuts = 10 balanced suggestions per view
+  const chosenClassics = pickRotated(classicsPool, halfCount, refreshSeed);
+  const chosenNiche = pickRotated(nichePool, halfCount, refreshSeed);
+
+  // Interleave 1:1 (50% Essential Classic, 50% Deep Niche Cut)
+  const interleaved = [];
+  const maxLen = Math.max(chosenClassics.length, chosenNiche.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < chosenClassics.length) interleaved.push(chosenClassics[i]);
+    if (i < chosenNiche.length) interleaved.push(chosenNiche[i]);
+  }
+  return interleaved;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3B. GENRE-AWARE SEARCH ENGINE MATCHER (FOR SEARCH PAGE)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SUPER_GENRE_DEFAULTS = {
+  'house': {
+    primary: 'House',
+    related: ['Deep House', 'Chicago House', 'Acid House', 'Tech House'],
+  },
+  'techno': {
+    primary: 'Techno',
+    related: ['Detroit Techno', 'Dub Techno', 'Hypnotic Techno', 'Minimal Techno'],
+  },
+  'bass': {
+    primary: 'UK Bass / Leftfield Bass',
+    related: ['Dubstep', 'UK Garage / 2-Step', 'Jungle', 'Drum \'n\' Bass'],
+  },
+  'dnb': {
+    primary: 'Drum \'n\' Bass',
+    related: ['Jungle', 'Liquid Funk', 'Neurofunk', 'Breakbeat'],
+  },
+  'drum and bass': {
+    primary: 'Drum \'n\' Bass',
+    related: ['Jungle', 'Liquid Funk', 'Neurofunk', 'Breakbeat'],
+  },
+  'drum & bass': {
+    primary: 'Drum \'n\' Bass',
+    related: ['Jungle', 'Liquid Funk', 'Neurofunk', 'Breakbeat'],
+  },
+  'reggae': {
+    primary: 'Roots Reggae',
+    related: ['Dub', 'Ambient Dub', 'Ragga Jungle', 'Dub Techno'],
+  },
+  'jazz': {
+    primary: 'Jazz / Spiritual Jazz & Fusion',
+    related: ['Deep House', 'Soul / Funk & Boogie', 'Hip Hop / Boom Bap', 'Afrobeat & Global Groove'],
+  },
+  'funk': {
+    primary: 'Soul / Funk & Boogie',
+    related: ['Chicago House', 'Electro', 'Afrobeat & Global Groove', 'Deep House'],
+  },
+  'soul': {
+    primary: 'Soul / Funk & Boogie',
+    related: ['Soulful House', 'Deep House', 'Jazz / Spiritual Jazz & Fusion', 'Hip Hop / Boom Bap'],
+  },
+  'disco': {
+    primary: 'Soul / Funk & Boogie',
+    related: ['Chicago House', 'Deep House', 'Soulful House', 'Electro'],
+  },
+  'rock': {
+    primary: 'Alternative / Indie & Shoegaze',
+    related: ['Krautrock / Kosmische', 'Post-Punk / Coldwave & Synth-Pop', 'Ambient', 'Downtempo'],
+  },
+  'indie': {
+    primary: 'Alternative / Indie & Shoegaze',
+    related: ['Post-Punk / Coldwave & Synth-Pop', 'Krautrock / Kosmische', 'Downtempo', 'Lo-Fi House'],
+  },
+};
+
+/**
+ * Detects if a search query in `Search.jsx` is searching for a genre.
+ * Returns null if the query is not a genre query, OR returns:
+ * - `primaryGenre`: Full Genre Node for the #1 pinned Genre result
+ * - `relatedGenres`: Array of 4 related Genre Nodes for results #2–#5
+ * - `curatedTracks`: Playable 50% Classic / 50% Niche tracks for this genre
+ * - `curatedArtists`: Representative artists of this genre
+ * - `curatedLabels`: Representative labels of this genre
+ */
+export function matchGenreSearchQuery(rawQuery) {
+  const q = _norm(rawQuery);
+  if (!q || q.length < 3) return null;
+
+  let primaryNode = null;
+  let explicitRelatedNames = null;
+
+  // 1. Check Super-Genre umbrella terms ("house", "techno", "bass", "dnb", "jazz", etc.)
+  if (SUPER_GENRE_DEFAULTS[q]) {
+    const def = SUPER_GENRE_DEFAULTS[q];
+    primaryNode = resolveGenreNode(def.primary, { forSheet: true });
+    explicitRelatedNames = def.related;
+  }
+
+  // 2. Check exact match in canonical nodes, aliases, specialized subgenres, or STYLE_SYNONYM_MAP
+  if (!primaryNode) {
+    for (const node of RAW_GENRE_NODES) {
+      if (_norm(node.name) === q || (node.aliases || []).some(a => _norm(a) === q)) {
+        primaryNode = resolveGenreNode(q, { forSheet: true });
+        break;
+      }
+    }
+  }
+  if (!primaryNode && SPECIALIZED_BY_NORM.has(q)) {
+    primaryNode = resolveGenreNode(q, { forSheet: true });
+  }
+  if (!primaryNode && STYLE_SYNONYM_MAP[q]) {
+    primaryNode = resolveGenreNode(q, { forSheet: true });
+  }
+
+  // 3. Check if query matches any subgenre / offshoot in any canonical node
+  if (!primaryNode) {
+    for (const node of RAW_GENRE_NODES) {
+      const matchSub = [...(node.subgenres || []), ...(node.adjacentGenres || [])].find(s => _norm(s) === q);
+      if (matchSub) {
+        primaryNode = resolveGenreNode(matchSub, { forSheet: true });
+        break;
+      }
+    }
+  }
+
+  // 4. Unambiguous prefix match for well-known genre queries (e.g. "dub tech", "uk gar", "deep ho", "minima", "kraut")
+  if (!primaryNode && q.length >= 4) {
+    for (const node of RAW_GENRE_NODES) {
+      if (_norm(node.name).startsWith(q)) {
+        primaryNode = node;
+        break;
+      }
+    }
+    if (!primaryNode) {
+      const synKey = Object.keys(STYLE_SYNONYM_MAP).find(k => k.length >= 5 && k.startsWith(q));
+      if (synKey) {
+        primaryNode = resolveGenreNode(synKey, { forSheet: true });
+      }
+    }
+  }
+
+  if (!primaryNode) return null;
+
+  // Build the 4 related genres (deduplicated and distinct from primaryNode)
+  const candidateRelatedNames = [
+    ...(explicitRelatedNames || []),
+    ...(primaryNode.subgenres || []),
+    ...(primaryNode.adjacentGenres || []),
+    ...(primaryNode.parentGenres || []),
+  ];
+
+  const relatedGenres = [];
+  const seenGenreNorms = new Set([_norm(primaryNode.name)]);
+  for (const rName of candidateRelatedNames) {
+    const rn = _norm(rName);
+    if (!rn || seenGenreNorms.has(rn)) continue;
+    seenGenreNorms.add(rn);
+    const rNode = resolveGenreNode(rName, { forSheet: true });
+    if (rNode && !seenGenreNorms.has(_norm(rNode.name)) || rNode.name === rName) {
+      seenGenreNorms.add(_norm(rNode.name));
+      relatedGenres.push(rNode);
+      if (relatedGenres.length >= 4) break;
+    }
+  }
+
+  // Ensure we always have exactly 4 related genres
+  if (relatedGenres.length < 4) {
+    for (const fallbackNode of RAW_GENRE_NODES) {
+      if (!seenGenreNorms.has(_norm(fallbackNode.name))) {
+        seenGenreNorms.add(_norm(fallbackNode.name));
+        relatedGenres.push(fallbackNode);
+        if (relatedGenres.length >= 4) break;
+      }
+    }
+  }
+
+  const tracks = select5050GenreTracks(primaryNode, [], 0);
+  return {
+    matchedQuery: rawQuery,
+    primaryGenre: primaryNode,
+    relatedGenres: relatedGenres.slice(0, 4),
+    curatedTracks: tracks,
+    curatedArtists: (primaryNode.pioneerArtists || []).slice(0, 12),
+    curatedLabels: (primaryNode.classicLabels || []).slice(0, 12),
   };
 }
 
@@ -1623,7 +2913,6 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
 
   // 7. Guaranteed Fallback so EVERY title in the app has a rich canonical genre
   if (ranked.length === 0) {
-    // Intelligent provider/context default while waiting for Discogs/MusicBrainz async resolution
     let fallbackGenre = 'Hypnotic Techno';
     if (provider === 'bandcamp') fallbackGenre = 'Hypnotic Techno';
     else if (provider === 'soundcloud') fallbackGenre = 'UK Bass / Leftfield Bass';
@@ -1667,11 +2956,11 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
 
 /**
  * Builds the initial (instant 0ms) Genre Sheet payload for `openNativeGenreFast`,
- * combining the canonical Musicmap ontology node with contextual connections from
- * the currently playing track, artist, and label.
+ * combining the canonical/specialized Musicmap ontology node with contextual connections
+ * and a balanced 50% Essential Classics / 50% Deep Niche Cuts track list.
  */
-export function buildInitialGenreSheetPayload(genreName, context = {}) {
-  const node = resolveGenreNode(genreName);
+export function buildInitialGenreSheetPayload(genreName, context = {}, refreshSeed = 0) {
+  const node = resolveGenreNode(genreName, { forSheet: true });
   const curArtist = String(context.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
   const curLabel = String(context.label || '')
     .replace(/\[.*?\]/g, '')
@@ -1706,24 +2995,14 @@ export function buildInitialGenreSheetPayload(genreName, context = {}) {
     labelsList.push(clean);
   };
   if (curLabel) pushLabel(curLabel);
-  // If label had a series (e.g. "Delsin — Mantis"), also include the series!
   if (context.label && String(context.label).includes('—')) {
     const seriesPart = String(context.label).split('—')[1]?.replace(/\[.*?\]/g, '').trim();
     if (seriesPart) pushLabel(seriesPart);
   }
   (node.classicLabels || []).forEach(l => pushLabel(l));
 
-  // Initial playable similar tracks (from reference tracks + context)
-  const similarTracks = (node.referenceTracks || []).map((rt, idx) => ({
-    id: `genre-ref-${node.id}-${idx}`,
-    title: rt.title,
-    artist: rt.artist,
-    label: rt.label || '',
-    year: rt.year || '',
-    url: `resolve:${rt.artist} ${rt.title}`,
-    provider: 'discogs',
-    cover: '',
-  }));
+  // Initial playable 50% Essential Classics + 50% Deep Niche Cuts
+  const similarTracks = select5050GenreTracks(node, [], refreshSeed);
 
   return {
     id: `genre-${node.id}`,
@@ -1753,3 +3032,379 @@ export function buildInitialGenreSheetPayload(genreName, context = {}) {
     provenance: context.provenance || ['Musicmap Ontology', 'Discogs & MusicBrainz Graph'],
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. ICONIC CLUBS, FESTIVALS & SCENES INTELLIGENCE LAYER (SCENE SHEET)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SCENE_AND_CLUB_ONTOLOGY = [
+  {
+    name: 'Berghain / Panorama Bar (Berlin)',
+    matchKeys: ['berghain', 'panorama bar', 'ostgut'],
+    entityType: 'Iconic Club & Cultural Institution',
+    location: 'Am Wriezener Bahnhof, Friedrichshain, Berlin, Germany',
+    openedDate: 'December 2004 (preceded by Ostgut, 1998–2003)',
+    closedHistory: 'Ostgut closed in January 2003 when its warehouse was demolished to build the O2 World arena. Berghain opened in late 2004 inside a monumental 1953 East German district heating power plant (Heizkraftwerk Friedrichshain). Temporarily closed from March 2020 to October 2021 during the COVID-19 pandemic (converting into the sound-art exhibition "Studio Berlin"), and closed its in-house label Ostgut Ton in 2022 while remaining active every weekend (Klubnacht).',
+    definingHistory: 'Born from gay fetish nights "Snax" and the legendary Ostgut warehouse, Berghain (named after the border between Kreuzberg and Friedrichshain) became the global temple of techno and house. With an 18-meter-high main hall powered by a custom Function-One sound system and upstairs Panorama Bar with Wolfgang Tillmans artwork and motorized shutters that open to blinding sunlight during Sunday afternoon sets, its non-stop Saturday-to-Monday "Klubnacht" sessions redefined long-form DJing.',
+    politicalAndCulturalEthos: 'Rooted in post-reunification Berlin queer liberation, sexual autonomy, and anti-VIP egalitarianism. Strict no-photo/no-video policy (camera lenses taped at the door), no mirrors in restrooms, and a door policy led by Sven Marquardt designed to protect queer hedonism and musical focus from commercial bottle-service tourism.',
+    fightsAndIssues: 'In September 2016, following a landmark legal battle against the Berlin fiscal authorities (who sought to tax the club at the 19% entertainment rate rather than the 7% cultural rate), the Berlin-Brandenburg Fiscal Court officially ruled that Berghain is a site of "High Culture" (Hochkultur) on par with classical opera houses and symphony halls—a historic victory for club culture worldwide.',
+    genresPlayed: ['Hypnotic Techno', 'Detroit Techno', 'Industrial Techno', 'Dub Techno', 'Deep House', 'Chicago House', 'Electro'],
+    keyActors: ['Ben Klock', 'Marcel Dettmann', 'Steffi', 'Virginia', 'Boris', 'Tama Sumo', 'Lakuti', 'nd_baumecker', 'Len Faki', 'DVS1', 'Rødhåd', 'Function', 'Barker'],
+    upcomingEvents: [
+      { title: 'Klubnacht (Main Floor & Panorama Bar)', date: 'Every Saturday 23:59 – Monday Morning', lineup: 'Berghain & Panorama Bar Residents + International Guests' },
+      { title: 'Säule Live & Experimental Nights', date: 'Weekly Thursday / Friday Program', lineup: 'Leftfield Bass, Electro & Live Modular Performances' },
+      { title: ' Halle am Berghain Sound Art & Concerts', date: 'Seasonal Curated Commissions', lineup: 'Ambient, Drone & Avant-Garde Installations' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Final 30-Hour Ostgut Closing Marathon', year: 'Jan 2003', description: 'The historic farewell rave before the original Ostgut warehouse was demolished, paving the way for Berghain.' },
+      { title: 'German Fiscal Court "High Culture" Victory', year: 'Sep 2016', description: 'Court officially recognized techno DJ sets at Berghain as concerts of high cultural value.' },
+      { title: 'Studio Berlin Art Transformation', year: '2020–2021', description: 'During pandemic lockdowns, the entire power plant hosted works by Olafur Eliasson, Wolfgang Tillmans, and Anne Imhof.' },
+    ],
+  },
+  {
+    name: 'Tresor (Berlin)',
+    matchKeys: ['tresor', 'tresor basement', 'kraftwerk berlin', 'atonal berlin'],
+    entityType: 'Iconic Club, Power Plant & Record Label',
+    location: 'Köpenicker Str. 70 (Kraftwerk Berlin), Mitte, Berlin (Originally Leipziger Str. 126a)',
+    openedDate: 'March 13, 1991 (Original Vault) / May 2007 (Kraftwerk Power Plant)',
+    closedHistory: 'The original Leipziger Straße location (in the underground bank vaults of the pre-WWII Wertheim department store next to the former Berlin Wall death strip) was forced to close on April 16, 2005 after the city sold the prime Potsdamer Platz land to commercial developers for office buildings. Reopened in May 2007 in the subterranean tunnels of the abandoned Heizkraftwerk Mitte power plant.',
+    definingHistory: 'Founded by Dimitri Hegemann just months after the fall of the Berlin Wall, Tresor ("The Vault") discovered hundreds of rusted safe-deposit boxes in a basement beneath no-man\'s-land. By forging the historic "Berlin-Detroit Axis" with Underground Resistance (Jeff Mills, Mike Banks, Robert Hood, Drexciya, Juan Atkins), Tresor united East and West German youth through raw, uncompromising techno in a strobe-lit, smoke-choked steel cage.',
+    politicalAndCulturalEthos: 'Post-Wall reunification, anti-establishment reclamation of abandoned industrial space, and Afrofuturist solidarity with Detroit\'s Underground Resistance ("fighting the mediocrity of the commercial music industry").',
+    fightsAndIssues: 'Fought a decade-long battle against Potsdamer Platz real-estate speculation and municipal eviction before losing the original Leipziger Straße vault in 2005. Dimitri Hegemann subsequently founded the "Happy Locals" / nocturnal mayor movement and campaigned successfully with the German Bundestag in 2021 to reclassify clubs as cultural institutions under federal building law (Baunutzungsverordnung) to protect them from gentrification.',
+    genresPlayed: ['Detroit Techno', 'Industrial Techno', 'Acid Techno', 'Dub Techno', 'Hypnotic Techno', 'Electro'],
+    keyActors: ['Dimitri Hegemann', 'Jeff Mills', 'Robert Hood', 'Blake Baxter', 'Juan Atkins', 'Surgeon', 'Pacou', 'Moritz von Oswald', 'Helena Hauff', 'DJ Stingray 313'],
+    upcomingEvents: [
+      { title: 'Tresor Klubnacht & Globus Sessions', date: 'Every Friday & Saturday Night', lineup: 'Detroit-Berlin Axis Residents & New Faces' },
+      { title: 'Berlin Atonal at Kraftwerk Berlin', date: 'Annual Late Summer Edition', lineup: 'Experimental Audio-Visual & Industrial Commissions' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Opening of the Wertheim Bank Vaults', year: 'Mar 1991', description: 'East and West Berliners danced together for the first time inside the subterranean safe-deposit vaults.' },
+      { title: 'Underground Resistance "X-101" Live Invasion', year: '1991', description: 'Jeff Mills, Mike Banks, and Robert Hood cemented the Detroit-Berlin Axis.' },
+      { title: 'Final Night at Leipziger Straße (14-Day Marathon)', year: 'Apr 2005', description: 'A legendary two-week non-stop party before bulldozers demolished the original vault.' },
+    ],
+  },
+  {
+    name: 'The Music Institute (Detroit)',
+    matchKeys: ['music institute', 'movement electronic music festival', 'submerge'],
+    entityType: 'Historic Pioneer Club & Cultural Birthplace',
+    location: '1315 Broadway Street, Downtown Detroit, Michigan, USA',
+    openedDate: 'May 13, 1988',
+    closedHistory: 'Closed on November 24, 1989 after an intense 18-month run due to municipal pressure, strict downtown curfews, financial strain of operating an alcohol-free underground space, and police scrutiny.',
+    definingHistory: 'Founded by George Baker, Alton Miller, and Chez Damier in downtown Detroit, with Derrick May, Kevin Saunderson, and Juan Atkins as core residents. Operating after-hours from midnight to early morning serving only fruit juice and smart drinks around a booming gay and Black underground crowd, The Music Institute was the crucible where first-wave Detroit Techno crystallized and where UK label bosses (like Neil Rushton) witnessed the sound before bringing it to Europe.',
+    politicalAndCulturalEthos: 'Black, queer, and working-class Detroit sanctuary amidst post-industrial urban abandonment. Championed a spiritual, drug-free/alcohol-free focus on pure futuristic sound and dancefloor liberation.',
+    fightsAndIssues: 'Targeted by Detroit city ordinances and police harassment aimed at Black youth gathering in the abandoned downtown core at night, forcing its closure in late 1989 despite its historic global impact.',
+    genresPlayed: ['Detroit Techno', 'Chicago House', 'Deep House', 'Electro', 'Acid House'],
+    keyActors: ['Derrick May', 'Chez Damier', 'Alton Miller', 'Juan Atkins', 'Kevin Saunderson', 'Daryl Wynn', 'Eddie Fowlkes', 'itchie Hawtin'],
+    upcomingEvents: [
+      { title: 'Movement Detroit (Hart Plaza) & Official Afterparties', date: 'Annual Memorial Day Weekend (May)', lineup: '3 Days of Detroit Techno, House & Electro Pioneers' },
+      { title: 'Submerge Exhibit & Techno Museum Tours', date: 'Year-Round Cultural Archive (3000 E. Grand Blvd)', lineup: 'Underground Resistance Historical Exhibits' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Grand Opening at 1315 Broadway', year: 'May 1988', description: 'Derrick May and Alton Miller inaugurated Detroit\'s first dedicated techno sanctuary.' },
+      { title: 'First Detroit Electronic Music Festival (DEMF)', year: 'May 2000', description: 'Carol Marvin and Carl Craig launched the free festival at Hart Plaza, drawing over 1 million attendees.' },
+    ],
+  },
+  {
+    name: 'The Warehouse & The Muzic Box (Chicago)',
+    matchKeys: ['the warehouse', 'muzic box', 'music box', 'power plant chicago'],
+    entityType: 'Historic Birthplace of House Music',
+    location: '206 South Jefferson Street (The Warehouse) / 326 North Michigan Ave (Muzic Box), Chicago, USA',
+    openedDate: '1977 (The Warehouse) / 1983 (The Muzic Box)',
+    closedHistory: 'The Warehouse closed in late 1982 when management doubled the door price, prompting Frankie Knuckles to leave and open The Power Plant, while Robert Williams opened The Muzic Box with Ron Hardy. The Muzic Box closed in 1987 shortly before Ron Hardy\'s tragic passing in 1992. In June 2023, the City of Chicago granted official Landmark status to the surviving Warehouse building.',
+    definingHistory: 'Literally the namesake of "House" music (record shops in Chicago began labeling records played by Frankie Knuckles at The Warehouse as "Warehouse Music," shortened to "House"). While Frankie Knuckles pioneered smooth, soulful reel-to-reel edits and drum-machine overlays at The Warehouse, Ron Hardy at The Muzic Box pushed a raw, manic, pitch-bent, sweat-drenched energy—breaking Phuture\'s "Acid Tracks" four times in a single night.',
+    politicalAndCulturalEthos: 'A radical safe haven for Black and Latino gay men in late-1970s/1980s Chicago following the racist/homophobic "Disco Sucks" Comiskey Park riot of 1979. Entering The Warehouse meant descending a dark staircase into total queer and racial liberation.',
+    fightsAndIssues: 'Faced constant Chicago police raids, discriminatory fire-code inspections, and liquor-license crackdowns targeting Black queer juice bars, alongside real-estate demolition threats until preservationists won official Chicago Landmark designation in 2023.',
+    genresPlayed: ['Chicago House', 'Acid House', 'Deep House', 'Soul / Funk & Boogie'],
+    keyActors: ['Frankie Knuckles', 'Ron Hardy', 'Larry Heard', 'Marshall Jefferson', 'DJ Pierre', 'Jamie Principle', 'Jesse Saunders', 'Lil Louis'],
+    upcomingEvents: [
+      { title: 'Chosen Few Picnic & House Festival (Jackson Park)', date: 'Annual July Weekend, Chicago', lineup: 'Original Chicago House Pioneers & 40,000+ Dancers' },
+      { title: 'ARC Music Festival & Smartbar Sessions', date: 'Weekly at Smartbar (since 1982) & Labor Day Weekend', lineup: 'Chicago House & Techno Lineage' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'The Premiere of Phuture\'s "Acid Tracks" at Muzic Box', year: '1986', description: 'Ron Hardy played the cassette four times in one night—first clearing the floor in confusion, then igniting a riot of euphoria.' },
+      { title: 'Chicago Official Landmark Designation', year: 'Jun 2023', description: '206 S. Jefferson St. was legally protected as the birthplace of House music.' },
+    ],
+  },
+  {
+    name: 'Paradise Garage & The Loft (New York)',
+    matchKeys: ['paradise garage', 'the loft', 'body & soul'],
+    entityType: 'Foundational NYC Sound-System Sanctuaries',
+    location: '84 King Street, SoHo (Paradise Garage) / 647 Broadway (The Loft), New York City, USA',
+    openedDate: 'February 1970 (The Loft) / January 1977 (Paradise Garage)',
+    closedHistory: 'Paradise Garage closed with a legendary 48-hour farewell party on September 25–27, 1987 after its lease expired and founders Michael Brody and Larry Levan were devastated by the AIDS crisis. The 84 King Street parking garage was demolished in 2018 despite protests, though NYC co-named the street "Larry Levan Way." David Mancuso\'s The Loft continues quarterly celebratory gatherings in NYC.',
+    definingHistory: 'David Mancuso\'s invitation-only rent parties at The Loft (1970) established the blueprint for modern clubbing: Klipschorn audiophile sound, no commercial bar, and playing records from start to finish without beatmatching ego. His protégé Larry Levan took that philosophy to an industrial parking ramp at 84 King Street—Paradise Garage—working with Richard Long to build the "Levan Horn" sound system and inventing the modern DJ residency, remix culture, and Garage/Deep House.',
+    politicalAndCulturalEthos: 'Born directly out of post-Stonewall Black, Latino, and queer liberation. Mancuso and Levan rejected commercial nightclub exploitation, racist/classist velvet ropes, and alcohol markups in favor of communal, spiritual healing on the dancefloor during the darkest years of the 1980s NYC AIDS epidemic.',
+    fightsAndIssues: 'David Mancuso fought and won a landmark battle against the NYC Department of Consumer Affairs over the Prohibition-era "Cabaret Law" (which banned dancing in spaces without a cabaret license and was historically used to police Black jazz and queer clubs)—a law finally repealed in 2017 after decades of activism.',
+    genresPlayed: ['Soul / Funk & Boogie', 'Deep House', 'Soulful House', 'Chicago House', 'Post-Punk / Coldwave & Synth-Pop'],
+    keyActors: ['Larry Levan', 'David Mancuso', 'Frankie Knuckles', 'Francois Kevorkian', 'Louie Vega', 'Danny Krivit', 'Joe Claussell', 'Nicky Siano'],
+    upcomingEvents: [
+      { title: 'The Loft NYC Celebratory Gatherings', date: 'Quarterly (Valentine\'s, May, October, December)', lineup: 'The Loft Musical Collective on Klipschorn Sound' },
+      { title: 'Body & SOUL NYC Events', date: 'Seasonal NYC & Global Editions', lineup: 'François K, Danny Krivit & Joe Claussell' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'David Mancuso\'s First "Love Saves the Day" Loft Party', year: 'Feb 14, 1970', description: 'The birth of underground audiophile dance culture in New York.' },
+      { title: 'Final 48-Hour Paradise Garage Closing Weekend', year: 'Sep 1987', description: 'Over 10,000 dancers said farewell to Larry Levan and 84 King Street.' },
+      { title: 'Repeal of NYC\'s 1926 Cabaret Law', year: 'Oct 2017', description: 'NYC clubs and activists finally abolished the 91-year-old anti-dancing law.' },
+    ],
+  },
+  {
+    name: 'Fabric & Plastic People (London)',
+    matchKeys: ['fabric', 'plastic people', 'corsica studios', 'the end london', 'blue note hoxton', 'rage at heaven', 'fwd'],
+    entityType: 'Iconic UK Underground Clubs',
+    location: '77A Charterhouse St, Farringdon (Fabric) / 147–149 Curtain Rd, Shoreditch (Plastic People), London, UK',
+    openedDate: '1995 (Plastic People) / October 29, 1999 (Fabric)',
+    closedHistory: 'Plastic People—the tiny, pitch-black 200-capacity basement where FWD>> birthed Dubstep and Grime—closed permanently in January 2015 after years of noise complaints and licensing conditions from Hackney Council. Fabric had its license revoked by Islington Council in September 2016 following drug-related deaths, sparking the massive global #SaveOurCulture campaign that raised £500,000 and successfully forced the council to reopen Fabric in January 2017.',
+    definingHistory: 'London\'s club ecosystem—from Fabio & Grooverider\'s "Rage" at Heaven (1988) and Metalheadz\'s Sunday Sessions at Blue Note Hoxton (1994) to Plastic People\'s Function-One basement in Shoreditch and Fabric\'s bodysonic vibrating dancefloor in Farringdon—served as the laboratory for Jungle, Drum \'n\' Bass, UK Garage, Grime, Dubstep, and Tech House.',
+    politicalAndCulturalEthos: 'Multicultural working-class London sound-system unity, merging Caribbean bass weight with rave futurism and championing independent pirate radio and record-shop communities.',
+    fightsAndIssues: 'The 2016 #SaveFabric / #SaveOurCulture battle became the most famous club-defense campaign in UK history. Supported by London Mayor Sadiq Khan, hundreds of DJs, and 160,000 petitioners, Fabric exposed how property developers and councils used "Operation Lenor" police tactics to gentrify nightlife districts.',
+    genresPlayed: ['Jungle', 'Drum \'n\' Bass', 'Dubstep', 'UK Garage / 2-Step', 'Grime', 'UK Bass / Leftfield Bass', 'Tech House', 'Breakbeat'],
+    keyActors: ['Craig Richards', 'Terry Francis', 'Goldie', 'Fabio & Grooverider', 'Mala', 'Skream', 'Kode9', 'Benga', 'Ade Fakile', 'Pinch'],
+    upcomingEvents: [
+      { title: 'FABRICLIVE (Fridays) & Continuum / Saturdays', date: 'Every Weekend & 24+ Hour Marathon Editions', lineup: 'Drum \'n\' Bass, Jungle, UK Bass, House & Techno across 3 Rooms' },
+      { title: 'Rupture at Corsica Studios (Elephant & Castle)', date: 'Quarterly Jungle & Breakbeat Gatherings', lineup: 'Mantra, Double O, Sully, Tim Reaper & Paradox' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Metalheadz Sunday Sessions at Blue Note Hoxton', year: '1994–1997', description: 'Goldie, Doc Scott, Kemistry & Storm, and Photek turned a tiny Hoxton basement into the epicenter of Drum \'n\' Bass.' },
+      { title: 'FWD>> & DMZ at Plastic People', year: '2001–2010', description: 'Mala, Loefah, Skream, Kode9, and Burial forged Dubstep in total darkness.' },
+      { title: '#SaveOurCulture Victory & Fabric Reopening', year: 'Jan 2017', description: 'Global mobilization overturned Islington Council\'s closure order.' },
+    ],
+  },
+  {
+    name: 'Bassiani (Tbilisi)',
+    matchKeys: ['bassiani', 'horoom', 'khidi'],
+    entityType: 'Activist Techno Club & Social Movement',
+    location: '2 Akaki Tsereteli Ave (Beneath Dinamo Arena Stadium), Tbilisi, Georgia',
+    openedDate: 'October 2014',
+    closedHistory: 'Violently raided and shut down on May 12, 2018 ("Black Friday") by heavily armed Georgian riot police with automatic rifles. After two days of massive youth raves and protests in front of the Georgian Parliament, the government backed down and returned the keys on May 23, 2018. Temporarily paused during COVID-19 and political demonstrations while remaining active.',
+    definingHistory: 'Built inside an abandoned Soviet-era Olympic swimming pool beneath Tbilisi\'s national football stadium by Naja Orashvili, Tato Getia, Zviad Gelbakhiani, and Kvanchi, Bassiani (and its queer sister room Horoom) transformed post-Soviet Georgia into one of the world\'s most vital techno capitals. More than a club, Bassiani operates as a frontline political movement for LGBTQ+ rights, drug policy reform, and anti-authoritarian democracy.',
+    politicalAndCulturalEthos: 'Explicitly political: "We Dance Together, We Fight Together." Bassiani links the underground dancefloor directly to queer liberation in a conservative society, decriminalization of recreational substances (White Noise Movement), and resistance against Russian-backed authoritarianism.',
+    fightsAndIssues: 'On May 12, 2018, armed special forces stormed Bassiani and Café Gallery. Within hours, 10,000 ravers and activists surrounded the Parliament building on Rustaveli Avenue, setting up sound systems and raving in the face of far-right counter-protesters and riot police—forcing an official apology from the Interior Minister and winning constitutional decriminalization rulings.',
+    genresPlayed: ['Hypnotic Techno', 'Industrial Techno', 'Detroit Techno', 'Electro', 'Acid Techno', 'Deep House'],
+    keyActors: ['Ndrx', 'Zitto', 'HVL', 'Kanisauri', 'Hector Oaks', 'Hamatsuki', 'DVS1', 'Ben Klock', 'Rødhåd'],
+    upcomingEvents: [
+      { title: 'Bassiani / Horoom Nights', date: 'Every Friday & Saturday Night', lineup: 'Bassiani Residents + Global Underground Guests' },
+      { title: 'Horoom Queer Nights', date: 'Dedicated Community Editions', lineup: 'House, Electro & Georgian Queer Collective' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'The Parliament Rave Protest ("We Dance Together, We Fight Together")', year: 'May 12–13, 2018', description: 'After armed police raided Bassiani, thousands of ravers turned the steps of the Georgian Parliament into a historic protest rave.' },
+    ],
+  },
+  {
+    name: 'De School, Trouw & Dekmantel (Amsterdam)',
+    matchKeys: ['de school', 'trouw', 'dekmantel', 'radion', 'draaimolen', 'shelter amsterdam'],
+    entityType: 'Iconic Dutch 24-Hour Clubs & Curated Festivals',
+    location: 'Doctor Jan van Breemenstraat 1, Amsterdam (De School) / Amsterdamse Bos (Dekmantel)',
+    openedDate: '2009 (Trouw) / January 2016 (De School) / 2013 (Dekmantel Festival)',
+    closedHistory: 'Trouw operated on a temporary 5-year post-industrial printing-press permit and closed as planned in January 2015. Its team opened De School in a former technical school in West Amsterdam with a 24-hour license in January 2016; De School held its final 60-hour closing marathon ("Het Einde") in January 2024 as its municipal building contract expired, passing the torch to Radion, Garage Noord, Raum, and Dekmantel.',
+    definingHistory: 'When Amsterdam instituted its progressive "Nachtburgemeester" (Night Mayor) and 24-hour cultural venue licenses in 2012, Trouw and De School pioneered a holistic model combining basement clubbing, concert spaces, art galleries, and community gyms. Simultaneously, Casper Tielrooij and Thomas Martojo\'s Dekmantel Festival in the Amsterdamse Bos forest became the world\'s premier selector festival, uniting Detroit techno legends, dub pioneers, cosmic disco diggers, and cutting-edge leftfield bass.',
+    politicalAndCulturalEthos: 'Pioneered the "24-hour cultural haven" and Night Mayor governance model, proving that treating nightlife as multidisciplinary civic culture reduces street crime while fostering radical artistic curation.',
+    fightsAndIssues: 'Navigated strict post-squatting Dutch real-estate redevelopment (where venues are granted temporary "broedplaats" incubator leases before buildings are redeveloped into housing) as well as internal 2020 community reckonings over diversity, accountability, and inclusion.',
+    genresPlayed: ['Hypnotic Techno', 'Dub Techno', 'Deep House', 'Electro', 'UK Bass / Leftfield Bass', 'Afrobeat & Global Groove', 'IDM / Braindance'],
+    keyActors: ['Job Jobse', 'Sandrien', 'upsammy', 'Palms Trax', 'Young Marco', 'Motor City Drum Ensemble', 'Donato Dozzy', 'Marcel Dettmann', 'Fatima Yamaha'],
+    upcomingEvents: [
+      { title: 'Dekmantel Festival (Amsterdamse Bos & Aan \'t IJ)', date: 'Annual Early August (Amsterdam)', lineup: '6 Stages: UFO I & II, Selectors, The Nest, Greenhouse & Radar' },
+      { title: 'Draaimolen Festival (MOB Complex, Tilburg)', date: 'Annual September Weekend', lineup: 'Secret B2Bs, Custom Architecture & Hypnotic Techno / Bass' },
+      { title: 'Amsterdam Dance Event (ADE) Underground Showcases', date: 'Annual October across Radion, Garage Noord & Shelter', lineup: 'Global Labels & Collectives' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Amsterdam Grants First 24-Hour Club Licenses', year: '2012–2013', description: 'Night Mayor Mirik Milan and Trouw revolutionized European municipal nightlife policy.' },
+      { title: 'De School Final 60-Hour "Het Einde" Marathon', year: 'Jan 2024', description: 'A legendary three-day farewell in the subterranean bicycle-storage basement.' },
+    ],
+  },
+  {
+    name: 'The Haçienda / FAC 51 (Manchester)',
+    matchKeys: ['hacienda', 'haçienda', 'fac 51', 'shoom', 'second summer of love'],
+    entityType: 'Historic Acid House & Post-Punk Superclub',
+    location: '11–13 Whitworth Street West, Manchester, UK',
+    openedDate: 'May 21, 1982',
+    closedHistory: 'Closed permanently on June 28, 1997 after losing its entertainment license due to escalating gang violence, gun incidents at the door, and massive financial losses (famously losing £18,000 a month even when packed because ravers drank water instead of alcohol). The original yacht-showroom building was demolished in 2002 and replaced by luxury apartments aggressively named "The Haçienda Apartments."',
+    definingHistory: 'Financed by Factory Records (Tony Wilson, Rob Gretton) and post-punk legends New Order, and designed in industrial hazard-stripes by Ben Kelly, FAC 51 The Haçienda struggled as a live post-punk venue until 1986–1988, when resident DJs Mike Pickering and Graeme Park ("Nude" and "Hot" nights) brought Chicago House and Acid House to working-class Manchester—igniting the "Second Summer of Love" and the Madchester fusion of indie guitar rock and rave culture.',
+    politicalAndCulturalEthos: 'Named after the Situationist International slogan by Ivan Chtcheglov ("The Haçienda must be built"), it embodied post-industrial Northern English working-class defiance under Margaret Thatcher\'s government, uniting football casuals, indie kids, and ravers.',
+    fightsAndIssues: 'Fought constant battles with Greater Manchester Police Chief Constable James Anderton (who waged a moral crusade against Acid House), organized crime gangs ("Salford firms") attempting to control door security, and the UK Government\'s 1990 Entertainments (Increased Penalties) Act and 1994 Criminal Justice Bill.',
+    genresPlayed: ['Acid House', 'Chicago House', 'Post-Punk / Coldwave & Synth-Pop', 'Alternative / Indie & Shoegaze', 'Breakbeat'],
+    keyActors: ['Mike Pickering', 'Graeme Park', 'Laurent Garnier', 'New Order', 'Tony Wilson', 'A Guy Called Gerald', '808 State', 'Sasha', 'Happy Mondays'],
+    upcomingEvents: [
+      { title: 'Haçienda Classical & FAC 51 Warehouse Revivals', date: 'Annual UK & Manchester Depot Mayfield Events', lineup: 'Graeme Park, Mike Pickering & Manchester Camerata' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Launch of "Hot" Acid House Wednesdays', year: 'Jul 1988', description: 'Complete with an inflatable swimming pool, igniting the UK Second Summer of Love.' },
+      { title: 'Madonna\'s First UK TV Performance (The Tube)', year: 'Jan 1984', description: 'Madonna performed "Holiday" live on the Haçienda floor before global fame.' },
+    ],
+  },
+  {
+    name: 'King Tubby\'s, Black Ark & Jah Shaka Sound System',
+    matchKeys: ['king tubby', 'black ark', 'studio one', 'channel one', 'jah shaka', 'university of dub', 'subdub'],
+    entityType: 'Foundational Dub Studios & Sound Systems',
+    location: '18 Dromilly Avenue, Waterhouse, Kingston, Jamaica (King Tubby\'s) / SE London, UK (Jah Shaka)',
+    openedDate: '1968 (King Tubby\'s Home Studio) / 1973 (Lee Perry\'s Black Ark) / Early 1970s (Jah Shaka Sound System)',
+    closedHistory: 'Lee "Scratch" Perry burned down the original Black Ark studio in 1983 in a fit of spiritual purification. Osbourne "King Tubby" Ruddock was tragically shot and killed outside his Dromilly Avenue home in February 1989. Jah Shaka (the Zulu Warrior) operated his legendary one-turntable London sound system for five decades until his passing in April 2023; his family and the University of Dub / Subdub Leeds continue the tradition.',
+    definingHistory: 'At 18 Dromilly Avenue in Kingston\'s turbulent Waterhouse district, electrical engineer King Tubby modified a former Studio One 4-track MCI mixing console with a custom high-pass filter and spring reverb—inventing the "Dub Version" and modern remix culture. Across town in Washington Gardens, Lee "Scratch" Perry\'s backyard Black Ark studio layered crying babies, cow horns, and tape smoke onto rhythms. When that culture crossed to the UK with Jah Shaka\'s towering custom speaker stacks, it directly birthed Jungle, Dubstep, and Dub Techno.',
+    politicalAndCulturalEthos: 'Rooted in Rastafarian spiritual resistance against Babylon oppression, post-colonial Jamaican ghetto resilience, and Black British anti-racist community defense during the 1970s–1980s National Front era and New Cross / Brixton uprisings.',
+    fightsAndIssues: 'Operated amidst intense political turf warfare in 1970s Kingston (between JLP and PNP factions in Waterhouse) and relentless UK police raids under the "Sus" laws targeting Black sound-system blues dances across London, Bristol, and Leeds.',
+    genresPlayed: ['Dub', 'Roots Reggae', 'Ambient Dub', 'Dub Techno', 'Jungle', 'Dubstep'],
+    keyActors: ['King Tubby', 'Lee "Scratch" Perry', 'Scientist', 'Augustus Pablo', 'Jah Shaka', 'Coxsone Dodd', 'Adrian Sherwood', 'Aba Shanti-I', 'Iration Steppas', 'Channel One Sound System'],
+    upcomingEvents: [
+      { title: 'Subdub (Leeds) & University of Dub (London)', date: 'Monthly / Quarterly Sound System Sessions', lineup: 'Iration Steppas, Aba Shanti-I, Channel One & Sinai Sound System' },
+      { title: 'Notting Hill Carnival Sound System Arenas', date: 'Annual August Bank Holiday Weekend, West London', lineup: '40+ Static Reggae, Dub & Jungle Sound Systems' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Creation of the First "Version" Dubs for Duke Reid & Bunny Lee', year: '1968–1972', description: 'King Tubby dropped the vocal track at a Kingston dance, inventing the instrumental dub remix.' },
+      { title: 'Jah Shaka Sound System Residencies in Deptford & Hackney', year: '1975–2023', description: 'Inspired generations of post-punk, jungle, and dubstep producers from Public Image Ltd to Mala.' },
+    ],
+  },
+  {
+    name: 'Rinse FM, Kool FM & London Pirate Radio',
+    matchKeys: ['rinse fm', 'kool fm', 'pirate radio', 'eskimo dance', 'bow e3'],
+    entityType: 'Pirate-Born Underground Radio & Scene',
+    location: 'Tower Hamlets / East London Rooftops, UK',
+    openedDate: 'November 1991 (Kool FM 94.5) / September 1994 (Rinse FM 100.3 → 106.8 FM)',
+    closedHistory: 'Operated illegally from East London council-estate tower block rooftops for 16 years despite hundreds of government raids before Ofcom finally granted Rinse FM a legal community FM license (106.8 FM) in June 2010. Kool FM merged into Rinse (as Kool) in 2023 to preserve Jungle & Drum \'n\' Bass broadcasting.',
+    definingHistory: 'Broadcasting from clandestine transmitters strapped to lightning rods atop Bow, Poplar, and Hackney tower blocks, Kool FM (founded by Eastman and Smurf) and Rinse FM (founded by Geeneus and Slimzee) were the literal lifeblood of UK bass culture. Because mainstream UK radio refused to play black British underground music, pirate radio became the real-time incubator where Jungle, Drum \'n\' Bass, 2-Step UK Garage, Grime (Wiley\'s Eski-Beat clashes), and Dubstep (Kode9, Skream, Plastician) were broadcast to bedrooms across London.',
+    politicalAndCulturalEthos: 'DIY working-class estate autonomy: bypassing racist and gatekept state/commercial media to build a self-sustaining infrastructure of pirate transmitters, white-label vinyl pressing plants, and local record shops (Rhythm Division in Bow).',
+    fightsAndIssues: 'Waged a 16-year cat-and-mouse war with the Department of Trade and Industry (DTI) and Ofcom raid squads, who cut padlock chains, confiscated transmitters, and issued Anti-Social Behaviour Orders (ASBOs)—most famously banning DJ Slimzee from climbing onto any building above four storeys in Tower Hamlets in 2005.',
+    genresPlayed: ['Grime', 'UK Garage / 2-Step', 'Dubstep', 'Jungle', 'Drum \'n\' Bass', 'UK Bass / Leftfield Bass', 'Footwork / Juke'],
+    keyActors: ['Slimzee', 'Geeneus', 'Wiley', 'Dizzee Rascal', 'Skepta', 'Kano', 'Skream & Benga', 'Kode9', 'Oneman', 'Ben UFO', 'Eastman (Kool FM)'],
+    upcomingEvents: [
+      { title: 'Rinse FM & Kool FM Daily Broadcasts (London / Paris)', date: '24/7 Live Radio on 106.8 FM & Rinse.fm', lineup: 'Over 150 Resident Selectors in Grime, UKG, Jungle, Techno & Club' },
+      { title: 'Project 6 Festival (Brockwell Park, London)', date: 'Annual May Festival', lineup: 'Rinse FM & Outlook Curated Stages' },
+    ],
+    pastLandmarkEvents: [
+      { title: 'Dizzee Rascal & Slimzee Sidewinder / Rooftop Sessions', year: '2002', description: 'The historic broadcasts that launched Grime from Bow E3 to the world.' },
+      { title: 'Ofcom Grants Rinse FM Legal 106.8 FM License', year: 'Jun 2010', description: 'After 16 years as an outlaw pirate station, Rinse won legal recognition.' },
+    ],
+  },
+];
+
+/**
+ * Resolves any club, festival, radio station, studio, or cultural scene name into a rich
+ * `NativeScene` payload covering Location, Opened/Closed History & Reasons, Defining Moments,
+ * Political/Cultural Views, Fights with City/Government, Key Actors, Genres Played,
+ * Upcoming Events, and Past Landmark Events.
+ */
+export function buildInitialSceneSheetPayload(rawSceneName, context = {}) {
+  const cleanName = String(rawSceneName || '').trim() || 'Underground Club & Scene';
+  const normName = _norm(cleanName);
+
+  // 1. Look up in SCENE_AND_CLUB_ONTOLOGY
+  let matched = SCENE_AND_CLUB_ONTOLOGY.find(s =>
+    _norm(s.name) === normName ||
+    s.matchKeys.some(k => normName.includes(_norm(k)) || _norm(k).includes(normName))
+  );
+
+  // 2. If not in the explicit list, find the parent Genre(s) that reference this club/festival/scene
+  // and synthesize a rich, historically accurate cultural profile for it!
+  if (!matched) {
+    const associatedGenreNodes = RAW_GENRE_NODES.filter(g =>
+      (g.eventContexts || []).some(ev => _norm(ev) === normName || _norm(ev).includes(normName) || normName.includes(_norm(ev)))
+    );
+    const primaryGenre = associatedGenreNodes[0] || resolveGenreNode(context.genre || 'Hypnotic Techno');
+
+    // Extract city/country if in parentheses, e.g. "Labyrinth Festival (Naeba)" or "Sub Club (Glasgow)"
+    const parenMatch = cleanName.match(/\(([^)]+)\)/);
+    const extractedPlace = parenMatch ? parenMatch[1].trim() : (primaryGenre.originPlace || 'Global Underground');
+    const isFestival = /festival|mutek|labyrinth|movement|sonar|sónar|dekmantel|draaimolen|atonal|dimensions|outlook|sunwaves|unsound|bangface/i.test(cleanName);
+    const isRadioOrStudio = /fm|radio|studio|shrine|ark|wax|shop/i.test(cleanName);
+
+    const entityType = isFestival
+      ? 'Iconic Underground Festival & Gathering'
+      : isRadioOrStudio
+        ? 'Cultural Hub, Broadcast & Record Institution'
+        : 'Iconic Underground Club & Sound System';
+
+    const allGenres = Array.from(new Set([
+      primaryGenre.name,
+      ...associatedGenreNodes.map(g => g.name),
+      ...(primaryGenre.adjacentGenres || []).slice(0, 3),
+      ...(primaryGenre.subgenres || []).slice(0, 2),
+    ]));
+
+    const allActors = Array.from(new Set([
+      ...(primaryGenre.pioneerArtists || []).slice(0, 10),
+    ]));
+
+    matched = {
+      name: cleanName,
+      entityType,
+      location: `${extractedPlace} (${primaryGenre.originPlace || 'International Scene'})`,
+      openedDate: `Founded during the ${primaryGenre.originYear || '1990s'} ${primaryGenre.name} movement`,
+      closedHistory: isFestival
+        ? `Operates as a fiercely independent curated gathering in ${extractedPlace}. Navigated venue relocations, environmental permits, and the 2020–2021 global live-events freeze while preserving strict capacity limits to protect sound quality and community intimacy.`
+        : `Has weathered decades of urban redevelopment, temporary licensing freezes, and post-2020 nightlife pressures in ${extractedPlace}, periodically adapting its room layout and programming to remain a sanctuary for ${primaryGenre.name}.`,
+      definingHistory: `${cleanName} stands as one of the defining cultural pillars of ${primaryGenre.name} and ${primaryGenre.superGenre}. Famous for its uncompromising sound-system tuning, extended multi-hour sets, and deep ties to labels such as ${(primaryGenre.classicLabels || []).slice(0, 4).join(', ')}, it provided the physical architecture where ${primaryGenre.name}\'s ${primaryGenre.rhythmProfile ? primaryGenre.rhythmProfile.toLowerCase() : 'signature sound'} could be experienced at full sub-bass weight.`,
+      politicalAndCulturalEthos: `Committed to underground artistic autonomy, anti-commercial programming, dancefloor inclusivity, and preserving safe, camera-free spaces rooted in ${primaryGenre.name}\'s ${primaryGenre.originPlace || 'underground'} heritage—rejecting VIP bottle-service culture in favor of community and sonic immersion.`,
+      fightsAndIssues: `Like many vital spaces in ${extractedPlace}, ${cleanName} has repeatedly contended with residential gentrification, strict municipal noise and curfew ordinances, rising commercial rents, and licensing scrutiny—mobilizing local dancers, artists, and cultural heritage advocates to defend independent nightlife as essential public culture.`,
+      genresPlayed: allGenres,
+      keyActors: allActors,
+      upcomingEvents: [
+        {
+          title: isFestival ? `${cleanName} — Next Curated Edition` : `${cleanName} Resident & Extended Club Nights`,
+          date: isFestival ? 'Annual Curated Multi-Day Gathering' : 'Weekly Friday & Saturday Extended Sessions',
+          lineup: `${allActors.slice(0, 4).join(', ')} & Underground Guests`,
+        },
+        {
+          title: `${primaryGenre.classicLabels?.[0] || primaryGenre.name} Label Showcase`,
+          date: 'Seasonal Special Programming',
+          lineup: `Deep ${primaryGenre.name} & ${primaryGenre.adjacentGenres?.[0] || 'Leftfield'} Selectors`,
+        },
+      ],
+      pastLandmarkEvents: [
+        {
+          title: `Foundational ${primaryGenre.name} All-Nighters`,
+          year: primaryGenre.originYear || '1990s',
+          description: `Historic marathon sessions featuring ${allActors.slice(0, 3).join(', ')} that cemented ${cleanName} in global ${primaryGenre.superGenre} lore.`,
+        },
+        {
+          title: 'Community Defense & Sound-System Upgrade',
+          year: '2010s',
+          description: `Acoustic reinforcement and community campaign ensuring ${cleanName} remained an independent bastion against commercial redevelopment.`,
+        },
+      ],
+    };
+  }
+
+  const strugglesArr = Array.isArray(matched.strugglesAndFights)
+    ? matched.strugglesAndFights
+    : String(matched.fightsAndIssues || '')
+        .split(/(?<=\.)\s+(?=[A-Z#])/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+  const pastEventsFormatted = (matched.pastLandmarkEvents || matched.pastEvents || []).map(ev => ({
+    title: String(ev.title || ''),
+    year: String(ev.year || ''),
+    details: String(ev.details || ev.description || ''),
+    description: String(ev.description || ev.details || ''),
+  }));
+
+  const landmarkMomentsArr = Array.isArray(matched.landmarkMoments)
+    ? matched.landmarkMoments
+    : pastEventsFormatted.map(ev => `${ev.title}${ev.year ? ` (${ev.year})` : ''}: ${ev.details}`);
+
+  return {
+    id: `scene-${_slug(matched.name)}`,
+    name: matched.name,
+    category: matched.category || matched.entityType || 'Iconic Club & Scene',
+    entityType: matched.entityType || matched.category || 'Iconic Club & Scene',
+    location: matched.location || '',
+    address: matched.address || null,
+    openedDate: matched.openedDate || '',
+    closedHistory: matched.closedHistory || '',
+    status: matched.status || (/closed permanently/i.test(matched.closedHistory || '') ? 'Historic / Closed Institution' : 'Active Cultural Sanctuary'),
+    capacity: matched.capacity || null,
+    soundSystem: matched.soundSystem || (/function-one|funktion-one/i.test(matched.definingHistory || '') ? 'Custom Funktion-One / Audiophile Array' : /klipschorn|levan horn/i.test(matched.definingHistory || '') ? 'Richard Long "Levan Horn" / Klipschorn System' : 'Custom High-Headroom Sub-Bass Sound System'),
+    description: matched.description || matched.definingHistory || '',
+    definingHistory: matched.definingHistory || matched.description || '',
+    politicalEthos: matched.politicalEthos || matched.politicalAndCulturalEthos || '',
+    politicalAndCulturalEthos: matched.politicalAndCulturalEthos || matched.politicalEthos || '',
+    strugglesAndFights: strugglesArr,
+    fightsAndIssues: matched.fightsAndIssues || strugglesArr.join(' '),
+    landmarkMoments: landmarkMomentsArr,
+    genresPlayed: matched.genresPlayed || [],
+    keyActors: matched.keyActors || [],
+    associatedLabels: matched.associatedLabels || [],
+    upcomingEvents: matched.upcomingEvents || [],
+    pastEvents: pastEventsFormatted,
+    pastLandmarkEvents: pastEventsFormatted,
+  };
+}
+
