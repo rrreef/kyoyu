@@ -51,7 +51,7 @@ export function registerAlbumPlayback(album) {
   };
 }
 
-export function openNativeAlbumFast(album) {
+export function openNativeAlbumFast(album, opts = {}) {
   if (!album) return null;
   const ts = Date.now();
   window.__lastFastOpenTs = ts;
@@ -74,6 +74,7 @@ export function openNativeAlbumFast(album) {
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
       albumOpen: true,
+      isUpdate: Boolean(opts && opts.isUpdate),
       nativeAlbum: {
         _ts: String(ts),
         id: album.id || String(Date.now()),
@@ -509,7 +510,7 @@ export default function AlbumSheet({ album, onClose }) {
   return null;
 }
 
-export function openNativeArtistFast(artist) {
+export function openNativeArtistFast(artist, opts = {}) {
   if (!artist) return null;
   const ts = Date.now();
   window.__lastFastOpenArtistTs = ts;
@@ -545,13 +546,14 @@ export function openNativeArtistFast(artist) {
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
       cmd: 'open_native_artist',
+      isUpdate: Boolean(opts && opts.isUpdate),
       artist: safeArtist
     });
   } catch (e) { console.error('Failed to open native artist sheet', e); }
   return artist;
 }
 
-export function openNativeLabelFast(label) {
+export function openNativeLabelFast(label, opts = {}) {
   if (!label) return null;
   const ts = Date.now();
   window.__lastFastOpenLabelTs = ts;
@@ -597,6 +599,8 @@ export function openNativeLabelFast(label) {
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
       cmd: 'open_native_label',
+      isUpdate: Boolean(opts && opts.isUpdate),
+      replaceArtist: Boolean(opts && opts.replaceArtist),
       label: safeLabel
     });
   } catch (e) { console.error('Failed to open native label sheet', e); }
@@ -720,6 +724,7 @@ export async function openRichArtistSheet(artistInput) {
           discogsId: profile.labelId || null,
           name: profile.labelName || cleanName,
           provider: 'discogs',
+          replaceArtist: true,
         });
       }
       if (profile && !profile.error) {
@@ -750,7 +755,7 @@ export async function openRichArtistSheet(artistInput) {
           images: mergedImages,
           urls: mergedUrls,
           topReleases: mergedReleases.length ? mergedReleases : initialArtist.topReleases,
-        });
+        }, { isUpdate: true });
       }
     }
   } catch (err) {
@@ -803,7 +808,7 @@ export async function openRichLabelSheet(labelInput) {
   };
 
   // Open immediately so user sees the sheet right away
-  openNativeLabelFast(currentLabel);
+  openNativeLabelFast(currentLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
 
   const labelId = (isObj && labelInput.provider === 'discogs' && /^\d+$/.test(String(labelInput.id || '')))
     ? labelInput.id
@@ -1011,7 +1016,7 @@ export async function openRichLabelSheet(labelInput) {
       topReleases: mergedReleases,
     };
 
-    openNativeLabelFast(currentLabel);
+    openNativeLabelFast(currentLabel, { isUpdate: true });
   };
 
   if (discogsData && !discogsData.error) {
@@ -1120,7 +1125,7 @@ export async function openReleaseFromSheet(releaseObj) {
             provider: 'bandcamp',
           }
         ],
-      });
+      }, { isUpdate: true });
       return;
     }
 
@@ -1152,7 +1157,7 @@ export async function openReleaseFromSheet(releaseObj) {
               cover: d.cover || cover,
               provider: '',
             })),
-          });
+          }, { isUpdate: true });
           return;
         }
       }
@@ -1167,7 +1172,7 @@ export async function openReleaseFromSheet(releaseObj) {
   }
 }
 
-export function openNativeGenreFast(genreObj) {
+export function openNativeGenreFast(genreObj, opts = {}) {
   if (!genreObj) return null;
   const ts = Date.now();
   window.__lastFastOpenGenreTs = ts;
@@ -1214,16 +1219,18 @@ export function openNativeGenreFast(genreObj) {
   };
 
   try {
-    window.webkit?.messageHandlers?.player?.postMessage({
-      cmd: 'open_native_genre',
-      genre: safeGenre,
-    });
+    if (window.webkit?.messageHandlers?.player) {
+      window.webkit.messageHandlers.player.postMessage({
+        cmd: 'open_native_genre',
+        isUpdate: Boolean(opts && opts.isUpdate),
+        genre: safeGenre,
+      });
+    } else {
+      window.dispatchEvent(new CustomEvent('kyoyu-open-web-genre', { detail: safeGenre }));
+    }
   } catch (e) {
     console.error('Failed to open native genre sheet', e);
   }
-  try {
-    window.dispatchEvent(new CustomEvent('kyoyu-open-web-genre', { detail: safeGenre }));
-  } catch (e) {}
   return safeGenre;
 }
 
@@ -1376,7 +1383,7 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
       window.__kyoyuGenrePayloadCache[currentPayload.name.toLowerCase()] = currentPayload;
     }
 
-    openNativeGenreFast(currentPayload);
+    openNativeGenreFast(currentPayload, { isUpdate: true });
   } catch (err) {
     console.warn('[openRichGenreSheet] enrich error:', err);
   }
@@ -1402,14 +1409,14 @@ export function refreshGenreSheetTracks(genreNameInput) {
         similarTracks: nextTracks,
       };
       window.__kyoyuGenrePayloadCache[key] = updated;
-      openNativeGenreFast(updated);
+      openNativeGenreFast(updated, { isUpdate: true });
       return;
     }
     openRichGenreSheet(gName, null, nextSeed);
   }
 }
 
-export function openNativeSceneFast(sceneObj) {
+export function openNativeSceneFast(sceneObj, opts = {}) {
   if (!sceneObj) return null;
   const pastEvs = (Array.isArray(sceneObj.pastEvents) ? sceneObj.pastEvents : (Array.isArray(sceneObj.pastLandmarkEvents) ? sceneObj.pastLandmarkEvents : [])).map((ev, idx) => ({
     id: `past-${idx}-${Date.now()}`,
@@ -1456,16 +1463,18 @@ export function openNativeSceneFast(sceneObj) {
   };
 
   try {
-    window.webkit?.messageHandlers?.player?.postMessage({
-      cmd: 'open_native_scene',
-      scene: safeScene,
-    });
+    if (window.webkit?.messageHandlers?.player) {
+      window.webkit.messageHandlers.player.postMessage({
+        cmd: 'open_native_scene',
+        isUpdate: Boolean(opts && opts.isUpdate),
+        scene: safeScene,
+      });
+    } else {
+      window.dispatchEvent(new CustomEvent('kyoyu-open-web-scene', { detail: safeScene }));
+    }
   } catch (e) {
     console.error('Failed to open native scene sheet', e);
   }
-  try {
-    window.dispatchEvent(new CustomEvent('kyoyu-open-web-scene', { detail: safeScene }));
-  } catch (e) {}
   return safeScene;
 }
 
