@@ -161,14 +161,11 @@ function baseReducer(state, action) {
         // No queue — restart current track from beginning
         return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
       }
-      if (state.progress > 3) {
-        // Restart current track
-        return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
-      }
       const idx = state.queue.findIndex(t => t.id === state.currentTrack?.id);
       if (idx < 0) return state;
-      // At the first track — do nothing
-      if (idx <= 0) return state;
+      if (idx <= 0) {
+        return { ...state, currentTrack: { ...state.currentTrack, _restart: Date.now() }, progress:0 };
+      }
       return { ...state, currentTrack: { ...state.queue[idx - 1] }, progress:0, duration:0, isPlaying:true };
     }
     default: return state;
@@ -294,27 +291,57 @@ export function PlayerProvider({ children }) {
     };
   }, []);
 
-  // ── History tracking ──
+  // ── History & Back-Stack tracking ──
+  const listenedStackRef = useRef([]);
+  const isSteppingBackRef = useRef(false);
+
   useEffect(() => {
-    if (!state.currentTrack) return;
+    if (!state.currentTrack || state.currentTrack.title === 'Loading...') return;
     try {
-      const historyStr = localStorage.getItem('kyoyu-play-history') || '[]';
-      let history = JSON.parse(historyStr);
       const replay = historyReplayInfo(state.currentTrack);
       const key = historyKey(state.currentTrack, replay);
-      history = history.filter(t => t.id !== state.currentTrack.id && (t._hkey || historyKey(t)) !== key);
-      
+
       const trackToSave = { ...state.currentTrack, replay, _hkey: key };
       delete trackToSave._restart;
       trackToSave.title = trackToSave.title || trackToSave.artistName || 'Unknown Track';
       trackToSave.artist = trackToSave.artistName || trackToSave.artist || '';
       trackToSave.cover = trackToSave.releaseCover || trackToSave.cover || trackToSave.artworkUrl;
       trackToSave.timestamp = Date.now();
-      
-      history.unshift(trackToSave);
-      history = history.slice(0, 20);
-      localStorage.setItem('kyoyu-play-history', JSON.stringify(history));
-      window.dispatchEvent(new Event('kyoyu-play-history-changed'));
+
+      if (isSteppingBackRef.current) {
+        isSteppingBackRef.current = false;
+      } else {
+        // Update chronological back-stack (shared across tabs via localStorage)
+        let stack = listenedStackRef.current;
+        try {
+          const rawStack = localStorage.getItem('kyoyu-back-stack-v1');
+          if (rawStack) {
+            const parsed = JSON.parse(rawStack);
+            if (Array.isArray(parsed)) stack = parsed;
+          }
+        } catch (e) {}
+        const top = stack.length > 0 ? stack[stack.length - 1] : null;
+        const topKey = top ? (top._hkey || historyKey(top)) : '';
+        const normStr = (s) => String(s || '').toLowerCase().trim();
+        const topTA = top ? `${normStr(top.title)}::${normStr(top.artist || top.artistName)}` : '';
+        const curTA = `${normStr(trackToSave.title)}::${normStr(trackToSave.artist || trackToSave.artistName)}`;
+        if (top && (String(top.id || '') === String(trackToSave.id || '') || (key && topKey === key) || (curTA !== '::' && topTA === curTA))) {
+          stack[stack.length - 1] = trackToSave;
+        } else {
+          stack.push(trackToSave);
+          if (stack.length > 40) stack = stack.slice(stack.length - 40);
+        }
+        listenedStackRef.current = stack;
+        try { localStorage.setItem('kyoyu-back-stack-v1', JSON.stringify(stack)); } catch (e) {}
+
+        const historyStr = localStorage.getItem('kyoyu-play-history') || '[]';
+        let history = JSON.parse(historyStr);
+        history = history.filter(t => t.id !== state.currentTrack.id && (t._hkey || historyKey(t)) !== key);
+        history.unshift(trackToSave);
+        history = history.slice(0, 20);
+        localStorage.setItem('kyoyu-play-history', JSON.stringify(history));
+        window.dispatchEvent(new Event('kyoyu-play-history-changed'));
+      }
     } catch (err) {}
   }, [state.currentTrack]);
 
@@ -824,13 +851,15 @@ export function PlayerProvider({ children }) {
 
   // ── Saved items (History, Library likes, playlists): play the exact same provider/item ──
   const savedPlayCounterRef = useRef(0);
-  async function playSaved(item, queue) {
+  async function playSaved(item, queue, opts = {}) {
     if (!item) return;
     savedPlayCounterRef.current += 1;
     const myCounter = savedPlayCounterRef.current;
     // A saved-item tap is a standalone play, not part of a search-results queue
-    searchQueueRef.current = [];
-    searchQueueIdxRef.current = -1;
+    if (!opts.keepSearchQueue) {
+      searchQueueRef.current = [];
+      searchQueueIdxRef.current = -1;
+    }
     if (Array.isArray(queue) && queue.length) dispatch({ type: 'SET_QUEUE', queue });
 
     const r = historyReplayInfo(item);
@@ -849,8 +878,10 @@ export function PlayerProvider({ children }) {
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
       await playBandcampOrFallback({ ...meta, url: r.url }, isCurrent);
     } else if (isStreamingProvider(r.provider)) {
-      searchQueueRef.current = [];
-      searchQueueIdxRef.current = -1;
+      if (!opts.keepSearchQueue) {
+        searchQueueRef.current = [];
+        searchQueueIdxRef.current = -1;
+      }
       await playStreamingItem(
         { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '', strict: true },
         playSearchItemCounterRef.current += 1,
@@ -892,19 +923,80 @@ export function PlayerProvider({ children }) {
     const q = searchQueueRef.current;
     const idx = searchQueueIdxRef.current;
     if (!q.length || idx < 0) return false;
-    // If progress > 3s, restart current
-    if (state.progress > 3) {
-      playSearchItem(q[idx]);
-      return true;
-    }
     if (idx <= 0) {
-      // At start — restart current
-      playSearchItem(q[0]);
-      return true;
+      return false;
     }
     const prevIdx = idx - 1;
     searchQueueIdxRef.current = prevIdx;
     playSearchItem(q[prevIdx]);
+    return true;
+  }
+
+  function playPreviousListened() {
+    const cur = stateRef.current.currentTrack;
+    const curId = String(cur?.id || '');
+    const curKey = cur ? (cur._hkey || historyKey(cur)) : '';
+    const normStr = (s) => String(s || '').toLowerCase().trim();
+    const curTitleArtist = cur ? `${normStr(cur.title)}::${normStr(cur.artistName || cur.artist)}` : '';
+
+    const isSameAsCurrent = (item) => {
+      if (!item || !cur) return false;
+      const tid = String(item.id || '');
+      const tkey = item._hkey || historyKey(item);
+      if (curId && tid && curId === tid) return true;
+      if (curKey && tkey && curKey === tkey) return true;
+      const itemTitleArtist = `${normStr(item.title || item.name)}::${normStr(item.artistName || item.artist)}`;
+      if (curTitleArtist && curTitleArtist !== '::' && curTitleArtist === itemTitleArtist) return true;
+      return false;
+    };
+
+    // 1. Check the chronological listened stack (synced via localStorage across tabs)
+    let stack = Array.isArray(listenedStackRef.current) ? [...listenedStackRef.current] : [];
+    try {
+      const rawStack = localStorage.getItem('kyoyu-back-stack-v1');
+      if (rawStack) {
+        const parsed = JSON.parse(rawStack);
+        if (Array.isArray(parsed) && parsed.length > 0) stack = parsed;
+      }
+    } catch (e) {}
+
+    // Pop any top entries matching the currently playing track
+    let popped = 0;
+    while (stack.length > 0 && isSameAsCurrent(stack[stack.length - 1])) {
+      stack.pop();
+      popped += 1;
+    }
+    // If the active WebView differed from the one that started the track, the top of stack is still the active track
+    if (popped === 0 && stack.length >= 2) {
+      stack.pop();
+    }
+
+    let prevTrack = stack.length > 0 ? stack[stack.length - 1] : null;
+
+    // 2. Fallback to persistent play history (`kyoyu-play-history`) if stack has no prior entry
+    if (!prevTrack) {
+      try {
+        const rawHist = localStorage.getItem('kyoyu-play-history');
+        if (rawHist) {
+          const hist = JSON.parse(rawHist);
+          if (Array.isArray(hist)) {
+            prevTrack = hist.find(t => t && !isSameAsCurrent(t)) || (hist.length >= 2 ? hist[1] : null);
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (prevTrack) {
+      isSteppingBackRef.current = true;
+      listenedStackRef.current = stack;
+      try { localStorage.setItem('kyoyu-back-stack-v1', JSON.stringify(stack)); } catch (e) {}
+      playSaved(prevTrack, stateRef.current.queue);
+      return true;
+    }
+
+    // 3. Fallback to active searchQueue or queue reducer
+    if (playPrevSearch()) return true;
+    dispatch({ type: 'PREV_TRACK' });
     return true;
   }
 
@@ -1345,7 +1437,7 @@ export function PlayerProvider({ children }) {
     <PlayerContext.Provider value={{
       state, dispatch, playTrack, playRelease, playYouTube, playSoundCloud,
       seekTo, setVolume, setAudioVolumeDirect, allTracks,
-      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, isInSearchQueue, playNextAutoplay,
+      setSearchQueue, playSearchItem, playNextSearch, playPrevSearch, playPreviousListened, isInSearchQueue, playNextAutoplay,
       resumeRestoredSession,
       recoverYouTubeFailure,
       playFromHistory, playSaved

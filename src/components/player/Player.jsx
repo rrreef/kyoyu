@@ -850,7 +850,7 @@ import { useLibrary } from '../../contexts/LibraryContext';
 
 /* ── Root ── */
 export default function Player({ hideMini = false }) {
-  const { state, dispatch, seekTo, playNextSearch, playPrevSearch, isInSearchQueue, playNextAutoplay, resumeRestoredSession, recoverYouTubeFailure } = usePlayer();
+  const { state, dispatch, seekTo, playNextSearch, playPrevSearch, playPreviousListened, isInSearchQueue, playNextAutoplay, resumeRestoredSession, recoverYouTubeFailure } = usePlayer();
   const { toggleLikeUpload, isLikedUpload, toggleLike, isLiked, likedUploads, likedTracks } = useLibrary();
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume, restoredPending } = state;
@@ -873,9 +873,14 @@ export default function Player({ hideMini = false }) {
   }, [isInSearchQueue, playNextSearch, playNextAutoplay]);
 
   const handlePrev = useCallback(() => {
-    if (isInSearchQueue()) { playPrevSearch(); }
-    else { dispatch({ type: 'PREV_TRACK' }); }
-  }, [isInSearchQueue, playPrevSearch, dispatch]);
+    if (playPreviousListened) {
+      playPreviousListened();
+    } else if (isInSearchQueue()) {
+      playPrevSearch();
+    } else {
+      dispatch({ type: 'PREV_TRACK' });
+    }
+  }, [playPreviousListened, isInSearchQueue, playPrevSearch, dispatch]);
   const expand   = useCallback(()=>{ setExp(true);  postNative({expanded:true});  },[]);
   const collapse = useCallback(()=>{ setExp(false); postNative({expanded:false}); },[]);
   useEffect(()=>{
