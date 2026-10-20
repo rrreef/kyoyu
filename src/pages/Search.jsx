@@ -5,7 +5,7 @@ import { unifiedSearch, resolveBandcamp, searchSingleProvider, categorizeDiscogs
 import { fetchAccountLibrary, isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import { rankResults, detectArtistSplit, normalize } from '../lib/searchRanker';
 import { analyzeSearch, buildResults, stripInternal } from '../lib/searchOrchestrator';
-import { openNativeAlbumFast, openNativeArtistFast, openNativeLabelFast, openRichArtistSheet, openRichLabelSheet, openRichGenreSheet, playGenreTrack, openReleaseFromSheet } from '../components/ui/AlbumSheet';
+import { openNativeAlbumFast, openNativePlaylistFast, openNativeArtistFast, openNativeLabelFast, openRichArtistSheet, openRichLabelSheet, openRichGenreSheet, playGenreTrack, openReleaseFromSheet } from '../components/ui/AlbumSheet';
 import { matchGenreSearchQuery } from '../lib/genreIntelligence';
 import { useLibrary } from '../contexts/LibraryContext';
 import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
@@ -1404,21 +1404,35 @@ export default function Search() {
       return;
     }
     if (item._libType === 'playlist' || item.kind === 'playlist') {
-      let tracks = raw.tracks || [];
-      if (!tracks.length && isStreamingAvailable() && raw.provider && (raw.playlistId || raw.url)) {
+      const latestPl = playlists.find(p => String(p.id) === String(raw.id)) || raw;
+      let tracks = latestPl.tracks || [];
+      if (!tracks.length && isStreamingAvailable() && latestPl.provider && (latestPl.playlistId || latestPl.url)) {
         try {
-          tracks = await fetchAccountLibrary(raw.provider, 'playlistTracks', { playlistId: raw.playlistId, playlistUrl: raw.url });
-          raw.tracks = tracks;
+          tracks = await fetchAccountLibrary(latestPl.provider, 'playlistTracks', { playlistId: latestPl.playlistId, playlistUrl: latestPl.url });
+          latestPl.tracks = tracks;
         } catch {}
       }
-      setPlaylistSheet({
-        id: raw.id,
-        title: raw.title || raw.name || 'Playlist',
-        artistName: raw.artistName || raw.creator || user?.displayName || 'You',
-        artworkUrl: raw.artworkUrl || raw.cover || null,
-        provider: raw.provider || null,
-        tracks,
-      });
+      if (window.webkit?.messageHandlers?.player) {
+        openNativePlaylistFast({
+          ...latestPl,
+          id: latestPl.id,
+          title: latestPl.title || latestPl.name || 'Playlist',
+          creator: latestPl.artistName || latestPl.creator || user?.displayName || 'You',
+          cover: latestPl.artworkUrl || latestPl.cover || '/album1.png',
+          provider: latestPl.provider || null,
+          tracks,
+        });
+      } else {
+        setPlaylistSheet({
+          id: latestPl.id,
+          title: latestPl.title || latestPl.name || 'Playlist',
+          artistName: latestPl.artistName || latestPl.creator || user?.displayName || 'You',
+          artworkUrl: latestPl.artworkUrl || latestPl.cover || null,
+          provider: latestPl.provider || null,
+          trackCount: tracks.length,
+          tracks,
+        });
+      }
       return;
     }
     if (item._libType === 'acctItem') {
@@ -2035,34 +2049,38 @@ export default function Search() {
             )}
             <div>
               <div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 600 }}>{playlistSheet.title}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{playlistSheet.artistName} · {playlistSheet.trackCount} tracks</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{playlistSheet.artistName} · {(playlistSheet.tracks || []).length} tracks</div>
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {(playlistSheet.tracks || []).map((t, i) => (
-              <div key={t.trackId || i} className="search-result-row search-external-row"
+              <div key={t.id || t.trackId || i} className="search-result-row search-external-row"
                 onClick={() => {
-                  handleSearchPlay({
-                    id: `sc-${t.trackId}`,
-                    title: t.title,
-                    artistName: t.artistName,
-                    artworkUrl: t.artworkUrl,
-                    duration: t.duration || 0,
-                    provider: 'soundcloud',
-                    providerItemId: t.permalinkUrl,
-                    scTrackId: t.trackId,
-                  });
+                  if (t.id && !t.permalinkUrl) {
+                    playSaved(t, playlistSheet.tracks);
+                  } else {
+                    handleSearchPlay({
+                      id: t.id || `sc-${t.trackId}`,
+                      title: t.title,
+                      artistName: t.artistName || t.artist,
+                      artworkUrl: t.artworkUrl || t.cover,
+                      duration: t.duration || 0,
+                      provider: t.provider || 'soundcloud',
+                      providerItemId: t.permalinkUrl || t.providerItemId || t.trackUrl,
+                      scTrackId: t.scTrackId || t.trackId,
+                    });
+                  }
                 }}>
                 <div className="search-result-art discogs-art" style={{ borderRadius: '8px' }}>
-                  {t.artworkUrl ? (
-                    <img src={t.artworkUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  {(t.artworkUrl || t.cover) ? (
+                    <img src={t.artworkUrl || t.cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', background: 'var(--grey-800)', borderRadius: 'inherit' }} />
                   )}
                 </div>
                 <div className="search-result-info">
                   <span className="search-result-title">{t.title}</span>
-                  <span className="search-result-artist">{t.artistName}</span>
+                  <span className="search-result-artist">{t.artistName || t.artist}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>
                   <Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />

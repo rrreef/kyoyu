@@ -20,23 +20,39 @@ export function registerAlbumPlayback(album) {
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
     const queue = (album.tracks || []).map(t => {
       const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
+      const resolvedCover = (t.cover && t.cover !== '/album1.png' ? t.cover : '')
+        || t.artworkUrl
+        || t.releaseCover
+        || (album.cover && album.cover !== '/album1.png' ? album.cover : '')
+        || album.artworkUrl
+        || t.cover
+        || album.cover
+        || '';
       return {
+        ...t,
         id: t.id,
         title: t.title || t.name,
-        artist: t.artist || album.artist,
-        releaseCover: album.cover || album.artworkUrl || t.cover,
-        releaseTitle: album.title,
+        artist: t.artist || t.artistName || album.artist || '',
+        cover: resolvedCover,
+        artworkUrl: t.artworkUrl || resolvedCover,
+        releaseCover: resolvedCover,
+        releaseTitle: t.album || t.releaseTitle || album.title || '',
         src, audioUrl: src, url: src,
+        trackUrl: t.trackUrl || t.url || undefined,
         duration: t.duration || '',
         provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null),
         providerItemId: t.providerItemId || t.trackUrl || undefined,
         scTrackId: t.scTrackId || undefined,
+        videoId: t.videoId || undefined,
+        spotifyId: t.spotifyId || undefined,
+        appleMusicId: t.appleMusicId || undefined,
+        tidalId: t.tidalId || undefined,
         origin: t.origin || undefined,
         replay: t.replay || undefined,
         streamFetchedAt: t.streamFetchedAt || undefined,
       };
     });
-    const idx = queue.findIndex(q => String(q.id) === String(trackObj.id));
+    const idx = queue.findIndex(q => String(q.id).split('?ts=')[0] === String(trackObj.id).split('?ts=')[0]);
     const target = queue[Math.max(idx, 0)];
     if (!target) return;
 
@@ -44,11 +60,59 @@ export function registerAlbumPlayback(album) {
     const fresh = target.streamFetchedAt && Date.now() - target.streamFetchedAt < FRESH_STREAM_MS;
     const needsResolve = isResolve || !target.src || (!fresh && historyReplayInfo(target).provider !== 'native');
     if (needsResolve && window.__kyoyuPlaySaved) {
-      window.__kyoyuPlaySaved({ ...target, src: '', audioUrl: '', url: isResolve ? target.src : target.url }, queue);
+      window.__kyoyuPlaySaved({ ...target, src: '', audioUrl: '', url: isResolve ? target.src : (target.trackUrl || target.url) }, queue);
       return;
     }
     if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
   };
+}
+
+export function openNativePlaylistFast(pl, opts = {}) {
+  if (!pl) return null;
+  const ts = Date.now();
+  const albumForm = {
+    id: pl.id,
+    title: pl.title || pl.name || 'Playlist',
+    artist: pl.artist || pl.artistName || pl.creator || 'You',
+    cover: pl.cover || pl.artworkUrl || '/album1.png',
+    provider: pl.provider || null,
+    isPublic: !!pl.isPublic,
+    tracks: (pl.tracks || []).map((t, idx) => ({
+      ...t,
+      id: t.id || `${pl.id}-t-${idx}`,
+      title: t.title || t.name || 'Unknown Track',
+      artist: t.artist || t.artistName || pl.artist || pl.artistName || '',
+      url: t.url || t.trackUrl || t.streamUrl || t.audioUrl || t.src || '',
+      cover: t.cover || t.artworkUrl || t.releaseCover || pl.cover || pl.artworkUrl || null,
+      provider: t.provider || pl.provider || null,
+    })),
+    _ts: ts,
+  };
+  window.__lastFastOpenTs = ts;
+  window.__kyoyuCurrentNativeAlbum = albumForm;
+  registerAlbumPlayback(albumForm);
+  try {
+    window.webkit?.messageHandlers?.player?.postMessage({
+      playlistOpen: true,
+      isUpdate: Boolean(opts && opts.isUpdate),
+      nativePlaylist: {
+        id: albumForm.id,
+        title: albumForm.title,
+        creator: albumForm.artist,
+        cover: albumForm.cover,
+        isPublic: albumForm.isPublic,
+        tracks: albumForm.tracks.map(t => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          url: t.url || '',
+          cover: t.cover || null,
+          provider: t.provider || null,
+        })),
+      },
+    });
+  } catch (e) {}
+  return albumForm;
 }
 
 export function openNativeAlbumFast(album, opts = {}) {
@@ -339,10 +403,6 @@ export default function AlbumSheet({ album, onClose }) {
     };
     window.addEventListener('kyoyu-native-like', handleNativeLike);
 
-    window.__kyoyuIsTrackInAnyPlaylist = (trackId) => {
-      const pls = getPlaylistsRef.current();
-      return pls.some(pl => pl.tracks && pl.tracks.some(t => String(t.id) === String(trackId)));
-    };
     window.__kyoyuToggleSaveAlbum = () => {
       const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
       if (!curAlbum || !curAlbum.tracks) return;
@@ -393,20 +453,6 @@ export default function AlbumSheet({ album, onClose }) {
         }, nextLiked);
       } catch (e) {}
     };
-    window.__kyoyuIsSavedAlbum = (tracksJson, incomingAlbumId) => {
-      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
-      const aid = incomingAlbumId || curAlbum?.id || '';
-      if (aid && isItemInConnectedLikes({ id: aid, trackUrl: curAlbum?.trackUrl || curAlbum?.url || '' })) {
-        return true;
-      }
-      let tracks = curAlbum?.tracks || [];
-      if (tracksJson) {
-        try { tracks = JSON.parse(tracksJson); } catch {}
-      }
-      if (!tracks || !tracks.length) return false;
-      const saved = JSON.parse(localStorage.getItem('kyoyu-liked-uploads') || '[]');
-      return tracks.every(t => saved.some(x => String(x.id) === String(t.id)));
-    };
     window.__kyoyuDownloadTrack = (trackId) => {
       const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
       const t = (curAlbum?.tracks || []).find(tr => String(tr.id) === String(trackId));
@@ -424,79 +470,11 @@ export default function AlbumSheet({ album, onClose }) {
       return !isDownloadedRef.current(trackId);
     };
 
-    // Playlist bridge
-    window.__kyoyuGetPlaylists = (trackId) => {
-      const pls = getPlaylistsRef.current().map(pl => {
-        // Find if this playlist contains ANY of the comma-separated track IDs
-        const ids = trackId ? String(trackId).split(',') : [];
-        const containsTrack = ids.length > 0 && ids.every(id => pl.tracks && pl.tracks.find(t => String(t.id) === String(id)));
-        return {
-          id: pl.id,
-          name: pl.title || pl.name,
-          trackCount: pl.trackCount || (pl.tracks || []).length,
-          containsTrack
-        };
-      });
-      return JSON.stringify(pls);
-    };
-
-    window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
-      const curAlbum = safeAlbumRef.current || window.__kyoyuCurrentNativeAlbum;
-      if (!curAlbum || !curAlbum.tracks) return;
-      const ids = String(trackId).split(',');
-      for (const id of ids) {
-        let trackObj = (curAlbum.tracks || []).find(t => String(t.id) === String(id));
-        if (trackObj) {
-          addToPlaylistRef.current(playlistId, trackObj);
-        }
-      }
-    };
-
-    window.__kyoyuCreatePlaylist = (name) => {
-      const pl = createPlaylistRef.current(name);
-      return JSON.stringify({ id: pl.id, name: pl.title, trackCount: 0 });
-    };
-
-    // Playlist cover update from native
-    window.__kyoyuUpdatePlaylistCover = (playlistId, coverDataUrl) => {
-      updatePlaylistCoverRef.current(playlistId, coverDataUrl || null);
-    };
-
-    // Playlist editing callbacks
-    window.__kyoyuDeletePlaylist = (playlistId) => {
-      deletePlaylistRef.current(playlistId);
-    };
-    window.__kyoyuRemoveFromPlaylist = (playlistId, trackId) => {
-      removeFromPlaylistRef.current(playlistId, trackId);
-    };
-    window.__kyoyuReorderPlaylist = (playlistId, fromIndex, toIndex) => {
-      reorderPlaylistRef.current(playlistId, fromIndex, toIndex);
-    };
-    window.__kyoyuTogglePlaylistPublic = (playlistId) => {
-      togglePlaylistPublicRef.current(playlistId);
-    };
-    window.__kyoyuGetPlaylistPublic = (playlistId) => {
-      const pl = getPlaylistsRef.current().find(p => p.id === playlistId);
-      // need full playlist data for isPublic
-      return false; // default
-    };
-
     return () => {
       window.removeEventListener('kyoyu-native-like', handleNativeLike);
       delete window.__kyoyuCloseNativeAlbum;
       delete window.__kyoyuToggleSaveAlbum;
-      delete window.__kyoyuIsSavedAlbum;
-      delete window.__kyoyuIsTrackInAnyPlaylist;
       delete window.__kyoyuDownloadTrack;
-      delete window.__kyoyuGetPlaylists;
-      delete window.__kyoyuAddToPlaylist;
-      delete window.__kyoyuCreatePlaylist;
-      delete window.__kyoyuUpdatePlaylistCover;
-      delete window.__kyoyuDeletePlaylist;
-      delete window.__kyoyuRemoveFromPlaylist;
-      delete window.__kyoyuReorderPlaylist;
-      delete window.__kyoyuTogglePlaylistPublic;
-      delete window.__kyoyuGetPlaylistPublic;
       const myTs = safeAlbumRef.current?._ts;
       if (!myTs || (window.__lastFastOpenTs && String(myTs) === String(window.__lastFastOpenTs))) {
         window.__lastFastOpenTs = 0;

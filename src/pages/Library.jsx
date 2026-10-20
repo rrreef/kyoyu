@@ -291,7 +291,9 @@ export default function Library() {
   }
 
   // Opens a playlist (Kyoyu or connected account) in the native sheet
-  async function openPlaylistSheet(pl) {
+  async function openPlaylistSheet(incomingPl) {
+    if (!incomingPl) return;
+    const pl = playlists.find(p => String(p.id) === String(incomingPl.id)) || incomingPl;
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
@@ -316,8 +318,8 @@ export default function Library() {
         id: t.id || String(Date.now() + Math.random()),
         title: t.title || t.name || 'Unknown Track',
         artist: t.artist || t.artistName || '',
-        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-        cover: t.artworkUrl || t.cover || null,
+        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || t.src || '',
+        cover: t.cover || t.artworkUrl || t.releaseCover || null,
         provider: t.provider || pl.provider || null,
       }));
       try {
@@ -343,9 +345,10 @@ export default function Library() {
             nativePlaylist: {
               _ts: String(ts),
               id: pl.id,
-              title: pl.title,
+              title: pl.title || pl.name || 'Playlist',
               cover,
               creator,
+              isPublic: !!pl.isPublic,
               provider: pl.provider || null,
               tracks: mappedTracks,
             }
@@ -617,6 +620,32 @@ export default function Library() {
       <div className="page library-page animate-in">
         {barSpacer}
         {hiddenFilterButtons}
+        {activeFilter === 'playlists' && playlists.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div className="shelf-row-label">My Playlists</div>
+            {layoutMode === 'list' ? (
+              <div>
+                {playlists.map(pl => (
+                  <LibRow
+                    key={pl.id}
+                    cover={pl.cover}
+                    title={pl.title}
+                    sub={`${pl.tracks?.length || 0} tracks`}
+                    onClick={() => openPlaylistSheet(pl)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="scroll-row">
+                {playlists.map(pl => (
+                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
+                    <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length || 0} tracks`} badge={pl.isAI ? 'AI' : null} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {body}
         {selectedAlbum && <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />}
       </div>

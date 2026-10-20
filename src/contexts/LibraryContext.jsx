@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { playlists as mockPlaylists, releases } from '../data/mockData';
 import { syncProviderLike } from '../lib/streaming';
@@ -24,10 +24,21 @@ export function LibraryProvider({ children }) {
   const [playlists, setPlaylists] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('kyoyu-playlists'));
-      if (stored && stored.length) return stored;
+      if (Array.isArray(stored)) return stored;
     } catch {}
     return mockPlaylists;
   });
+  const playlistsRef = useRef(playlists);
+  playlistsRef.current = playlists;
+
+  function updatePlaylists(updater) {
+    const next = typeof updater === 'function' ? updater(playlistsRef.current || []) : updater;
+    playlistsRef.current = next;
+    try { localStorage.setItem('kyoyu-playlists', JSON.stringify(next)); } catch {}
+    setPlaylists(next);
+    return next;
+  }
+
   const [downloads, setDownloads] = useState(() => {
     try { return JSON.parse(localStorage.getItem('reef-downloads') || '[]'); } catch { return []; }
   });
@@ -52,7 +63,11 @@ export function LibraryProvider({ children }) {
         if (e.key === 'reef-saved') setSavedReleases(JSON.parse(e.newValue || '[]'));
         if (e.key === 'reef-downloads') setDownloads(JSON.parse(e.newValue || '[]'));
         if (e.key === 'reef-followed') setFollowedArtists(JSON.parse(e.newValue || '[]'));
-        if (e.key === 'kyoyu-playlists') setPlaylists(JSON.parse(e.newValue || '[]'));
+        if (e.key === 'kyoyu-playlists') {
+          const next = JSON.parse(e.newValue || '[]');
+          playlistsRef.current = next;
+          setPlaylists(next);
+        }
       } catch (err) {}
     };
     window.addEventListener('storage', handleStorage);
@@ -174,43 +189,73 @@ export function LibraryProvider({ children }) {
   function isDownloaded(trackId) { return downloads.some(d => d.id === trackId); }
 
   function createPlaylist(name) {
-    const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false };
-    setPlaylists(prev => [...prev, newPl]);
+    const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false, isPublic: false };
+    updatePlaylists(prev => [...prev, newPl]);
     return newPl;
   }
   function addToPlaylist(playlistId, track) {
-    setPlaylists(prev => prev.map(pl => {
+    if (!track || !playlistId) return;
+    const cleanTrackId = String(track.id || '').split('?ts=')[0];
+    if (!cleanTrackId) return;
+    const normalizedTrack = {
+      ...track,
+      id: cleanTrackId,
+      title: track.title || track.name || 'Unknown Track',
+      artist: track.artist || track.artistName || '',
+      album: track.album || track.releaseTitle || track.albumTitle || '',
+      cover: track.cover || track.artworkUrl || track.releaseCover || '',
+      url: track.url || track.trackUrl || track.streamUrl || track.audioUrl || track.src || '',
+      audioUrl: track.audioUrl || track.src || track.streamUrl || track.url || '',
+      trackUrl: track.trackUrl || track.url || '',
+    };
+    updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
-      if (pl.tracks.some(t => t.id === track.id)) return pl;
-      return { ...pl, tracks: [...pl.tracks, track] };
+      const existingTracks = pl.tracks || [];
+      if (existingTracks.some(t => String(t.id || '').split('?ts=')[0] === cleanTrackId)) return pl;
+      const nextTracks = [...existingTracks, normalizedTrack];
+      const nextCover = ((!pl.cover || pl.cover === '/album1.png') && normalizedTrack.cover && normalizedTrack.cover !== '/album1.png')
+        ? normalizedTrack.cover
+        : (pl.cover || '/album1.png');
+      return { ...pl, cover: nextCover, tracks: nextTracks };
     }));
   }
   function getPlaylists() {
-    return playlists.map(pl => ({ id: pl.id, name: pl.title, trackCount: (pl.tracks || []).length }));
+    return (playlistsRef.current || []).map(pl => ({
+      id: pl.id,
+      name: pl.title || pl.name || 'Untitled',
+      title: pl.title || pl.name || 'Untitled',
+      trackCount: (pl.tracks || []).length,
+      tracks: pl.tracks || [],
+      cover: pl.cover || '/album1.png',
+      creator: pl.creator || 'You',
+      isPublic: !!pl.isPublic,
+    }));
   }
   function updatePlaylistCover(playlistId, coverUrl) {
-    setPlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, cover: coverUrl } : pl));
+    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, cover: coverUrl } : pl));
   }
   function deletePlaylist(playlistId) {
-    setPlaylists(prev => prev.filter(pl => pl.id !== playlistId));
+    updatePlaylists(prev => prev.filter(pl => pl.id !== playlistId));
   }
   function removeFromPlaylist(playlistId, trackId) {
-    setPlaylists(prev => prev.map(pl => {
+    const cleanId = String(trackId || '').split('?ts=')[0];
+    updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
-      return { ...pl, tracks: pl.tracks.filter(t => t.id !== trackId) };
+      return { ...pl, tracks: (pl.tracks || []).filter(t => String(t.id || '').split('?ts=')[0] !== cleanId) };
     }));
   }
   function reorderPlaylist(playlistId, fromIndex, toIndex) {
-    setPlaylists(prev => prev.map(pl => {
+    updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
-      const tracks = [...pl.tracks];
+      const tracks = [...(pl.tracks || [])];
+      if (fromIndex < 0 || fromIndex >= tracks.length || toIndex < 0 || toIndex >= tracks.length) return pl;
       const [moved] = tracks.splice(fromIndex, 1);
       tracks.splice(toIndex, 0, moved);
       return { ...pl, tracks };
     }));
   }
   function togglePlaylistPublic(playlistId) {
-    setPlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, isPublic: !pl.isPublic } : pl));
+    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, isPublic: !pl.isPublic } : pl));
   }
 
   return (
