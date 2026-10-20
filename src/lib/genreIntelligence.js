@@ -2505,93 +2505,333 @@ export function resolveGenreNode(rawGenreInput, options = {}) {
 }
 
 /**
- * Selects a balanced 50% Essential Classics / 50% Deep Niche Cuts list of tracks for a genre,
- * rotating through the pools whenever `refreshSeed` increments so the user can refresh suggestions endlessly.
+ * Generates a deterministic vinyl sleeve SVG data URI so a genre track never appears blank
+ * even before live provider / iTunes artwork finishes resolving.
  */
-export function select5050GenreTracks(nodeInput, externalTracks = [], refreshSeed = 0) {
+export function buildGenreSleeveDataUri(item = {}, genreName = '') {
+  const seedStr = `${item.artist || ''}-${item.title || ''}-${genreName || ''}`;
+  let hash = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const abs = Math.abs(hash);
+  const hue1 = abs % 360;
+  const hue2 = (hue1 + 42 + (abs % 55)) % 360;
+  const initials = String(item.artist || item.title || genreName || 'KY')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(w => (w[0] || '').toUpperCase())
+    .join('') || 'KY';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0%" stop-color="hsl(${hue1},48%,22%)"/>` +
+    `<stop offset="100%" stop-color="hsl(${hue2},62%,10%)"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="300" height="300" fill="url(#g)"/>` +
+    `<circle cx="150" cy="150" r="112" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>` +
+    `<circle cx="150" cy="150" r="82" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>` +
+    `<circle cx="150" cy="150" r="44" fill="hsl(${hue1},58%,32%)" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>` +
+    `<circle cx="150" cy="150" r="9" fill="#0d0d11"/>` +
+    `<text x="150" y="268" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-family="-apple-system,Helvetica,sans-serif" font-size="18" font-weight="700" letter-spacing="2">${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function getDefaultProviderPriority() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('providerPriority') || localStorage.getItem('kyoyu-provider-priority');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(p => String(p).toLowerCase());
+      }
+    }
+  } catch (e) {}
+  return ['bandcamp', 'soundcloud', 'youtube', 'discogs', 'spotify', 'applemusic', 'tidal'];
+}
+
+/**
+ * Assigns and orders tracks according to the user's provider ranking in Settings.
+ * If a curated track has `resolve:` URL (playable across providers), its provider is assigned
+ * proportionally to the user's top ranked providers (e.g. mostly #1 Bandcamp, then #2 SoundCloud, etc.),
+ * and all tracks in the section are sorted by the user's provider priority ranking.
+ */
+export function orderTracksByProviderPriority(tracks = [], priorityInput = []) {
+  const priority = (Array.isArray(priorityInput) && priorityInput.length > 0)
+    ? priorityInput.map(p => String(p).toLowerCase())
+    : getDefaultProviderPriority();
+
+  const playableRankOrder = priority.filter(p => ['bandcamp', 'soundcloud', 'youtube', 'spotify', 'applemusic', 'tidal', 'discogs'].includes(p));
+  const primaryProv = playableRankOrder[0] || 'bandcamp';
+  const secondaryProv = playableRankOrder[1] || 'soundcloud';
+  const tertiaryProv = playableRankOrder[2] || 'youtube';
+
+  const rankOf = (prov) => {
+    const p = String(prov || '').toLowerCase();
+    const idx = priority.indexOf(p);
+    return idx === -1 ? 999 : idx;
+  };
+
+  const assigned = tracks.map((t, idx) => {
+    const rawUrl = String(t.trackUrl || t.url || '');
+    const isResolve = rawUrl.startsWith('resolve:');
+    let prov = String(t.provider || '').toLowerCase();
+    // For unresolved ontology tracks that will be resolved on playback or enrichment,
+    // weight their target provider toward the user's Settings ranking (#1 mostly, then #2, then #3)
+    if (isResolve && (!prov || prov === 'discogs')) {
+      const mod = idx % 10;
+      if (mod < 6) prov = primaryProv;
+      else if (mod < 9) prov = secondaryProv;
+      else prov = tertiaryProv;
+    }
+    return {
+      ...t,
+      provider: prov || primaryProv,
+    };
+  });
+
+  return assigned.sort((a, b) => {
+    const ra = rankOf(a.provider);
+    const rb = rankOf(b.provider);
+    if (ra !== rb) return ra - rb;
+    // Prefer tracks with real external artwork URLs over data: URI fallbacks within the same provider tier
+    const aRealArt = a.coverImage && !String(a.coverImage).startsWith('data:') ? 0 : 1;
+    const bRealArt = b.coverImage && !String(b.coverImage).startsWith('data:') ? 0 : 1;
+    return aRealArt - bRealArt;
+  });
+}
+
+/**
+ * Builds the 3 Genre Sheet release sections (10 titles each):
+ * 1. `essentialClassics` (10 titles) — foundational classics of the genre
+ * 2. `nicheCuts` (10 titles) — strictly niche underground cuts (likes <= 1000 & artist followers <= 1000)
+ * 3. `recommendations` (10 titles) — the sweet spot between classics & niche cuts, matching 100% the genre
+ *    and the initial context track/artist/label + public/platform playlists.
+ */
+export function selectGenreThreeSections(
+  nodeInput,
+  externalPools = {},
+  context = {},
+  seeds = {},
+  providerPriorityInput = []
+) {
   const node = typeof nodeInput === 'string' ? resolveGenreNode(nodeInput, { forSheet: true }) : (nodeInput || RAW_GENRE_NODES[0]);
   const baseId = GENRE_BY_ID.has(node.id) ? node.id : (_slug(node.parent || '') || _slug(node.parentGenres?.[0] || '') || 'hypnotic-techno');
+  const priority = (Array.isArray(providerPriorityInput) && providerPriorityInput.length > 0)
+    ? providerPriorityInput
+    : getDefaultProviderPriority();
 
-  // 1. Assemble Classics Pool (Foundational, must-know tracks of the genre)
-  const rawClassics = [
-    ...(node.referenceTracks || []),
-    ...(EXTENDED_CLASSIC_TRACKS[node.id] || []),
-    ...(EXTENDED_CLASSIC_TRACKS[baseId] || []),
-  ];
+  const classicSeed = typeof seeds === 'number' ? seeds : (seeds.essentialClassics ?? seeds.all ?? 0);
+  const nicheSeed = typeof seeds === 'number' ? seeds : (seeds.nicheCuts ?? seeds.all ?? 0);
+  const recSeed = typeof seeds === 'number' ? seeds : (seeds.recommendations ?? seeds.all ?? 0);
 
-  // 2. Assemble Deep Niche Pool (Pertinent, underground, less-known cuts of the same genre)
-  const rawNiche = [
-    ...(node.nicheTracks || []),
-    ...(DEEP_NICHE_TRACKS[node.id] || []),
-    ...(DEEP_NICHE_TRACKS[baseId] || []),
-  ];
-
-  // Partition any live external tracks (from Discogs / Bandcamp):
-  // Bandcamp cuts and newer/deeper Discogs cuts go to Niche; early landmark Discogs releases go to Classics
-  const extClassics = [];
-  const extNiche = [];
-  for (const ext of externalTracks || []) {
-    if (!ext || !ext.title) continue;
-    const yr = parseInt(ext.year, 10);
-    if (ext.provider === 'bandcamp' || (yr && yr >= 2012)) {
-      extNiche.push(ext);
-    } else {
-      extClassics.push(ext);
+  // Gather related genre IDs for deep pool expansion so every section has >= 25 candidates for refreshing
+  const relatedIds = [];
+  for (const relName of [...(node.subgenres || []), ...(node.parentGenres || []), ...(node.adjacentGenres || [])]) {
+    const rSlug = _slug(relName);
+    if (EXTENDED_CLASSIC_TRACKS[rSlug] || DEEP_NICHE_TRACKS[rSlug] || GENRE_BY_ID.has(rSlug)) {
+      if (!relatedIds.includes(rSlug) && rSlug !== node.id && rSlug !== baseId) {
+        relatedIds.push(rSlug);
+      }
     }
   }
 
-  const dedupePool = (list, tierLabel) => {
+  const relatedClassics = [];
+  const relatedNiche = [];
+  for (const rId of relatedIds) {
+    const rNode = GENRE_BY_ID.get(rId);
+    if (rNode?.referenceTracks) relatedClassics.push(...rNode.referenceTracks);
+    if (EXTENDED_CLASSIC_TRACKS[rId]) relatedClassics.push(...EXTENDED_CLASSIC_TRACKS[rId]);
+    if (rNode?.nicheTracks) relatedNiche.push(...rNode.nicheTracks);
+    if (DEEP_NICHE_TRACKS[rId]) relatedNiche.push(...DEEP_NICHE_TRACKS[rId]);
+  }
+
+  // Normalize external pools (supports array or { classics, niche, recommendations })
+  let extClassics = [];
+  let extNiche = [];
+  let extRecommendations = [];
+  if (Array.isArray(externalPools)) {
+    for (const ext of externalPools) {
+      if (!ext || !ext.title) continue;
+      const likes = Number(ext.likesCount || 0);
+      const followers = Number(ext.userFollowersCount || 0);
+      const yr = parseInt(ext.year, 10);
+      if (likes <= 1000 && followers <= 1000 && (ext.provider === 'bandcamp' || ext.provider === 'soundcloud' || (yr && yr >= 2012))) {
+        extNiche.push(ext);
+      } else if (yr && yr <= 2005) {
+        extClassics.push(ext);
+      } else {
+        extRecommendations.push(ext);
+      }
+    }
+  } else if (externalPools && typeof externalPools === 'object') {
+    extClassics = Array.isArray(externalPools.classics) ? externalPools.classics : [];
+    extNiche = Array.isArray(externalPools.niche) ? externalPools.niche : [];
+    extRecommendations = Array.isArray(externalPools.recommendations) ? externalPools.recommendations : [];
+  }
+
+  const normalizeTrackItem = (item, sectionKey, idx, seedVal) => {
+    const rawLabel = item.label
+      ? String(item.label).replace(/^(Essential Classic|Deep Cut|Niche Cut|Recommendation)\s*·\s*/i, '').trim()
+      : '';
+    const fallbackCover = buildGenreSleeveDataUri(item, node.name);
+    const realCover = (item.coverImage && !String(item.coverImage).includes('spacer.gif'))
+      ? item.coverImage
+      : ((item.thumb && !String(item.thumb).includes('spacer.gif')) ? item.thumb : (item.cover || ''));
+    const coverUrl = realCover || fallbackCover;
+    return {
+      id: item.id || `genre-${sectionKey}-${node.id}-${idx}-${seedVal}`,
+      discogsId: item.discogsId ? String(item.discogsId) : '',
+      title: String(item.title || '').trim(),
+      artist: String(item.artist || item.artistName || '').replace(/\s*\(\d+\)\s*$/, '').trim(),
+      label: rawLabel || node.name,
+      year: item.year ? String(item.year) : '',
+      trackUrl: item.trackUrl || item.url || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
+      url: item.url || item.trackUrl || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
+      coverImage: coverUrl,
+      thumb: item.thumb && !String(item.thumb).includes('spacer.gif') ? item.thumb : coverUrl,
+      provider: item.provider || priority[0] || 'bandcamp',
+      type: item.type || 'release',
+      likesCount: item.likesCount != null ? Number(item.likesCount) : null,
+      userFollowersCount: item.userFollowersCount != null ? Number(item.userFollowersCount) : null,
+    };
+  };
+
+  const dedupeList = (list, sectionKey, seedVal, filterFn = null) => {
     const out = [];
     const seen = new Set();
     for (let i = 0; i < list.length; i++) {
       const item = list[i];
       if (!item || !item.title) continue;
-      const key = `${_norm(item.artist || '')}|${_norm(item.title || '')}`;
-      if (!key || seen.has(key)) continue;
+      if (filterFn && !filterFn(item)) continue;
+      const key = `${_norm(item.artist || item.artistName || '')}|${_norm(item.title || '')}`;
+      if (!key || key === '|' || seen.has(key)) continue;
       seen.add(key);
-      const rawLabel = item.label ? String(item.label).replace(/^(Essential Classic|Deep Cut)\s*·\s*/i, '') : '';
-      out.push({
-        id: item.id || `genre-${tierLabel.toLowerCase().replace(/\s+/g, '-')}-${node.id}-${i}-${refreshSeed}`,
-        discogsId: item.discogsId || '',
-        title: item.title,
-        artist: item.artist || item.artistName || '',
-        label: rawLabel ? `${tierLabel} · ${rawLabel}` : tierLabel,
-        year: item.year ? String(item.year) : '',
-        trackUrl: item.trackUrl || item.url || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
-        url: item.url || item.trackUrl || `resolve:${item.artist || ''} ${item.title || ''}`.trim(),
-        coverImage: item.coverImage || item.thumb || item.cover || '',
-        thumb: item.thumb || item.coverImage || item.cover || '',
-        provider: item.provider || 'discogs',
-        type: item.type || 'release',
-      });
+      out.push(normalizeTrackItem(item, sectionKey, i, seedVal));
     }
     return out;
   };
 
-  const classicsPool = dedupePool([...rawClassics, ...extClassics], 'Essential Classic');
-  const nichePool = dedupePool([...rawNiche, ...extNiche], 'Deep Cut');
+  // 1. ESSENTIAL CLASSICS POOL (Foundational classics of the genre)
+  const rawClassicsPool = [
+    ...extClassics,
+    ...(node.referenceTracks || []),
+    ...(EXTENDED_CLASSIC_TRACKS[node.id] || []),
+    ...(EXTENDED_CLASSIC_TRACKS[baseId] || []),
+    ...relatedClassics,
+  ];
+  const classicsPool = dedupeList(rawClassicsPool, 'classic', classicSeed);
 
-  // Rotate both pools by refreshSeed so every refresh surfaces a new 50/50 batch
-  const pickRotated = (pool, count, seedOffset) => {
-    if (!pool.length) return [];
+  // 2. NICHE CUTS POOL (Strictly likesCount <= 1000 AND userFollowersCount <= 1000)
+  const isNicheEligible = (item) => {
+    const likes = item.likesCount != null ? Number(item.likesCount) : 0;
+    const followers = item.userFollowersCount != null ? Number(item.userFollowersCount) : 0;
+    const haveCount = item.have != null ? Number(item.have) : 0;
+    return likes <= 1000 && followers <= 1000 && haveCount <= 1000;
+  };
+  const rawNichePool = [
+    ...extNiche,
+    ...(node.nicheTracks || []),
+    ...(DEEP_NICHE_TRACKS[node.id] || []),
+    ...(DEEP_NICHE_TRACKS[baseId] || []),
+    ...relatedNiche,
+  ];
+  const nichePool = dedupeList(rawNichePool, 'niche', nicheSeed, isNicheEligible);
+
+  // Rotate helper to select 10 items per section
+  const pickTenRotated = (pool, count, seedVal, excludeKeys = new Set()) => {
+    const filtered = pool.filter(item => {
+      const k = `${_norm(item.artist)}|${_norm(item.title)}`;
+      return !excludeKeys.has(k);
+    });
+    const source = filtered.length >= count ? filtered : pool;
+    if (!source.length) return [];
     const picked = [];
-    const stride = (seedOffset * 4) % pool.length;
-    for (let i = 0; i < Math.min(count, pool.length); i++) {
-      picked.push(pool[(stride + i) % pool.length]);
+    const stride = (seedVal * 5) % source.length;
+    for (let i = 0; i < Math.min(count, source.length); i++) {
+      picked.push(source[(stride + i) % source.length]);
     }
-    return picked;
+    return orderTracksByProviderPriority(picked, priority);
   };
 
-  const halfCount = 5; // 5 Essential Classics + 5 Deep Cuts = 10 balanced suggestions per view
-  const chosenClassics = pickRotated(classicsPool, halfCount, refreshSeed);
-  const chosenNiche = pickRotated(nichePool, halfCount, refreshSeed);
+  const essentialClassics = pickTenRotated(classicsPool, 10, classicSeed);
+  const usedInClassics = new Set(essentialClassics.map(t => `${_norm(t.artist)}|${_norm(t.title)}`));
 
-  // Interleave 1:1 (50% Essential Classic, 50% Deep Niche Cut)
+  const nicheCuts = pickTenRotated(nichePool, 10, nicheSeed, usedInClassics);
+  const usedInClassicsAndNiche = new Set([
+    ...usedInClassics,
+    ...nicheCuts.map(t => `${_norm(t.artist)}|${_norm(t.title)}`),
+  ]);
+
+  // 3. RECOMMENDATIONS POOL (Sweet spot between Essential Classics & Niche Cuts,
+  // matching 100% the genre + initial context track/artist/label + public/platform playlists)
+  const ctxArtistNorm = _norm(context.artist || '');
+  const ctxLabelNorm = _norm(context.label || '');
+  const ctxTitleNorm = _norm(context.title || '');
+
+  // Build bridge candidates from remaining genre classics + niche cuts + pioneer/label tracks
+  const bridgeCandidates = [];
+  const maxBridge = Math.max(classicsPool.length, nichePool.length);
+  for (let i = 0; i < maxBridge; i++) {
+    if (i < classicsPool.length) bridgeCandidates.push(classicsPool[i]);
+    if (i < nichePool.length) bridgeCandidates.push(nichePool[i]);
+  }
+
+  const rawRecsPool = [
+    ...extRecommendations,
+    ...bridgeCandidates,
+  ];
+
+  // Score recommendations by affinity to the context track/artist/label, playlist provenance, and genre match
+  const dedupedRecs = dedupeList(rawRecsPool, 'rec', recSeed, (item) => {
+    if (ctxTitleNorm && _norm(item.title) === ctxTitleNorm && (!ctxArtistNorm || _norm(item.artist) === ctxArtistNorm)) {
+      return false; // Don't recommend the exact same track the user is already on
+    }
+    return true;
+  });
+
+  const scoredRecs = dedupedRecs.map((item, idx) => {
+    let score = 50;
+    const aNorm = _norm(item.artist);
+    const lNorm = _norm(item.label);
+    if (ctxArtistNorm && (aNorm === ctxArtistNorm || aNorm.includes(ctxArtistNorm))) score += 35;
+    if (ctxLabelNorm && lNorm && (lNorm === ctxLabelNorm || lNorm.includes(ctxLabelNorm))) score += 30;
+    if ((node.pioneerArtists || []).some(p => _norm(p) === aNorm)) score += 20;
+    if ((node.classicLabels || []).some(l => _norm(l) === lNorm)) score += 18;
+    if (item.fromPlaylist) score += 28;
+    if (item.coverImage && !String(item.coverImage).startsWith('data:')) score += 12;
+    // Slight deterministic offset based on recSeed so refreshing surfaces fresh top recommendations
+    const rotatedIdx = (idx + recSeed * 7) % Math.max(1, dedupedRecs.length);
+    score += Math.max(0, 15 - rotatedIdx * 0.5);
+    return { item, score };
+  });
+
+  scoredRecs.sort((a, b) => b.score - a.score);
+  const orderedRecPool = scoredRecs.map(s => s.item);
+  const recommendations = pickTenRotated(orderedRecPool, 10, recSeed, usedInClassicsAndNiche);
+
+  return {
+    essentialClassics,
+    nicheCuts,
+    recommendations,
+    similarTracks: [...essentialClassics.slice(0, 5), ...nicheCuts.slice(0, 5)],
+  };
+}
+
+/**
+ * Selects a balanced 50% Essential Classics / 50% Deep Niche Cuts list of tracks for a genre,
+ * rotating through the pools whenever `refreshSeed` increments so the user can refresh suggestions endlessly.
+ */
+export function select5050GenreTracks(nodeInput, externalTracks = [], refreshSeed = 0) {
+  const sections = selectGenreThreeSections(nodeInput, externalTracks, {}, refreshSeed);
   const interleaved = [];
-  const maxLen = Math.max(chosenClassics.length, chosenNiche.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (i < chosenClassics.length) interleaved.push(chosenClassics[i]);
-    if (i < chosenNiche.length) interleaved.push(chosenNiche[i]);
+  const maxLen = Math.max(sections.essentialClassics.length, sections.nicheCuts.length);
+  for (let i = 0; i < Math.min(5, maxLen); i++) {
+    if (i < sections.essentialClassics.length) interleaved.push(sections.essentialClassics[i]);
+    if (i < sections.nicheCuts.length) interleaved.push(sections.nicheCuts[i]);
   }
   return interleaved;
 }
@@ -3001,8 +3241,8 @@ export function buildInitialGenreSheetPayload(genreName, context = {}, refreshSe
   }
   (node.classicLabels || []).forEach(l => pushLabel(l));
 
-  // Initial playable 50% Essential Classics + 50% Deep Niche Cuts
-  const similarTracks = select5050GenreTracks(node, [], refreshSeed);
+  // Initial 3 sections (10 Essential Classics, 10 Niche Cuts, 10 Recommendations)
+  const threeSections = selectGenreThreeSections(node, {}, context, refreshSeed);
 
   return {
     id: `genre-${node.id}`,
@@ -3026,7 +3266,10 @@ export function buildInitialGenreSheetPayload(genreName, context = {}, refreshSe
     artistRoles: artistsList,
     classicLabels: labelsList,
     eventContexts: node.eventContexts || [],
-    similarTracks,
+    similarTracks: threeSections.similarTracks,
+    essentialClassics: threeSections.essentialClassics,
+    nicheCuts: threeSections.nicheCuts,
+    recommendations: threeSections.recommendations,
     contextTrackTitle: curTitle || null,
     contextArtistName: curArtist || null,
     provenance: context.provenance || ['Musicmap Ontology', 'Discogs & MusicBrainz Graph'],

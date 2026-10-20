@@ -626,11 +626,156 @@ async function findDiscogsLabelHit(labelName) {
   return null;
 }
 
+// Cross-entity / Imprint Link Knowledge Graph: maps artist/alias/label names to their official Bandcamp & portal URLs
+// even when the Bandcamp page name differs from the artist/label name (e.g. Traumprinz -> All Possible Worlds)
+const CROSS_ENTITY_LINK_MAP = {
+  'traumprinz': ['https://allpossibleworlds.bandcamp.com', 'https://giegling.bandcamp.com'],
+  'dj metatron': ['https://allpossibleworlds.bandcamp.com', 'https://giegling.bandcamp.com'],
+  'prince of denmark': ['https://allpossibleworlds.bandcamp.com', 'https://giegling.bandcamp.com'],
+  'prime minister of doom': ['https://allpossibleworlds.bandcamp.com'],
+  'dj healer': ['https://allpossibleworlds.bandcamp.com'],
+  'irini': ['https://allpossibleworlds.bandcamp.com'],
+  'golden baby': ['https://allpossibleworlds.bandcamp.com'],
+  '2000 2007': ['https://allpossibleworlds.bandcamp.com'],
+  'the phantasy': ['https://allpossibleworlds.bandcamp.com'],
+  'all possible worlds': ['https://allpossibleworlds.bandcamp.com'],
+  'planet uterus': ['https://allpossibleworlds.bandcamp.com'],
+  'giegling': ['https://giegling.bandcamp.com', 'https://www.giegling.net'],
+  'vril': ['https://giegling.bandcamp.com', 'https://delsinrecords.bandcamp.com'],
+  'map ache': ['https://giegling.bandcamp.com'],
+  'ketiov': ['https://giegling.bandcamp.com'],
+  'leafar legov': ['https://giegling.bandcamp.com'],
+  'basic channel': ['https://basicchannel.bandcamp.com', 'https://www.basicchannel.com'],
+  'maurizio': ['https://basicchannel.bandcamp.com'],
+  'rhythm sound': ['https://basicchannel.bandcamp.com'],
+  'rhythm and sound': ['https://basicchannel.bandcamp.com'],
+  'chain reaction': ['https://basicchannel.bandcamp.com'],
+  'burial mix': ['https://basicchannel.bandcamp.com'],
+  'moritz von oswald': ['https://basicchannel.bandcamp.com'],
+  'mark ernestus': ['https://basicchannel.bandcamp.com'],
+  'skee mask': ['https://iliantape.bandcamp.com'],
+  'zenker brothers': ['https://iliantape.bandcamp.com'],
+  'ilian tape': ['https://iliantape.bandcamp.com'],
+  'forest drive west': ['https://forestdrivewest.bandcamp.com', 'https://livitysound.bandcamp.com', 'https://delsinrecords.bandcamp.com'],
+  'mantis': ['https://delsinrecords.bandcamp.com'],
+  'delsin': ['https://delsinrecords.bandcamp.com'],
+  'convextion': ['https://mojuba.bandcamp.com', 'https://frustratedfunk.bandcamp.com'],
+  'e r p': ['https://frustratedfunk.bandcamp.com', 'https://mojuba.bandcamp.com'],
+  'gerard hanson': ['https://mojuba.bandcamp.com', 'https://frustratedfunk.bandcamp.com'],
+  'donato dozzy': ['https://spaziodisponibile.bandcamp.com'],
+  'voices from the lake': ['https://spaziodisponibile.bandcamp.com'],
+  'spazio disponibile': ['https://spaziodisponibile.bandcamp.com'],
+  'luigi tozzi': ['https://hypnusrecords.bandcamp.com'],
+  'hypnus': ['https://hypnusrecords.bandcamp.com'],
+  'hypnus records': ['https://hypnusrecords.bandcamp.com'],
+  'peverelist': ['https://livitysound.bandcamp.com'],
+  'livity sound': ['https://livitysound.bandcamp.com'],
+  'batu': ['https://timedance.bandcamp.com'],
+  'timedance': ['https://timedance.bandcamp.com'],
+  'pearson sound': ['https://hessleaudio.bandcamp.com'],
+  'ben ufo': ['https://hessleaudio.bandcamp.com'],
+  'pangaea': ['https://hessleaudio.bandcamp.com'],
+  'hessle audio': ['https://hessleaudio.bandcamp.com'],
+  'burial': ['https://burial.bandcamp.com', 'https://hyperdub.bandcamp.com'],
+  'kode9': ['https://hyperdub.bandcamp.com'],
+  'hyperdub': ['https://hyperdub.bandcamp.com'],
+  'mala': ['https://dmzuk.bandcamp.com', 'https://deepmedimusik.bandcamp.com'],
+  'digital mystikz': ['https://dmzuk.bandcamp.com'],
+  'dmz': ['https://dmzuk.bandcamp.com'],
+  'deep medi': ['https://deepmedimusik.bandcamp.com'],
+  'deep medi musik': ['https://deepmedimusik.bandcamp.com'],
+  'theo parrish': ['https://soundsignature.bandcamp.com'],
+  'sound signature': ['https://soundsignature.bandcamp.com'],
+  'moodymann': ['https://moodymann.bandcamp.com', 'https://mahoganimusic.bandcamp.com'],
+  'kdj': ['https://moodymann.bandcamp.com', 'https://mahoganimusic.bandcamp.com'],
+  'mahogani music': ['https://mahoganimusic.bandcamp.com'],
+  'omar s': ['https://fxhe.bandcamp.com'],
+  'fxhe': ['https://fxhe.bandcamp.com'],
+  'fxhe records': ['https://fxhe.bandcamp.com'],
+  'aphex twin': ['https://aphextwin.bandcamp.com'],
+  'afx': ['https://aphextwin.bandcamp.com'],
+  'polygon window': ['https://aphextwin.bandcamp.com'],
+  'boards of canada': ['https://boardsofcanada.bandcamp.com'],
+  'autechre': ['https://autechre.bandcamp.com'],
+  'overmono': ['https://overmono.bandcamp.com'],
+  'joy orbison': ['https://joyorbison.bandcamp.com'],
+  'bicep': ['https://bicep.bandcamp.com'],
+  'four tet': ['https://fourtet.bandcamp.com'],
+  'kh': ['https://fourtet.bandcamp.com'],
+};
+
+async function discoverCrossEntityUrls({ name, aliases = [], labels = [], releaseTitles = [] }) {
+  const discovered = [];
+  const candidates = [name, ...aliases, ...labels].filter(Boolean);
+  for (const c of candidates) {
+    const key = normName(c);
+    const coreKey = normLabelName(c);
+    if (CROSS_ENTITY_LINK_MAP[key]) discovered.push(...CROSS_ENTITY_LINK_MAP[key]);
+    if (CROSS_ENTITY_LINK_MAP[coreKey]) discovered.push(...CROSS_ENTITY_LINK_MAP[coreKey]);
+  }
+
+  // If we still don't have a Bandcamp URL, search Bandcamp autocomplete across bands/labels, albums, and tracks ('b,a,t')
+  // so that even when an artist's Bandcamp page has a different name (e.g. "All Possible Worlds" for "Traumprinz"),
+  // matching an album/track by that artist or alias reveals `item.item_url_root`!
+  if (!discovered.some(u => /bandcamp\.com/i.test(u))) {
+    const artistNorms = new Set([name, ...aliases].map(normName).filter(Boolean));
+    const labelNorms = new Set(labels.map(normLabelName).filter(Boolean));
+    const titleNorms = new Set(releaseTitles.map(normName).filter(Boolean));
+    const searchTerms = [name, aliases[0], labels[0]].filter(Boolean).slice(0, 2);
+
+    for (const term of searchTerms) {
+      try {
+        const bcRes = await fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+          body: JSON.stringify({ search_text: term, search_filter: 'b,a,t', full_page: false, fan_id: 0 }),
+        });
+        if (!bcRes.ok) continue;
+        const bcJson = await bcRes.json();
+        const results = bcJson?.auto?.results || [];
+
+        // 1. Direct band/label match on artist, alias, or artist's primary imprint label
+        const directBand = results.find(item =>
+          item.type === 'b' && (
+            artistNorms.has(normName(item.name)) ||
+            labelNorms.has(normLabelName(item.name))
+          )
+        );
+        if (directBand) {
+          const root = directBand.item_url_root || directBand.item_url_path || directBand.url || '';
+          if (root) {
+            discovered.push(root);
+            break;
+          }
+        }
+
+        // 2. Cross-name discovery via album/track results: if an album or track is by this artist/alias
+        // (or matches one of the artist's release titles), its `item_url_root` is the artist/imprint's Bandcamp page!
+        const albumOrTrackHit = results.find(item =>
+          (item.type === 'a' || item.type === 't') && item.item_url_root && (
+            artistNorms.has(normName(item.band_name)) ||
+            artistNorms.has(normName(item.name)) ||
+            titleNorms.has(normName(item.name)) ||
+            [...artistNorms].some(an => an.length >= 4 && (normName(item.band_name).includes(an) || normName(item.name).includes(an)))
+          )
+        );
+        if (albumOrTrackHit && albumOrTrackHit.item_url_root) {
+          discovered.push(albumOrTrackHit.item_url_root);
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  return Array.from(new Set(discovered)).filter(Boolean);
+}
+
 async function resolveDiscogsTextAndMeta(rawText) {
-  if (!rawText) return { cleanText: '', extractedUrls: [], founders: [], foundedYear: '' };
+  if (!rawText) return { cleanText: '', extractedUrls: [], founders: [], foundedYear: '', referencedLabels: [] };
   let work = String(rawText);
 
   const extractedUrls = [];
+  const referencedLabels = [];
   // Extract [url=...] links
   const urlTagRegex = /\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi;
   let um;
@@ -638,6 +783,14 @@ async function resolveDiscogsTextAndMeta(rawText) {
     const u = um[1].trim();
     if (/^https?:\/\//i.test(u)) extractedUrls.push(u);
     else if (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(u)) extractedUrls.push(`https://${u}`);
+  }
+
+  // Extract explicit [l=Label Name] tags before stripping
+  const explicitLabelRegex = /\[l=([^\]]+)\]/gi;
+  let elm;
+  while ((elm = explicitLabelRegex.exec(work)) !== null) {
+    const lName = stripArtistSuffix(elm[1]);
+    if (lName && !referencedLabels.includes(lName)) referencedLabels.push(lName);
   }
 
   // Resolve numeric tags [a12345], [l12345], [r12345], [m12345]
@@ -661,6 +814,10 @@ async function resolveDiscogsTextAndMeta(rawText) {
           const json = await res.json();
           const name = stripArtistSuffix(json.name || json.title || '');
           if (name) {
+            if (tag.type === 'l' && !referencedLabels.includes(name)) referencedLabels.push(name);
+            if (tag.type === 'l' && Array.isArray(json.urls)) {
+              json.urls.forEach(u => { if (u && /bandcamp\.com/i.test(u)) extractedUrls.push(u); });
+            }
             const replacement = tag.type === 'a' ? `[a=${name}]` : name;
             work = work.replace(new RegExp(`\\[${tag.type}${tag.id}\\]`, 'gi'), replacement);
           }
@@ -708,7 +865,53 @@ async function resolveDiscogsTextAndMeta(rawText) {
     extractedUrls.push(/^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`);
   });
 
-  return { cleanText, extractedUrls, founders, foundedYear };
+  return { cleanText, extractedUrls, founders, foundedYear, referencedLabels };
+}
+
+async function fetchMusicBrainzArtistProfile(artistName, discogsId) {
+  if (!artistName && !discogsId) return null;
+  try {
+    let mbid = '';
+    const wantExact = normName(artistName || '');
+
+    const urlLookupPromise = discogsId
+      ? fetch(`https://musicbrainz.org/ws/2/url?resource=${encodeURIComponent(`https://www.discogs.com/artist/${discogsId}`)}&inc=artist-rels&fmt=json`, { headers: MB_HEADERS })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const searchPromise = artistName
+      ? fetch(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(artistName)}&fmt=json&limit=5`, { headers: MB_HEADERS })
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const [urlRelData, searchData] = await Promise.all([urlLookupPromise, searchPromise]);
+    if (urlRelData && Array.isArray(urlRelData.relations)) {
+      const artRel = urlRelData.relations.find(r => r.artist?.id);
+      if (artRel?.artist?.id) mbid = artRel.artist.id;
+    }
+    if (!mbid && searchData && Array.isArray(searchData.artists)) {
+      const exact = searchData.artists.find(a => normName(a.name) === wantExact)
+        || searchData.artists.find(a => (a.aliases || []).some(al => normName(al.name) === wantExact));
+      if (exact) mbid = exact.id;
+    }
+    if (!mbid) return null;
+
+    const detailRes = await fetch(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels+label-rels+aliases&fmt=json`, { headers: MB_HEADERS });
+    if (!detailRes.ok) return { mbid, urls: [`https://musicbrainz.org/artist/${mbid}`], aliases: [], labels: [] };
+    const data = await detailRes.json();
+    const urls = [`https://musicbrainz.org/artist/${data.id || mbid}`];
+    const labels = [];
+    for (const rel of (data.relations || [])) {
+      if (rel.url?.resource) urls.push(rel.url.resource);
+      if (rel['target-type'] === 'label' && rel.label?.name) {
+        labels.push(stripArtistSuffix(rel.label.name));
+      }
+    }
+    const aliases = (data.aliases || []).map(a => stripArtistSuffix(a.name || '')).filter(Boolean);
+    return { mbid: data.id || mbid, urls, aliases, labels };
+  } catch (e) {
+    return null;
+  }
 }
 
 async function fetchMusicBrainzLabel(labelName, discogsId) {
@@ -857,17 +1060,16 @@ async function handleArtistProfile(body, res) {
   }
   if (!artistId) return res.status(200).json({ error: 'Artist not found on Discogs' });
 
-  const cacheKey = `artist-profile-v2|${artistId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 2);
+  const cacheKey = `artist-profile-v3|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 3);
   if (cached) return res.status(200).json(cached);
 
-  let profileData = {};
-  try {
-    const r = await fetch(`https://api.discogs.com/artists/${artistId}`, { headers: DISCOGS_HEADERS });
-    if (r.ok) profileData = await r.json();
-  } catch (e) {}
+  const [profileData, mbArtist] = await Promise.all([
+    fetch(`https://api.discogs.com/artists/${artistId}`, { headers: DISCOGS_HEADERS }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    fetchMusicBrainzArtistProfile(artistName || '', artistId),
+  ]);
 
-  const { cleanText: cleanBio, extractedUrls } = await resolveDiscogsTextAndMeta(profileData.profile || '');
+  const { cleanText: cleanBio, extractedUrls, referencedLabels } = await resolveDiscogsTextAndMeta(profileData.profile || '');
 
   // Fetch top releases by reusing the artist-top-releases logic internally
   let topReleases = [];
@@ -876,14 +1078,55 @@ async function handleArtistProfile(body, res) {
     await handleArtistTopReleases({ artistId, artistName }, mockRes);
   } catch(e) {}
 
+  const cleanArtistName = stripArtistSuffix(profileData.name || artistName || '');
+
+  // Gather ALL aliases without truncation (Discogs aliases + groups + MusicBrainz aliases)
+  const rawAliases = [
+    ...(profileData.aliases || []).map(a => stripArtistSuffix(a.name || '')),
+    ...(profileData.groups || []).map(g => stripArtistSuffix(g.name || '')),
+    ...(mbArtist?.aliases || []),
+  ];
+  const seenAliasNorm = new Set([normName(cleanArtistName)]);
+  const fullAliases = [];
+  for (const al of rawAliases) {
+    const n = normName(al);
+    if (!al || !n || seenAliasNorm.has(n)) continue;
+    seenAliasNorm.add(n);
+    fullAliases.push(al);
+  }
+
+  // Dominant labels from topReleases + profile referencedLabels + MusicBrainz labels
+  const releaseLabels = [];
+  for (const rel of topReleases) {
+    const lbl = Array.isArray(rel.labels) ? rel.labels[0] : rel.label;
+    if (lbl && !/not on label|self-released/i.test(lbl) && !releaseLabels.includes(lbl)) {
+      releaseLabels.push(lbl);
+    }
+  }
+  const associatedLabels = Array.from(new Set([...referencedLabels, ...(mbArtist?.labels || []), ...releaseLabels])).filter(Boolean);
+  const releaseTitles = topReleases.map(r => r.title).filter(Boolean);
+
+  // Discover cross-entity / differently-named Bandcamp & external links (e.g. Traumprinz -> All Possible Worlds)
+  const crossUrls = await discoverCrossEntityUrls({
+    name: cleanArtistName,
+    aliases: fullAliases,
+    labels: associatedLabels,
+    releaseTitles,
+  });
+
   const result = {
-    _v: 2,
+    _v: 3,
     id: artistId,
-    name: stripArtistSuffix(profileData.name || artistName || ''),
+    name: cleanArtistName,
     realname: profileData.realname || '',
     profile: cleanBio || profileData.profile || '',
-    urls: Array.from(new Set([...(profileData.urls || []), ...extractedUrls])).filter(Boolean),
-    aliases: (profileData.aliases || []).map(a => stripArtistSuffix(a.name)),
+    urls: Array.from(new Set([
+      ...crossUrls,
+      ...(profileData.urls || []),
+      ...extractedUrls,
+      ...(mbArtist?.urls || []),
+    ])).filter(Boolean),
+    aliases: fullAliases,
     images: (profileData.images || []).map(i => i.uri).filter(Boolean),
     topReleases
   };
@@ -902,8 +1145,8 @@ async function handleLabelProfile(body, res) {
     if (hit) labelId = hit.id;
   }
 
-  const cacheKey = `label-profile-v3|${labelId || normLabelName(labelName || '')}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 3);
+  const cacheKey = `label-profile-v4|${labelId || normLabelName(labelName || '')}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 4);
   if (cached) return res.status(200).json(cached);
 
   // 2. Fetch MusicBrainz label data in parallel with Discogs label data
@@ -1010,6 +1253,21 @@ async function handleLabelProfile(body, res) {
 
   const discogsUrl = labelId ? (profileData?.uri || `https://www.discogs.com/label/${labelId}`) : '';
   const mbUrl = mbData?.mbUrl || '';
+  const founders = Array.from(new Set([...profileResolved.founders, ...(mbData?.founders || [])])).filter(Boolean);
+  const foundedYear = mbData?.foundedYear || profileResolved.foundedYear || '';
+  const parentLabel = (profileData?.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '') || mbData?.parentLabel || '';
+  const sublabels = Array.from(new Set([
+    ...(profileData?.sublabels || []).map(s => stripArtistSuffix(s.name || '')),
+    ...(mbData?.sublabels || []),
+  ])).filter(Boolean);
+
+  const crossLabelUrls = await discoverCrossEntityUrls({
+    name: resolvedLabelName,
+    aliases: [...(mbData?.aliases || []), ...founders],
+    labels: [parentLabel, ...sublabels, ...(profileResolved.referencedLabels || [])].filter(Boolean),
+    releaseTitles: topReleases.slice(0, 6).map(r => `${r.artist || ''} ${r.title || ''}`.trim()),
+  });
+
   const rawUrls = [
     discogsUrl,
     mbUrl,
@@ -1017,6 +1275,7 @@ async function handleLabelProfile(body, res) {
     ...profileResolved.extractedUrls,
     ...contactResolved.extractedUrls,
     ...(mbData?.urls || []),
+    ...crossLabelUrls,
   ].filter(Boolean);
 
   // 5. If Bandcamp URL is not yet in rawUrls, query Bandcamp autocomplete for the label
@@ -1069,15 +1328,6 @@ async function handleLabelProfile(body, res) {
     combinedGenres.push(g);
   }
 
-  // Combine founders, parent label, sublabels
-  const founders = Array.from(new Set([...profileResolved.founders, ...(mbData?.founders || [])])).filter(Boolean);
-  const foundedYear = mbData?.foundedYear || profileResolved.foundedYear || '';
-  const parentLabel = (profileData?.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '') || mbData?.parentLabel || '';
-  const sublabels = Array.from(new Set([
-    ...(profileData?.sublabels || []).map(s => stripArtistSuffix(s.name || '')),
-    ...(mbData?.sublabels || []),
-  ])).filter(Boolean);
-
   const sources = [];
   if (labelId || profileData?.name) sources.push('Discogs');
   if (mbData?.mbid) sources.push('MusicBrainz');
@@ -1091,7 +1341,7 @@ async function handleLabelProfile(body, res) {
   const allUrls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   const result = {
-    _v: 3,
+    _v: 4,
     id: labelId || mbData?.mbid || `label-${normLabelName(resolvedLabelName)}`,
     name: resolvedLabelName,
     profile: bioParts.join('\n\n'),

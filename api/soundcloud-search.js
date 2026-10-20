@@ -323,6 +323,8 @@ export default async function handler(req, res) {
       permalinkUrl: track.permalink_url || '',
       waveformUrl: track.waveform_url || '',
       playbackCount: track.playback_count || 0,
+      likesCount: track.likes_count || track.favoritings_count || 0,
+      userFollowersCount: track.user?.followers_count || 0,
       genre: track.genre || '',
       year: (track.release_date || track.created_at || '').slice(0, 4) || null,
     }));
