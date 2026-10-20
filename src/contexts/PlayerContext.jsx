@@ -1283,6 +1283,108 @@ export function PlayerProvider({ children }) {
     }
   }
 
+  const prefetchedAutoplayRef = useRef({ trackId: '', item: null });
+
+  // Pre-compute prevArtwork & nextArtwork (including background autoplay prefetch) so native artwork swipe can morph old -> new live during finger drag
+  useEffect(() => {
+    const cur = state.currentTrack;
+    if (!cur || cur.title === 'Loading...') return;
+    let cancelled = false;
+
+    const getCover = (t) => String(t?.releaseCover || t?.cover || t?.artworkUrl || t?.thumbnail || '').trim();
+    const normStr = (s) => String(s || '').toLowerCase().trim();
+    const curId = String(cur.id || '');
+    const curTA = `${normStr(cur.title)}::${normStr(cur.artistName || cur.artist)}`;
+
+    // 1. Determine previous track artwork
+    let prevArt = '';
+    try {
+      const rawStack = localStorage.getItem('kyoyu-back-stack-v1');
+      if (rawStack) {
+        const stack = JSON.parse(rawStack);
+        if (Array.isArray(stack)) {
+          for (let i = stack.length - 1; i >= 0; i--) {
+            const item = stack[i];
+            if (!item) continue;
+            const tid = String(item.id || '');
+            const ita = `${normStr(item.title || item.name)}::${normStr(item.artistName || item.artist)}`;
+            if ((curId && tid === curId) || (curTA !== '::' && ita === curTA)) continue;
+            const c = getCover(item);
+            if (c) { prevArt = c; break; }
+          }
+        }
+      }
+      if (!prevArt) {
+        const rawHist = localStorage.getItem('kyoyu-play-history');
+        if (rawHist) {
+          const hist = JSON.parse(rawHist);
+          if (Array.isArray(hist)) {
+            const prevItem = hist.find(item => {
+              if (!item) return false;
+              const tid = String(item.id || '');
+              const ita = `${normStr(item.title || item.name)}::${normStr(item.artistName || item.artist)}`;
+              return !((curId && tid === curId) || (curTA !== '::' && ita === curTA));
+            });
+            if (prevItem) prevArt = getCover(prevItem);
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 2. Determine next track artwork from explicit queue or searchQueue
+    let nextArt = '';
+    const q = state.queue || [];
+    if (q.length > 0) {
+      const idx = q.findIndex(t => t.id === cur.id);
+      if (idx >= 0 && idx < q.length - 1) {
+        nextArt = getCover(q[idx + 1]);
+      }
+    }
+    if (!nextArt) {
+      const sq = searchQueueRef.current || [];
+      const sIdx = searchQueueIdxRef.current;
+      if (sq.length > 0 && sIdx >= 0 && sIdx < sq.length - 1) {
+        nextArt = getCover(sq[sIdx + 1]);
+      }
+    }
+
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({
+        prevArtwork: prevArt,
+        nextArtwork: nextArt,
+      });
+    } catch (e) {}
+
+    // 3. If no explicit next track is queued, pre-resolve autoplay in the background so swipe-left morphs immediately
+    if (!nextArt && prefetchedAutoplayRef.current.trackId !== curId) {
+      (async () => {
+        try {
+          const replayProv = historyReplayInfo(cur).provider;
+          const trueProvider = (replayProv && replayProv !== 'lookup') ? replayProv : (cur.provider || 'native');
+          const res = await Promise.race([
+            resolveAutoplay({ ...cur, provider: trueProvider }),
+            new Promise(resolve => setTimeout(() => resolve(null), AUTOPLAY_TIMEOUT_MS)),
+          ]);
+          if (cancelled || stateRef.current.currentTrack?.id !== cur.id) return;
+          const next = Array.isArray(res) ? res[0] : null;
+          if (next) {
+            prefetchedAutoplayRef.current = { trackId: curId, item: next };
+            const resolvedNextArt = getCover(next);
+            if (resolvedNextArt) {
+              try {
+                window.webkit?.messageHandlers?.player?.postMessage({
+                  nextArtwork: resolvedNextArt,
+                });
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+      })();
+    }
+
+    return () => { cancelled = true; };
+  }, [state.currentTrack?.id, state.currentTrack?.title, state.queue.length]);
+
   async function playNextAutoplay() {
     const s = stateRef.current;          // always fresh (this can be called from long-lived listeners)
     const cur = s.currentTrack;
@@ -1300,8 +1402,26 @@ export function PlayerProvider({ children }) {
       }
     }
 
-    // 2. Radio-style autoplay. The current track keeps playing while we look, so a slow
-    //    network never means silence.
+    // 2. Use pre-fetched autoplay candidate immediately if available for this track
+    const prefetched = (prefetchedAutoplayRef.current.trackId === String(cur.id || ''))
+      ? prefetchedAutoplayRef.current.item
+      : null;
+    if (prefetched) {
+      prefetchedAutoplayRef.current = { trackId: '', item: null };
+      const q = searchQueueRef.current;
+      const i = searchQueueIdxRef.current;
+      if (q.length > 0 && i >= 0) {
+        searchQueueRef.current = [...q.slice(0, i + 1), prefetched];
+        searchQueueIdxRef.current = i + 1;
+      } else {
+        searchQueueRef.current = [prefetched];
+        searchQueueIdxRef.current = 0;
+      }
+      playSearchItem(prefetched);
+      return;
+    }
+
+    // 3. Radio-style autoplay fallback if prefetch hasn't finished yet
     if (isResolvingAutoplayRef.current) return;
     isResolvingAutoplayRef.current = true;
     try {
@@ -1333,7 +1453,7 @@ export function PlayerProvider({ children }) {
         }
         playSearchItem(next);
       } else {
-        // 3. Nothing found: never end in silence — replay the current track
+        // 4. Nothing found: never end in silence — replay the current track
         console.warn('[Player] autoplay found nothing, replaying current track');
         if (stateRef.current.restoredPending) resumeRestoredSession();
         else dispatch({ type: 'RESTART_CURRENT' });
