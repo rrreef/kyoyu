@@ -1186,7 +1186,7 @@ export function PlayerProvider({ children }) {
     // Prefetch: called by Swift on track change — warms the cache
     window.__kyoyuPrefetchTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
-        const key = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+        const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key || window.__kyoyuInfoCache[key]) return; // Already cached
         const res = await fetch('/api/discogs-search', {
           method: 'POST',
@@ -1206,9 +1206,9 @@ export function PlayerProvider({ children }) {
     // Get cached info: called when user opens info panel — returns instantly
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
-        const key = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+        const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key]) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 11) {
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
         // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
