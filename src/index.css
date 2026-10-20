@@ -1001,6 +1001,21 @@ img {
   filter: invert(1) brightness(0.15);
 }
 
+/* ── Customized Background Main Color (Customized Appearance) ── */
+html[data-custom-bg="true"] {
+  --bg-deep:      var(--custom-bg-color) !important;
+  --bg-primary:   var(--custom-bg-color) !important;
+  --bg-secondary: color-mix(in srgb, var(--custom-bg-color) 92%, #000000) !important;
+  --bg-tertiary:  color-mix(in srgb, var(--custom-bg-color) 84%, #000000) !important;
+  --bg-card:      color-mix(in srgb, var(--custom-bg-color) 88%, #000000) !important;
+}
+html[data-custom-bg="true"],
+html[data-custom-bg="true"] body,
+html[data-custom-bg="true"] #root {
+  background: var(--custom-bg-color) !important;
+  background-color: var(--custom-bg-color) !important;
+}
+
 /* ── Discreet Glass Lens UI Tint (Customized Appearance) ── */
 html[data-theme="white"][data-glass-tint="true"] {
   --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 16%, rgba(255, 255, 255, 0.72));
@@ -1030,6 +1045,3 @@ html[data-glass-tint="true"] #kpl-sh {
   background: var(--glass-bg-elevated) !important;
   border-color: var(--glass-border) !important;
 }
-
-
-
