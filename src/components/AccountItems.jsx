@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { Play, Music2 } from 'lucide-react';
 import { usePlayer } from '../contexts/PlayerContext';
 
@@ -11,6 +11,34 @@ const fmt = (s) => {
 };
 
 const _resolvedArtMem = new Map();
+const _pinnedImages = (typeof window !== 'undefined' && (window.__kyoyuPinnedImages || (window.__kyoyuPinnedImages = new Map()))) || new Map();
+
+/** Pins an artwork URL in memory as a decoded Image() object so WebKit never evicts it when scrolling up/down. */
+export function pinImageInMemory(url) {
+  if (!url || typeof url !== 'string' || typeof window === 'undefined' || typeof Image === 'undefined') return;
+  if (_pinnedImages.has(url)) return;
+  try {
+    const img = new Image();
+    img.decoding = 'sync';
+    img.src = url;
+    _pinnedImages.set(url, img);
+  } catch (_) {}
+}
+
+/** Eagerly preloads and pins artwork URLs for a list of items/tracks/albums in memory. */
+export function preloadImagesInMemory(items, maxCount = 120) {
+  if (!Array.isArray(items) || typeof window === 'undefined') return;
+  let count = 0;
+  for (const it of items) {
+    if (!it || count >= maxCount) break;
+    const raw = it.artworkUrl || it.cover || it.releaseCover || it.avatar;
+    const clean = sanitizeArtworkUrl(raw, it.id || it.trackId || it.playlistId);
+    if (clean) {
+      pinImageInMemory(clean);
+      count++;
+    }
+  }
+}
 
 // Clean up any previously cached false-positive artworks for private Apple Music uploads (e.g. am-i.* / i.*)
 if (typeof window !== 'undefined') {
@@ -121,12 +149,14 @@ function useResolvedArtwork(item) {
 
   const rawArt = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
   const initial = sanitizeArtworkUrl(rawArt, itemId);
+  if (initial) pinImageInMemory(initial);
   const [art, setArt] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextRaw = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
     const next = sanitizeArtworkUrl(nextRaw, itemId);
+    if (next) pinImageInMemory(next);
     setArt(next);
     setFailed(false);
   }, [item?.artworkUrl, item?.cover, item?.avatar, itemId, isFakePrivateArt]);
@@ -144,6 +174,7 @@ function useResolvedArtwork(item) {
         const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
         if (raw) {
           const hiRes = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
+          pinImageInMemory(hiRes);
           setArt(hiRes);
           setFailed(false);
           if (item) {
@@ -220,20 +251,20 @@ export function toPlayable(it) {
   };
 }
 
-function Art({ item, src, round }) {
+const Art = memo(function Art({ item, src, round }) {
   const { src: resolvedSrc, onError } = useResolvedArtwork(item || { artworkUrl: src });
   return (
     <div style={{
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
            : <Music2 size={22} color="var(--text-dim)" />}
     </div>
   );
-}
+});
 
-function Row({ item, onClick, right, sub, round }) {
+const Row = memo(function Row({ item, onClick, right, sub, round }) {
   return (
     <div
       onClick={onClick}
@@ -247,17 +278,17 @@ function Row({ item, onClick, right, sub, round }) {
       {right && <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>{right}</div>}
     </div>
   );
-}
+});
 
 /** One cell of the icon view (same classes as the liked-tracks grid) */
-function GridCell({ item, onClick, cols, isActive, isPlaying }) {
+const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlaying }) {
   const isPlaylist = item.kind === 'playlist';
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
   return (
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
-          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="lazy" decoding="async" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
+          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
         {isActive && (
           <div className="upl-grid-playing">
@@ -271,7 +302,7 @@ function GridCell({ item, onClick, cols, isActive, isPlaying }) {
       {item.artistName ? <div className="upl-grid-artist">{item.artistName}</div> : null}
     </div>
   );
-}
+});
 
 export default function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
   const { setSearchQueue, playSearchItem, state } = usePlayer();

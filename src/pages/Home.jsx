@@ -8,13 +8,63 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AccountItemList, { sanitizeArtworkUrl } from '../components/AccountItems';
-import { useConnectedLibrary } from '../lib/useConnectedLibrary';
+import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory } from '../components/AccountItems';
+import { useConnectedLibrary, preloadConnectedLibrary } from '../lib/useConnectedLibrary';
 import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
 import './Home.css';
+
+const PUBLIC_RELEASES_CACHE_KEY = 'kyoyu-public-releases-cache-v1';
+let _cachedPublicReleases = [];
+let _publicReleasesPromise = null;
+const _publicReleaseListeners = new Set();
+const _expandedVisibleCounts = new Map();
+
+try {
+  if (typeof window !== 'undefined') {
+    const rawPub = localStorage.getItem(PUBLIC_RELEASES_CACHE_KEY);
+    if (rawPub) {
+      const parsed = JSON.parse(rawPub);
+      if (Array.isArray(parsed) && parsed.length) {
+        _cachedPublicReleases = parsed;
+        preloadImagesInMemory(parsed, 60);
+      }
+    }
+    const rawHist = localStorage.getItem('kyoyu-play-history');
+    if (rawHist) {
+      const parsedHist = JSON.parse(rawHist);
+      if (Array.isArray(parsedHist) && parsedHist.length) {
+        preloadImagesInMemory(parsedHist, 40);
+      }
+    }
+  }
+} catch (_) {}
+
+export function preloadHomeContent() {
+  if (typeof window === 'undefined') return;
+  preloadConnectedLibrary();
+  if (!_publicReleasesPromise) {
+    _publicReleasesPromise = fetchPublicTracks()
+      .then((tracks) => {
+        if (Array.isArray(tracks)) {
+          _cachedPublicReleases = tracks;
+          preloadImagesInMemory(tracks, 60);
+          try {
+            localStorage.setItem(PUBLIC_RELEASES_CACHE_KEY, JSON.stringify(tracks.slice(0, 60)));
+          } catch (_) {}
+          _publicReleaseListeners.forEach((fn) => fn(tracks));
+        }
+        return tracks;
+      })
+      .catch(() => _cachedPublicReleases);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  preloadHomeContent();
+}
 
 /**
  * Groups an array of flat tracks into album objects.
@@ -62,7 +112,7 @@ export default function Home() {
   const [homeSectionRows] = useHomeSectionRows();
   const homeLayout = useHomeLayoutLive();
   const [myUploads,      setMyUploads]      = useState([]);
-  const [publicReleases, setPublicReleases] = useState([]);
+  const [publicReleases, setPublicReleases] = useState(() => _cachedPublicReleases);
   const [selectedAlbum,  setSelectedAlbum]  = useState(null);
   const [selectedEventIndex, setSelectedEventIndex] = useState(null);
 
@@ -237,9 +287,15 @@ export default function Home() {
     setActiveSlide(idx);
   }, []);
 
-  // Load real public releases from backend
+  // Load real public releases from prewarmed cache / backend
   useEffect(() => {
-    fetchPublicTracks().then(setPublicReleases).catch(() => {});
+    if (_cachedPublicReleases.length > 0) {
+      setPublicReleases(_cachedPublicReleases);
+    }
+    const onPub = (tracks) => setPublicReleases(tracks);
+    _publicReleaseListeners.add(onPub);
+    preloadHomeContent();
+    return () => _publicReleaseListeners.delete(onPub);
   }, []);
 
   useEffect(() => {
@@ -253,6 +309,7 @@ export default function Home() {
             ...t,
             artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
           }));
+          preloadImagesInMemory(hydrated, 60);
           setMyUploads(hydrated);
         } else {
           setMyUploads([]);
@@ -270,6 +327,7 @@ export default function Home() {
     function loadHistory() {
       try {
         const h = JSON.parse(localStorage.getItem('kyoyu-play-history') || '[]');
+        preloadImagesInMemory(h, 40);
         setPlayHistory(h);
       } catch (err) {}
     }
@@ -283,15 +341,16 @@ export default function Home() {
   const [followingOnly, setFollowing]   = useState(false);
   const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcasts';
 
-  // In-place expanded category state (infinite vertical scroll on Home page)
+  // In-place expanded category state (infinite vertical scroll on Home page — once loaded, count stays in memory)
   const [expandedSectionKey, setExpandedSectionKey] = useState(null);
-  const [expandedVisibleCount, setExpandedVisibleCount] = useState(30);
+  const [expandedVisibleCount, setExpandedVisibleCount] = useState(45);
   const loadMoreSentinelRef = useRef(null);
 
   const toggleExpandSection = useCallback((sectionKey) => {
     setExpandedSectionKey((prev) => {
       if (prev === sectionKey) return null;
-      setExpandedVisibleCount(30);
+      const savedCount = _expandedVisibleCounts.get(sectionKey) || 45;
+      setExpandedVisibleCount(savedCount);
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) {}
       return sectionKey;
     });
@@ -299,24 +358,31 @@ export default function Home() {
 
   useEffect(() => {
     if (!expandedSectionKey) return;
+    const bump = () => {
+      setExpandedVisibleCount((c) => {
+        const next = c + 36;
+        _expandedVisibleCounts.set(expandedSectionKey, Math.max(_expandedVisibleCounts.get(expandedSectionKey) || 45, next));
+        return next;
+      });
+    };
     const node = loadMoreSentinelRef.current;
     let observer = null;
     if (node && typeof IntersectionObserver !== 'undefined') {
       observer = new IntersectionObserver(
         (entries) => {
           if (entries.some((e) => e.isIntersecting)) {
-            setExpandedVisibleCount((c) => c + 30);
+            bump();
           }
         },
-        { rootMargin: '400px 0px' }
+        { rootMargin: '800px 0px' }
       );
       observer.observe(node);
     }
     const onScroll = () => {
       const scrollBottom = window.innerHeight + window.scrollY;
       const docHeight = document.documentElement?.scrollHeight || document.body?.scrollHeight || 0;
-      if (docHeight > 0 && docHeight - scrollBottom < 500) {
-        setExpandedVisibleCount((c) => c + 30);
+      if (docHeight > 0 && docHeight - scrollBottom < 800) {
+        bump();
       }
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -382,28 +448,31 @@ export default function Home() {
           {expandedSectionKey === 'featured' ? (
             <>
               <div className="upl-grid upl-grid-3">
-                {featuredAlbums.slice(0, expandedVisibleCount).map((album) => (
-                  <button
-                    key={album.id}
-                    className="upl-grid-cell"
-                    style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                    onClick={() => {
-                      if (album.id.startsWith('single::') && album.tracks?.length === 1) {
-                        playTrack(album.tracks[0]);
-                      } else {
-                        setSelectedAlbum(openNativeAlbumFast(album));
-                      }
-                    }}
-                  >
-                    <div className="upl-grid-art">
-                      {album.cover
-                        ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
-                        : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
-                    </div>
-                    <div className="upl-grid-title">{album.title}</div>
-                    <div className="upl-grid-artist">{album.artist}</div>
-                  </button>
-                ))}
+                {featuredAlbums.slice(0, expandedVisibleCount).map((album) => {
+                  if (album.cover) pinImageInMemory(album.cover);
+                  return (
+                    <button
+                      key={album.id}
+                      className="upl-grid-cell"
+                      style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => {
+                        if (album.id.startsWith('single::') && album.tracks?.length === 1) {
+                          playTrack(album.tracks[0]);
+                        } else {
+                          setSelectedAlbum(openNativeAlbumFast(album));
+                        }
+                      }}
+                    >
+                      <div className="upl-grid-art">
+                        {album.cover
+                          ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync" />
+                          : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
+                      </div>
+                      <div className="upl-grid-title">{album.title}</div>
+                      <div className="upl-grid-artist">{album.artist}</div>
+                    </button>
+                  );
+                })}
               </div>
               {expandedVisibleCount < featuredAlbums.length && (
                 <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
@@ -416,32 +485,34 @@ export default function Home() {
                 ref={featuredRef}
                 onScroll={handleFeaturedScroll}
               >
-                {featuredAlbums.map((album) => (
-                  <button
-                    key={album.id}
-                    className="featured-hero-card"
-                    onClick={() => {
-                      if (album.id.startsWith('single::') && album.tracks?.length === 1) {
-                        playTrack(album.tracks[0]);
-                      } else {
-                        setSelectedAlbum(openNativeAlbumFast(album));
-                      }
-                    }}
-                  >
-                    {/* Blurred background from cover art */}
-                    {album.cover && (
-                      <div
-                        className="featured-hero-bg"
-                        style={{ backgroundImage: `url(${album.cover})` }}
-                      />
-                    )}
+                {featuredAlbums.map((album) => {
+                  if (album.cover) pinImageInMemory(album.cover);
+                  return (
+                    <button
+                      key={album.id}
+                      className="featured-hero-card"
+                      onClick={() => {
+                        if (album.id.startsWith('single::') && album.tracks?.length === 1) {
+                          playTrack(album.tracks[0]);
+                        } else {
+                          setSelectedAlbum(openNativeAlbumFast(album));
+                        }
+                      }}
+                    >
+                      {/* Blurred background from cover art */}
+                      {album.cover && (
+                        <div
+                          className="featured-hero-bg"
+                          style={{ backgroundImage: `url(${album.cover})` }}
+                        />
+                      )}
 
-                    {/* Cover art */}
-                    <div className="featured-hero-art">
-                      {album.cover
-                        ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
-                        : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
-                    </div>
+                      {/* Cover art */}
+                      <div className="featured-hero-art">
+                        {album.cover
+                          ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync" />
+                          : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
+                      </div>
 
                     {/* Info overlay */}
                     <div className="featured-hero-info">
@@ -456,7 +527,8 @@ export default function Home() {
                       )}
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Dot indicators */}
@@ -631,6 +703,7 @@ export default function Home() {
               <div className="upl-grid upl-grid-3">
                 {playHistory.slice(0, expandedVisibleCount).map(item => {
                   const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
+                  if (cleanCover) pinImageInMemory(cleanCover);
                   return (
                     <button
                       key={item._hkey || item.id}
@@ -640,7 +713,7 @@ export default function Home() {
                     >
                       <div className="upl-grid-art">
                         {cleanCover ? (
-                          <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                          <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
                         ) : (
                           <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
                         )}
@@ -659,6 +732,7 @@ export default function Home() {
             <div className="scroll-row">
               {playHistory.map(item => {
                 const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
+                if (cleanCover) pinImageInMemory(cleanCover);
                 return (
                   <button 
                     key={item._hkey || item.id} 
@@ -668,7 +742,7 @@ export default function Home() {
                   >
                     <div className="shelf-card-art">
                       {cleanCover ? (
-                        <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                        <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
                       ) : (
                         <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
                       )}
@@ -740,29 +814,32 @@ export default function Home() {
         }
         const renderReleaseGrid = (albumsSlice) => (
           <div className="upl-grid upl-grid-3">
-            {albumsSlice.map(album => (
-              <button
-                key={album.id}
-                className="upl-grid-cell"
-                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => {
-                  const isSingle = String(album.id || '').startsWith('single::') && album.tracks?.length === 1;
-                  if (isSingle) {
-                    playTrack(album.tracks[0]);
-                  } else {
-                    setSelectedAlbum(openNativeAlbumFast(album));
-                  }
-                }}
-              >
-                <div className="upl-grid-art">
-                  {album.cover
-                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
-                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                </div>
-                <div className="upl-grid-title">{album.title}</div>
-                <div className="upl-grid-artist">{album.artist}</div>
-              </button>
-            ))}
+            {albumsSlice.map(album => {
+              if (album.cover) pinImageInMemory(album.cover);
+              return (
+                <button
+                  key={album.id}
+                  className="upl-grid-cell"
+                  style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => {
+                    const isSingle = String(album.id || '').startsWith('single::') && album.tracks?.length === 1;
+                    if (isSingle) {
+                      playTrack(album.tracks[0]);
+                    } else {
+                      setSelectedAlbum(openNativeAlbumFast(album));
+                    }
+                  }}
+                >
+                  <div className="upl-grid-art">
+                    {album.cover
+                      ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync"/>
+                      : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                  </div>
+                  <div className="upl-grid-title">{album.title}</div>
+                  <div className="upl-grid-artist">{album.artist}</div>
+                </button>
+              );
+            })}
           </div>
         );
         return (

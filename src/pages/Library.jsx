@@ -11,28 +11,44 @@ import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../compo
 import EventSheet from '../components/ui/EventSheet';
 import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
-import AccountItemList from '../components/AccountItems';
+import AccountItemList, { pinImageInMemory } from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
 import { isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import './Library.css';
 
+const _librarySectionLimits = new Map();
+
 /* A labelled block of items from a connected SoundCloud / Bandcamp account.
-   Renders in pages; more items load automatically when the user scrolls near the bottom. */
+   Renders in pages; more items load automatically when the user scrolls near the bottom.
+   Once loaded, the expanded limit stays in memory so scrolling up/down never re-loads or collapses items. */
 function AcctSection({ title, items, first, view = 'list', cols = 3, onOpenPlaylist }) {
   const PAGE = 40;
-  const [limit, setLimit] = useState(PAGE);
+  const cacheKey = title || `default-${view}-${cols}`;
+  const [limit, setLimit] = useState(() => _librarySectionLimits.get(cacheKey) || PAGE);
   const sentinelRef = useRef(null);
   const total = items ? items.length : 0;
 
   useEffect(() => {
+    const saved = _librarySectionLimits.get(cacheKey);
+    if (saved && saved > limit) setLimit(saved);
+  }, [cacheKey, limit]);
+
+  useEffect(() => {
     const el = sentinelRef.current;
     if (!el || limit >= total) return undefined;
+    const bumpLimit = () => {
+      setLimit(l => {
+        const next = Math.min(l + PAGE, total);
+        _librarySectionLimits.set(cacheKey, Math.max(_librarySectionLimits.get(cacheKey) || PAGE, next));
+        return next;
+      });
+    };
     const io = new IntersectionObserver((entries) => {
-      if (entries.some(e => e.isIntersecting)) setLimit(l => Math.min(l + PAGE, total));
-    }, { rootMargin: '600px 0px' });
+      if (entries.some(e => e.isIntersecting)) bumpLimit();
+    }, { rootMargin: '800px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [limit, total]);
+  }, [limit, total, cacheKey]);
 
   if (!items || total === 0) return null;
   return (
@@ -82,11 +98,12 @@ function groupByAlbum(tracks) {
 
 /* ── Shelf card — identical to Home ───────────────────────── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
+  if (cover) pinImageInMemory(cover);
   return (
     <div className="shelf-card">
       <div className="shelf-card-art">
         {cover
-          ? <img src={cover} alt={title}/>
+          ? <img src={cover} alt={title} loading="eager" decoding="sync"/>
           : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--grey-800)'}}>{fallback||<Music2 size={22} color="var(--text-dim)"/>}</div>
         }
         {badge&&<div className="shelf-card-badge">{BadgeIcon&&<BadgeIcon size={9}/>}<span>{badge}</span></div>}
@@ -101,6 +118,7 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 
 function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) {
   const cleanSrc = (cover && cover.includes('bcbits.com')) ? cover.replace(/_[0-9]+\.jpg/, '_10.jpg') : cover;
+  if (cleanSrc) pinImageInMemory(cleanSrc);
   return (
     <div
       onClick={onClick}
@@ -110,7 +128,7 @@ function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) 
         width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
         background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
              : <Music2 size={22} color="var(--text-dim)" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

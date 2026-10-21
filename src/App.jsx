@@ -21,7 +21,7 @@ import SplashScreen   from './pages/auth/SplashScreen';
 import ResetPassword  from './pages/auth/ResetPassword';
 
 // Listener pages
-import Home from './pages/Home';
+import Home, { preloadHomeContent } from './pages/Home';
 import Search from './pages/Search';
 import Library from './pages/Library';
 import AllReleases from './pages/AllReleases';
@@ -57,6 +57,10 @@ import ListenerPreview from './pages/ListenerPreview';
 import AdminApp from './pages/admin/AdminApp';
 
 import './index.css';
+
+if (typeof window !== 'undefined') {
+  preloadHomeContent();
+}
 
 // ─── Route reporter ────────────────────────────────────────
 // Registers window.__kyoyuGo so the native iOS tab bar can
@@ -109,11 +113,48 @@ function LabelRoute() {
   return isCanonical ? <CanonicalLabelPage /> : <ArtistPage />;
 }
 
+const _savedScrollPositions = new Map();
+
 // ─── Listener shell ────────────────────────────────────────
 function ListenerApp() {
   const { state } = usePlayer();
   const hasTrack = !!state.currentTrack;
   const { pathname } = useLocation();
+  const isHomeRoute = pathname === '/' || pathname === '';
+  const isLibraryRoute = pathname === '/library';
+  const [libraryMounted, setLibraryMounted] = useState(isLibraryRoute);
+
+  useEffect(() => {
+    if (isLibraryRoute && !libraryMounted) {
+      setLibraryMounted(true);
+    } else if (!libraryMounted) {
+      // Pre-mount Library shortly after Home so Library is also warm in memory
+      const t = setTimeout(() => setLibraryMounted(true), 800);
+      return () => clearTimeout(t);
+    }
+  }, [isLibraryRoute, libraryMounted]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (pathname === '/' || pathname === '/library') {
+        _savedScrollPositions.set(pathname, window.scrollY || 0);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname === '/' || pathname === '/library') {
+      const savedY = _savedScrollPositions.get(pathname);
+      if (typeof savedY === 'number') {
+        requestAnimationFrame(() => {
+          try { window.scrollTo(0, savedY); } catch (_) {}
+        });
+      }
+    }
+  }, [pathname]);
+
   const hideSidebar = PROFILE_ROUTES.has(pathname)
     || pathname.startsWith('/release/')
     || pathname.startsWith('/artist/')
@@ -129,31 +170,42 @@ function ListenerApp() {
       >
         {/* RouteReporter inside ListenerApp so navigate() uses this Routes context */}
         <RouteReporter />
-        <Routes>
-          <Route path="/"               element={<Home />} />
-          <Route path="/search"         element={<Search />} />
-          <Route path="/library"        element={<Library />} />
-          <Route path="/all-releases"   element={<AllReleases />} />
-          <Route path="/shop"           element={<Shop />} />
-          <Route path="/marketplace"    element={<Marketplace />} />
-          <Route path="/marketplace/:id" element={<Marketplace />} />
-          <Route path="/profile"        element={<Profile />} />
-          <Route path="/release/:id"    element={<ReleaseRoute />} />
-          <Route path="/artist/:id"     element={<ArtistRoute />} />
-          <Route path="/label/:id"      element={<LabelRoute />} />
-          <Route path="/subscription"   element={<Subscription />} />
-          <Route path="/accounts/:service" element={<AccountLibrary />} />
-          <Route path="/settings"        element={<ListenerSettings />} />
-          <Route path="/orders"          element={<Orders />} />
-          <Route path="/downloads"       element={<Downloads />} />
-          <Route path="/account"         element={<Account />} />
-          <Route path="/uploads"         element={<UserUploads />} />
-          <Route path="/my-releases"      element={<MyReleases />} />
-          <Route path="/app-settings"    element={<AppSettings />} />
-          <Route path="/messages"        element={<Messages />} />
-          <Route path="/events"          element={<Events />} />
-          <Route path="*"               element={<Home />} />
-        </Routes>
+
+        {/* Keep Home and Library persistently mounted in DOM once loaded so content & artworks never reload */}
+        <div style={{ display: isHomeRoute ? 'block' : 'none' }}>
+          <Home />
+        </div>
+        {libraryMounted && (
+          <div style={{ display: isLibraryRoute ? 'block' : 'none' }}>
+            <Library />
+          </div>
+        )}
+
+        {!isHomeRoute && !isLibraryRoute && (
+          <Routes>
+            <Route path="/search"         element={<Search />} />
+            <Route path="/all-releases"   element={<AllReleases />} />
+            <Route path="/shop"           element={<Shop />} />
+            <Route path="/marketplace"    element={<Marketplace />} />
+            <Route path="/marketplace/:id" element={<Marketplace />} />
+            <Route path="/profile"        element={<Profile />} />
+            <Route path="/release/:id"    element={<ReleaseRoute />} />
+            <Route path="/artist/:id"     element={<ArtistRoute />} />
+            <Route path="/label/:id"      element={<LabelRoute />} />
+            <Route path="/subscription"   element={<Subscription />} />
+            <Route path="/accounts/:service" element={<AccountLibrary />} />
+            <Route path="/settings"        element={<ListenerSettings />} />
+            <Route path="/orders"          element={<Orders />} />
+            <Route path="/downloads"       element={<Downloads />} />
+            <Route path="/account"         element={<Account />} />
+            <Route path="/uploads"         element={<UserUploads />} />
+            <Route path="/my-releases"      element={<MyReleases />} />
+            <Route path="/app-settings"    element={<AppSettings />} />
+            <Route path="/messages"        element={<Messages />} />
+            <Route path="/events"          element={<Events />} />
+            <Route path="*"               element={null} />
+          </Routes>
+        )}
       </div>
       {/* BottomDock owns the mini player + nav pill (swipeable, one at a time) */}
       <BottomDock onExpandPlayer={() => window.__kyoyuPlayerCmd?.('expand')} />
@@ -213,6 +265,10 @@ function CreatorApp() {
 function RoleGate() {
   const { role, loading } = useAuth();
   useTheme();
+
+  useEffect(() => {
+    preloadHomeContent();
+  }, []);
 
   // Report role to native iOS bridge so Swift can configure the correct tab bar
   useEffect(() => {

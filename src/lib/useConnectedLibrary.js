@@ -1,32 +1,85 @@
 import { useEffect, useState } from 'react';
-import { fetchAccountLibrary, isStreamingAvailable, onStreamingEvent, useStreamingStatus } from './streaming';
+import { fetchAccountLibrary, isStreamingAvailable, onStreamingEvent, refreshStreamingStatus, useStreamingStatus } from './streaming';
+import { preloadImagesInMemory } from '../components/AccountItems';
 
-/* Library data from connected SoundCloud / Bandcamp accounts, fetched automatically as soon as an account is
-   connected, cached for the session and refreshed in the background (so the Library is always up to date). */
+/* Library data from connected SoundCloud / Bandcamp / Discogs / YouTube / Spotify / Apple Music / TIDAL accounts,
+   fetched automatically at app launch (simultaneously with the splash animation), cached for the session,
+   and persisted in fast localStorage so the Home and Library pages are populated immediately. */
 
-const BC_FAST_CACHE_KEY = 'kyoyu-bc-fast-cache-v1';
+const FAST_CACHE_KEY = 'kyoyu-connected-fast-cache-v2';
+const LEGACY_BC_CACHE_KEY = 'kyoyu-bc-fast-cache-v1';
 
 let cache = { soundcloud: {}, bandcamp: {}, spotify: {}, applemusic: {}, tidal: {}, discogs: {}, youtube: {} };      // service → kind → items
 try {
   if (typeof window !== 'undefined') {
-    const raw = localStorage.getItem(BC_FAST_CACHE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
+    const rawV2 = localStorage.getItem(FAST_CACHE_KEY);
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2);
       if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed.collection) && parsed.collection.length) cache.bandcamp.collection = parsed.collection;
-        if (Array.isArray(parsed.wishlist) && parsed.wishlist.length) cache.bandcamp.wishlist = parsed.wishlist;
+        for (const svc of ['bandcamp', 'soundcloud', 'discogs', 'youtube', 'spotify', 'applemusic', 'tidal']) {
+          if (parsed[svc] && typeof parsed[svc] === 'object') {
+            cache[svc] = {};
+            for (const [k, list] of Object.entries(parsed[svc])) {
+              if (Array.isArray(list) && list.length) {
+                cache[svc][k] = list;
+                preloadImagesInMemory(list, 36);
+              }
+            }
+          }
+        }
+      }
+    }
+    const rawV1 = localStorage.getItem(LEGACY_BC_CACHE_KEY);
+    if (rawV1) {
+      const parsed = JSON.parse(rawV1);
+      if (parsed && typeof parsed === 'object') {
+        if (!cache.bandcamp?.collection?.length && Array.isArray(parsed.collection) && parsed.collection.length) {
+          cache.bandcamp.collection = parsed.collection;
+          preloadImagesInMemory(parsed.collection, 36);
+        }
+        if (!cache.bandcamp?.wishlist?.length && Array.isArray(parsed.wishlist) && parsed.wishlist.length) {
+          cache.bandcamp.wishlist = parsed.wishlist;
+          preloadImagesInMemory(parsed.wishlist, 36);
+        }
       }
     }
   }
 } catch (_) {}
 
-function saveFastBandcampCache() {
-  try {
-    if (typeof window === 'undefined') return;
-    const col = Array.isArray(cache.bandcamp?.collection) ? cache.bandcamp.collection.slice(0, 36) : [];
-    const wish = Array.isArray(cache.bandcamp?.wishlist) ? cache.bandcamp.wishlist.slice(0, 36) : [];
-    localStorage.setItem(BC_FAST_CACHE_KEY, JSON.stringify({ collection: col, wishlist: wish, ts: Date.now() }));
-  } catch (_) {}
+let _saveTimer = null;
+function saveFastConnectedCache() {
+  if (typeof window === 'undefined') return;
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    try {
+      const snapshot = { ts: Date.now() };
+      const fastKinds = {
+        bandcamp: ['newStuff', 'collection', 'wishlist', 'playlists'],
+        soundcloud: ['newStuff', 'likes', 'playlists'],
+        discogs: ['newStuff', 'collection', 'wishlist'],
+        youtube: ['newStuff', 'likes', 'playlists'],
+        spotify: ['newStuff', 'likes', 'playlists', 'albums'],
+        applemusic: ['newStuff', 'likes', 'playlists', 'albums'],
+        tidal: ['newStuff', 'likes', 'playlists', 'albums'],
+      };
+      for (const [svc, kinds] of Object.entries(fastKinds)) {
+        const svcObj = {};
+        for (const k of kinds) {
+          const arr = cache[svc]?.[k];
+          if (Array.isArray(arr) && arr.length) {
+            svcObj[k] = arr.slice(0, 36);
+          }
+        }
+        if (Object.keys(svcObj).length) snapshot[svc] = svcObj;
+      }
+      localStorage.setItem(FAST_CACHE_KEY, JSON.stringify(snapshot));
+      if (cache.bandcamp) {
+        const col = Array.isArray(cache.bandcamp.collection) ? cache.bandcamp.collection.slice(0, 36) : [];
+        const wish = Array.isArray(cache.bandcamp.wishlist) ? cache.bandcamp.wishlist.slice(0, 36) : [];
+        localStorage.setItem(LEGACY_BC_CACHE_KEY, JSON.stringify({ collection: col, wishlist: wish, ts: Date.now() }));
+      }
+    } catch (_) {}
+  }, 150);
 }
 
 let errors = {};                                    // "service:kind" → message of the last failed load
@@ -48,11 +101,10 @@ async function ensure(service, kind, force = false) {
       if (!Array.isArray(existing) || items.length >= existing.length || force) {
         cache[service][kind] = items;
       }
+      preloadImagesInMemory(items, 90);
       fetchedAt[k] = Date.now();
       delete errors[k];
-      if (service === 'bandcamp' && (kind === 'collection' || kind === 'wishlist')) {
-        saveFastBandcampCache();
-      }
+      saveFastConnectedCache();
     })
     .catch((e) => {
       errors[k] = e?.message || 'Could not load';
@@ -62,6 +114,73 @@ async function ensure(service, kind, force = false) {
     .finally(() => { inflight.delete(k); emit(); });
   inflight.set(k, p);
   return p;
+}
+
+function triggerConnectedServicePreload(status) {
+  if (!status || !isStreamingAvailable()) return;
+  if (status.bandcamp?.connected) {
+    ensure('bandcamp', 'collection');
+    ensure('bandcamp', 'wishlist');
+    ensure('bandcamp', 'newStuff');
+    ensure('bandcamp', 'playlists');
+    ensure('bandcamp', 'following');
+  }
+  if (status.soundcloud?.connected) {
+    ensure('soundcloud', 'likes');
+    ensure('soundcloud', 'playlists');
+    ensure('soundcloud', 'newStuff');
+    ensure('soundcloud', 'following');
+  }
+  if (status.discogs?.connected) {
+    ensure('discogs', 'collection');
+    ensure('discogs', 'wishlist');
+    ensure('discogs', 'purchases');
+    ensure('discogs', 'newStuff');
+  }
+  if (status.youtube?.connected) {
+    ensure('youtube', 'likes');
+    ensure('youtube', 'playlists');
+    ensure('youtube', 'albums');
+    ensure('youtube', 'following');
+    ensure('youtube', 'newStuff');
+  }
+  if (status.spotify?.connected) {
+    ensure('spotify', 'likes');
+    ensure('spotify', 'playlists');
+    ensure('spotify', 'albums');
+    ensure('spotify', 'following');
+    ensure('spotify', 'newStuff');
+  }
+  if (status.applemusic?.connected) {
+    ensure('applemusic', 'likes');
+    ensure('applemusic', 'playlists');
+    ensure('applemusic', 'albums');
+    ensure('applemusic', 'following');
+    ensure('applemusic', 'newStuff');
+  }
+  if (status.tidal?.connected) {
+    ensure('tidal', 'likes');
+    ensure('tidal', 'playlists');
+    ensure('tidal', 'albums');
+    ensure('tidal', 'following');
+    ensure('tidal', 'newStuff');
+  }
+}
+
+let _preloadStarted = false;
+/** Starts loading all connected accounts' libraries immediately (during the splash animation). */
+export function preloadConnectedLibrary() {
+  if (_preloadStarted || typeof window === 'undefined' || !isStreamingAvailable()) return;
+  _preloadStarted = true;
+  refreshStreamingStatus()
+    .then((status) => {
+      if (status) triggerConnectedServicePreload(status);
+    })
+    .catch(() => {});
+}
+
+if (typeof window !== 'undefined') {
+  preloadConnectedLibrary();
 }
 
 function extractDiscogsRelId(str = '') {
@@ -122,15 +241,16 @@ export function isItemInConnectedLikes(idOrItem) {
 if (typeof window !== 'undefined') {
   onStreamingEvent((evt) => {
     if (!evt) return;
-    if (evt.type === 'libraryPartial' && evt.service && evt.kind && Array.isArray(evt.items)) {
+    if (evt.type === 'status' && evt.status) {
+      triggerConnectedServicePreload(evt.status);
+    } else if (evt.type === 'libraryPartial' && evt.service && evt.kind && Array.isArray(evt.items)) {
       const s = evt.service;
       const k = evt.kind;
       if (!cache[s]) cache[s] = {};
       cache[s][k] = evt.items;
+      preloadImagesInMemory(evt.items, 90);
       fetchedAt[`${s}:${k}`] = Date.now();
-      if (s === 'bandcamp' && (k === 'collection' || k === 'wishlist')) {
-        saveFastBandcampCache();
-      }
+      saveFastConnectedCache();
       emit();
     } else if (evt.type === 'libraryOptimistic' && evt.service) {
       const s = evt.service;
@@ -146,6 +266,7 @@ if (typeof window !== 'undefined') {
       const turl = evt.url || evt.item?.trackUrl || '';
       if (!evt.liked) {
         cache[s][bucket] = current.filter((it) => !matchesItem(it, tid, turl));
+        saveFastConnectedCache();
         emit();
       } else if (evt.item && !current.some((it) => matchesItem(it, tid, turl))) {
         const it = evt.item;
@@ -164,7 +285,9 @@ if (typeof window !== 'undefined') {
           permalinkUrl: turl || it.permalinkUrl || '',
           url: turl || it.url || '',
         };
+        preloadImagesInMemory([entry], 1);
         cache[s][bucket] = [entry, ...current];
+        saveFastConnectedCache();
         emit();
       }
     } else if (evt.type === 'libraryChanged' && evt.service) {
@@ -203,33 +326,33 @@ export function useConnectedLibrary() {
   const yt = !!status?.youtube?.connected;
 
   useEffect(() => {
-    if (!isStreamingAvailable()) return;
+    if (!isStreamingAvailable() || !status) return;
     if (bc) {
-      Promise.all([ensure('bandcamp', 'collection'), ensure('bandcamp', 'wishlist')]).finally(() => {
-        ensure('bandcamp', 'following');
-        ensure('bandcamp', 'playlists');
-        ensure('bandcamp', 'newStuff');
-      });
-    } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; try { localStorage.removeItem(BC_FAST_CACHE_KEY); } catch (_) {} emit(); }
+      ensure('bandcamp', 'collection');
+      ensure('bandcamp', 'wishlist');
+      ensure('bandcamp', 'newStuff');
+      ensure('bandcamp', 'playlists');
+      ensure('bandcamp', 'following');
+    } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; try { localStorage.removeItem(LEGACY_BC_CACHE_KEY); } catch (_) {} saveFastConnectedCache(); emit(); }
     if (sc) {
       ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); ensure('soundcloud', 'following'); ensure('soundcloud', 'newStuff');
-    } else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; emit(); }
+    } else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; saveFastConnectedCache(); emit(); }
     if (sp) {
       ensure('spotify', 'likes'); ensure('spotify', 'playlists'); ensure('spotify', 'albums'); ensure('spotify', 'following'); ensure('spotify', 'newStuff');
-    } else if (Object.keys(cache.spotify).length) { cache.spotify = {}; emit(); }
+    } else if (Object.keys(cache.spotify).length) { cache.spotify = {}; saveFastConnectedCache(); emit(); }
     if (am) {
       ensure('applemusic', 'likes'); ensure('applemusic', 'playlists'); ensure('applemusic', 'albums'); ensure('applemusic', 'following'); ensure('applemusic', 'newStuff');
-    } else if (Object.keys(cache.applemusic || {}).length) { cache.applemusic = {}; emit(); }
+    } else if (Object.keys(cache.applemusic || {}).length) { cache.applemusic = {}; saveFastConnectedCache(); emit(); }
     if (td) {
       ensure('tidal', 'likes'); ensure('tidal', 'playlists'); ensure('tidal', 'albums'); ensure('tidal', 'following'); ensure('tidal', 'newStuff');
-    } else if (Object.keys(cache.tidal || {}).length) { cache.tidal = {}; emit(); }
+    } else if (Object.keys(cache.tidal || {}).length) { cache.tidal = {}; saveFastConnectedCache(); emit(); }
     if (dg) {
       ensure('discogs', 'collection'); ensure('discogs', 'wishlist'); ensure('discogs', 'purchases'); ensure('discogs', 'newStuff');
-    } else if (Object.keys(cache.discogs || {}).length) { cache.discogs = {}; emit(); }
+    } else if (Object.keys(cache.discogs || {}).length) { cache.discogs = {}; saveFastConnectedCache(); emit(); }
     if (yt) {
       ensure('youtube', 'likes'); ensure('youtube', 'playlists'); ensure('youtube', 'albums'); ensure('youtube', 'following'); ensure('youtube', 'newStuff');
-    } else if (Object.keys(cache.youtube || {}).length) { cache.youtube = {}; emit(); }
-  }, [bc, sc, sp, am, td, dg, yt]);
+    } else if (Object.keys(cache.youtube || {}).length) { cache.youtube = {}; saveFastConnectedCache(); emit(); }
+  }, [bc, sc, sp, am, td, dg, yt, status]);
 
   const get = (service, kind) => (cache[service]?.[kind] || []);
   const bcFollowingCount = get('bandcamp', 'following').length;

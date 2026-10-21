@@ -391,8 +391,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 img {
   display: block;
   max-width: 100%;
-  /* GPU hint for composited images */
-  transform: translateZ(0);
 }
 
 /* ═══════════════════════════════════════════

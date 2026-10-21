@@ -4,7 +4,7 @@ import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check, Heart } from 'luci
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { sanitizeArtworkUrl } from '../AccountItems';
+import { sanitizeArtworkUrl, pinImageInMemory } from '../AccountItems';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -44,12 +44,13 @@ function toPlayerTrack(t, albumCover) {
 }
 
 /* ── tiny shelf card ─────────────────────────────────────── */
-function Card({ cover, title, sub, badge, onClick }) {
+const Card = memo(function Card({ cover, title, sub, badge, onClick }) {
+  if (cover) pinImageInMemory(cover);
   return (
     <div className="shelf-card upl-shelf-card" onClick={onClick}>
       <div className="shelf-card-art">
         {cover
-          ? <img src={cover} alt={title} loading="lazy" decoding="async"/>
+          ? <img src={cover} alt={title} loading="eager" decoding="sync"/>
           : <div className="upl-card-ph"><Music2 size={20} strokeWidth={1.3}/></div>
         }
         {badge && <div className="shelf-card-badge">{badge}</div>}
@@ -60,7 +61,7 @@ function Card({ cover, title, sub, badge, onClick }) {
       </div>
     </div>
   );
-}
+});
 
 /* ── notify native layer ──────────────────────────────────── */
 function postNative(obj) {
@@ -280,24 +281,27 @@ function useUploadArtwork(t) {
     !!t?.catalogId;
   const rawArt = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
   const initial = sanitizeArtworkUrl(rawArt, itemId);
+  if (initial) pinImageInMemory(initial);
   const [src, setSrc] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextRaw = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
-    setSrc(sanitizeArtworkUrl(nextRaw, itemId));
+    const next = sanitizeArtworkUrl(nextRaw, itemId);
+    if (next) pinImageInMemory(next);
+    setSrc(next);
     setFailed(false);
   }, [t?.artworkUrl, t?.cover, itemId, isFakePrivateArt]);
 
   return { cleanSrc: failed ? '' : src, onError: () => setFailed(true) };
 }
 
-function UploadExpRow({ t, isActive, onPlay }) {
+const UploadExpRow = memo(function UploadExpRow({ t, isActive, onPlay }) {
   const { cleanSrc, onError } = useUploadArtwork(t);
   return (
     <div className={`upl-exp-row${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
       {cleanSrc
-        ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="lazy" decoding="async"/>
+        ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="eager" decoding="sync"/>
         : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
       }
       <div className="upl-exp-info">
@@ -309,15 +313,15 @@ function UploadExpRow({ t, isActive, onPlay }) {
       </div>
     </div>
   );
-}
+});
 
-function UploadGridCellItem({ t, isActive, isPlaying, liked, safeCols, onPlay, onToggleLike }) {
+const UploadGridCellItem = memo(function UploadGridCellItem({ t, isActive, isPlaying, liked, safeCols, onPlay, onToggleLike }) {
   const { cleanSrc, onError } = useUploadArtwork(t);
   return (
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
       <div className="upl-grid-art">
         {cleanSrc
-          ? <img src={cleanSrc} alt={t.title} onError={onError} loading="lazy" decoding="async"/>
+          ? <img src={cleanSrc} alt={t.title} onError={onError} loading="eager" decoding="sync"/>
           : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
         }
         {isActive && (
@@ -340,7 +344,7 @@ function UploadGridCellItem({ t, isActive, isPlaying, liked, safeCols, onPlay, o
       {safeCols <= 3 && <div className="upl-grid-artist">{t.artist || ''}</div>}
     </div>
   );
-}
+});
 
 /* ── Named export: vertical track list reused in Home & Library ── */
 export function UploadExpandedList({ uploads }) {

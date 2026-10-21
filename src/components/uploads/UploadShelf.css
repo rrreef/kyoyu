@@ -198,7 +198,7 @@ button.upl-grid-cell:active:not(:disabled) { opacity:1 !important; transform:non
 .upl-grid-art { aspect-ratio:1;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.06);margin-bottom:5px;position:relative;flex-shrink:0; }
 .upl-grid-1 .upl-grid-art { border-radius:14px; }
 .upl-grid-4 .upl-grid-art,.upl-grid-5 .upl-grid-art { border-radius:8px; }
-.upl-grid-art img { width:100%;height:100%;object-fit:cover;display:block;transform:translateZ(0); }
+.upl-grid-art img { width:100%;height:100%;object-fit:cover;display:block; }
 .upl-grid-art-ph { width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.2); }
 
 .upl-grid-playing { position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:#fff;border-radius:inherit; }
