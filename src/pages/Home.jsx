@@ -283,6 +283,49 @@ export default function Home() {
   const [followingOnly, setFollowing]   = useState(false);
   const showFollowingToggle = shelfFilter === 'music' || shelfFilter === 'podcasts';
 
+  // In-place expanded category state (infinite vertical scroll on Home page)
+  const [expandedSectionKey, setExpandedSectionKey] = useState(null);
+  const [expandedVisibleCount, setExpandedVisibleCount] = useState(30);
+  const loadMoreSentinelRef = useRef(null);
+
+  const toggleExpandSection = useCallback((sectionKey) => {
+    setExpandedSectionKey((prev) => {
+      if (prev === sectionKey) return null;
+      setExpandedVisibleCount(30);
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) {}
+      return sectionKey;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!expandedSectionKey) return;
+    const node = loadMoreSentinelRef.current;
+    let observer = null;
+    if (node && typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            setExpandedVisibleCount((c) => c + 30);
+          }
+        },
+        { rootMargin: '400px 0px' }
+      );
+      observer.observe(node);
+    }
+    const onScroll = () => {
+      const scrollBottom = window.innerHeight + window.scrollY;
+      const docHeight = document.documentElement?.scrollHeight || document.body?.scrollHeight || 0;
+      if (docHeight > 0 && docHeight - scrollBottom < 500) {
+        setExpandedVisibleCount((c) => c + 30);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [expandedSectionKey, expandedVisibleCount]);
+
   // Decide which sections to render per filter
   const f = shelfFilter;
   const showFeatured    = f === 'all' || f === 'music';
@@ -307,7 +350,7 @@ export default function Home() {
                 key={key}
                 data-home-filter={key}
                 className={`shelf-filter-btn${shelfFilter === key ? ' active' : ''}`}
-                onClick={() => { setShelfFilter(key); setFollowing(false); }}
+                onClick={() => { setShelfFilter(key); setFollowing(false); setExpandedSectionKey(null); }}
               >
                 {label}
               </button>
@@ -316,7 +359,7 @@ export default function Home() {
           {showFollowingToggle && (
             <button
               className={`shelf-following-btn${followingOnly ? ' active' : ''}`}
-              onClick={() => setFollowing(f => !f)}
+              onClick={() => { setFollowing(f => !f); setExpandedSectionKey(null); }}
             >
               Following
             </button>
@@ -325,101 +368,124 @@ export default function Home() {
       </section>
 
       {/* ═══ 1 — FEATURED CONTENT CAROUSEL ═══ */}
-      {showFeatured && featuredAlbums.length > 0 && (
+      {showFeatured && featuredAlbums.length > 0 && (!expandedSectionKey || expandedSectionKey === 'featured') && (
         <section className="home-section featured-hero-section">
           <div className="section-title">
-            <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Featured</span>
+            <span onClick={() => toggleExpandSection('featured')} style={{ cursor: 'pointer' }}>
+              {expandedSectionKey === 'featured' ? '← Featured' : 'Featured'}
+            </span>
+            {expandedSectionKey === 'featured' && (
+              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{featuredAlbums.length}</span>
+            )}
           </div>
 
-          <div
-            className="featured-hero-row"
-            ref={featuredRef}
-            onScroll={handleFeaturedScroll}
-          >
-            {featuredAlbums.map((album, idx) => (
-              <button
-                key={album.id}
-                className="featured-hero-card"
-                onClick={() => {
-                  if (album.id.startsWith('single::') && album.tracks?.length === 1) {
-                    playTrack(album.tracks[0]);
-                  } else {
-                    setSelectedAlbum(openNativeAlbumFast(album));
-                  }
-                }}
-              >
-                {/* Blurred background from cover art */}
-                {album.cover && (
-                  <div
-                    className="featured-hero-bg"
-                    style={{ backgroundImage: `url(${album.cover})` }}
-                  />
-                )}
-
-                {/* Cover art */}
-                <div className="featured-hero-art">
-                  {album.cover
-                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
-                    : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
-                </div>
-
-                {/* Info overlay */}
-                <div className="featured-hero-info">
-                  <div className="featured-hero-title">{album.title}</div>
-                  <div className="featured-hero-artist">{album.artist}</div>
-                  {album.label && <div className="featured-hero-label">{album.label}</div>}
-                  {album.tracks && (
-                    <div className="featured-hero-meta">
-                      {album.tracks.length} {album.tracks.length === 1 ? 'track' : 'tracks'}
-                      {album.year ? ` · ${album.year}` : ''}
+          {expandedSectionKey === 'featured' ? (
+            <>
+              <div className="upl-grid upl-grid-3">
+                {featuredAlbums.slice(0, expandedVisibleCount).map((album) => (
+                  <button
+                    key={album.id}
+                    className="upl-grid-cell"
+                    style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => {
+                      if (album.id.startsWith('single::') && album.tracks?.length === 1) {
+                        playTrack(album.tracks[0]);
+                      } else {
+                        setSelectedAlbum(openNativeAlbumFast(album));
+                      }
+                    }}
+                  >
+                    <div className="upl-grid-art">
+                      {album.cover
+                        ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                        : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
                     </div>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
+                    <div className="upl-grid-title">{album.title}</div>
+                    <div className="upl-grid-artist">{album.artist}</div>
+                  </button>
+                ))}
+              </div>
+              {expandedVisibleCount < featuredAlbums.length && (
+                <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+              )}
+            </>
+          ) : (
+            <>
+              <div
+                className="featured-hero-row"
+                ref={featuredRef}
+                onScroll={handleFeaturedScroll}
+              >
+                {featuredAlbums.map((album) => (
+                  <button
+                    key={album.id}
+                    className="featured-hero-card"
+                    onClick={() => {
+                      if (album.id.startsWith('single::') && album.tracks?.length === 1) {
+                        playTrack(album.tracks[0]);
+                      } else {
+                        setSelectedAlbum(openNativeAlbumFast(album));
+                      }
+                    }}
+                  >
+                    {/* Blurred background from cover art */}
+                    {album.cover && (
+                      <div
+                        className="featured-hero-bg"
+                        style={{ backgroundImage: `url(${album.cover})` }}
+                      />
+                    )}
 
-          {/* Dot indicators */}
-          {featuredAlbums.length > 1 && (
-            <div className="featured-dots">
-              {featuredAlbums.map((_, i) => (
-                <div
-                  key={i}
-                  className={`featured-dot${i === activeSlide ? ' active' : ''}`}
-                  onClick={() => {
-                    const el = featuredRef.current;
-                    if (!el || !el.firstChild) return;
-                    const cardW = el.firstChild.offsetWidth + 14;
-                    el.scrollTo({ left: i * cardW, behavior: 'smooth' });
-                  }}
-                />
-              ))}
-            </div>
+                    {/* Cover art */}
+                    <div className="featured-hero-art">
+                      {album.cover
+                        ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                        : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
+                    </div>
+
+                    {/* Info overlay */}
+                    <div className="featured-hero-info">
+                      <div className="featured-hero-title">{album.title}</div>
+                      <div className="featured-hero-artist">{album.artist}</div>
+                      {album.label && <div className="featured-hero-label">{album.label}</div>}
+                      {album.tracks && (
+                        <div className="featured-hero-meta">
+                          {album.tracks.length} {album.tracks.length === 1 ? 'track' : 'tracks'}
+                          {album.year ? ` · ${album.year}` : ''}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Dot indicators */}
+              {featuredAlbums.length > 1 && (
+                <div className="featured-dots">
+                  {featuredAlbums.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`featured-dot${i === activeSlide ? ' active' : ''}`}
+                      onClick={() => {
+                        const el = featuredRef.current;
+                        if (!el || !el.firstChild) return;
+                        const cardW = el.firstChild.offsetWidth + 14;
+                        el.scrollTo({ left: i * cardW, behavior: 'smooth' });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
 
-      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (SWIPEABLE PAGES OF N ROWS × 3 TITLES) ═══ */}
+      {/* ═══ 1.2 — LIBRARY PER PROVIDER: NEW STUFF, COLLECTION / LIKES, WISHLIST & PLAYLISTS (SWIPEABLE PAGES OF N ROWS × 3 TITLES) ═══ */}
       {showFeatured && (() => {
         const limitFor = (sectionKey) => {
           const rows = homeSectionRows?.[sectionKey] ?? DEFAULT_HOME_SECTION_ROWS;
           return Math.max(0, Number(rows) || 0) * HOME_TITLES_PER_ROW;
-        };
-
-        const openLibrarySection = (provider, category) => {
-          window.__kyoyuLibraryProvider = provider || null;
-          window.__kyoyuLibraryCategory = category || null;
-          window.dispatchEvent(new CustomEvent('kyoyu-library-state', {
-            detail: { provider: provider || null, category: category || null }
-          }));
-          try {
-            window.webkit?.messageHandlers?.player?.postMessage({
-              cmd: 'open_library_section',
-              provider: provider || '',
-              category: category || '',
-            });
-          } catch (e) {}
-          navigate('/library');
         };
 
         const likedUploads = getLikedUploads(user?.id) || [];
@@ -434,31 +500,38 @@ export default function Home() {
 
         const sectionsByProvider = {
           bandcamp: [
+            { key: 'bandcamp-new',  title: 'Bandcamp · New Stuff',  provider: 'bandcamp', category: 'newStuff',  items: acct.bandcamp?.newStuff || [],   pageSize: limitFor('bandcamp-new'),  type: 'acct' },
             { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: acct.bandcamp?.collection || [], pageSize: limitFor('bandcamp-col'),  type: 'acct' },
             { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: acct.bandcamp?.wishlist || [],   pageSize: limitFor('bandcamp-wish'), type: 'acct' },
             { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: acct.bandcamp?.playlists || [],  pageSize: limitFor('bandcamp-pl'),   type: 'acct' },
           ],
           discogs: [
+            { key: 'discogs-new',   title: 'Discogs · New Stuff',   provider: 'discogs',  category: 'newStuff',  items: acct.discogs?.newStuff || [],    pageSize: limitFor('discogs-new'),   type: 'acct' },
             { key: 'discogs-col',   title: 'Discogs · Collection',  provider: 'discogs',  category: 'purchases', items: acct.discogs?.collection || [],  pageSize: limitFor('discogs-col'),   type: 'acct' },
             { key: 'discogs-wish',  title: 'Discogs · Wishlist',    provider: 'discogs',  category: 'wishlist',  items: acct.discogs?.wishlist || [],    pageSize: limitFor('discogs-wish'),  type: 'acct' },
           ],
           soundcloud: [
+            { key: 'soundcloud-new',   title: 'SoundCloud · New Stuff', provider: 'soundcloud', category: 'newStuff',  items: acct.soundcloud?.newStuff || [],  pageSize: limitFor('soundcloud-new'),   type: 'acct' },
             { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     provider: 'soundcloud', category: 'titles',    items: acct.soundcloud?.likes || [],     pageSize: limitFor('soundcloud-likes'), type: 'acct' },
             { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: acct.soundcloud?.playlists || [], pageSize: limitFor('soundcloud-pl'),    type: 'acct' },
           ],
           youtube: [
+            { key: 'youtube-new',   title: 'YouTube · New Stuff', provider: 'youtube', category: 'newStuff',  items: acct.youtube?.newStuff || [],                        pageSize: limitFor('youtube-new'),   type: 'acct' },
             { key: 'youtube-likes', title: 'YouTube · Likes',     provider: 'youtube', category: 'titles',    items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, pageSize: limitFor('youtube-likes'), type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
             { key: 'youtube-pl',    title: 'YouTube · Playlists', provider: 'youtube', category: 'playlists', items: ytPlaylists,                                         pageSize: limitFor('youtube-pl'),    type: 'acct' },
           ],
           spotify: [
+            { key: 'spotify-new',   title: 'Spotify · New Stuff', provider: 'spotify', category: 'newStuff',  items: acct.spotify?.newStuff || [],  pageSize: limitFor('spotify-new'),   type: 'acct' },
             { key: 'spotify-likes', title: 'Spotify · Likes',     provider: 'spotify', category: 'titles',    items: acct.spotify?.likes || [],     pageSize: limitFor('spotify-likes'), type: 'acct' },
             { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: acct.spotify?.playlists || [], pageSize: limitFor('spotify-pl'),    type: 'acct' },
           ],
           applemusic: [
+            { key: 'applemusic-new',   title: 'Apple Music · New Stuff', provider: 'applemusic', category: 'newStuff',  items: acct.applemusic?.newStuff || [],  pageSize: limitFor('applemusic-new'),   type: 'acct' },
             { key: 'applemusic-likes', title: 'Apple Music · Likes',     provider: 'applemusic', category: 'titles',    items: acct.applemusic?.likes || [],     pageSize: limitFor('applemusic-likes'), type: 'acct' },
             { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: acct.applemusic?.playlists || [], pageSize: limitFor('applemusic-pl'),    type: 'acct' },
           ],
           tidal: [
+            { key: 'tidal-new',   title: 'TIDAL · New Stuff', provider: 'tidal', category: 'newStuff',  items: acct.tidal?.newStuff || [],  pageSize: limitFor('tidal-new'),   type: 'acct' },
             { key: 'tidal-likes', title: 'TIDAL · Likes',     provider: 'tidal', category: 'titles',    items: acct.tidal?.likes || [],     pageSize: limitFor('tidal-likes'), type: 'acct' },
             { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: acct.tidal?.playlists || [], pageSize: limitFor('tidal-pl'),    type: 'acct' },
           ],
@@ -466,7 +539,8 @@ export default function Home() {
 
         const orderedSections = providerPriority
           .flatMap(p => sectionsByProvider[p] || [])
-          .filter(s => s && s.pageSize > 0 && s.items.length > 0);
+          .filter(s => s && s.pageSize > 0 && s.items.length > 0 && (!followingOnly || s.category === 'newStuff'))
+          .filter(s => !expandedSectionKey || expandedSectionKey === s.key);
 
         if (orderedSections.length === 0) return null;
 
@@ -475,6 +549,33 @@ export default function Home() {
         return (
           <>
             {orderedSections.map(sec => {
+              const isExpanded = expandedSectionKey === sec.key;
+              if (isExpanded) {
+                const visibleItems = sec.items.slice(0, expandedVisibleCount);
+                return (
+                  <section key={sec.key} className="home-section">
+                    <div className="section-title">
+                      <span onClick={() => toggleExpandSection(sec.key)} style={{ cursor: 'pointer' }}>
+                        ← {sec.title}
+                      </span>
+                      <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>
+                        {sec.items.length}
+                      </span>
+                    </div>
+                    {sec.type === 'uploads' ? (
+                      viewMode === 'list'
+                        ? <UploadExpandedList uploads={visibleItems} />
+                        : <UploadGridView uploads={visibleItems} cols={3} />
+                    ) : (
+                      <AccountItemList items={visibleItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                    )}
+                    {expandedVisibleCount < sec.items.length && (
+                      <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                    )}
+                  </section>
+                );
+              }
+
               const pages = [];
               for (let i = 0; i < sec.items.length; i += sec.pageSize) {
                 pages.push(sec.items.slice(i, i + sec.pageSize));
@@ -482,7 +583,7 @@ export default function Home() {
               return (
                 <section key={sec.key} className="home-section">
                   <div className="section-title">
-                    <span onClick={() => openLibrarySection(sec.provider, sec.category)} style={{ cursor: 'pointer' }}>{sec.title}</span>
+                    <span onClick={() => toggleExpandSection(sec.key)} style={{ cursor: 'pointer' }}>{sec.title}</span>
                   </div>
                   {pages.length <= 1 ? (
                     sec.type === 'uploads' ? (
@@ -515,41 +616,78 @@ export default function Home() {
       })()}
 
       {/* ═══ 1.5 — HISTORY ═══ */}
-      {showFeatured && playHistory.length > 0 && (
+      {showFeatured && playHistory.length > 0 && (!expandedSectionKey || expandedSectionKey === 'history') && (
         <section className="home-section">
           <div className="section-title">
-            <span>History</span>
+            <span onClick={() => toggleExpandSection('history')} style={{ cursor: 'pointer' }}>
+              {expandedSectionKey === 'history' ? '← History' : 'History'}
+            </span>
+            {expandedSectionKey === 'history' && (
+              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{playHistory.length}</span>
+            )}
           </div>
-          <div className="scroll-row">
-            {playHistory.map(item => {
-              const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
-              return (
-                <button 
-                  key={item._hkey || item.id} 
-                  className="shelf-card" 
-                  style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                  onClick={() => playFromHistory(item)}
-                >
-                  <div className="shelf-card-art">
-                    {cleanCover ? (
-                      <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
-                    ) : (
-                      <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
-                    )}
-                  </div>
-                  <div className="shelf-card-info">
-                    <div className="shelf-card-title">{item.title}</div>
-                    <div className="shelf-card-sub">{item.artist}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {expandedSectionKey === 'history' ? (
+            <>
+              <div className="upl-grid upl-grid-3">
+                {playHistory.slice(0, expandedVisibleCount).map(item => {
+                  const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
+                  return (
+                    <button
+                      key={item._hkey || item.id}
+                      className="upl-grid-cell"
+                      style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => playFromHistory(item)}
+                    >
+                      <div className="upl-grid-art">
+                        {cleanCover ? (
+                          <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                        ) : (
+                          <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
+                        )}
+                      </div>
+                      <div className="upl-grid-title">{item.title}</div>
+                      <div className="upl-grid-artist">{item.artist}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              {expandedVisibleCount < playHistory.length && (
+                <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+              )}
+            </>
+          ) : (
+            <div className="scroll-row">
+              {playHistory.map(item => {
+                const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
+                return (
+                  <button 
+                    key={item._hkey || item.id} 
+                    className="shelf-card" 
+                    style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
+                    onClick={() => playFromHistory(item)}
+                  >
+                    <div className="shelf-card-art">
+                      {cleanCover ? (
+                        <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                      ) : (
+                        <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
+                      )}
+                    </div>
+                    <div className="shelf-card-info">
+                      <div className="shelf-card-title">{item.title}</div>
+                      <div className="shelf-card-sub">{item.artist}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
       {/* ═══ 2 — MY UPLOADS (private) ═══ */}
-      {showReleases && myUploads.length > 0 && (() => {
+      {showReleases && myUploads.length > 0 && (!expandedSectionKey || expandedSectionKey === 'my-uploads') && (() => {
+        const isExpanded = expandedSectionKey === 'my-uploads';
         const uploadPageSize = Math.max(3, (homeLayout.cols || 3) * 2);
         const uploadPages = [];
         for (let i = 0; i < myUploads.length; i += uploadPageSize) {
@@ -558,10 +696,21 @@ export default function Home() {
         return (
           <section className="home-section">
             <div className="section-title">
-              <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
+              <span onClick={() => toggleExpandSection('my-uploads')} style={{ cursor: 'pointer' }}>
+                {isExpanded ? '← ' : ''}<Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads
+              </span>
               <span style={{fontSize:'.72rem',color:'var(--text-muted)'}}>{myUploads.length} tracks</span>
             </div>
-            {uploadPages.length <= 1 ? (
+            {isExpanded ? (
+              <>
+                {homeLayout.mode === 'list'
+                  ? <UploadExpandedList uploads={myUploads.slice(0, expandedVisibleCount)}/>
+                  : <UploadGridView uploads={myUploads.slice(0, expandedVisibleCount)} cols={homeLayout.cols}/>}
+                {expandedVisibleCount < myUploads.length && (
+                  <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                )}
+              </>
+            ) : uploadPages.length <= 1 ? (
               homeLayout.mode === 'list'
                 ? <UploadExpandedList uploads={myUploads}/>
                 : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
@@ -582,7 +731,8 @@ export default function Home() {
       })()}
 
       {/* ═══ 3 — RELEASES ═══ */}
-      {showReleases && (() => {
+      {showReleases && (!expandedSectionKey || expandedSectionKey === 'releases') && (() => {
+        const isExpanded = expandedSectionKey === 'releases';
         const releasePageSize = 6;
         const releasePages = [];
         for (let i = 0; i < publicAlbums.length; i += releasePageSize) {
@@ -618,10 +768,22 @@ export default function Home() {
         return (
           <section className="home-section">
             <div className="section-title">
-              <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Releases</span>
+              <span onClick={() => toggleExpandSection('releases')} style={{ cursor: 'pointer' }}>
+                {isExpanded ? '← Releases' : 'Releases'}
+              </span>
+              {isExpanded && (
+                <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{publicAlbums.length}</span>
+              )}
             </div>
             {publicAlbums.length === 0 ? (
               <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
+            ) : isExpanded ? (
+              <>
+                {renderReleaseGrid(publicAlbums.slice(0, expandedVisibleCount))}
+                {expandedVisibleCount < publicAlbums.length && (
+                  <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                )}
+              </>
             ) : releasePages.length <= 1 ? (
               renderReleaseGrid(releasePages[0] || [])
             ) : (
@@ -643,12 +805,14 @@ export default function Home() {
       )}
 
       {/* ═══ 4 — EVENTS ═══ */}
-      {showEvents && (
+      {showEvents && (!expandedSectionKey || expandedSectionKey === 'events') && (
         <section className="home-section">
           <div className="section-title">
-            <span>Events</span>
+            <span onClick={() => toggleExpandSection('events')} style={{ cursor: 'pointer' }}>
+              {expandedSectionKey === 'events' ? '← Events' : 'Events'}
+            </span>
           </div>
-          <div className="scroll-row">
+          <div className="scroll-row" style={expandedSectionKey === 'events' ? { flexWrap: 'wrap', gap: 14 } : undefined}>
             {berghainEvents.map((e, idx) => (
               <BerghainEventCard key={e.id} event={e} onClick={() => setSelectedEventIndex(idx)} />
             ))}

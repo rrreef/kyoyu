@@ -208,29 +208,143 @@ export function useConnectedLibrary() {
       Promise.all([ensure('bandcamp', 'collection'), ensure('bandcamp', 'wishlist')]).finally(() => {
         ensure('bandcamp', 'following');
         ensure('bandcamp', 'playlists');
+        ensure('bandcamp', 'newStuff');
       });
     } else if (Object.keys(cache.bandcamp).length) { cache.bandcamp = {}; try { localStorage.removeItem(BC_FAST_CACHE_KEY); } catch (_) {} emit(); }
     if (sc) {
-      ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); ensure('soundcloud', 'following');
+      ensure('soundcloud', 'likes'); ensure('soundcloud', 'playlists'); ensure('soundcloud', 'following'); ensure('soundcloud', 'newStuff');
     } else if (Object.keys(cache.soundcloud).length) { cache.soundcloud = {}; emit(); }
     if (sp) {
-      ensure('spotify', 'likes'); ensure('spotify', 'playlists'); ensure('spotify', 'albums'); ensure('spotify', 'following');
+      ensure('spotify', 'likes'); ensure('spotify', 'playlists'); ensure('spotify', 'albums'); ensure('spotify', 'following'); ensure('spotify', 'newStuff');
     } else if (Object.keys(cache.spotify).length) { cache.spotify = {}; emit(); }
     if (am) {
-      ensure('applemusic', 'likes'); ensure('applemusic', 'playlists'); ensure('applemusic', 'albums'); ensure('applemusic', 'following');
+      ensure('applemusic', 'likes'); ensure('applemusic', 'playlists'); ensure('applemusic', 'albums'); ensure('applemusic', 'following'); ensure('applemusic', 'newStuff');
     } else if (Object.keys(cache.applemusic || {}).length) { cache.applemusic = {}; emit(); }
     if (td) {
-      ensure('tidal', 'likes'); ensure('tidal', 'playlists'); ensure('tidal', 'albums'); ensure('tidal', 'following');
+      ensure('tidal', 'likes'); ensure('tidal', 'playlists'); ensure('tidal', 'albums'); ensure('tidal', 'following'); ensure('tidal', 'newStuff');
     } else if (Object.keys(cache.tidal || {}).length) { cache.tidal = {}; emit(); }
     if (dg) {
-      ensure('discogs', 'collection'); ensure('discogs', 'wishlist'); ensure('discogs', 'purchases');
+      ensure('discogs', 'collection'); ensure('discogs', 'wishlist'); ensure('discogs', 'purchases'); ensure('discogs', 'newStuff');
     } else if (Object.keys(cache.discogs || {}).length) { cache.discogs = {}; emit(); }
     if (yt) {
-      ensure('youtube', 'likes'); ensure('youtube', 'playlists'); ensure('youtube', 'albums'); ensure('youtube', 'following');
+      ensure('youtube', 'likes'); ensure('youtube', 'playlists'); ensure('youtube', 'albums'); ensure('youtube', 'following'); ensure('youtube', 'newStuff');
     } else if (Object.keys(cache.youtube || {}).length) { cache.youtube = {}; emit(); }
   }, [bc, sc, sp, am, td, dg, yt]);
 
   const get = (service, kind) => (cache[service]?.[kind] || []);
+  const bcFollowingCount = get('bandcamp', 'following').length;
+  const bcNewStuffCount = get('bandcamp', 'newStuff').length;
+  const scFollowingCount = get('soundcloud', 'following').length;
+  const scNewStuffCount = get('soundcloud', 'newStuff').length;
+
+  // Web-side fallback enrichment: if Bandcamp / SoundCloud following is loaded and native newStuff is empty,
+  // query /api/bandcamp-search or /api/soundcloud-search for the followed artists/labels' newest releases.
+  useEffect(() => {
+    if (!bc || bcFollowingCount === 0 || bcNewStuffCount > 0) return;
+    if (inflight.has('bandcamp:newStuff') || inflight.has('bandcamp:newStuffWeb')) return;
+    const followed = get('bandcamp', 'following').slice(0, 8);
+    if (!followed.length) return;
+    const p = (async () => {
+      const seenUrls = new Set();
+      const collected = [];
+      await Promise.all(
+        followed.map(async (band) => {
+          const name = (band.title || band.artistName || band.name || '').trim();
+          if (!name) return;
+          try {
+            const res = await fetch('/api/bandcamp-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: name }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const items = (data.results || []).filter(
+              (r) => (r.type === 'album' || r.type === 'track') && (r.trackUrl || r.url)
+            );
+            for (const it of items.slice(0, 2)) {
+              const u = it.trackUrl || it.url;
+              if (!u || seenUrls.has(u)) continue;
+              seenUrls.add(u);
+              collected.push({
+                id: `bc-new-${Math.abs(u.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0))}`,
+                provider: 'bandcamp',
+                kind: it.type === 'track' ? 'track' : 'album',
+                title: it.title || '',
+                artistName: it.artistName || name,
+                artworkUrl: it.artworkUrl || band.artworkUrl || '',
+                trackUrl: u,
+                url: u,
+              });
+            }
+          } catch (_) {}
+        })
+      );
+      if (collected.length > 0 && (!cache.bandcamp?.newStuff || cache.bandcamp.newStuff.length === 0)) {
+        if (!cache.bandcamp) cache.bandcamp = {};
+        cache.bandcamp.newStuff = collected;
+        fetchedAt['bandcamp:newStuff'] = Date.now();
+        emit();
+      }
+    })().finally(() => {
+      inflight.delete('bandcamp:newStuffWeb');
+    });
+    inflight.set('bandcamp:newStuffWeb', p);
+  }, [bc, bcFollowingCount, bcNewStuffCount]);
+
+  useEffect(() => {
+    if (!sc || scFollowingCount === 0 || scNewStuffCount > 0) return;
+    if (inflight.has('soundcloud:newStuff') || inflight.has('soundcloud:newStuffWeb')) return;
+    const followed = get('soundcloud', 'following').slice(0, 6);
+    if (!followed.length) return;
+    const p = (async () => {
+      const seenIds = new Set();
+      const collected = [];
+      await Promise.all(
+        followed.map(async (u) => {
+          const name = (u.title || u.username || u.name || '').trim();
+          if (!name) return;
+          try {
+            const res = await fetch('/api/soundcloud-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: name, limit: 3 }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const tracks = data.tracks || data.results || [];
+            for (const t of tracks.slice(0, 2)) {
+              const id = `sc-${t.trackId || t.id}`;
+              if (seenIds.has(id)) continue;
+              seenIds.add(id);
+              collected.push({
+                id,
+                provider: 'soundcloud',
+                kind: 'track',
+                title: t.title || '',
+                artistName: t.artistName || name,
+                artworkUrl: t.artworkUrl || u.artworkUrl || '',
+                duration: t.duration || 0,
+                permalinkUrl: t.permalinkUrl || t.url || '',
+                trackUrl: t.permalinkUrl || t.url || '',
+                url: t.permalinkUrl || t.url || '',
+              });
+            }
+          } catch (_) {}
+        })
+      );
+      if (collected.length > 0 && (!cache.soundcloud?.newStuff || cache.soundcloud.newStuff.length === 0)) {
+        if (!cache.soundcloud) cache.soundcloud = {};
+        cache.soundcloud.newStuff = collected;
+        fetchedAt['soundcloud:newStuff'] = Date.now();
+        emit();
+      }
+    })().finally(() => {
+      inflight.delete('soundcloud:newStuffWeb');
+    });
+    inflight.set('soundcloud:newStuffWeb', p);
+  }, [sc, scFollowingCount, scNewStuffCount]);
+
   const loading = inflight.size > 0;
 
   return {
@@ -238,6 +352,7 @@ export function useConnectedLibrary() {
     errors,
     bandcamp: {
       connected: bc,
+      newStuff:   bc ? get('bandcamp', 'newStuff') : [],
       collection: bc ? get('bandcamp', 'collection') : [],
       wishlist:   bc ? get('bandcamp', 'wishlist') : [],
       following:  bc ? get('bandcamp', 'following') : [],
@@ -245,12 +360,14 @@ export function useConnectedLibrary() {
     },
     soundcloud: {
       connected: sc,
+      newStuff:  sc ? get('soundcloud', 'newStuff') : [],
       likes:     sc ? get('soundcloud', 'likes') : [],
       playlists: sc ? get('soundcloud', 'playlists') : [],
       following: sc ? get('soundcloud', 'following') : [],
     },
     spotify: {
       connected: sp,
+      newStuff:  sp ? get('spotify', 'newStuff') : [],
       likes:     sp ? get('spotify', 'likes') : [],
       playlists: sp ? get('spotify', 'playlists') : [],
       albums:    sp ? get('spotify', 'albums') : [],
@@ -258,6 +375,7 @@ export function useConnectedLibrary() {
     },
     applemusic: {
       connected: am,
+      newStuff:  am ? get('applemusic', 'newStuff') : [],
       likes:     am ? get('applemusic', 'likes') : [],
       playlists: am ? get('applemusic', 'playlists') : [],
       albums:    am ? get('applemusic', 'albums') : [],
@@ -265,6 +383,7 @@ export function useConnectedLibrary() {
     },
     tidal: {
       connected: td,
+      newStuff:  td ? get('tidal', 'newStuff') : [],
       likes:     td ? get('tidal', 'likes') : [],
       playlists: td ? get('tidal', 'playlists') : [],
       albums:    td ? get('tidal', 'albums') : [],
@@ -272,12 +391,14 @@ export function useConnectedLibrary() {
     },
     discogs: {
       connected: dg,
+      newStuff:   dg ? get('discogs', 'newStuff') : [],
       collection: dg ? get('discogs', 'collection') : [],
       wishlist:   dg ? get('discogs', 'wishlist') : [],
       purchases:  dg ? get('discogs', 'purchases') : [],
     },
     youtube: {
       connected: yt,
+      newStuff:  yt ? get('youtube', 'newStuff') : [],
       likes:     yt ? get('youtube', 'likes') : [],
       playlists: yt ? get('youtube', 'playlists') : [],
       albums:    yt ? get('youtube', 'albums') : [],

@@ -16,31 +16,45 @@ const FRESH_STREAM_MS = 10 * 60 * 1000;
 export function registerAlbumPlayback(album) {
   if (typeof window !== 'undefined') {
     window.__kyoyuCurrentNativeAlbum = album;
+    window.__kyoyuNativeAlbumsById = window.__kyoyuNativeAlbumsById || {};
+    if (album && album.id) {
+      window.__kyoyuNativeAlbumsById[String(album.id)] = album;
+    }
   }
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
-    const queue = (album.tracks || []).map(t => {
+    const activeAlbum = (typeof window !== 'undefined' && albumId && window.__kyoyuNativeAlbumsById?.[String(albumId)]) || album;
+    const isRadioAlbum = activeAlbum.provider === 'radio'
+      || String(activeAlbum.id || '').startsWith('radio-')
+      || activeAlbum.genre === 'Track Radio'
+      || /\s+radio$/i.test(String(activeAlbum.title || '').trim());
+    const queue = (activeAlbum.tracks || []).map(t => {
       const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
       const resolvedCover = (t.cover && t.cover !== '/album1.png' ? t.cover : '')
         || t.artworkUrl
         || t.releaseCover
-        || (album.cover && album.cover !== '/album1.png' ? album.cover : '')
-        || album.artworkUrl
+        || (activeAlbum.cover && activeAlbum.cover !== '/album1.png' ? activeAlbum.cover : '')
+        || activeAlbum.artworkUrl
         || t.cover
-        || album.cover
+        || activeAlbum.cover
         || '';
+      const rawTrackAlbum = String(t.album || t.releaseTitle || t.albumTitle || (isRadioAlbum ? '' : activeAlbum.title) || '').trim();
+      const cleanTrackAlbum = (/\s+radio$/i.test(rawTrackAlbum) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlbum))
+        ? ''
+        : rawTrackAlbum;
       return {
         ...t,
         id: t.id,
         title: t.title || t.name,
-        artist: t.artist || t.artistName || album.artist || '',
+        artist: t.artist || t.artistName || (isRadioAlbum ? '' : activeAlbum.artist) || '',
         cover: resolvedCover,
         artworkUrl: t.artworkUrl || resolvedCover,
         releaseCover: resolvedCover,
-        releaseTitle: t.album || t.releaseTitle || album.title || '',
+        album: cleanTrackAlbum,
+        releaseTitle: cleanTrackAlbum,
         src, audioUrl: src, url: src,
         trackUrl: t.trackUrl || t.url || undefined,
         duration: t.duration || '',
-        provider: (t.provider || album.provider) === 'discogs' ? '' : (t.provider || album.provider || null),
+        provider: (t.provider || activeAlbum.provider) === 'discogs' || (t.provider || activeAlbum.provider) === 'radio' ? '' : (t.provider || activeAlbum.provider || null),
         providerItemId: t.providerItemId || t.trackUrl || undefined,
         scTrackId: t.scTrackId || undefined,
         videoId: t.videoId || undefined,
@@ -188,7 +202,8 @@ if (typeof window !== 'undefined') {
     const curTrack = window.__kyoyuGetCurrentTrack ? window.__kyoyuGetCurrentTrack() : null;
     const cleanArtist = String(artist || curTrack?.artistName || curTrack?.artist || '').trim();
     const rawAlbumOrTitle = String(albumOrTitle || curTrack?.releaseTitle || curTrack?.album || curTrack?.title || '').trim();
-    const cleanAlbumOrTitle = (/^unknown(\s+album)?$/i.test(rawAlbumOrTitle) ? (curTrack?.title || '') : rawAlbumOrTitle).trim();
+    const isRadioOrUnknown = /^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio)$/i.test(rawAlbumOrTitle) || /\s+radio$/i.test(rawAlbumOrTitle);
+    const cleanAlbumOrTitle = (isRadioOrUnknown ? (curTrack?.title || '') : rawAlbumOrTitle).trim();
     if (!cleanArtist && !cleanAlbumOrTitle) return;
 
     const cacheKey = `${cleanArtist.toLowerCase()}|${cleanAlbumOrTitle.toLowerCase()}`;
@@ -2187,7 +2202,8 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
     const title = String(cur.title || cur.name || '').trim();
     const artist = String(cur.artistName || cur.artist || infoData?.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
     const rawAlbum = String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').replace(/\s*\(single\)\s*$/i, '').trim();
-    const album = (/^unknown(\s+album)?$/i.test(rawAlbum) ? '' : rawAlbum) || title || '';
+    const isInvalidAlb = /^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio)$/i.test(rawAlbum) || /\s+radio$/i.test(rawAlbum);
+    const album = (isInvalidAlb ? '' : rawAlbum) || title || '';
     const rawLabel = String(infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
     const label = rawLabel
       .replace(/\[.*?\]/g, '')
@@ -2359,10 +2375,18 @@ export async function startTrackRadio(seedInput = null) {
     return ordered.map((t, idx) => {
       const coverUrl = t.coverImage || t.cover || t.thumb || seedCover || '';
       const rawUrl = t.trackUrl || t.url || `resolve:${t.artist} ${t.title}`.trim();
+      const rawTrackAlb = String(t.album || t.albumTitle || t.releaseTitle || '').replace(/\s*\(single\)\s*$/i, '').trim();
+      const cleanTrackAlb = (/\s+radio$/i.test(rawTrackAlb) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlb))
+        ? ''
+        : rawTrackAlb;
       return {
         id: t.id || `radio-${idx}-${Date.now()}`,
         title: t.title,
         artist: t.artist,
+        album: cleanTrackAlb,
+        releaseTitle: cleanTrackAlb,
+        label: t.label || '',
+        year: t.year || '',
         url: rawUrl,
         trackUrl: rawUrl,
         cover: coverUrl,
@@ -2393,6 +2417,9 @@ export async function startTrackRadio(seedInput = null) {
 
   const initialRadioTracks = buildRadioTrackList(initialPool);
   const radioId = `radio-${_normStr(seedArtist)}-${_normStr(seedTitle)}`.replace(/\s+/g, '-');
+  if (typeof window !== 'undefined') {
+    window.__kyoyuActiveRadioId = radioId;
+  }
   const radioSubtitleParts = [
     primaryNode.name,
     relatedGenreNames[0] || '',
@@ -2478,6 +2505,7 @@ export async function startTrackRadio(seedInput = null) {
           id: `bc-radio-${idx}-${Date.now()}`,
           title: r.title || '',
           artist: r.artistName || r.artist || '',
+          album: r.albumTitle || (r.type === 'album' ? r.title : '') || '',
           label: r.labelName || r.albumTitle || seedLabel || primaryNode.name,
           trackUrl: r.trackUrl || r.url || '',
           coverImage: cleanCover,
@@ -2491,6 +2519,7 @@ export async function startTrackRadio(seedInput = null) {
         scTrackId: r.scTrackId ? String(r.scTrackId) : '',
         title: r.title || '',
         artist: r.artistName || r.artist || '',
+        album: r.albumTitle || r.releaseTitle || '',
         label: r.genre || primaryNode.name,
         trackUrl: r.trackUrl || '',
         coverImage: r.artworkUrl || '',
@@ -2505,6 +2534,7 @@ export async function startTrackRadio(seedInput = null) {
           scTrackId: tr.scTrackId ? String(tr.scTrackId) : '',
           title: tr.title || '',
           artist: tr.artistName || tr.artist || pl.artistName || '',
+          album: tr.albumTitle || tr.releaseTitle || '',
           label: pl.title || primaryNode.name,
           trackUrl: tr.trackUrl || '',
           coverImage: tr.artworkUrl || pl.artworkUrl || '',
@@ -2520,6 +2550,8 @@ export async function startTrackRadio(seedInput = null) {
         id: rel.id || `dc-radio-${idx}-${Date.now()}`,
         title: rel.title || '',
         artist: rel.artist || '',
+        album: rel.album || rel.releaseTitle || rel.title || '',
+        year: rel.year ? String(rel.year) : '',
         label: rel.label || primaryNode.name,
         trackUrl: `resolve:${rel.artist || ''} ${rel.title || ''}`.trim(),
         coverImage: cov,
@@ -2539,8 +2571,8 @@ export async function startTrackRadio(seedInput = null) {
       ...combinedRadioTracks.slice(28),
     ].slice(0, 66);
 
-    // Only update if the user is still viewing this radio sheet
-    if (typeof window !== 'undefined' && window.__kyoyuCurrentNativeAlbum?.id === radioId) {
+    // Update the radio sheet and keep it in __kyoyuNativeAlbumsById even if user navigated to Player sheet
+    if (typeof window !== 'undefined' && (window.__kyoyuCurrentNativeAlbum?.id === radioId || window.__kyoyuActiveRadioId === radioId)) {
       openNativeAlbumFast({
         ...initialRadioAlbum,
         year: 'Radio',

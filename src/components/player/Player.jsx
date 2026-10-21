@@ -1035,8 +1035,16 @@ export default function Player({ hideMini = false }) {
       const validArt = (typeof rawArt === 'string' && /^(https?:\/\/|data:|blob:|\/)/i.test(rawArt.trim()))
         ? rawArt.trim().replace('{w}', '600').replace('{h}', '600')
         : '';
+      const isInvalidAlbumName = (s) => {
+        if (typeof s !== 'string') return true;
+        const t = s.trim();
+        if (!t) return true;
+        if (/^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio|—|-)$/i.test(t)) return true;
+        if (/\s+radio$/i.test(t) || /^(seeded|inspired)\s+by\s+/i.test(t)) return true;
+        return false;
+      };
       const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
-        .find(a => typeof a === 'string' && a.trim() && !/^unknown(\s+album|\s+release)?$/i.test(a.trim())) || '';
+        .find(a => !isInvalidAlbumName(a)) || '';
       const cleanRawAlbum = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
       const fallbackAlbum = cleanRawAlbum || (currentTrack.title ? (String(currentTrack.title).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || currentTrack.title) : '');
       postNative({
@@ -1072,12 +1080,20 @@ export default function Player({ hideMini = false }) {
       return;
     }
     let cancelled = false;
+    const isInvalidAlbumName = (s) => {
+      if (typeof s !== 'string') return true;
+      const t = s.trim();
+      if (!t) return true;
+      if (/^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio|—|-)$/i.test(t)) return true;
+      if (/\s+radio$/i.test(t) || /^(seeded|inspired)\s+by\s+/i.test(t)) return true;
+      return false;
+    };
     const trackKey = `${currentTrack.id || ''}:${currentTrack.title || ''}`;
     const srcProv = badgeProviderOf(provider, currentTrack);
     const title = currentTrack.title || '';
     const artist = currentTrack.artistName || currentTrack.artist || '';
     const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
-      .find(a => typeof a === 'string' && a.trim() && !/^unknown(\s+album|\s+release)?$/i.test(a.trim())) || '';
+      .find(a => !isInvalidAlbumName(a)) || '';
     const album = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
     const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
     const fullCacheKey = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
@@ -1096,7 +1112,7 @@ export default function Player({ hideMini = false }) {
     };
     if (cachedInfo?.bpm) initialPatch.bpm = String(cachedInfo.bpm);
     if (cachedInfo?.key) initialPatch.key = String(cachedInfo.key);
-    if (cachedInfo?.album && !/^unknown(\s+album|\s+release)?$/i.test(String(cachedInfo.album).trim())) {
+    if (cachedInfo?.album && !isInvalidAlbumName(cachedInfo.album)) {
       initialPatch.albumName = String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim();
     }
     if (cachedInfo?.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
@@ -1150,8 +1166,8 @@ export default function Player({ hideMini = false }) {
         };
         if (infoData.bpm) nativePatch.bpm = String(infoData.bpm);
         if (infoData.key) nativePatch.key = String(infoData.key);
-        if (infoData.album && !/^unknown(\s+album|\s+release)?$/i.test(String(infoData.album).trim())) {
-          nativePatch.albumName = infoData.album;
+        if (infoData.album && !isInvalidAlbumName(infoData.album)) {
+          nativePatch.albumName = String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim();
         }
         if (infoData.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
           nativePatch.label = infoData.label;

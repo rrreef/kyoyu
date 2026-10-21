@@ -117,31 +117,38 @@ export const DEFAULT_HOME_SECTION_ROWS = 3;
 
 export const HOME_PROVIDER_SECTIONS = {
   bandcamp: [
+    { key: 'bandcamp-new',  shortLabel: 'New Stuff',  title: 'Bandcamp · New Stuff' },
     { key: 'bandcamp-col',  shortLabel: 'Collection', title: 'Bandcamp · Collection' },
     { key: 'bandcamp-wish', shortLabel: 'Wishlist',   title: 'Bandcamp · Wishlist' },
     { key: 'bandcamp-pl',   shortLabel: 'Playlists',  title: 'Bandcamp · Playlists' },
   ],
   discogs: [
+    { key: 'discogs-new',   shortLabel: 'New Stuff',  title: 'Discogs · New Stuff' },
     { key: 'discogs-col',   shortLabel: 'Collection', title: 'Discogs · Collection' },
     { key: 'discogs-wish',  shortLabel: 'Wishlist',   title: 'Discogs · Wishlist' },
   ],
   soundcloud: [
+    { key: 'soundcloud-new',   shortLabel: 'New Stuff', title: 'SoundCloud · New Stuff' },
     { key: 'soundcloud-likes', shortLabel: 'Likes',     title: 'SoundCloud · Likes' },
     { key: 'soundcloud-pl',    shortLabel: 'Playlists', title: 'SoundCloud · Playlists' },
   ],
   youtube: [
+    { key: 'youtube-new',   shortLabel: 'New Stuff', title: 'YouTube · New Stuff' },
     { key: 'youtube-likes', shortLabel: 'Likes',     title: 'YouTube · Likes' },
     { key: 'youtube-pl',    shortLabel: 'Playlists', title: 'YouTube · Playlists' },
   ],
   spotify: [
+    { key: 'spotify-new',   shortLabel: 'New Stuff', title: 'Spotify · New Stuff' },
     { key: 'spotify-likes', shortLabel: 'Likes',     title: 'Spotify · Likes' },
     { key: 'spotify-pl',    shortLabel: 'Playlists', title: 'Spotify · Playlists' },
   ],
   applemusic: [
+    { key: 'applemusic-new',   shortLabel: 'New Stuff', title: 'Apple Music · New Stuff' },
     { key: 'applemusic-likes', shortLabel: 'Likes',     title: 'Apple Music · Likes' },
     { key: 'applemusic-pl',    shortLabel: 'Playlists', title: 'Apple Music · Playlists' },
   ],
   tidal: [
+    { key: 'tidal-new',   shortLabel: 'New Stuff', title: 'TIDAL · New Stuff' },
     { key: 'tidal-likes', shortLabel: 'Likes',     title: 'TIDAL · Likes' },
     { key: 'tidal-pl',    shortLabel: 'Playlists', title: 'TIDAL · Playlists' },
   ],
