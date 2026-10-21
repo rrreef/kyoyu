@@ -2186,8 +2186,8 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
     if (!cur) return;
     const title = String(cur.title || cur.name || '').trim();
     const artist = String(cur.artistName || cur.artist || infoData?.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
-    const rawAlbum = String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').trim();
-    const album = (/^unknown(\s+album)?$/i.test(rawAlbum) ? '' : rawAlbum) || (title ? `${title} (Single)` : '');
+    const rawAlbum = String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').replace(/\s*\(single\)\s*$/i, '').trim();
+    const album = (/^unknown(\s+album)?$/i.test(rawAlbum) ? '' : rawAlbum) || title || '';
     const rawLabel = String(infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
     const label = rawLabel
       .replace(/\[.*?\]/g, '')
@@ -2411,7 +2411,7 @@ export async function startTrackRadio(seedInput = null) {
     artist: seedArtist ? `Seeded by ${seedArtist}` : `${primaryNode.name} Radio`,
     cover: seedCover || initialRadioTracks[0]?.cover || '/album1.png',
     genre: radioSubtitleParts.slice(0, 2).join(' · ') || primaryNode.name,
-    year: `${initialRadioTracks.length} Tracks`,
+    year: 'Radio',
     label: seedLabel ? `${seedLabel} · Radio` : `${primaryNode.name} Radio`,
     provider: 'radio',
     description: radioDescription,
@@ -2543,7 +2543,7 @@ export async function startTrackRadio(seedInput = null) {
     if (typeof window !== 'undefined' && window.__kyoyuCurrentNativeAlbum?.id === radioId) {
       openNativeAlbumFast({
         ...initialRadioAlbum,
-        year: `${mergedFinalTracks.length} Tracks`,
+        year: 'Radio',
         tracks: mergedFinalTracks,
       }, { isUpdate: true });
     }

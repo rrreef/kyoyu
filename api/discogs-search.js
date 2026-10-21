@@ -962,14 +962,16 @@ async function handleTrackInfo(body, res) {
 
   const cleanTitle = (title || '').trim();
   const cleanArtist = stripArtistSuffix(artist || '');
-  const cleanAlbum = (album && !/unknown album/i.test(album)) ? album.trim() : '';
+  const cleanAlbum = (album && !/unknown album/i.test(album))
+    ? String(album).replace(/\s*\(single\)\s*$/i, '').trim()
+    : '';
 
   const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
 
-  // Check cache (_v: 12 ensures all tracks get 100% accurate genres, resolved album title, resolved bracket tags, artist & label bios, and BPM/Key)
+  // Check cache (_v: 13 ensures all tracks get 100% accurate genres, resolved album title without synthetic (Single), resolved bracket tags, artist & label bios, and BPM/Key)
   try {
     const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 12) {
+    if (cached?.data && cached.data._v === 13) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) return res.status(200).json(cached.data);
     }
@@ -1101,15 +1103,18 @@ async function handleTrackInfo(body, res) {
   const allAliases = [...(discogsArtist?.aliases || []), ...(mbArtist?.aliases || [])];
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
 
-  // Always define the album of a playing title (never "Unknown Album" or empty)
+  // Always define the album of a playing title accurately (never append synthetic "(Single)")
+  const cleanTitleBase = cleanTitle
+    .replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '')
+    .trim() || cleanTitle;
   const resolvedAlbumTitle = [
     discogs?.title,
     mb?.releaseTitle,
-    cleanAlbum,
     trackMeta?.albumFallback,
     bcAlbumTitle,
-    cleanTitle ? `${cleanTitle} (Single)` : '',
-  ].find(v => v && String(v).trim() && !/unknown album/i.test(String(v))) || cleanTitle || '';
+    cleanAlbum,
+    cleanTitleBase,
+  ].find(v => v && String(v).trim() && !/unknown(\s+album|\s+release)?/i.test(String(v).trim())) || cleanTitleBase || '';
 
   const trackPos = discogs?.matchedTrack?.position || '';
   const trackDur = discogs?.matchedTrack?.duration || trackMeta?.duration || (mb?.lengthSec ? formatDurationSec(mb.lengthSec) : '');
@@ -1117,7 +1122,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 12,
+    _v: 13,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',

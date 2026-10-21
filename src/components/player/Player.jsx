@@ -1037,7 +1037,8 @@ export default function Player({ hideMini = false }) {
         : '';
       const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
         .find(a => typeof a === 'string' && a.trim() && !/^unknown(\s+album|\s+release)?$/i.test(a.trim())) || '';
-      const fallbackAlbum = rawAlbum || (currentTrack.title ? `${String(currentTrack.title).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || currentTrack.title} (Single)` : '');
+      const cleanRawAlbum = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
+      const fallbackAlbum = cleanRawAlbum || (currentTrack.title ? (String(currentTrack.title).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || currentTrack.title) : '');
       postNative({
         visible: true,
         playing: isPlaying,
@@ -1077,7 +1078,7 @@ export default function Player({ hideMini = false }) {
     const artist = currentTrack.artistName || currentTrack.artist || '';
     const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
       .find(a => typeof a === 'string' && a.trim() && !/^unknown(\s+album|\s+release)?$/i.test(a.trim())) || '';
-    const album = rawAlbum;
+    const album = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
     const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
     const fullCacheKey = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
 
@@ -1096,7 +1097,7 @@ export default function Player({ hideMini = false }) {
     if (cachedInfo?.bpm) initialPatch.bpm = String(cachedInfo.bpm);
     if (cachedInfo?.key) initialPatch.key = String(cachedInfo.key);
     if (cachedInfo?.album && !/^unknown(\s+album|\s+release)?$/i.test(String(cachedInfo.album).trim())) {
-      initialPatch.albumName = cachedInfo.album;
+      initialPatch.albumName = String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim();
     }
     if (cachedInfo?.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
       initialPatch.label = cachedInfo.label;
@@ -1111,7 +1112,7 @@ export default function Player({ hideMini = false }) {
       window.__kyoyuPreloadPlayingEntities(currentTrack, cachedInfo || null);
     }
 
-    if (cachedInfo && cachedInfo._v === 12) return;
+    if (cachedInfo && cachedInfo._v === 13) return;
 
     // 2. Asynchronously query /api/discogs-search (action: 'track-info') to refine genre, label, year, BPM, key, and album for EVERY provider
     (async () => {

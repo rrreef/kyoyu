@@ -1016,44 +1016,112 @@ export function PlayerProvider({ children }) {
     window.__kyoyuPlaySaved = (item, queue) => playSaved(item, queue);
     window.__kyoyuGetCurrentTrack = () => stateRef.current.currentTrack;
     window.__kyoyuGetQueue = () => {
-      const q = state.queue || [];
+      const q = (stateRef.current?.queue?.length ? stateRef.current.queue : state.queue) || [];
       const searchQ = searchQueueRef.current || [];
-      let activeQueue = q.length > 0 ? q : searchQ;
-      
+      const nativeAlbTracks = (typeof window !== 'undefined' && Array.isArray(window.__kyoyuCurrentNativeAlbum?.tracks))
+        ? window.__kyoyuCurrentNativeAlbum.tracks
+        : [];
+      let activeQueue = q.length > 0 ? [...q] : (searchQ.length > 0 ? [...searchQ] : [...nativeAlbTracks]);
+
       // Ensure the currently playing track is always included in the queue list
       const cur = stateRef.current.currentTrack || state.currentTrack;
       if (cur) {
-        const hasCurrent = activeQueue.some(t => String(t.id || '') === String(cur.id || ''));
+        const curId = String(cur.id || '');
+        const curTitle = String(cur.title || cur.name || '').trim().toLowerCase();
+        const hasCurrent = activeQueue.some(t =>
+          (curId && String(t.id || '') === curId) ||
+          (curTitle && String(t.title || t.name || '').trim().toLowerCase() === curTitle)
+        );
         if (!hasCurrent) {
           activeQueue = [cur, ...activeQueue];
         }
       }
 
-      return JSON.stringify(activeQueue.map(t => ({
-        id: String(t.id || ''),
+      // Include prefetched autoplay track if queue only has current track
+      const prefetched = prefetchedAutoplayRef.current?.item;
+      if (prefetched && activeQueue.length <= 1) {
+        activeQueue.push(prefetched);
+      }
+
+      const fallbackCover = (typeof window !== 'undefined' && window.__kyoyuCurrentNativeAlbum?.cover) || cur?.releaseCover || cur?.artworkUrl || cur?.cover || '';
+      const fallbackArtist = (typeof window !== 'undefined' && window.__kyoyuCurrentNativeAlbum?.artist) || cur?.artistName || cur?.artist || '';
+
+      return JSON.stringify(activeQueue.map((t, idx) => ({
+        id: String(t.id || `queue-${idx}`),
         title: String(t.title || t.name || 'Unknown'),
-        artist: t.artistName || t.artist || '',
-        cover: t.releaseCover || t.cover || t.artworkUrl || '',
-        url: t.src || t.audioUrl || t.fileUrl || '',
+        artist: t.artistName || t.artist || fallbackArtist || '',
+        cover: t.releaseCover || t.cover || t.artworkUrl || fallbackCover || '',
+        url: t.src || t.audioUrl || t.fileUrl || t.trackUrl || t.url || '',
+        provider: t.provider || t.sourceProvider || '',
       })));
     };
 
-    window.__kyoyuPlayQueueItem = (index) => {
-      const q = state.queue || [];
+    window.__kyoyuPlayQueueItem = (index, trackId) => {
+      const q = (stateRef.current?.queue?.length ? stateRef.current.queue : state.queue) || [];
       const searchQ = searchQueueRef.current || [];
-      if (q.length > 0 && index >= 0 && index < q.length) {
-        dispatch({ type: 'PLAY_TRACK', track: { ...q[index] } });
-      } else if (searchQ.length > 0 && index >= 0 && index < searchQ.length) {
-        searchQueueIdxRef.current = index;
-        playSearchItem(searchQ[index]);
+      const nativeAlbTracks = (typeof window !== 'undefined' && Array.isArray(window.__kyoyuCurrentNativeAlbum?.tracks))
+        ? window.__kyoyuCurrentNativeAlbum.tracks
+        : [];
+
+      const findInList = (list) => {
+        if (!Array.isArray(list) || list.length === 0) return { item: null, idx: -1 };
+        if (trackId) {
+          const hitIdx = list.findIndex(t => String(t.id || '') === String(trackId));
+          if (hitIdx !== -1) return { item: list[hitIdx], idx: hitIdx };
+        }
+        if (index >= 0 && index < list.length) {
+          return { item: list[index], idx: index };
+        }
+        return { item: null, idx: -1 };
+      };
+
+      const fromQ = findInList(q);
+      if (fromQ.item) {
+        const item = fromQ.item;
+        const rawUrl = String(item.src || item.audioUrl || item.fileUrl || item.trackUrl || item.url || '');
+        if (rawUrl.startsWith('resolve:') && typeof window.__kyoyuPlayNativeTrack === 'function') {
+          window.__kyoyuPlayNativeTrack(item.id);
+        } else if (!item.src && !item.audioUrl && !item.fileUrl && (item.provider || item.scTrackId || item.videoId)) {
+          playSaved(item, q);
+        } else {
+          playTrack(item, q);
+        }
+        return true;
       }
+
+      const fromSearch = findInList(searchQ);
+      if (fromSearch.item) {
+        searchQueueIdxRef.current = fromSearch.idx;
+        playSearchItem(fromSearch.item);
+        return true;
+      }
+
+      const fromNative = findInList(nativeAlbTracks);
+      if (fromNative.item && typeof window.__kyoyuPlayNativeTrack === 'function') {
+        window.__kyoyuPlayNativeTrack(fromNative.item.id);
+        return true;
+      }
+      return false;
     };
 
-    window.__kyoyuRemoveFromQueue = (index) => {
-      const q = [...(state.queue || [])];
-      if (index >= 0 && index < q.length) {
-        q.splice(index, 1);
-        dispatch({ type: 'SET_QUEUE', queue: q });
+    window.__kyoyuRemoveFromQueue = (index, trackId) => {
+      const q = [...((stateRef.current?.queue?.length ? stateRef.current.queue : state.queue) || [])];
+      if (q.length > 0) {
+        const rmIdx = trackId ? q.findIndex(t => String(t.id || '') === String(trackId)) : index;
+        const targetIdx = rmIdx !== -1 ? rmIdx : index;
+        if (targetIdx >= 0 && targetIdx < q.length) {
+          q.splice(targetIdx, 1);
+          dispatch({ type: 'SET_QUEUE', queue: q });
+        }
+      }
+      if (Array.isArray(searchQueueRef.current) && searchQueueRef.current.length > 0) {
+        const sq = [...searchQueueRef.current];
+        const rmIdx = trackId ? sq.findIndex(t => String(t.id || '') === String(trackId)) : index;
+        const targetIdx = rmIdx !== -1 ? rmIdx : index;
+        if (targetIdx >= 0 && targetIdx < sq.length) {
+          sq.splice(targetIdx, 1);
+          searchQueueRef.current = sq;
+        }
       }
     };
 
@@ -1208,7 +1276,7 @@ export function PlayerProvider({ children }) {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 12) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 13) {
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
         // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
