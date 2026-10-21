@@ -399,7 +399,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (N ROWS × 3 TITLES) ═══ */}
+      {/* ═══ 1.2 — LIBRARY PER PROVIDER: COLLECTION / LIKES, WISHLIST & PLAYLISTS (SWIPEABLE PAGES OF N ROWS × 3 TITLES) ═══ */}
       {showFeatured && (() => {
         const limitFor = (sectionKey) => {
           const rows = homeSectionRows?.[sectionKey] ?? DEFAULT_HOME_SECTION_ROWS;
@@ -423,52 +423,50 @@ export default function Home() {
         };
 
         const likedUploads = getLikedUploads(user?.id) || [];
-        const ytLikesMax = limitFor('youtube-likes');
-        const ytPlMax = limitFor('youtube-pl');
         const ytLocalLikes = likedUploads.filter(t => {
           const p = historyReplayInfo(t).provider || t.provider || '';
           return p === 'youtube' || String(t.id || '').startsWith('yt-');
-        }).slice(0, ytLikesMax);
-        const ytAcctLikes = (acct.youtube?.likes || []).slice(0, ytLikesMax);
-        const ytPlaylists = ((acct.youtube?.playlists || []).concat(
+        });
+        const ytAcctLikes = acct.youtube?.likes || [];
+        const ytPlaylists = (acct.youtube?.playlists || []).concat(
           (playlists || []).filter(p => p.provider === 'youtube')
-        )).slice(0, ytPlMax);
+        );
 
         const sectionsByProvider = {
           bandcamp: [
-            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: (acct.bandcamp?.collection || []).slice(0, limitFor('bandcamp-col')),  type: 'acct' },
-            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: (acct.bandcamp?.wishlist || []).slice(0, limitFor('bandcamp-wish')),   type: 'acct' },
-            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: (acct.bandcamp?.playlists || []).slice(0, limitFor('bandcamp-pl')),    type: 'acct' },
+            { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: acct.bandcamp?.collection || [], pageSize: limitFor('bandcamp-col'),  type: 'acct' },
+            { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: acct.bandcamp?.wishlist || [],   pageSize: limitFor('bandcamp-wish'), type: 'acct' },
+            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: acct.bandcamp?.playlists || [],  pageSize: limitFor('bandcamp-pl'),   type: 'acct' },
           ],
           discogs: [
-            { key: 'discogs-col',   title: 'Discogs · Collection',  provider: 'discogs',  category: 'purchases', items: (acct.discogs?.collection || []).slice(0, limitFor('discogs-col')),   type: 'acct' },
-            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    provider: 'discogs',  category: 'wishlist',  items: (acct.discogs?.wishlist || []).slice(0, limitFor('discogs-wish')),    type: 'acct' },
+            { key: 'discogs-col',   title: 'Discogs · Collection',  provider: 'discogs',  category: 'purchases', items: acct.discogs?.collection || [],  pageSize: limitFor('discogs-col'),   type: 'acct' },
+            { key: 'discogs-wish',  title: 'Discogs · Wishlist',    provider: 'discogs',  category: 'wishlist',  items: acct.discogs?.wishlist || [],    pageSize: limitFor('discogs-wish'),  type: 'acct' },
           ],
           soundcloud: [
-            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     provider: 'soundcloud', category: 'titles',    items: (acct.soundcloud?.likes || []).slice(0, limitFor('soundcloud-likes')),     type: 'acct' },
-            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: (acct.soundcloud?.playlists || []).slice(0, limitFor('soundcloud-pl')),    type: 'acct' },
+            { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     provider: 'soundcloud', category: 'titles',    items: acct.soundcloud?.likes || [],     pageSize: limitFor('soundcloud-likes'), type: 'acct' },
+            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: acct.soundcloud?.playlists || [], pageSize: limitFor('soundcloud-pl'),    type: 'acct' },
           ],
           youtube: [
-            { key: 'youtube-likes', title: 'YouTube · Likes',     provider: 'youtube', category: 'titles',    items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
-            { key: 'youtube-pl',    title: 'YouTube · Playlists', provider: 'youtube', category: 'playlists', items: ytPlaylists,                                         type: 'acct' },
+            { key: 'youtube-likes', title: 'YouTube · Likes',     provider: 'youtube', category: 'titles',    items: ytAcctLikes.length > 0 ? ytAcctLikes : ytLocalLikes, pageSize: limitFor('youtube-likes'), type: ytAcctLikes.length > 0 ? 'acct' : 'uploads' },
+            { key: 'youtube-pl',    title: 'YouTube · Playlists', provider: 'youtube', category: 'playlists', items: ytPlaylists,                                         pageSize: limitFor('youtube-pl'),    type: 'acct' },
           ],
           spotify: [
-            { key: 'spotify-likes', title: 'Spotify · Likes',     provider: 'spotify', category: 'titles',    items: (acct.spotify?.likes || []).slice(0, limitFor('spotify-likes')),     type: 'acct' },
-            { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: (acct.spotify?.playlists || []).slice(0, limitFor('spotify-pl')),    type: 'acct' },
+            { key: 'spotify-likes', title: 'Spotify · Likes',     provider: 'spotify', category: 'titles',    items: acct.spotify?.likes || [],     pageSize: limitFor('spotify-likes'), type: 'acct' },
+            { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: acct.spotify?.playlists || [], pageSize: limitFor('spotify-pl'),    type: 'acct' },
           ],
           applemusic: [
-            { key: 'applemusic-likes', title: 'Apple Music · Likes',     provider: 'applemusic', category: 'titles',    items: (acct.applemusic?.likes || []).slice(0, limitFor('applemusic-likes')),     type: 'acct' },
-            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: (acct.applemusic?.playlists || []).slice(0, limitFor('applemusic-pl')),    type: 'acct' },
+            { key: 'applemusic-likes', title: 'Apple Music · Likes',     provider: 'applemusic', category: 'titles',    items: acct.applemusic?.likes || [],     pageSize: limitFor('applemusic-likes'), type: 'acct' },
+            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: acct.applemusic?.playlists || [], pageSize: limitFor('applemusic-pl'),    type: 'acct' },
           ],
           tidal: [
-            { key: 'tidal-likes', title: 'TIDAL · Likes',     provider: 'tidal', category: 'titles',    items: (acct.tidal?.likes || []).slice(0, limitFor('tidal-likes')),     type: 'acct' },
-            { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: (acct.tidal?.playlists || []).slice(0, limitFor('tidal-pl')),    type: 'acct' },
+            { key: 'tidal-likes', title: 'TIDAL · Likes',     provider: 'tidal', category: 'titles',    items: acct.tidal?.likes || [],     pageSize: limitFor('tidal-likes'), type: 'acct' },
+            { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: acct.tidal?.playlists || [], pageSize: limitFor('tidal-pl'),    type: 'acct' },
           ],
         };
 
         const orderedSections = providerPriority
           .flatMap(p => sectionsByProvider[p] || [])
-          .filter(s => s && s.items.length > 0);
+          .filter(s => s && s.pageSize > 0 && s.items.length > 0);
 
         if (orderedSections.length === 0) return null;
 
@@ -476,20 +474,42 @@ export default function Home() {
 
         return (
           <>
-            {orderedSections.map(sec => (
-              <section key={sec.key} className="home-section">
-                <div className="section-title">
-                  <span onClick={() => openLibrarySection(sec.provider, sec.category)} style={{ cursor: 'pointer' }}>{sec.title}</span>
-                </div>
-                {sec.type === 'uploads' ? (
-                  viewMode === 'list'
-                    ? <UploadExpandedList uploads={sec.items} />
-                    : <UploadGridView uploads={sec.items} cols={3} />
-                ) : (
-                  <AccountItemList items={sec.items} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
-                )}
-              </section>
-            ))}
+            {orderedSections.map(sec => {
+              const pages = [];
+              for (let i = 0; i < sec.items.length; i += sec.pageSize) {
+                pages.push(sec.items.slice(i, i + sec.pageSize));
+              }
+              return (
+                <section key={sec.key} className="home-section">
+                  <div className="section-title">
+                    <span onClick={() => openLibrarySection(sec.provider, sec.category)} style={{ cursor: 'pointer' }}>{sec.title}</span>
+                  </div>
+                  {pages.length <= 1 ? (
+                    sec.type === 'uploads' ? (
+                      viewMode === 'list'
+                        ? <UploadExpandedList uploads={pages[0] || []} />
+                        : <UploadGridView uploads={pages[0] || []} cols={3} />
+                    ) : (
+                      <AccountItemList items={pages[0] || []} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                    )
+                  ) : (
+                    <div className="catalog-swipe-row">
+                      {pages.map((pageItems, pIdx) => (
+                        <div key={`${sec.key}-p${pIdx}`} className="catalog-swipe-page">
+                          {sec.type === 'uploads' ? (
+                            viewMode === 'list'
+                              ? <UploadExpandedList uploads={pageItems} />
+                              : <UploadGridView uploads={pageItems} cols={3} />
+                          ) : (
+                            <AccountItemList items={pageItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
           </>
         );
       })()}
@@ -529,56 +549,93 @@ export default function Home() {
       )}
 
       {/* ═══ 2 — MY UPLOADS (private) ═══ */}
-      {showReleases && myUploads.length > 0 && (
-        <section className="home-section">
-          <div className="section-title">
-            <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
-            <span style={{fontSize:'.72rem',color:'var(--text-muted)'}}>{myUploads.length} tracks</span>
-          </div>
-          {homeLayout.mode === 'list'
-            ? <UploadExpandedList uploads={myUploads}/>
-            : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
-          }
-        </section>
-      )}
+      {showReleases && myUploads.length > 0 && (() => {
+        const uploadPageSize = Math.max(3, (homeLayout.cols || 3) * 2);
+        const uploadPages = [];
+        for (let i = 0; i < myUploads.length; i += uploadPageSize) {
+          uploadPages.push(myUploads.slice(i, i + uploadPageSize));
+        }
+        return (
+          <section className="home-section">
+            <div className="section-title">
+              <span><Lock size={14} style={{marginRight:5,verticalAlign:'middle'}}/> My Uploads</span>
+              <span style={{fontSize:'.72rem',color:'var(--text-muted)'}}>{myUploads.length} tracks</span>
+            </div>
+            {uploadPages.length <= 1 ? (
+              homeLayout.mode === 'list'
+                ? <UploadExpandedList uploads={myUploads}/>
+                : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
+            ) : (
+              <div className="catalog-swipe-row">
+                {uploadPages.map((pageItems, idx) => (
+                  <div key={`myuploads-p${idx}`} className="catalog-swipe-page">
+                    {homeLayout.mode === 'list'
+                      ? <UploadExpandedList uploads={pageItems}/>
+                      : <UploadGridView uploads={pageItems} cols={homeLayout.cols}/>
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* ═══ 3 — RELEASES ═══ */}
-      {showReleases && (
-        <section className="home-section">
-          <div className="section-title">
-            <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Releases</span>
+      {showReleases && (() => {
+        const releasePageSize = 6;
+        const releasePages = [];
+        for (let i = 0; i < publicAlbums.length; i += releasePageSize) {
+          releasePages.push(publicAlbums.slice(i, i + releasePageSize));
+        }
+        const renderReleaseGrid = (albumsSlice) => (
+          <div className="upl-grid upl-grid-3">
+            {albumsSlice.map(album => (
+              <button
+                key={album.id}
+                className="upl-grid-cell"
+                style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => {
+                  const isSingle = String(album.id || '').startsWith('single::') && album.tracks?.length === 1;
+                  if (isSingle) {
+                    playTrack(album.tracks[0]);
+                  } else {
+                    setSelectedAlbum(openNativeAlbumFast(album));
+                  }
+                }}
+              >
+                <div className="upl-grid-art">
+                  {album.cover
+                    ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
+                    : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                </div>
+                <div className="upl-grid-title">{album.title}</div>
+                <div className="upl-grid-artist">{album.artist}</div>
+              </button>
+            ))}
           </div>
-          {publicAlbums.length === 0 ? (
-            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
-          ) : (
-            <div className="upl-grid upl-grid-3">
-              {publicAlbums.slice(0, 6).map(album => (
-                <button
-                  key={album.id}
-                  className="upl-grid-cell"
-                  style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => {
-                    const isSingle = String(album.id || '').startsWith('single::') && album.tracks?.length === 1;
-                    if (isSingle) {
-                      playTrack(album.tracks[0]);
-                    } else {
-                      setSelectedAlbum(openNativeAlbumFast(album));
-                    }
-                  }}
-                >
-                  <div className="upl-grid-art">
-                    {album.cover
-                      ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
-                      : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                  </div>
-                  <div className="upl-grid-title">{album.title}</div>
-                  <div className="upl-grid-artist">{album.artist}</div>
-                </button>
-              ))}
+        );
+        return (
+          <section className="home-section">
+            <div className="section-title">
+              <span onClick={() => navigate('/all-releases')} style={{ cursor: 'pointer' }}>Releases</span>
             </div>
-          )}
-        </section>
-      )}
+            {publicAlbums.length === 0 ? (
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', padding: '16px 0' }}>No public releases yet.</p>
+            ) : releasePages.length <= 1 ? (
+              renderReleaseGrid(releasePages[0] || [])
+            ) : (
+              <div className="catalog-swipe-row">
+                {releasePages.map((pageAlbums, idx) => (
+                  <div key={`releases-p${idx}`} className="catalog-swipe-page">
+                    {renderReleaseGrid(pageAlbums)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* Album detail sheet */}
       {selectedAlbum && (

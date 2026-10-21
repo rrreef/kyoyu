@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { User, Camera, Music, Download, Upload, Disc3, Settings, ChevronRight, Heart, BarChart3, FileText, Bell, LogOut, ChevronLeft } from 'lucide-react';
 import { userProfile, payoutData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
+import { setVIState } from '../lib/visualIdentityStore';
+import { supabase } from '../lib/supabase';
 import './Profile.css';
 
 export default function Profile() {
@@ -16,10 +18,28 @@ export default function Profile() {
 
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setAvatarSrc(ev.target.result, user?.id);
-    reader.readAsDataURL(file);
+    if (!file || !file.type.startsWith('image/')) return;
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = async () => {
+      URL.revokeObjectURL(objUrl);
+      const scale = Math.min(360 / img.naturalWidth, 360 / img.naturalHeight, 1);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = cv.toDataURL('image/jpeg', 0.84);
+      setVIState({ avatarImage: dataUrl });
+      setAvatarSrc(dataUrl, user?.id);
+      if (user?.id) {
+        try { await supabase.from('profiles').upsert({ id: user.id, avatar_url: dataUrl }, { onConflict: 'id' }); } catch (_) {}
+      }
+      try { await supabase.auth.updateUser({ data: { avatar_url: dataUrl } }); } catch (_) {}
+    };
+    img.onerror = () => URL.revokeObjectURL(objUrl);
+    img.src = objUrl;
+    e.target.value = '';
     setAvatarMenu(false);
   }
 
@@ -41,7 +61,15 @@ export default function Profile() {
               {avatarSrc ? 'Replace' : 'Add photo'}
             </button>
             {avatarSrc && (
-              <button className="avatar-menu-item avatar-menu-remove" onClick={() => { setAvatarSrc(null); setAvatarMenu(false); }}>
+              <button className="avatar-menu-item avatar-menu-remove" onClick={async () => {
+                setVIState({ avatarImage: null });
+                setAvatarSrc(null, user?.id, true);
+                if (user?.id) {
+                  try { await supabase.from('profiles').upsert({ id: user.id, avatar_url: null }, { onConflict: 'id' }); } catch (_) {}
+                }
+                try { await supabase.auth.updateUser({ data: { avatar_url: null } }); } catch (_) {}
+                setAvatarMenu(false);
+              }}>
                 Remove
               </button>
             )}

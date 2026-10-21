@@ -260,3 +260,26 @@
 }
 .shelf-following-btn:hover  { color: var(--text-secondary); border-bottom-color: var(--text-dim); }
 .shelf-following-btn.active { color: var(--text-primary);   border-bottom-color: var(--text-primary); font-weight: 600; }
+
+/* ═══ Horizontal Swipeable Catalog Pages ══════════════════ */
+.catalog-swipe-row {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.catalog-swipe-row::-webkit-scrollbar {
+  display: none;
+}
+.catalog-swipe-page {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+

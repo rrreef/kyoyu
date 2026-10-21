@@ -70,30 +70,20 @@ async function uploadAvatarToR2(blob, userId) {
   }
 }
 
-/* Save avatar_url to profiles table via direct REST — uses UPSERT so the row is created if it doesn't exist */
+/* Save avatar_url to profiles table AND auth user_metadata so it persists permanently */
 async function saveAvatarUrlToProfile(userId, url) {
   try {
-    const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    const session    = sessionKey ? JSON.parse(localStorage.getItem(sessionKey)) : null;
-    const token      = session?.access_token;
-    if (!token) return;
-
-    const supaUrl  = import.meta.env.VITE_SUPABASE_URL;
-    const anonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    // Use UPSERT (POST + resolution=merge-duplicates) so missing rows are created
-    await fetch(`${supaUrl}/rest/v1/profiles`, {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey':        anonKey,
-        'Prefer':        'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify({ id: userId, avatar_url: url }),
-    });
+    if (userId) {
+      await supabase
+        .from('profiles')
+        .upsert({ id: userId, avatar_url: url }, { onConflict: 'id' });
+    }
   } catch (e) {
-    console.warn('[avatar] profile save error:', e);
+    console.warn('[avatar] profile upsert error:', e);
   }
+  try {
+    await supabase.auth.updateUser({ data: { avatar_url: url } });
+  } catch (_) {}
 }
 
 /* ─── Settings sections ──────────────────────────────────── */
@@ -196,35 +186,30 @@ function AccountPanel({ user }) {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [avatarMenu]);
 
-  /* Handle file from input or drop — convert to data URL for persistence + native sync */
+  /* Handle file from input or drop — convert to compact JPEG data URL for permanent persistence + native sync */
   const processAvatarFile = async (f) => {
     if (!f || !f.type.startsWith('image/')) return;
     try {
       const img = await loadImage(f);
 
-      // 1️⃣ Immediate local preview — TopBar + Settings card both update NOW
-      const displayDataUrl = resizeViaCanvas(img, 800);
+      // 1️⃣ Generate compact, crystal-clear 360px JPEG data URL (~30-45KB) that never hits localStorage quota
+      const displayDataUrl = resizeViaCanvas(img, 360, 'image/jpeg', 0.84);
       setVIState({ avatarImage: displayDataUrl });
       setAvatarSrc(displayDataUrl, user?.id);
 
-      // 2️⃣ Send tiny thumbnail to native bridge RIGHT NOW
-      const thumbDataUrl = resizeViaCanvas(img, 80, 'image/jpeg', 0.8);
-      try { window.webkit?.messageHandlers?.avatar?.postMessage(thumbDataUrl); } catch (_) {}
+      // 2️⃣ Persist immediately in Supabase profile + auth metadata as data URL so it survives everywhere
+      await saveAvatarUrlToProfile(user?.id, displayDataUrl);
 
-      // 3️⃣ Convert to JPEG blob and upload to R2 (stable CDN URL)
+      // 3️⃣ Optionally upload to R2 in background; only switch to publicUrl if the CDN URL actually loads
       const jpegBlob = await fetch(displayDataUrl).then(r => r.blob());
       const publicUrl = await uploadAvatarToR2(jpegBlob, user?.id);
-
       if (publicUrl) {
-        // Store CLEAN URL in DB (no cache-buster — stable, deduplicatable)
-        await saveAvatarUrlToProfile(user?.id, publicUrl);
-        // Show cache-busted URL in UI to bypass any stale CDN
         const freshUrl = `${publicUrl}?v=${Date.now()}`;
-        setAvatarSrc(freshUrl, user?.id);
-      } else {
-        // R2 upload failed — save compressed data URL directly in DB as fallback
-        const fallbackUrl = resizeViaCanvas(img, 400, 'image/jpeg', 0.72);
-        await saveAvatarUrlToProfile(user?.id, fallbackUrl);
+        const probe = new Image();
+        probe.onload = () => {
+          saveAvatarUrlToProfile(user?.id, freshUrl);
+        };
+        probe.src = freshUrl;
       }
     } catch (e) {
       console.warn('[processAvatarFile]', e);
@@ -283,7 +268,7 @@ function AccountPanel({ user }) {
                   <button className="s-avatar-popover-item s-avatar-popover-remove"
                     onClick={() => {
                       setVIState({ avatarImage: null });
-                      setAvatarSrc(null, user?.id);
+                      setAvatarSrc(null, user?.id, true);
                       if (user?.id) saveAvatarUrlToProfile(user.id, null);
                       setAvatarMenu(false);
                     }}>

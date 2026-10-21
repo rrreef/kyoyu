@@ -117,9 +117,12 @@ export function openNativePlaylistFast(pl, opts = {}) {
 
 export function openNativeAlbumFast(album, opts = {}) {
   if (!album) return null;
+  const isPreload = Boolean(opts && opts.preload);
   const ts = Date.now();
-  window.__lastFastOpenTs = ts;
-  window.__kyoyuCurrentNativeAlbum = album;
+  if (!isPreload) {
+    window.__lastFastOpenTs = ts;
+    window.__kyoyuCurrentNativeAlbum = album;
+  }
 
   // Sanitize Discogs tracks unconditionally (covers groupByAlbum which drops album.provider)
   // Also make generic Discogs track ids ("discogs-track-0") unique per album, otherwise
@@ -133,80 +136,144 @@ export function openNativeAlbumFast(album, opts = {}) {
     });
   }
 
-  registerAlbumPlayback(album);
+  if (!isPreload) {
+    registerAlbumPlayback(album);
+  }
+
+  const nativeAlbumPayload = {
+    _ts: String(ts),
+    id: album.id || String(Date.now()),
+    title: album.title || '',
+    artist: album.artist || '',
+    cover: album.cover || album.artworkUrl || null,
+    genre: album.genre || null,
+    year: album.year ? String(album.year) : null,
+    label: album.label || null,
+    provider: album.provider || null,
+    description: album.description || null,
+    tracks: (album.tracks || []).map(t => ({
+      id: t.id || String(Date.now() + Math.random()),
+      title: t.title || t.name || 'Unknown Track',
+      artist: t.artist || '',
+      url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
+      cover: t.cover || null,
+      provider: t.provider || album.provider || null
+    }))
+  };
 
   try {
-    window.webkit?.messageHandlers?.player?.postMessage({
-      albumOpen: true,
-      isUpdate: Boolean(opts && opts.isUpdate),
-      nativeAlbum: {
-        _ts: String(ts),
-        id: album.id || String(Date.now()),
-        title: album.title || '',
-        artist: album.artist || '',
-        cover: album.cover || album.artworkUrl || null,
-        genre: album.genre || null,
-        year: album.year ? String(album.year) : null,
-        label: album.label || null,
-        provider: album.provider || null,
-        description: album.description || null,
-        tracks: (album.tracks || []).map(t => ({
-          id: t.id || String(Date.now() + Math.random()),
-          title: t.title || t.name || 'Unknown Track',
-          artist: t.artist || '',
-          url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
-          cover: t.cover || null,
-          provider: t.provider || album.provider || null
-        }))
-      }
-    });
+    if (isPreload) {
+      window.webkit?.messageHandlers?.player?.postMessage({
+        cmd: 'preload_native_album',
+        nativeAlbum: nativeAlbumPayload,
+      });
+    } else {
+      window.webkit?.messageHandlers?.player?.postMessage({
+        albumOpen: true,
+        isUpdate: Boolean(opts && opts.isUpdate),
+        nativeAlbum: nativeAlbumPayload,
+      });
+    }
   } catch(e) {}
   return { ...album, _ts: ts };
 }
 
 // ── "Go to Album" bridge — called from Swift NativePlayerView ──
-// Searches Discogs for the album, opens a full Discogs album sheet.
+// Searches Discogs/Bandcamp for the album, opens (or preloads) a full Album Sheet.
 if (typeof window !== 'undefined') {
-  window.__kyoyuGoToAlbum = async (artist, albumOrTitle) => {
-    if (!artist && !albumOrTitle) return;
-    const query = `${artist} ${albumOrTitle}`.trim();
-    try {
-      // First try Discogs track-info (gets full tracklist + metadata)
-      const r = await fetch('/api/discogs-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'track-info', title: albumOrTitle, artist, album: albumOrTitle }),
+  window.__kyoyuPreloadedAlbums = window.__kyoyuPreloadedAlbums || {};
+
+  window.__kyoyuGoToAlbum = async (artist, albumOrTitle, opts = {}) => {
+    const isPreload = Boolean(opts && opts.preload);
+    const curTrack = window.__kyoyuGetCurrentTrack ? window.__kyoyuGetCurrentTrack() : null;
+    const cleanArtist = String(artist || curTrack?.artistName || curTrack?.artist || '').trim();
+    const rawAlbumOrTitle = String(albumOrTitle || curTrack?.releaseTitle || curTrack?.album || curTrack?.title || '').trim();
+    const cleanAlbumOrTitle = (/^unknown(\s+album)?$/i.test(rawAlbumOrTitle) ? (curTrack?.title || '') : rawAlbumOrTitle).trim();
+    if (!cleanArtist && !cleanAlbumOrTitle) return;
+
+    const cacheKey = `${cleanArtist.toLowerCase()}|${cleanAlbumOrTitle.toLowerCase()}`;
+    if (window.__kyoyuPreloadedAlbums[cacheKey]) {
+      const cachedAlbum = window.__kyoyuPreloadedAlbums[cacheKey];
+      if (!isPreload) {
+        openNativeAlbumFast(cachedAlbum);
+      }
+      return cachedAlbum;
+    }
+
+    // If user explicitly tapped to open and it's not cached yet, open an instant skeleton with current track so there is 0ms delay
+    const fallbackCover = opts.cover || curTrack?.releaseCover || curTrack?.artworkUrl || curTrack?.cover || '';
+    const tempId = `album-${cacheKey.replace(/[^a-z0-9]+/g, '-')}`;
+    if (!isPreload) {
+      openNativeAlbumFast({
+        id: tempId,
+        title: cleanAlbumOrTitle.replace(/\s*\(Single\)\s*$/i, '') || cleanAlbumOrTitle,
+        artist: cleanArtist,
+        cover: fallbackCover,
+        year: curTrack?.year ? String(curTrack.year) : null,
+        genre: curTrack?.genre || '',
+        label: curTrack?.label || '',
+        provider: curTrack?.provider || 'discogs',
+        tracks: curTrack ? [{
+          id: curTrack.id || `${tempId}-0`,
+          title: curTrack.title || cleanAlbumOrTitle,
+          artist: cleanArtist,
+          url: curTrack.providerUrl || curTrack.trackUrl || curTrack.src || `resolve:${cleanArtist} ${curTrack.title || cleanAlbumOrTitle}`,
+          cover: fallbackCover,
+          provider: curTrack.provider || '',
+        }] : [],
       });
-      if (r.ok) {
-        const info = await r.json();
-        if (info.tracklist && info.tracklist.length > 0) {
-          openNativeAlbumFast({
-            id: info.discogsId || `discogs-${albumOrTitle}`,
-            title: info.album || albumOrTitle || '',
-            artist: info.artist || artist || '',
-            cover: info.coverImage || info.thumb || '',
-            year: info.year || null,
-            genre: info.genre || '',
-            label: info.label || '',
-            provider: 'discogs',
-            description: [
-              info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
-              info.country ? `Country: ${info.country}` : '',
-              info.description || '',
-              info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
-              info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
-            ].filter(Boolean).join('\n'),
-            tracks: (info.tracklist || []).map((t, i) => ({
-              id: `discogs-track-${i}`,
-              title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
-              artist: t.artists?.join(', ') || info.artist || artist || '',
-              url: `resolve:${t.artists?.join(', ') || info.artist || artist} ${t.title || ''}`,
-              cover: info.coverImage || info.thumb || '',
-              provider: '',
-            })),
-          });
-          return;
-        }
+    }
+
+    const emitAndCacheAlbum = (albumObj) => {
+      window.__kyoyuPreloadedAlbums[cacheKey] = albumObj;
+      if (albumObj.title) {
+        const altKey = `${cleanArtist.toLowerCase()}|${String(albumObj.title).toLowerCase()}`;
+        window.__kyoyuPreloadedAlbums[altKey] = albumObj;
+      }
+      openNativeAlbumFast(albumObj, { preload: isPreload, isUpdate: !isPreload });
+      return albumObj;
+    };
+
+    const searchTitle = cleanAlbumOrTitle.replace(/\s*\(Single\)\s*$/i, '').trim() || cleanAlbumOrTitle;
+    const query = `${cleanArtist} ${searchTitle}`.trim();
+    try {
+      // First check if track-info is already in __kyoyuInfoCache or fetch it
+      const infoKey = [cleanArtist, curTrack?.title || searchTitle, searchTitle].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+      let info = window.__kyoyuInfoCache?.[infoKey] || null;
+      if (!info) {
+        const r = await fetch('/api/discogs-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'track-info', title: curTrack?.title || searchTitle, artist: cleanArtist, album: searchTitle }),
+        });
+        if (r.ok) info = await r.json();
+      }
+      if (info && info.tracklist && info.tracklist.length > 0) {
+        return emitAndCacheAlbum({
+          id: info.discogsId ? `discogs-${info.discogsId}` : tempId,
+          title: info.album || searchTitle || '',
+          artist: info.artist || cleanArtist || '',
+          cover: info.coverImage || info.thumb || fallbackCover || '',
+          year: info.year || null,
+          genre: info.genre || '',
+          label: info.label || '',
+          provider: 'discogs',
+          description: [
+            info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
+            info.country ? `Country: ${info.country}` : '',
+            info.description || '',
+            info.credits?.mixing?.length ? `Mixed by: ${info.credits.mixing.join(', ')}` : '',
+            info.credits?.mastering?.length ? `Mastered by: ${info.credits.mastering.join(', ')}` : '',
+          ].filter(Boolean).join('\n'),
+          tracks: (info.tracklist || []).map((t, i) => ({
+            id: `discogs-track-${i}`,
+            title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+            artist: t.artists?.join(', ') || info.artist || cleanArtist || '',
+            url: `resolve:${t.artists?.join(', ') || info.artist || cleanArtist} ${t.title || ''}`,
+            cover: info.coverImage || info.thumb || fallbackCover || '',
+            provider: '',
+          })),
+        });
       }
 
       // Fallback: search Discogs for the release
@@ -219,7 +286,6 @@ if (typeof window !== 'undefined') {
         const sd = await sr.json();
         const release = (sd.results || []).find(r => r.type === 'release' || r.type === 'master');
         if (release) {
-          // Fetch full track info for this release
           const tr = await fetch('/api/discogs-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -228,28 +294,53 @@ if (typeof window !== 'undefined') {
           if (tr.ok) {
             const tinfo = await tr.json();
             const parsed = (release.title || '').split(' - ');
-            const releaseArtist = parsed.length >= 2 ? parsed[0].trim() : artist;
+            const releaseArtist = parsed.length >= 2 ? parsed[0].trim() : cleanArtist;
             const releaseTitle = parsed.length >= 2 ? parsed.slice(1).join(' - ').trim() : release.title;
-            openNativeAlbumFast({
-              id: `discogs-${release.id || release.discogsId}`,
-              title: tinfo.album || releaseTitle || albumOrTitle || '',
-              artist: tinfo.artist || releaseArtist || artist || '',
-              cover: release.cover_image || release.coverImage || release.thumb || '',
-              year: tinfo.year || release.year || null,
-              genre: tinfo.genre || '',
-              label: tinfo.label || '',
-              provider: 'discogs',
-              tracks: (tinfo.tracklist || []).map((t, i) => ({
-                id: `discogs-track-${i}`,
-                title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
-                artist: t.artists?.join(', ') || tinfo.artist || releaseArtist || '',
-                url: `resolve:${t.artists?.join(', ') || tinfo.artist || releaseArtist} ${t.title || ''}`,
-                cover: release.cover_image || release.coverImage || release.thumb || '',
-                provider: '',
-              })),
-            });
+            if (tinfo.tracklist && tinfo.tracklist.length > 0) {
+              return emitAndCacheAlbum({
+                id: `discogs-${release.id || release.discogsId}`,
+                title: tinfo.album || releaseTitle || searchTitle || '',
+                artist: tinfo.artist || releaseArtist || cleanArtist || '',
+                cover: release.cover_image || release.coverImage || release.thumb || fallbackCover || '',
+                year: tinfo.year || release.year || null,
+                genre: tinfo.genre || '',
+                label: tinfo.label || '',
+                provider: 'discogs',
+                tracks: (tinfo.tracklist || []).map((t, i) => ({
+                  id: `discogs-track-${i}`,
+                  title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+                  artist: t.artists?.join(', ') || tinfo.artist || releaseArtist || '',
+                  url: `resolve:${t.artists?.join(', ') || tinfo.artist || releaseArtist} ${t.title || ''}`,
+                  cover: release.cover_image || release.coverImage || release.thumb || fallbackCover || '',
+                  provider: '',
+                })),
+              });
+            }
           }
         }
+      }
+
+      // Guaranteed Single/Release fallback when not on Discogs
+      if (info || curTrack) {
+        return emitAndCacheAlbum({
+          id: tempId,
+          title: info?.album || searchTitle || curTrack?.title || 'Single',
+          artist: info?.artist || cleanArtist || '',
+          cover: info?.coverImage || info?.thumb || fallbackCover || '',
+          year: info?.year || curTrack?.year || null,
+          genre: info?.genre || curTrack?.genre || '',
+          label: info?.label || curTrack?.label || '',
+          provider: curTrack?.provider || 'native',
+          description: info?.description || '',
+          tracks: [{
+            id: curTrack?.id || `${tempId}-0`,
+            title: curTrack?.title || searchTitle,
+            artist: cleanArtist,
+            url: curTrack?.providerUrl || curTrack?.trackUrl || curTrack?.src || `resolve:${cleanArtist} ${curTrack?.title || searchTitle}`,
+            cover: info?.coverImage || fallbackCover || '',
+            provider: curTrack?.provider || '',
+          }],
+        });
       }
     } catch (e) {
       console.warn('[GoToAlbum] Error:', e);
@@ -490,8 +581,11 @@ export default function AlbumSheet({ album, onClose }) {
 
 export function openNativeArtistFast(artist, opts = {}) {
   if (!artist) return null;
+  const isPreload = Boolean(opts && opts.preload);
   const ts = Date.now();
-  window.__lastFastOpenArtistTs = ts;
+  if (!isPreload) {
+    window.__lastFastOpenArtistTs = ts;
+  }
   
   // Normalize types for Swift JSONDecoder
   const safeArtist = {
@@ -500,6 +594,10 @@ export function openNativeArtistFast(artist, opts = {}) {
     name: String(artist.name || 'Unknown'),
     realname: artist.realname ? String(artist.realname) : null,
     profile: artist.profile ? String(artist.profile) : null,
+    artisticPersona: artist.artisticPersona ? String(artist.artisticPersona) : null,
+    influencesAndInspirations: artist.influencesAndInspirations ? String(artist.influencesAndInspirations) : null,
+    collaborations: artist.collaborations ? String(artist.collaborations) : null,
+    collaborators: Array.isArray(artist.collaborators) ? artist.collaborators.filter(Boolean).map(String) : [],
     urls: Array.isArray(artist.urls) ? artist.urls.filter(Boolean).map(String) : [],
     aliases: Array.isArray(artist.aliases) ? artist.aliases.filter(Boolean).map(String) : [],
     images: Array.isArray(artist.images) ? artist.images.filter(Boolean).map(String) : [],
@@ -523,18 +621,21 @@ export function openNativeArtistFast(artist, opts = {}) {
 
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
-      cmd: 'open_native_artist',
+      cmd: isPreload ? 'preload_native_artist' : 'open_native_artist',
       isUpdate: Boolean(opts && opts.isUpdate),
       artist: safeArtist
     });
   } catch (e) { console.error('Failed to open native artist sheet', e); }
-  return artist;
+  return safeArtist;
 }
 
 export function openNativeLabelFast(label, opts = {}) {
   if (!label) return null;
+  const isPreload = Boolean(opts && opts.preload);
   const ts = Date.now();
-  window.__lastFastOpenLabelTs = ts;
+  if (!isPreload) {
+    window.__lastFastOpenLabelTs = ts;
+  }
 
   // Normalize types for Swift JSONDecoder
   const safeLabel = {
@@ -576,13 +677,13 @@ export function openNativeLabelFast(label, opts = {}) {
 
   try {
     window.webkit?.messageHandlers?.player?.postMessage({
-      cmd: 'open_native_label',
+      cmd: isPreload ? 'preload_native_label' : 'open_native_label',
       isUpdate: Boolean(opts && opts.isUpdate),
       replaceArtist: Boolean(opts && opts.replaceArtist),
       label: safeLabel
     });
   } catch (e) { console.error('Failed to open native label sheet', e); }
-  return label;
+  return safeLabel;
 }
 
 const _normStr = (s) => String(s || '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -806,19 +907,33 @@ function _prioritizeAndDedupeLinks(rawUrls) {
   return cleaned.sort((a, b) => rankOf(a) - rankOf(b));
 }
 
-export async function openRichArtistSheet(artistInput) {
+export async function openRichArtistSheet(artistInput, opts = {}) {
+  const isPreload = Boolean(opts && opts.preload);
   const isObj = artistInput && typeof artistInput === 'object';
   const rawName = isObj ? (artistInput.name || artistInput.artistName || artistInput.title || '') : String(artistInput || '');
   const cleanName = String(rawName).replace(/\s*\(\d+\)\s*$/, '').trim();
   if (!cleanName) return;
 
+  if (typeof window !== 'undefined') {
+    window.__kyoyuPreloadedArtists = window.__kyoyuPreloadedArtists || {};
+  }
+
   // If the item is already marked as a label or its name clearly indicates a record label, open the Label Sheet directly
   if (isObj && (artistInput.entityType === 'label' || artistInput.type === 'label')) {
-    return openRichLabelSheet(artistInput);
+    return openRichLabelSheet(artistInput, opts);
   }
   const hasExplicitArtistDiscogsId = isObj && artistInput.provider === 'discogs' && artistInput.entityType === 'artist' && /^\d+$/.test(String(artistInput.discogsId || artistInput.id || ''));
   if (!hasExplicitArtistDiscogsId && /\b(records|recordings|record label|disques|schallplatten)\b/i.test(cleanName)) {
-    return openRichLabelSheet(artistInput);
+    return openRichLabelSheet(artistInput, opts);
+  }
+
+  const cacheKey = _normStr(cleanName);
+  const cachedArtist = typeof window !== 'undefined' && window.__kyoyuPreloadedArtists?.[cacheKey];
+  if (cachedArtist && cachedArtist._enriched) {
+    if (!isPreload) {
+      openNativeArtistFast(cachedArtist);
+    }
+    return cachedArtist;
   }
 
   const initialCrossLinks = _discoverCrossEntityLinksForNames([
@@ -831,6 +946,10 @@ export async function openRichArtistSheet(artistInput) {
     name: cleanName,
     realname: isObj ? (artistInput.realname || null) : null,
     profile: isObj ? (artistInput.profile || null) : null,
+    artisticPersona: isObj ? (artistInput.artisticPersona || null) : null,
+    influencesAndInspirations: isObj ? (artistInput.influencesAndInspirations || null) : null,
+    collaborations: isObj ? (artistInput.collaborations || null) : null,
+    collaborators: isObj && Array.isArray(artistInput.collaborators) ? artistInput.collaborators : [],
     urls: _prioritizeAndDedupeLinks([
       ...(isObj && Array.isArray(artistInput.urls) ? artistInput.urls : (isObj && artistInput.url ? [artistInput.url] : [])),
       ...initialCrossLinks,
@@ -842,8 +961,9 @@ export async function openRichArtistSheet(artistInput) {
     topReleases: isObj && Array.isArray(artistInput.topReleases) ? artistInput.topReleases : [],
   };
 
-  // Show sheet immediately
-  openNativeArtistFast(initialArtist);
+  if (!isPreload) {
+    openNativeArtistFast(initialArtist);
+  }
 
   try {
     const artistId = (isObj && artistInput.provider === 'discogs' && /^\d+$/.test(String(artistInput.id || '')))
@@ -875,8 +995,8 @@ export async function openRichArtistSheet(artistInput) {
           discogsId: profile.labelId || null,
           name: profile.labelName || cleanName,
           provider: 'discogs',
-          replaceArtist: true,
-        });
+          replaceArtist: !isPreload,
+        }, opts);
       }
       if (profile && !profile.error) {
         const allAliases = Array.from(new Set([
@@ -914,7 +1034,7 @@ export async function openRichArtistSheet(artistInput) {
           provider: 'discogs',
         }));
 
-        openNativeArtistFast({
+        const enrichedArtist = {
           ...initialArtist,
           ...profile,
           name: (profile.name || cleanName).replace(/\s*\(\d+\)\s*$/, ''),
@@ -922,7 +1042,16 @@ export async function openRichArtistSheet(artistInput) {
           images: mergedImages,
           urls: mergedUrls,
           topReleases: mergedReleases.length ? mergedReleases : initialArtist.topReleases,
-        }, { isUpdate: true });
+          _enriched: true,
+        };
+        if (typeof window !== 'undefined' && cacheKey) {
+          window.__kyoyuPreloadedArtists[cacheKey] = enrichedArtist;
+          if (enrichedArtist.name) {
+            window.__kyoyuPreloadedArtists[_normStr(enrichedArtist.name)] = enrichedArtist;
+          }
+        }
+
+        openNativeArtistFast(enrichedArtist, { isUpdate: !isPreload, preload: isPreload });
       }
     }
   } catch (err) {
@@ -930,11 +1059,29 @@ export async function openRichArtistSheet(artistInput) {
   }
 }
 
-export async function openRichLabelSheet(labelInput) {
+export async function openRichLabelSheet(labelInput, opts = {}) {
+  const isPreload = Boolean(opts && opts.preload);
   const isObj = labelInput && typeof labelInput === 'object';
   const rawName = isObj ? (labelInput.name || labelInput.label || labelInput.title || labelInput.artistName || '') : String(labelInput || '');
-  const cleanName = String(rawName).replace(/\s*\(\d+\)\s*$/, '').trim();
-  if (!cleanName) return;
+  const cleanName = String(rawName)
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(sub-label.*?\)/i, '')
+    .split('—')[0]
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .trim();
+  if (!cleanName || cleanName === '—') return;
+
+  if (typeof window !== 'undefined') {
+    window.__kyoyuPreloadedLabels = window.__kyoyuPreloadedLabels || {};
+  }
+  const cacheKey = _normLabelCore(cleanName);
+  const cachedLabel = typeof window !== 'undefined' && window.__kyoyuPreloadedLabels?.[cacheKey];
+  if (cachedLabel && cachedLabel._enriched) {
+    if (!isPreload) {
+      openNativeLabelFast(cachedLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
+    }
+    return cachedLabel;
+  }
 
   const initialCrossLinks = _discoverCrossEntityLinksForNames([
     cleanName,
@@ -981,8 +1128,9 @@ export async function openRichLabelSheet(labelInput) {
     topReleases: isObj && Array.isArray(labelInput.topReleases) ? labelInput.topReleases : [],
   };
 
-  // Open immediately so user sees the sheet right away
-  openNativeLabelFast(currentLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
+  if (!isPreload) {
+    openNativeLabelFast(currentLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
+  }
 
   const labelId = (isObj && labelInput.provider === 'discogs' && /^\d+$/.test(String(labelInput.id || '')))
     ? labelInput.id
@@ -1205,9 +1353,17 @@ export async function openRichLabelSheet(labelInput) {
       urls: _prioritizeAndDedupeLinks(rawUrls),
       images: finalImages,
       topReleases: mergedReleases,
+      _enriched: true,
     };
 
-    openNativeLabelFast(currentLabel, { isUpdate: true });
+    if (typeof window !== 'undefined' && cacheKey) {
+      window.__kyoyuPreloadedLabels[cacheKey] = currentLabel;
+      if (currentLabel.name) {
+        window.__kyoyuPreloadedLabels[_normLabelCore(currentLabel.name)] = currentLabel;
+      }
+    }
+
+    openNativeLabelFast(currentLabel, { isUpdate: !isPreload, preload: isPreload });
   };
 
   if (discogsData && !discogsData.error) {
@@ -2024,6 +2180,378 @@ export async function playGenreTrack(trackItem) {
   }
 }
 
+export async function preloadPlayingEntities(trackInput = null, infoData = null) {
+  try {
+    const cur = trackInput || (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack ? window.__kyoyuGetCurrentTrack() : null);
+    if (!cur) return;
+    const title = String(cur.title || cur.name || '').trim();
+    const artist = String(cur.artistName || cur.artist || infoData?.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+    const rawAlbum = String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').trim();
+    const album = (/^unknown(\s+album)?$/i.test(rawAlbum) ? '' : rawAlbum) || (title ? `${title} (Single)` : '');
+    const rawLabel = String(infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
+    const label = rawLabel
+      .replace(/\[.*?\]/g, '')
+      .replace(/\(sub-label.*?\)/i, '')
+      .split('—')[0]
+      .trim();
+    const cover = String(infoData?.coverImage || cur.releaseCover || cur.artworkUrl || cur.cover || '').trim();
+
+    const tasks = [];
+    if (artist && !/^unknown/i.test(artist)) {
+      tasks.push(openRichArtistSheet({ name: artist, cover }, { preload: true }).catch(() => null));
+    }
+    if (label && label !== '—' && !/not on label|unknown/i.test(label)) {
+      tasks.push(openRichLabelSheet({ name: label, cover }, { preload: true }).catch(() => null));
+    }
+    if ((artist || album || title) && typeof window !== 'undefined' && window.__kyoyuGoToAlbum) {
+      tasks.push(window.__kyoyuGoToAlbum(artist, album || title, { preload: true, cover }).catch(() => null));
+    }
+    await Promise.allSettled(tasks);
+  } catch (e) {
+    console.warn('[preloadPlayingEntities] error:', e);
+  }
+}
+
+/**
+ * Spotify-Inspired Track Radio Engine (33 to 66 titles)
+ * Combines:
+ * 1. Acoustic / Tempo / Harmonic & Style Taxonomy Affinity (Primary + Sibling Subgenres)
+ * 2. 2-Hop Artist, Collaborator & Imprint Neighborhood Graph
+ * 3. Collaborative Filtering / Curatorial Co-Occurrence (Public SoundCloud & Kyoyu Playlists)
+ * 4. Artist Diversity Cap (max 2–3 tracks per artist) + Exploration/Exploitation Interleaving
+ */
+export async function startTrackRadio(seedInput = null) {
+  const cur = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack)
+    ? window.__kyoyuGetCurrentTrack()
+    : null;
+  const seed = (seedInput && typeof seedInput === 'object') ? { ...cur, ...seedInput } : (cur || {});
+  const seedTitle = String(seed.title || seed.name || 'Track').trim();
+  const seedArtist = String(seed.artistName || seed.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+  const seedAlbum = String(seed.album || seed.releaseTitle || seed.albumTitle || '').trim();
+  const seedCover = String(seed.cover || seed.releaseCover || seed.artworkUrl || '').trim();
+
+  // Pull any cached track-info for BPM, Key, Label, Styles, and Collaborators
+  const cacheKey = [seedArtist, seedAlbum || seedTitle].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+  const cachedInfo = (typeof window !== 'undefined' && window.__kyoyuInfoCache && cacheKey)
+    ? window.__kyoyuInfoCache[cacheKey]
+    : null;
+
+  const seedLabelRaw = String(seed.label || seed.labelName || cachedInfo?.label || '').trim();
+  const seedLabel = seedLabelRaw
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(sub-label.*?\)/i, '')
+    .split('—')[0]
+    .trim();
+  const seedBpm = String(seed.bpm || cachedInfo?.bpm || '').trim();
+  const seedKey = String(seed.key || cachedInfo?.key || '').trim();
+
+  const classified = classifyTrackGenre(seed, {
+    ...(cachedInfo || {}),
+    label: seedLabel,
+  });
+  const primaryNode = resolveGenreNode(seed.genre || classified?.primaryGenre || 'Hypnotic Techno', { forSheet: true });
+  const relatedGenreNames = Array.from(new Set([
+    ...(classified?.secondaryGenres || []),
+    ...(primaryNode.subgenres || []),
+    ...(primaryNode.adjacentGenres || []),
+    ...(primaryNode.parentGenres || []),
+  ])).filter(g => _normStr(g) !== _normStr(primaryNode.name)).slice(0, 4);
+
+  const relatedNodes = relatedGenreNames.map(g => resolveGenreNode(g, { forSheet: true }));
+  const providerPriority = getProviderPriority();
+
+  const seedArtistNorm = _normStr(seedArtist);
+  const seedTitleNorm = _normStr(seedTitle);
+  const seedLabelNorm = _normStr(seedLabel);
+
+  const collaboratorSet = new Set(
+    [
+      ...(cachedInfo?.releaseArtists || []),
+      ...(cachedInfo?.artistMembers || []),
+      ...(cachedInfo?.artistAliases || []),
+      ...(cachedInfo?.credits?.mixing || []),
+      ...(cachedInfo?.credits?.mastering || []),
+      ...(primaryNode.pioneerArtists || []),
+    ].map(_normStr).filter(Boolean)
+  );
+  const sisterLabelSet = new Set(
+    [
+      seedLabel,
+      ...(primaryNode.classicLabels || []),
+      ...relatedNodes.flatMap(n => n.classicLabels || []),
+    ].map(_normStr).filter(Boolean)
+  );
+
+  // Build candidate pool from Primary Genre + Related Sibling Genres + Platform Playlists
+  const buildRadioTrackList = (rawCandidates = []) => {
+    const deduped = [];
+    const seenTrackKey = new Set();
+    // Exclude the exact seed track itself from the suggestions (or keep it at index 0 if desired; user asked to suggest 33-66 titles matching the playing title)
+    seenTrackKey.add(`${seedArtistNorm}|${seedTitleNorm}`);
+
+    for (let i = 0; i < rawCandidates.length; i++) {
+      const c = rawCandidates[i];
+      if (!c || !c.title) continue;
+      const tClean = String(c.title).trim();
+      const aClean = String(c.artist || c.artistName || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+      if (!tClean || !aClean) continue;
+      const tNorm = _normStr(tClean);
+      const aNorm = _normStr(aClean);
+      const pairKey = `${aNorm}|${tNorm}`;
+      if (seenTrackKey.has(pairKey)) continue;
+      seenTrackKey.add(pairKey);
+
+      // Spotify-Style Multi-Factor Affinity Score
+      let score = 50;
+      const tier = c._radioTier || 'primary';
+      if (tier === 'direct') score += 38;
+      else if (tier === 'primary') score += 30;
+      else if (tier === 'cooccurrence') score += 28;
+      else if (tier === 'sibling1') score += 22;
+      else score += 16;
+
+      const lNorm = _normStr(c.label || '');
+      if (seedArtistNorm && aNorm === seedArtistNorm) score += 26;
+      else if (collaboratorSet.has(aNorm)) score += 20;
+      if (seedLabelNorm && lNorm && (lNorm === seedLabelNorm || lNorm.includes(seedLabelNorm))) score += 25;
+      else if (lNorm && sisterLabelSet.has(lNorm)) score += 16;
+      if (c.fromPlaylist) score += 18;
+      if (c.coverImage && /^https?:\/\//i.test(c.coverImage) && !String(c.coverImage).includes('spacer.gif')) score += 10;
+
+      deduped.push({
+        ...c,
+        title: tClean,
+        artist: aClean,
+        _aNorm: aNorm,
+        _score: score + ((i % 7) * 0.4),
+      });
+    }
+
+    deduped.sort((a, b) => b._score - a._score);
+
+    // Pass 1: Enforce Spotify Artist Diversity Cap (max 2 tracks per artist) so radio feels organic
+    const selected = [];
+    const overflow = [];
+    const artistCounts = new Map();
+    for (const item of deduped) {
+      const count = artistCounts.get(item._aNorm) || 0;
+      if (count < 2) {
+        artistCounts.set(item._aNorm, count + 1);
+        selected.push(item);
+      } else {
+        overflow.push(item);
+      }
+      if (selected.length >= 60) break;
+    }
+
+    // Pass 2: If fewer than 42 tracks after strict cap, relax cap to 3 per artist or pull from overflow to guarantee >= 36 tracks (within 33..66)
+    if (selected.length < 42) {
+      for (const item of overflow) {
+        selected.push(item);
+        if (selected.length >= 48) break;
+      }
+    }
+
+    // Clamp strictly to [33, 66]
+    const finalSlice = selected.slice(0, 66);
+    const ordered = orderTracksByProviderPriority(finalSlice, providerPriority);
+
+    return ordered.map((t, idx) => {
+      const coverUrl = t.coverImage || t.cover || t.thumb || seedCover || '';
+      const rawUrl = t.trackUrl || t.url || `resolve:${t.artist} ${t.title}`.trim();
+      return {
+        id: t.id || `radio-${idx}-${Date.now()}`,
+        title: t.title,
+        artist: t.artist,
+        url: rawUrl,
+        trackUrl: rawUrl,
+        cover: coverUrl,
+        provider: t.provider === 'discogs' ? '' : (t.provider || ''),
+        scTrackId: t.scTrackId || undefined,
+      };
+    });
+  };
+
+  // Gather initial 0ms ontology + playlist pool (Primary genre + 4 sibling genres -> 60+ unique candidates)
+  const initialPool = [];
+  const pSec0 = selectGenreThreeSections(primaryNode, {}, { artist: seedArtist, label: seedLabel, title: seedTitle }, 0, providerPriority);
+  const pSec1 = selectGenreThreeSections(primaryNode, {}, { artist: seedArtist, label: seedLabel, title: seedTitle }, 2, providerPriority);
+  [...pSec0.recommendations, ...pSec0.essentialClassics, ...pSec0.nicheCuts, ...pSec1.essentialClassics, ...pSec1.nicheCuts].forEach(t => {
+    initialPool.push({ ...t, _radioTier: 'primary' });
+  });
+
+  relatedNodes.forEach((rNode, rIdx) => {
+    const rSec = selectGenreThreeSections(rNode, {}, { artist: seedArtist, label: seedLabel, title: seedTitle }, rIdx, providerPriority);
+    [...rSec.recommendations, ...rSec.essentialClassics, ...rSec.nicheCuts].forEach(t => {
+      initialPool.push({ ...t, _radioTier: rIdx === 0 ? 'sibling1' : 'sibling2' });
+    });
+  });
+
+  _collectPlatformPlaylistTracksForGenre(primaryNode).forEach(t => {
+    initialPool.push({ ...t, _radioTier: 'cooccurrence' });
+  });
+
+  const initialRadioTracks = buildRadioTrackList(initialPool);
+  const radioId = `radio-${_normStr(seedArtist)}-${_normStr(seedTitle)}`.replace(/\s+/g, '-');
+  const radioSubtitleParts = [
+    primaryNode.name,
+    relatedGenreNames[0] || '',
+    seedBpm ? `${seedBpm} BPM` : '',
+    seedKey || '',
+  ].filter(Boolean);
+
+  const radioDescription = [
+    `Track Radio seeded from "${seedTitle}"${seedArtist ? ` by ${seedArtist}` : ''}.`,
+    `Curated via harmonic, tempo (${seedBpm ? `${seedBpm} BPM` : primaryNode.bpmRange || 'club tempo'}${seedKey ? `, ${seedKey}` : ''}), label (${seedLabel || primaryNode.classicLabels?.[0] || 'underground imprint'}), and selector co-occurrence matching across ${primaryNode.name}${relatedGenreNames.length ? ` & ${relatedGenreNames.slice(0, 2).join(', ')}` : ''}.`,
+  ].join(' ');
+
+  const initialRadioAlbum = {
+    id: radioId,
+    title: `${seedTitle} Radio`,
+    artist: seedArtist ? `Seeded by ${seedArtist}` : `${primaryNode.name} Radio`,
+    cover: seedCover || initialRadioTracks[0]?.cover || '/album1.png',
+    genre: radioSubtitleParts.slice(0, 2).join(' · ') || primaryNode.name,
+    year: `${initialRadioTracks.length} Tracks`,
+    label: seedLabel ? `${seedLabel} · Radio` : `${primaryNode.name} Radio`,
+    provider: 'radio',
+    description: radioDescription,
+    tracks: initialRadioTracks,
+  };
+
+  // 1. Open Radio Sheet immediately (0ms latency, guaranteed >= 33 and <= 66 tracks)
+  openNativeAlbumFast(initialRadioAlbum);
+
+  // 2. Live Multi-Provider Enrichment (Bandcamp, SoundCloud tracks + playlists, Discogs genre/label graph)
+  try {
+    const searchGenre = primaryNode.name.split(/[\/&]/)[0].trim();
+    const labelHint = seedLabel || primaryNode.classicLabels?.[0] || '';
+    const [bcArtistRes, bcGenreRes, scRes, scPlRes, dcRes] = await Promise.all([
+      fetch('/api/bandcamp-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `${seedArtist} ${labelHint}`.trim() }),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/bandcamp-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `${searchGenre} ${labelHint}`.trim() }),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${seedArtist} ${searchGenre}`.trim())}&limit=30`)
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${labelHint}`.trim())}&type=playlists&limit=5`)
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/discogs-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'genre-explore',
+          genre: searchGenre,
+          styles: [primaryNode.name, ...relatedGenreNames.slice(0, 2)],
+          artist: seedArtist,
+        }),
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+
+    const liveCandidates = [];
+    const coverByTitleArtist = new Map();
+    const providerTrackMap = new Map();
+
+    const registerItem = (item, tier) => {
+      if (!item || !item.title) return;
+      const tNorm = _normStr(item.title);
+      const aNorm = _normStr(item.artist || item.artistName || '');
+      const pairKey = `${aNorm}|${tNorm}`;
+      if (item.coverImage && /^https?:\/\//i.test(item.coverImage) && !item.coverImage.includes('spacer.gif')) {
+        coverByTitleArtist.set(pairKey, item.coverImage);
+      }
+      if (item.trackUrl && !String(item.trackUrl).startsWith('resolve:')) {
+        providerTrackMap.set(pairKey, item);
+      }
+      liveCandidates.push({ ...item, _radioTier: tier });
+    };
+
+    [...(bcArtistRes?.results || []), ...(bcGenreRes?.results || [])]
+      .filter(r => r && (r.type === 'track' || r.type === 'album'))
+      .forEach((r, idx) => {
+        const cleanCover = r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '';
+        registerItem({
+          id: `bc-radio-${idx}-${Date.now()}`,
+          title: r.title || '',
+          artist: r.artistName || r.artist || '',
+          label: r.labelName || r.albumTitle || seedLabel || primaryNode.name,
+          trackUrl: r.trackUrl || r.url || '',
+          coverImage: cleanCover,
+          provider: 'bandcamp',
+        }, 'direct');
+      });
+
+    (scRes?.results || []).forEach((r, idx) => {
+      registerItem({
+        id: r.id || `sc-radio-${idx}-${Date.now()}`,
+        scTrackId: r.scTrackId ? String(r.scTrackId) : '',
+        title: r.title || '',
+        artist: r.artistName || r.artist || '',
+        label: r.genre || primaryNode.name,
+        trackUrl: r.trackUrl || '',
+        coverImage: r.artworkUrl || '',
+        provider: 'soundcloud',
+      }, 'direct');
+    });
+
+    (scPlRes?.playlists || []).forEach((pl) => {
+      (pl.tracks || []).slice(0, 10).forEach((tr, idx) => {
+        registerItem({
+          id: tr.id || `sc-pl-radio-${idx}-${Date.now()}`,
+          scTrackId: tr.scTrackId ? String(tr.scTrackId) : '',
+          title: tr.title || '',
+          artist: tr.artistName || tr.artist || pl.artistName || '',
+          label: pl.title || primaryNode.name,
+          trackUrl: tr.trackUrl || '',
+          coverImage: tr.artworkUrl || pl.artworkUrl || '',
+          provider: 'soundcloud',
+          fromPlaylist: true,
+        }, 'cooccurrence');
+      });
+    });
+
+    [...(dcRes?.classics || []), ...(dcRes?.niche || []), ...(dcRes?.releases || [])].forEach((rel, idx) => {
+      const cov = rel.coverImage || rel.thumb || '';
+      registerItem({
+        id: rel.id || `dc-radio-${idx}-${Date.now()}`,
+        title: rel.title || '',
+        artist: rel.artist || '',
+        label: rel.label || primaryNode.name,
+        trackUrl: `resolve:${rel.artist || ''} ${rel.title || ''}`.trim(),
+        coverImage: cov,
+        provider: providerPriority[0] || 'bandcamp',
+      }, 'primary');
+    });
+
+    const combinedRadioTracks = buildRadioTrackList([...liveCandidates, ...initialPool]);
+    // Enrich top 28 tracks with real HTTP artwork from coverMap / iTunes so the radio sheet looks rich
+    const topSlice = await _enrichTracksWithRealArtwork(
+      combinedRadioTracks.slice(0, 28).map(t => ({ ...t, coverImage: t.cover })),
+      coverByTitleArtist,
+      providerTrackMap
+    );
+    const mergedFinalTracks = [
+      ...topSlice.map(t => ({ ...t, cover: t.coverImage || t.cover })),
+      ...combinedRadioTracks.slice(28),
+    ].slice(0, 66);
+
+    // Only update if the user is still viewing this radio sheet
+    if (typeof window !== 'undefined' && window.__kyoyuCurrentNativeAlbum?.id === radioId) {
+      openNativeAlbumFast({
+        ...initialRadioAlbum,
+        year: `${mergedFinalTracks.length} Tracks`,
+        tracks: mergedFinalTracks,
+      }, { isUpdate: true });
+    }
+  } catch (err) {
+    console.warn('[startTrackRadio] enrich error:', err);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.__kyoyuOpenArtist = openRichArtistSheet;
   window.__kyoyuOpenLabel = openRichLabelSheet;
@@ -2032,6 +2560,9 @@ if (typeof window !== 'undefined') {
   window.__kyoyuOpenScene = openRichSceneSheet;
   window.__kyoyuPlayGenreTrack = playGenreTrack;
   window.__kyoyuOpenReleaseFromSheet = openReleaseFromSheet;
+  window.__kyoyuPreloadPlayingEntities = preloadPlayingEntities;
+  window.__kyoyuStartTrackRadio = startTrackRadio;
 }
+
 
 

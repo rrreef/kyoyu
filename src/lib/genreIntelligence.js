@@ -3017,8 +3017,14 @@ export function matchGenreSearchQuery(rawQuery) {
  * Tidal, Bandcamp, YouTube, Discogs, or Native).
  */
 export function classifyTrackGenre(track = {}, extraMeta = {}) {
-  const candidates = []; // { genreName, weight, source }
-  const addCandidate = (rawStr, weight, source) => {
+  const candidates = []; // { node, weight, source, explicit }
+  const nonGenreNoise = new Set([
+    'electronic', 'music', 'track', 'album', 'event', 'unknown', 'pop/rock', 'non-music',
+    'seen live', 'favorites', 'favourite', 'under 2000 listeners', 'spotify', 'soundcloud',
+    'bandcamp', 'youtube', 'vinyl', '12"', 'lp', 'ep', 'single', 'digital',
+  ]);
+
+  const addCandidate = (rawStr, weight, source, explicit = false) => {
     if (!rawStr) return;
     const parts = Array.isArray(rawStr)
       ? rawStr
@@ -3027,10 +3033,10 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
       const clean = String(part || '').trim();
       if (!clean) continue;
       const n = _norm(clean);
-      if (!n || ['electronic', 'music', 'track', 'album', 'event', 'unknown'].includes(n)) continue;
+      if (!n || nonGenreNoise.has(n)) continue;
       const node = resolveGenreNode(clean);
       if (node) {
-        candidates.push({ node, weight, source });
+        candidates.push({ node, weight, source, explicit });
       }
     }
   };
@@ -3041,110 +3047,143 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
   const label = String(track.label || track.labelName || track.releaseLabel || extraMeta.label || '').trim();
   const provider = String(track.provider || extraMeta.provider || '').toLowerCase();
 
-  // 1. Explicit Discogs styles & MusicBrainz tags (highest specificity)
-  if (extraMeta.styles) addCandidate(extraMeta.styles, 1.0, 'Discogs Style');
-  if (extraMeta.genre) addCandidate(extraMeta.genre, 0.9, 'Discogs / MusicBrainz');
-  if (extraMeta.mbTags) addCandidate(extraMeta.mbTags, 0.85, 'MusicBrainz Tag');
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const hasWholePhrase = (haystackNorm, needleNorm) => {
+    if (!haystackNorm || !needleNorm) return false;
+    if (haystackNorm === needleNorm) return true;
+    const re = new RegExp(`(?:^|\\s)${escapeRe(needleNorm)}(?:$|\\s)`);
+    return re.test(haystackNorm);
+  };
 
-  // 2. Track's own genre / tags from provider (Bandcamp, SoundCloud, Spotify, Apple Music, Discogs)
-  if (track.styles) addCandidate(track.styles, 0.95, 'Release Style');
-  if (track.genre && track.genre !== 'Event') addCandidate(track.genre, 0.88, 'Track Metadata');
-  if (track.tags) addCandidate(track.tags, 0.82, 'Provider Tags');
-
-  // 3. Artist & Remixer Knowledge Graph Lookup
+  // 1. Artist & Remixer Knowledge Graph Lookup (Curated artist signature is ground truth)
   const artistNorm = _norm(artist);
+  let hasAuthoritativeSignal = false;
   for (const [aKey, genres] of Object.entries(ARTIST_GENRE_GRAPH)) {
-    if (artistNorm === aKey || (aKey.length >= 4 && (artistNorm.includes(aKey) || _norm(title).includes(aKey)))) {
-      genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 0.94 : 0.72, `Artist Graph (${artist || aKey})`));
+    if (artistNorm === aKey || (aKey.length >= 5 && hasWholePhrase(artistNorm, aKey))) {
+      hasAuthoritativeSignal = true;
+      genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 1.05 : 0.88, `Artist Graph (${artist || aKey})`, true));
     }
   }
 
   // Check remixers in title: e.g. "Track Name (Forest Drive West Remix)"
-  const remixMatch = title.match(/\(([^)]+?)\s+(?:remix|dub|rework|mix|edit|vip)\)/i);
+  const remixMatch = title.match(/\(([^)]+?)\s+(?:remix|dub|rework|mix|edit|vip|version)\)/i);
   if (remixMatch && remixMatch[1]) {
     const remixerNorm = _norm(remixMatch[1]);
     for (const [aKey, genres] of Object.entries(ARTIST_GENRE_GRAPH)) {
-      if (remixerNorm.includes(aKey)) {
-        genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 0.90 : 0.68, `Remixer Lineage (${remixMatch[1].trim()})`));
+      if (remixerNorm === aKey || (aKey.length >= 4 && hasWholePhrase(remixerNorm, aKey))) {
+        hasAuthoritativeSignal = true;
+        genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 0.98 : 0.82, `Remixer Lineage (${remixMatch[1].trim()})`, true));
       }
     }
   }
 
-  // 4. Label Knowledge Graph Lookup
+  // 2. Label Knowledge Graph Lookup (Strictly on label name or known label series)
   const labelNorm = _norm(label.replace(/\[.*?\]/g, '').replace(/\(sub-label.*?\)/i, ''));
-  const albumNorm = _norm(album);
   for (const [lKey, genres] of Object.entries(LABEL_GENRE_GRAPH)) {
-    if (
-      (labelNorm && (labelNorm === lKey || labelNorm.includes(lKey))) ||
-      (albumNorm && lKey.length >= 5 && albumNorm.includes(lKey)) ||
-      (_norm(title).includes(lKey) && lKey.length >= 5)
-    ) {
-      genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 0.91 : 0.70, `Label Graph (${label || lKey})`));
+    if (labelNorm && (labelNorm === lKey || (lKey.length >= 4 && hasWholePhrase(labelNorm, lKey)))) {
+      hasAuthoritativeSignal = true;
+      genres.forEach((g, idx) => addCandidate(g, idx === 0 ? 0.96 : 0.80, `Label Graph (${label || lKey})`, true));
     }
   }
 
-  // 5. Title / Album / Description Keyword & Mix-Type Analysis
-  const textBlob = `${title} ${album} ${extraMeta.description || ''} ${extraMeta.artistBio || ''}`.toLowerCase();
-  const cuePatterns = [
-    { re: /\b(dub techno|basic channel|chord dub)\b/i, genre: 'Dub Techno', w: 0.85 },
-    { re: /\b(mantis|hypnotic techno|deep techno|modular techno|scifi techno)\b/i, genre: 'Hypnotic Techno', w: 0.82 },
-    { re: /\b(detroit techno|motor city)\b/i, genre: 'Detroit Techno', w: 0.84 },
-    { re: /\b(minimal techno|microhouse|rominimal)\b/i, genre: 'Minimal Techno', w: 0.82 },
-    { re: /\b(industrial techno|ebm|schranz)\b/i, genre: 'Industrial Techno', w: 0.82 },
-    { re: /\b(acid techno|303|tb-303|acperience)\b/i, genre: 'Acid Techno', w: 0.80 },
-    { re: /\b(ambient techno|intelligent techno)\b/i, genre: 'Ambient Techno', w: 0.82 },
-    { re: /\b(deep house|rhodes|larry heard)\b/i, genre: 'Deep House', w: 0.80 },
-    { re: /\b(chicago house|trax records|jackin)\b/i, genre: 'Chicago House', w: 0.80 },
-    { re: /\b(acid house)\b/i, genre: 'Acid House', w: 0.82 },
-    { re: /\b(tech house)\b/i, genre: 'Tech House', w: 0.80 },
-    { re: /\b(drexciya|electro-funk|808 electro|electro mix)\b/i, genre: 'Electro', w: 0.80 },
-    { re: /\b(jungle|amen break|ragga|160 bpm|drumfunk)\b/i, genre: 'Jungle', w: 0.84 },
-    { re: /\b(drum\s*(?:&|and|'n'|n)\s*bass|dnb|neurofunk|techstep|liquid funk|170 bpm)\b/i, genre: 'Drum \'n\' Bass', w: 0.84 },
-    { re: /\b(uk garage|2-step|2 step|speed garage|ukg)\b/i, genre: 'UK Garage / 2-Step', w: 0.84 },
-    { re: /\b(dubstep|140 bpm|dmz|deep medi)\b/i, genre: 'Dubstep', w: 0.84 },
-    { re: /\b(footwork|juke|teklife)\b/i, genre: 'Footwork / Juke', w: 0.85 },
-    { re: /\b(uk bass|leftfield bass|hessle|livity|timedance)\b/i, genre: 'UK Bass / Leftfield Bass', w: 0.83 },
-    { re: /\b(breakbeat|breaks)\b/i, genre: 'Breakbeat', w: 0.78 },
-    { re: /\b(idm|braindance|glitch)\b/i, genre: 'IDM / Braindance', w: 0.82 },
-    { re: /\b(ambient|drone|field recording|soundscape)\b/i, genre: 'Ambient', w: 0.76 },
-    { re: /\b(trip hop|trip-hop|downtempo|balearic)\b/i, genre: 'Downtempo', w: 0.80 },
-    { re: /\b(trance|goa|psytrance)\b/i, genre: 'Trance', w: 0.80 },
-    { re: /\b(king tubby|roots dub|dub version|dubplate|stepper dub)\b/i, genre: 'Dub', w: 0.82 },
-    { re: /\b(reggae|rocksteady|dancehall|roots)\b/i, genre: 'Roots Reggae', w: 0.78 },
-    { re: /\b(boom bap|hip hop|hip-hop|mpc|freestyle)\b/i, genre: 'Hip Hop / Boom Bap', w: 0.78 },
-    { re: /\b(trap|drill|808 glide)\b/i, genre: 'Trap / Cloud Rap / Drill', w: 0.78 },
-    { re: /\b(grime|eski|rinse fm)\b/i, genre: 'Grime', w: 0.80 },
-    { re: /\b(spiritual jazz|modal jazz|jazz-funk|quartet|quintet|trio|saxophone)\b/i, genre: 'Jazz / Spiritual Jazz & Fusion', w: 0.78 },
-    { re: /\b(boogie|disco|p-funk|motown|soul)\b/i, genre: 'Soul / Funk & Boogie', w: 0.76 },
-    { re: /\b(post-punk|coldwave|minimal wave|darkwave|synth-pop)\b/i, genre: 'Post-Punk / Coldwave & Synth-Pop', w: 0.82 },
-    { re: /\b(krautrock|kosmische|motorik)\b/i, genre: 'Krautrock / Kosmische', w: 0.84 },
-    { re: /\b(shoegaze|dream pop|indie rock|post-rock)\b/i, genre: 'Alternative / Indie & Shoegaze', w: 0.80 },
-    { re: /\b(afrobeat|highlife|ethio-jazz)\b/i, genre: 'Afrobeat & Global Groove', w: 0.84 },
-    { re: /\b(dub mix|dub)\b/i, genre: 'Dub Techno', w: 0.62 },
-    { re: /\b(techno)\b/i, genre: 'Hypnotic Techno', w: 0.68 },
-    { re: /\b(house)\b/i, genre: 'Deep House', w: 0.65 },
-    { re: /\b(electro)\b/i, genre: 'Electro', w: 0.68 },
+  // 3. Explicit Discogs styles & MusicBrainz / Beatport / Provider genres
+  if (extraMeta.styles) {
+    hasAuthoritativeSignal = true;
+    addCandidate(extraMeta.styles, 1.0, 'Discogs Style', true);
+  }
+  if (extraMeta.genre) {
+    hasAuthoritativeSignal = true;
+    addCandidate(extraMeta.genre, 0.94, 'Discogs / MusicBrainz', true);
+  }
+  if (extraMeta.mbTags) addCandidate(extraMeta.mbTags, 0.82, 'MusicBrainz Tag', false);
+
+  // 4. Track's own genre / styles from provider
+  if (track.styles) {
+    hasAuthoritativeSignal = true;
+    addCandidate(track.styles, 0.96, 'Release Style', true);
+  }
+  if (track.genre && track.genre !== 'Event') {
+    hasAuthoritativeSignal = true;
+    addCandidate(track.genre, 0.90, 'Track Metadata', true);
+  }
+  if (track.tags) addCandidate(track.tags, 0.78, 'Provider Tags', false);
+
+  // 5. Specific Multi-Word Genre Phrases in Title / Album (avoids false positives from single words in bios)
+  const titleAlbumBlob = `${title} ${album}`.toLowerCase();
+  const specificCuePatterns = [
+    { re: /\b(dub techno|basic channel|chord dub)\b/i, genre: 'Dub Techno', w: 0.86 },
+    { re: /\b(hypnotic techno|deep techno|modular techno|scifi techno)\b/i, genre: 'Hypnotic Techno', w: 0.84 },
+    { re: /\b(detroit techno)\b/i, genre: 'Detroit Techno', w: 0.85 },
+    { re: /\b(minimal techno|microhouse|rominimal)\b/i, genre: 'Minimal Techno', w: 0.84 },
+    { re: /\b(industrial techno|schranz)\b/i, genre: 'Industrial Techno', w: 0.84 },
+    { re: /\b(acid techno|tb-303|acperience)\b/i, genre: 'Acid Techno', w: 0.82 },
+    { re: /\b(ambient techno|intelligent techno)\b/i, genre: 'Ambient Techno', w: 0.84 },
+    { re: /\b(deep house)\b/i, genre: 'Deep House', w: 0.82 },
+    { re: /\b(chicago house|jackin house)\b/i, genre: 'Chicago House', w: 0.82 },
+    { re: /\b(acid house)\b/i, genre: 'Acid House', w: 0.84 },
+    { re: /\b(tech house)\b/i, genre: 'Tech House', w: 0.82 },
+    { re: /\b(electro-funk|808 electro|electro mix)\b/i, genre: 'Electro', w: 0.82 },
+    { re: /\b(amen break|ragga jungle|160 bpm|drumfunk)\b/i, genre: 'Jungle', w: 0.85 },
+    { re: /\b(drum\s*(?:&|and|'n'|n)\s*bass|dnb|neurofunk|techstep|liquid funk|170 bpm)\b/i, genre: 'Drum \'n\' Bass', w: 0.85 },
+    { re: /\b(uk garage|2-step|2 step|speed garage|ukg)\b/i, genre: 'UK Garage / 2-Step', w: 0.85 },
+    { re: /\b(dubstep|140 bpm)\b/i, genre: 'Dubstep', w: 0.85 },
+    { re: /\b(footwork|juke|teklife)\b/i, genre: 'Footwork / Juke', w: 0.86 },
+    { re: /\b(uk bass|leftfield bass)\b/i, genre: 'UK Bass / Leftfield Bass', w: 0.84 },
+    { re: /\b(idm|braindance)\b/i, genre: 'IDM / Braindance', w: 0.84 },
+    { re: /\b(trip hop|trip-hop|balearic)\b/i, genre: 'Downtempo', w: 0.82 },
+    { re: /\b(psytrance|goa trance)\b/i, genre: 'Trance', w: 0.82 },
+    { re: /\b(roots dub|dubplate|stepper dub)\b/i, genre: 'Dub', w: 0.82 },
+    { re: /\b(roots reggae|rocksteady|dancehall)\b/i, genre: 'Roots Reggae', w: 0.82 },
+    { re: /\b(boom bap|hip hop|hip-hop)\b/i, genre: 'Hip Hop / Boom Bap', w: 0.80 },
+    { re: /\b(spiritual jazz|modal jazz|jazz-funk)\b/i, genre: 'Jazz / Spiritual Jazz & Fusion', w: 0.82 },
+    { re: /\b(post-punk|coldwave|minimal wave|darkwave|synth-pop)\b/i, genre: 'Post-Punk / Coldwave & Synth-Pop', w: 0.84 },
+    { re: /\b(krautrock|kosmische|motorik)\b/i, genre: 'Krautrock / Kosmische', w: 0.85 },
+    { re: /\b(shoegaze|dream pop|post-rock)\b/i, genre: 'Alternative / Indie & Shoegaze', w: 0.82 },
+    { re: /\b(afrobeat|highlife|ethio-jazz)\b/i, genre: 'Afrobeat & Global Groove', w: 0.85 },
   ];
 
-  for (const cue of cuePatterns) {
-    if (cue.re.test(textBlob)) {
-      addCandidate(cue.genre, cue.w, 'Title / Context Analysis');
+  for (const cue of specificCuePatterns) {
+    if (cue.re.test(titleAlbumBlob)) {
+      addCandidate(cue.genre, cue.w, 'Title / Context Analysis', false);
+    }
+  }
+
+  // Only fall back to broad single-word cues if no authoritative artist/label/style signal exists
+  if (!hasAuthoritativeSignal && candidates.length === 0) {
+    const broadCues = [
+      { re: /\b(dub mix|dub version)\b/i, genre: 'Dub Techno', w: 0.68 },
+      { re: /\b(techno)\b/i, genre: 'Hypnotic Techno', w: 0.70 },
+      { re: /\b(house)\b/i, genre: 'Deep House', w: 0.68 },
+      { re: /\b(electro)\b/i, genre: 'Electro', w: 0.70 },
+      { re: /\b(jungle)\b/i, genre: 'Jungle', w: 0.72 },
+      { re: /\b(breakbeat|breaks)\b/i, genre: 'Breakbeat', w: 0.70 },
+      { re: /\b(ambient|drone|soundscape)\b/i, genre: 'Ambient', w: 0.70 },
+      { re: /\b(trance)\b/i, genre: 'Trance', w: 0.70 },
+      { re: /\b(reggae)\b/i, genre: 'Roots Reggae', w: 0.70 },
+      { re: /\b(grime)\b/i, genre: 'Grime', w: 0.72 },
+      { re: /\b(disco|boogie|funk|soul)\b/i, genre: 'Soul / Funk & Boogie', w: 0.68 },
+    ];
+    for (const cue of broadCues) {
+      if (cue.re.test(titleAlbumBlob)) {
+        addCandidate(cue.genre, cue.w, 'Title / Context Analysis', false);
+      }
     }
   }
 
   // 6. Aggregate scores per canonical genre node
-  const scoreMap = new Map(); // id -> { node, score, sources: Set }
+  const scoreMap = new Map(); // id -> { node, score, explicit, sources: Set }
   for (const c of candidates) {
     const existing = scoreMap.get(c.node.id);
     if (!existing) {
       scoreMap.set(c.node.id, {
         node: c.node,
         score: c.weight,
+        explicit: Boolean(c.explicit),
         sources: new Set([c.source]),
       });
     } else {
-      // Diminishing boost for multiple agreeing signals
-      existing.score = Math.min(0.99, existing.score + c.weight * 0.28);
+      existing.score = Math.min(1.15, existing.score + c.weight * 0.25);
+      if (c.explicit) existing.explicit = true;
       existing.sources.add(c.source);
     }
   }
@@ -3172,9 +3211,29 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
   }
 
   const primary = ranked[0].node;
-  const secondaryFromSignals = ranked.slice(1, 4).map(r => r.node.name);
-  const secondaryGenres = secondaryFromSignals.length > 0
-    ? secondaryFromSignals
+  const relatedPrimaryNorms = new Set([
+    ...(primary.subgenres || []),
+    ...(primary.adjacentGenres || []),
+    ...(primary.parentGenres || []),
+    ...(primary.influences || []),
+  ].map(_norm));
+
+  // Filter secondary genres so they are 100% coherent with the primary genre or explicitly backed by artist/label/release styles
+  const coherentSecondaries = ranked
+    .slice(1)
+    .filter(r => {
+      const n = r.node;
+      if (r.explicit && r.score >= 0.85) return true;
+      if (n.superGenre === primary.superGenre || n.superGenre === primary.secondarySuperGenre) return true;
+      if (primary.superGenre === n.secondarySuperGenre) return true;
+      if (relatedPrimaryNorms.has(_norm(n.name))) return true;
+      return false;
+    })
+    .slice(0, 3)
+    .map(r => r.node.name);
+
+  const secondaryGenres = coherentSecondaries.length > 0
+    ? coherentSecondaries
     : primary.adjacentGenres.slice(0, 2);
 
   return {
@@ -3184,7 +3243,7 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
     secondarySuperGenre: primary.secondarySuperGenre || '',
     originYear: primary.originYear,
     originPlace: primary.originPlace,
-    confidence: Number(Math.min(0.98, Math.max(0.68, ranked[0].score)).toFixed(2)),
+    confidence: Number(Math.min(0.99, Math.max(0.72, ranked[0].score)).toFixed(2)),
     provenance: [...ranked[0].sources],
     node: primary,
   };

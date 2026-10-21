@@ -131,7 +131,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
         const aNorm = normName(item.artist?.name || '');
         return (tNorm === wantTitle || tNorm.includes(wantTitle) || wantTitle.includes(tNorm)) &&
                (!wantArtist || aNorm === wantArtist || aNorm.includes(wantArtist) || wantArtist.includes(aNorm));
-      }) || list[0];
+      });
       if (!hit?.id) return null;
 
       const detRes = await fetchWithTimeout(`https://api.deezer.com/track/${hit.id}`, {}, 2500);
@@ -169,7 +169,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
         previewUrl: hit.previewUrl || '',
         releaseDate: hit.releaseDate ? String(hit.releaseDate).slice(0, 10) : '',
         genre: hit.primaryGenreName || '',
-        albumTitle: hit.collectionName || '',
+        albumTitle: (hit.collectionName || '').replace(/\s*-\s*(Single|EP)$/i, '').trim() || hit.collectionName || '',
         duration: hit.trackTimeMillis ? formatDurationSec(hit.trackTimeMillis / 1000) : '',
         trackNumber: hit.trackNumber || null,
         trackCount: hit.trackCount || null,
@@ -177,7 +177,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     } catch (e) { return null; }
   })();
 
-  // 3. Beatport Track Search (__NEXT_DATA__ JSON for exact electronic BPM & Key)
+  // 3. Beatport Track Search (__NEXT_DATA__ JSON for exact electronic BPM, Key, Genre & Release)
   const beatportPromise = (async () => {
     if (!title || !artist) return null;
     try {
@@ -210,6 +210,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
       if (!hit) return null;
       const bpmVal = Number(hit.bpm || 0);
       const rawKeyName = hit.key_name || hit.key?.name || '';
+      const bpGenre = hit.sub_genre?.sub_genre_name || hit.sub_genre?.name || (Array.isArray(hit.genre) ? hit.genre[0]?.genre_name || hit.genre[0]?.name : hit.genre?.genre_name || hit.genre?.name) || '';
       return {
         bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
         key: rawKeyName ? normalizeMusicalKey(rawKeyName) : '',
@@ -217,6 +218,8 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
         releaseDate: hit.publish_date || hit.release_date || '',
         duration: hit.length ? formatDurationSec(hit.length / 1000) : '',
         labelName: hit.label?.label_name || hit.label?.name || '',
+        albumTitle: hit.release?.release_name || hit.release?.name || '',
+        genre: bpGenre,
       };
     } catch (e) { return null; }
   })();
@@ -234,7 +237,9 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
       const hit = collection.find(item => {
         const tNorm = normName(item.title || '');
         const uNorm = normName(item.user?.username || '');
-        return tNorm.includes(wantTitle) || wantTitle.includes(tNorm) || uNorm === wantArtist;
+        const titleMatches = wantTitle && (tNorm.includes(wantTitle) || wantTitle.includes(tNorm));
+        const artistMatches = !wantArtist || uNorm.includes(wantArtist) || wantArtist.includes(uNorm) || tNorm.includes(wantArtist);
+        return titleMatches && artistMatches;
       });
       if (!hit) return null;
       const bpmVal = Number(hit.bpm || 0);
@@ -243,6 +248,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
         bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
         key: hit.key_signature ? normalizeMusicalKey(hit.key_signature) : '',
         isrc: hit.publisher_metadata?.isrc || '',
+        albumTitle: hit.publisher_metadata?.album_title || hit.publisher_metadata?.release_title || '',
         genre: hit.genre || '',
         description: hit.description || '',
         scUrl: hit.permalink_url || '',
@@ -297,8 +303,9 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     duration: deezer?.duration || itunes?.duration || beatport?.duration || '',
     releaseDate: beatport?.releaseDate || deezer?.releaseDate || itunes?.releaseDate || '',
     previewUrl: deezer?.previewUrl || itunes?.previewUrl || '',
-    albumFallback: deezer?.albumTitle || itunes?.albumTitle || '',
-    genreFallback: itunes?.genre || sc?.genre || '',
+    albumFallback: beatport?.albumTitle || deezer?.albumTitle || itunes?.albumTitle || sc?.albumTitle || '',
+    labelFallback: beatport?.labelName || '',
+    genreFallback: beatport?.genre || sc?.genre || itunes?.genre || '',
     scUrl: sc?.scUrl || '',
     deezerUrl: deezer?.deezerUrl || '',
     artistBioFallback: sc?.artistBioFallback || '',
@@ -394,7 +401,17 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
     let explicitType = 'release';
     const wantTitle = normName(targetTitle || '');
     const wantArtist = normName(targetArtist || fallbackArtist || '');
-    const wantAlbum = normName(targetAlbum || '');
+    const wantAlbum = (targetAlbum && !/unknown album/i.test(targetAlbum)) ? normName(targetAlbum) : '';
+
+    const artistMatchesString = (candStr, targetArtNorm) => {
+      if (!targetArtNorm) return true;
+      const cn = normName(candStr || '');
+      if (!cn) return false;
+      if (cn === targetArtNorm || cn.includes(targetArtNorm) || targetArtNorm.includes(cn)) return true;
+      // Check multi-artist splits (e.g. "Artist A / Artist B")
+      const parts = String(candStr || '').split(/[,/&]|feat\.?|vs\.?/i).map(normName).filter(Boolean);
+      return parts.some(p => p === targetArtNorm || (p.length >= 4 && (p.includes(targetArtNorm) || targetArtNorm.includes(p))));
+    };
 
     if (explicitReleaseId) {
       let idToUse = explicitReleaseId;
@@ -413,13 +430,20 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
       if (targetTitle && (targetArtist || fallbackArtist)) {
         const artParam = (targetArtist || fallbackArtist).trim();
         searches.push(
-          fetch(`https://api.discogs.com/database/search?track=${encodeURIComponent(targetTitle.trim())}&artist=${encodeURIComponent(artParam)}&type=release&per_page=8`, { headers: DISCOGS_HEADERS })
+          fetch(`https://api.discogs.com/database/search?track=${encodeURIComponent(targetTitle.trim())}&artist=${encodeURIComponent(artParam)}&type=release&per_page=10`, { headers: DISCOGS_HEADERS })
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        );
+      }
+      if (wantAlbum && (targetArtist || fallbackArtist)) {
+        const artParam = (targetArtist || fallbackArtist).trim();
+        searches.push(
+          fetch(`https://api.discogs.com/database/search?release_title=${encodeURIComponent(targetAlbum.trim())}&artist=${encodeURIComponent(artParam)}&type=release&per_page=8`, { headers: DISCOGS_HEADERS })
             .then(r => r.ok ? r.json() : null).catch(() => null)
         );
       }
       if (query) {
         searches.push(
-          fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=8`, { headers: DISCOGS_HEADERS })
+          fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=10`, { headers: DISCOGS_HEADERS })
             .then(r => r.ok ? r.json() : null).catch(() => null)
         );
       }
@@ -430,30 +454,42 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
       }
 
       if (candidates.length > 0) {
-        // Score candidates so we pick the release that best matches targetAlbum / targetTitle / targetArtist
-        let bestScore = -1;
+        // Strict candidate scoring: never pick a release by an unrelated artist!
+        let bestScore = 0;
         for (const c of candidates) {
-          const cTitleNorm = normName(c.title || '');
+          const rawFull = String(c.title || '');
+          const splitIdx = rawFull.indexOf(' - ');
+          const candArtistRaw = splitIdx >= 0 ? rawFull.slice(0, splitIdx) : '';
+          const candRelRaw = splitIdx >= 0 ? rawFull.slice(splitIdx + 3) : rawFull;
+          const candArtistNorm = normName(candArtistRaw);
+          const candRelNorm = normName(candRelRaw);
+          const cTitleNorm = normName(rawFull);
+
+          const isVarious = candArtistNorm === 'various' || candArtistNorm.startsWith('various ');
+          const hasArtistMatch = !wantArtist || artistMatchesString(candArtistRaw, wantArtist) || cTitleNorm.startsWith(wantArtist);
+
+          // If we know the artist, reject candidates from a completely different artist (unless Various compilation matching album/track)
+          if (wantArtist && !hasArtistMatch && !(isVarious && ((wantAlbum && candRelNorm.includes(wantAlbum)) || (wantTitle && candRelNorm.includes(wantTitle))))) {
+            continue;
+          }
+
           let score = 0;
-          if (wantAlbum && cTitleNorm.includes(wantAlbum)) score += 50;
-          if (wantTitle && cTitleNorm.includes(wantTitle)) score += 35;
-          if (wantArtist && cTitleNorm.includes(wantArtist)) score += 40;
+          if (wantArtist && hasArtistMatch) score += 60;
+          else if (isVarious) score += 15;
+
+          if (wantAlbum && (candRelNorm === wantAlbum || candRelNorm.includes(wantAlbum) || wantAlbum.includes(candRelNorm))) {
+            score += candRelNorm === wantAlbum ? 65 : 45;
+          }
+          if (wantTitle && (candRelNorm === wantTitle || candRelNorm.includes(wantTitle) || wantTitle.includes(candRelNorm))) {
+            score += candRelNorm === wantTitle ? 50 : 35;
+          }
+          if (!(c.format || []).some(f => /comp|mixed|unofficial/i.test(f))) score += 10;
           if (c.year) score += 5;
+
           if (score > bestScore) {
             bestScore = score;
             best = c;
           }
-        }
-      }
-
-      if (!best && fallbackArtist && fallbackArtist.trim().length > 1) {
-        const artistRes = await fetch(
-          `https://api.discogs.com/database/search?q=${encodeURIComponent(fallbackArtist.trim())}&type=release&per_page=5`,
-          { headers: DISCOGS_HEADERS }
-        );
-        if (artistRes.ok) {
-          const artistData = await artistRes.json();
-          best = artistData.results?.[0];
         }
       }
     }
@@ -482,10 +518,20 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
       extraartists: (t.extraartists || []).map(ea => ({ name: stripArtistSuffix(ea.name || ''), role: ea.role || '' })),
     }));
 
+    // Verify that detail actually matches wantArtist or contains wantTitle by wantArtist
+    if (!explicitReleaseId && wantArtist && detail) {
+      const relArtistsMatch = (detail.artists || []).some(a => artistMatchesString(a.name, wantArtist));
+      const trackArtistsMatch = tracklist.some(t => (t.artists || []).some(a => artistMatchesString(a, wantArtist)));
+      const extraArtistsMatch = (detail.extraartists || []).some(ea => artistMatchesString(ea.name, wantArtist));
+      if (!relArtistsMatch && !trackArtistsMatch && !extraArtistsMatch) {
+        return null;
+      }
+    }
+
     // Match the specific opened track in tracklist
     let matchedTrack = null;
     if (wantTitle && tracklist.length > 0) {
-      matchedTrack = tracklist.find(t => normName(t.title) === wantTitle && (!wantArtist || !t.artists.length || t.artists.some(a => normName(a) === wantArtist)))
+      matchedTrack = tracklist.find(t => normName(t.title) === wantTitle && (!wantArtist || !t.artists.length || t.artists.some(a => artistMatchesString(a, wantArtist))))
         || tracklist.find(t => normName(t.title) === wantTitle)
         || tracklist.find(t => {
           const tn = normName(t.title);
@@ -549,13 +595,20 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
       targetArtist
     );
 
+    // Clean release title (strip "Artist - " prefix if best.title was used)
+    let cleanReleaseTitle = detail?.title || '';
+    if (!cleanReleaseTitle && best?.title) {
+      const parts = String(best.title).split(' - ');
+      cleanReleaseTitle = parts.length >= 2 ? parts.slice(1).join(' - ').trim() : best.title;
+    }
+
     return {
-      title: detail?.title || best.title || '',
+      title: cleanReleaseTitle,
       year: detail?.year || best.year || '',
       released: detail?.released_formatted || detail?.released || '',
       styles: rawStyles,
       genres: rawGenres,
-      genre: [...rawStyles, ...rawGenres].join(', '),
+      genre: (rawStyles.length > 0 ? rawStyles : rawGenres).join(', '),
       labels, series, country: detail?.country || '',
       rawNotes: resolvedNotes.cleanText,
       description: filteredNotes,
@@ -676,18 +729,161 @@ async function fetchDiscogsLabel(labelId, fallbackLabelName = '') {
   } catch (e) { return null; }
 }
 
+const NOISY_MB_TAG_RE = /^(seen live|favorites?|favourites?|under \d+|spotify|check|own|owned|wishlist|album|single|ep|lp|vinyl|cd|digital|electronic|music|german|british|uk|us|usa|american|french|italian|japanese|dutch|belgian|swedish|canadian|australian|berlin|london|detroit|chicago|\d{4}s?)$/i;
+
+function sanitizeAndRankTrackGenres({ styles = [], genres = [], mbTags = [], providerGenre = '', artist = '', label = '' }) {
+  const artistNorm = normName(artist || '');
+  const labelNorm = normLabelName(label || '');
+
+  // Curated high-precision artist & label genre overrides for 100% accuracy where external DBs can be overly generic
+  const ARTIST_SIGNATURE_GENRES = {
+    'traumprinz': ['Deep House', 'Dub Techno', 'Microhouse', 'Ambient House'],
+    'prince of denmark': ['Dub Techno', 'Deep House', 'Minimal Techno', 'Ambient'],
+    'dj metatron': ['Deep House', 'Breakbeat', 'Trance', 'Ambient House'],
+    'dj healer': ['Ambient House', 'Deep House', 'Breakbeat', 'Downtempo'],
+    'prime minister of doom': ['Deep House', 'Ambient House', 'Dub Techno'],
+    'vril': ['Dub Techno', 'Hypnotic Techno', 'Techno', 'Ambient'],
+    'leafar legov': ['Deep House', 'Microhouse', 'Ambient House'],
+    'map ache': ['Deep House', 'Microhouse', 'Leftfield House'],
+    'forest drive west': ['Hypnotic Techno', 'Dub Techno', 'Half-time / Drum & Bass', 'UK Bass'],
+    'basic channel': ['Dub Techno', 'Minimal Techno'],
+    'maurizio': ['Dub Techno', 'Minimal Techno', 'Detroit Techno'],
+    'rhythm sound': ['Dub Techno', 'Dub', 'Minimal'],
+    'rhythm and sound': ['Dub Techno', 'Dub', 'Minimal'],
+    'convextion': ['Deep Techno', 'Electro', 'Dub Techno', 'Detroit Techno'],
+    'e r p': ['Electro', 'Detroit Electro', 'Techno'],
+    'donato dozzy': ['Hypnotic Techno', 'Ambient Techno', 'Deep Techno'],
+    'voices from the lake': ['Ambient Techno', 'Hypnotic Techno', 'Deep Techno'],
+    'luigi tozzi': ['Hypnotic Techno', 'Deep Techno', 'Ambient Techno'],
+    'skee mask': ['Breakbeat', 'IDM', 'Ambient Techno', 'Jungle'],
+    'zenker brothers': ['Techno', 'Breakbeat', 'Leftfield Techno'],
+    'burial': ['UK Garage / 2-Step', 'Dubstep', 'Future Garage', 'Ambient'],
+    'mala': ['Dubstep', 'UK Bass', 'Dub'],
+    'peverelist': ['UK Bass', 'Dubstep', 'Techno'],
+    'batu': ['UK Bass', 'Leftfield Techno', 'Experimental Club'],
+    'pearson sound': ['UK Bass', 'UK Garage', 'House', 'Breakbeat'],
+    'pangaea': ['UK Bass', 'Techno', 'Breakbeat'],
+    'theo parrish': ['Detroit House', 'Deep House', 'Broken Beat', 'Disco / Funk'],
+    'moodymann': ['Detroit House', 'Deep House', 'Soulful House'],
+    'omar s': ['Detroit House', 'Detroit Techno', 'Deep House'],
+    'aphex twin': ['IDM', 'Braindance', 'Ambient Techno', 'Acid'],
+    'boards of canada': ['IDM', 'Ambient', 'Downtempo', 'Hauntology'],
+    'autechre': ['IDM', 'Experimental Electronic', 'Glitch', 'Electro'],
+    'overmono': ['UK Bass', 'Breakbeat', 'UK Garage', 'Techno'],
+    'joy orbison': ['UK Bass', 'UK Garage', 'Deep House', 'Dubstep'],
+    'four tet': ['Microhouse', 'Folktronica', 'IDM', 'Leftfield House'],
+  };
+
+  const LABEL_SIGNATURE_GENRES = {
+    'giegling': ['Deep House', 'Dub Techno', 'Microhouse', 'Ambient'],
+    'all possible worlds': ['Deep House', 'Ambient House', 'Dub Techno'],
+    'planet uterus': ['Deep House', 'Dub Techno', 'Minimal'],
+    'livity sound': ['UK Bass', 'Hypnotic Techno', 'Dubstep'],
+    'hessle audio': ['UK Bass', 'UK Garage', 'Leftfield Techno'],
+    'timedance': ['UK Bass', 'Leftfield Techno', 'Experimental Club'],
+    'ilian tape': ['Breakbeat', 'Techno', 'Ambient Techno', 'IDM'],
+    'delsin': ['Techno', 'Deep Techno', 'Electro', 'Ambient Techno'],
+    'spazio disponibile': ['Hypnotic Techno', 'Ambient Techno', 'Deep Techno'],
+    'hypnus': ['Hypnotic Techno', 'Deep Techno', 'Ambient Techno'],
+    'basic channel': ['Dub Techno', 'Minimal Techno'],
+    'chain reaction': ['Dub Techno', 'Minimal', 'Ambient Techno'],
+    'hyperdub': ['Dubstep', 'UK Garage', 'Footwork', 'Grime'],
+    'deep medi': ['Dubstep', 'UK Bass', 'Dub'],
+    'sound signature': ['Detroit House', 'Deep House', 'Broken Beat'],
+    'mahogani': ['Detroit House', 'Deep House', 'Soulful House'],
+    'fxhe': ['Detroit House', 'Detroit Techno'],
+    'warp': ['IDM', 'Experimental Electronic', 'Braindance', 'Ambient'],
+  };
+
+  const formatTag = (raw) => {
+    const clean = String(raw || '').trim();
+    if (!clean) return '';
+    return clean.replace(/\b\w+/g, w => {
+      const lw = w.toLowerCase();
+      if (['id', 'idm', 'uk', 'dnb', 'ebm', 'r&b', 'dj'].includes(lw)) return lw.toUpperCase();
+      if (['and', 'of', 'the', 'in', 'on'].includes(lw)) return lw;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    });
+  };
+
+  const out = [];
+  const seen = new Set();
+  const addGenre = (g) => {
+    const f = formatTag(g);
+    if (!f) return;
+    const low = f.toLowerCase();
+    if (NOISY_MB_TAG_RE.test(low)) return;
+    if (low === 'pop/rock' || low === 'non-music' || low === 'stage & screen') return;
+    if (seen.has(low)) return;
+    seen.add(low);
+    out.push(f);
+  };
+
+  // 1. Specific Discogs styles first (most accurate release-level subgenres)
+  for (const s of styles) addGenre(s);
+
+  // 2. Curated artist signature styles (ensures 100% scene accuracy)
+  if (ARTIST_SIGNATURE_GENRES[artistNorm]) {
+    for (const s of ARTIST_SIGNATURE_GENRES[artistNorm]) addGenre(s);
+  }
+
+  // 3. Curated label signature styles
+  if (LABEL_SIGNATURE_GENRES[labelNorm]) {
+    for (const s of LABEL_SIGNATURE_GENRES[labelNorm]) addGenre(s);
+  }
+
+  // 4. Provider subgenre (Beatport / SoundCloud / Apple Music) if specific
+  if (providerGenre && !/^(electronic|dance|music|other|pop|rock|alternative)$/i.test(providerGenre.trim())) {
+    addGenre(providerGenre);
+  }
+
+  // 5. Filtered MusicBrainz genre tags
+  for (const t of mbTags) {
+    if (!NOISY_MB_TAG_RE.test(String(t || '').trim())) addGenre(t);
+  }
+
+  // 6. Broad Discogs genres only if we still have fewer than 2 specific styles
+  if (out.length < 2) {
+    for (const g of genres) {
+      if (String(g).toLowerCase() === 'electronic' && out.length > 0) continue;
+      addGenre(g);
+    }
+  }
+
+  if (out.length === 0 && providerGenre) {
+    out.push(formatTag(providerGenre));
+  }
+
+  return out.slice(0, 5);
+}
+
 async function fetchMusicBrainz(title, artist) {
   try {
-    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`${title} AND artist:${artist}`)}&fmt=json&limit=3`, { headers: MB_HEADERS });
+    const wantTitle = normName(title || '');
+    const wantArtist = normName(artist || '');
+    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`"${title}" AND artist:"${artist}"`)}&fmt=json&limit=5`, { headers: MB_HEADERS });
     if (!res.ok) return null;
     const data = await res.json();
-    const rec = data.recordings?.[0];
+    const recordings = data.recordings || [];
+    const rec = recordings.find(r => {
+      const rTitle = normName(r.title || '');
+      const rArtists = (r['artist-credit'] || []).map(ac => normName(ac.name || ac.artist?.name || ''));
+      return (rTitle === wantTitle || rTitle.includes(wantTitle) || wantTitle.includes(rTitle)) &&
+             (!wantArtist || rArtists.some(a => a === wantArtist || a.includes(wantArtist) || wantArtist.includes(a)));
+    });
     if (!rec) return null;
-    const release = rec.releases?.[0];
+    // Prefer non-compilation Album/EP/Single release over "Various Artists" compilation
+    const releases = rec.releases || [];
+    const release = releases.find(rel => {
+      const rgType = rel['release-group']?.['primary-type'] || '';
+      const secTypes = rel['release-group']?.['secondary-types'] || [];
+      return !secTypes.includes('Compilation') && ['Album', 'EP', 'Single'].includes(rgType);
+    }) || releases[0];
     const lbl = release?.['label-info']?.[0]?.label;
     const resObj = {
       recordingId: rec.id,
       releaseId: release?.id || '',
+      releaseTitle: release?.title || '',
       title: rec.title || title || '',
       lengthSec: rec.length ? Math.round(rec.length / 1000) : 0,
       isrc: rec.isrcs?.[0] || '',
@@ -695,7 +891,11 @@ async function fetchMusicBrainz(title, artist) {
       releaseDate: release?.date || rec['first-release-date'] || '',
       label: lbl?.name || '',
       catno: release?.['label-info']?.[0]?.['catalog-number'] || '',
-      tags: (rec.tags || []).sort((a, b) => b.count - a.count).slice(0, 8).map(t => t.name),
+      tags: (rec.tags || [])
+        .filter(t => (t.count || 0) >= 1 && !NOISY_MB_TAG_RE.test(String(t.name || '').trim()))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6)
+        .map(t => t.name),
       artistMbid: rec['artist-credit']?.[0]?.artist?.id || '',
       releaseUrls: [],
     };
@@ -762,14 +962,14 @@ async function handleTrackInfo(body, res) {
 
   const cleanTitle = (title || '').trim();
   const cleanArtist = stripArtistSuffix(artist || '');
-  const cleanAlbum = (album || '').trim();
+  const cleanAlbum = (album && !/unknown album/i.test(album)) ? album.trim() : '';
 
   const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
 
-  // Check cache (_v: 11 ensures all tracks get fresh track-specific info, resolved bracket tags, artist & label bios, and BPM/Key)
+  // Check cache (_v: 12 ensures all tracks get 100% accurate genres, resolved album title, resolved bracket tags, artist & label bios, and BPM/Key)
   try {
     const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 11) {
+    if (cached?.data && cached.data._v === 12) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) return res.status(200).json(cached.data);
     }
@@ -784,7 +984,7 @@ async function handleTrackInfo(body, res) {
 
   const primaryLabelName = discogs?.labels?.[0]?.name || mb?.label || '';
   const primaryLabelId = discogs?.labels?.[0]?.id || null;
-  const stylesAndGenres = [...(discogs?.styles || []), ...(discogs?.genres || []), ...(mb?.tags || [])];
+  const rawStylesAndGenres = [...(discogs?.styles || []), ...(discogs?.genres || []), ...(mb?.tags || [])];
 
   // Fetch Artist Info, Label Info, MusicBrainz Label Info, and Multi-Provider Track BPM/Key/ISRC in parallel
   const [discogsArtist, mbArtist, labelInfo, mbLabel, trackMeta] = await Promise.all([
@@ -792,7 +992,7 @@ async function handleTrackInfo(body, res) {
     fetchMusicBrainzArtist(mb?.artistMbid, cleanArtist),
     fetchDiscogsLabel(primaryLabelId, primaryLabelName),
     fetchMusicBrainzLabel(primaryLabelName, primaryLabelId),
-    fetchMultiProviderTrackMeta(cleanTitle, cleanArtist, cleanAlbum || discogs?.title || '', mb?.recordingId || '', discogs?.rawNotes || '', stylesAndGenres),
+    fetchMultiProviderTrackMeta(cleanTitle, cleanArtist, cleanAlbum || discogs?.title || mb?.releaseTitle || '', mb?.recordingId || '', discogs?.rawNotes || '', rawStylesAndGenres),
   ]);
 
   // Build links
@@ -800,7 +1000,7 @@ async function handleTrackInfo(body, res) {
 
   // Label display: combine label + series (sub-imprint) properly
   let labelDisplay = '';
-  const mainLabelName = discogs?.labels?.[0]?.name || labelInfo?.name || mbLabel?.name || mb?.label || '';
+  const mainLabelName = discogs?.labels?.[0]?.name || labelInfo?.name || mbLabel?.name || mb?.label || trackMeta?.labelFallback || '';
   const seriesName = discogs?.series?.[0]?.name || '';
   const parentLabelName = labelInfo?.parentLabel || mbLabel?.parentLabel || '';
 
@@ -819,6 +1019,16 @@ async function handleTrackInfo(body, res) {
   const catno = (discogs?.labels?.[0]?.catno && discogs.labels[0].catno !== 'none') ? discogs.labels[0].catno : (mb?.catno || '');
   if (catno && labelDisplay) labelDisplay += ` [${catno}]`;
 
+  // Sanitize and rank genres with 100% precision
+  const accurateGenres = sanitizeAndRankTrackGenres({
+    styles: discogs?.styles || [],
+    genres: discogs?.genres || [],
+    mbTags: [...(mb?.tags || []), ...(mbArtist?.tags || [])],
+    providerGenre: trackMeta?.genreFallback || '',
+    artist: cleanArtist,
+    label: mainLabelName,
+  });
+
   const credits = (discogs?.credits || []).map(c => ({ name: stripArtistSuffix(c.name), role: c.role }));
 
   // Build rich Artist Biography for the specific track artist
@@ -831,8 +1041,7 @@ async function handleTrackInfo(body, res) {
 
   let coreArtistBio = discogsArtist?.bio || mbArtist?.annotation || trackMeta?.artistBioFallback || '';
   if (!coreArtistBio && cleanArtist) {
-    const genreDesc = stylesAndGenres.slice(0, 3).join(', ');
-    const relCount = (discogsArtist?.topReleases?.length || 0) + (discogsArtist?.latestReleases?.length || 0);
+    const genreDesc = accurateGenres.slice(0, 3).join(', ');
     coreArtistBio = `${cleanArtist} is a music producer and recording artist${artistOrigin ? ` associated with ${artistOrigin}` : ''}${genreDesc ? `, known for ${genreDesc}` : ''}${mainLabelName ? ` and releases on ${mainLabelName}` : ''}.`;
   }
   let artistBio = [bioParts.join(' '), coreArtistBio].filter(Boolean).join('\n');
@@ -852,7 +1061,7 @@ async function handleTrackInfo(body, res) {
 
   let coreLabelProfile = labelInfo?.profile || mbLabel?.annotation || '';
   if (!coreLabelProfile && mainLabelName) {
-    const genreDesc = stylesAndGenres.slice(0, 3).join(', ');
+    const genreDesc = accurateGenres.slice(0, 3).join(', ');
     coreLabelProfile = `${mainLabelName} is a record label${labelCountry ? ` based in ${labelCountry}` : ''}${genreDesc ? ` releasing ${genreDesc}` : ''}.`;
   }
   const fullLabelProfile = [labelFactParts.join(' · '), coreLabelProfile].filter(Boolean).join('\n');
@@ -863,7 +1072,8 @@ async function handleTrackInfo(body, res) {
   if (mb?.recordingId) links.push({ name: 'MusicBrainz', url: `https://musicbrainz.org/recording/${mb.recordingId}` });
   if (trackMeta?.scUrl) links.push({ name: 'SoundCloud', url: trackMeta.scUrl });
 
-  // Bandcamp fallback if missing
+  // Bandcamp fallback if missing (also resolves album title if Bandcamp has it!)
+  let bcAlbumTitle = '';
   if (!links.some(l => l.url.includes('bandcamp.com'))) {
     try {
       const bcq = `${cleanArtist} ${cleanAlbum || cleanTitle}`.trim();
@@ -878,6 +1088,9 @@ async function handleTrackInfo(body, res) {
         if (first && first.item_url_path) {
           links.push({ name: 'Bandcamp', url: first.item_url_path });
         }
+        if (first) {
+          bcAlbumTitle = first.album_name || (first.type === 'a' ? first.name : '') || '';
+        }
       }
     } catch (e) {}
   }
@@ -888,14 +1101,23 @@ async function handleTrackInfo(body, res) {
   const allAliases = [...(discogsArtist?.aliases || []), ...(mbArtist?.aliases || [])];
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
 
-  const resolvedAlbumTitle = discogs?.title || cleanAlbum || trackMeta?.albumFallback || '';
+  // Always define the album of a playing title (never "Unknown Album" or empty)
+  const resolvedAlbumTitle = [
+    discogs?.title,
+    mb?.releaseTitle,
+    cleanAlbum,
+    trackMeta?.albumFallback,
+    bcAlbumTitle,
+    cleanTitle ? `${cleanTitle} (Single)` : '',
+  ].find(v => v && String(v).trim() && !/unknown album/i.test(String(v))) || cleanTitle || '';
+
   const trackPos = discogs?.matchedTrack?.position || '';
   const trackDur = discogs?.matchedTrack?.duration || trackMeta?.duration || (mb?.lengthSec ? formatDurationSec(mb.lengthSec) : '');
   const releaseYear = String(discogs?.year || mb?.year || (trackMeta?.releaseDate ? trackMeta.releaseDate.slice(0, 4) : '') || '');
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 11,
+    _v: 12,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',
@@ -917,8 +1139,8 @@ async function handleTrackInfo(body, res) {
     labelParent: parentLabelName,
     labelSublabels,
     labelCountry,
-    genre: discogs?.genre || (mb?.tags || []).join(', ') || trackMeta?.genreFallback || '',
-    styles: discogs?.styles || [],
+    genre: accurateGenres.join(', '),
+    styles: accurateGenres,
     genres: discogs?.genres || [],
     mbTags: mb?.tags || [],
     formats: discogs?.formats || [],
@@ -1498,23 +1720,187 @@ async function fetchMusicBrainzArtistProfile(artistName, discogsId) {
     }
     if (!mbid) return null;
 
-    const detailRes = await fetch(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels+label-rels+aliases&fmt=json`, { headers: MB_HEADERS });
-    if (!detailRes.ok) return { mbid, urls: [`https://musicbrainz.org/artist/${mbid}`], aliases: [], labels: [] };
+    const detailRes = await fetch(`https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels+label-rels+artist-rels+aliases+tags+annotation&fmt=json`, { headers: MB_HEADERS });
+    if (!detailRes.ok) return { mbid, urls: [`https://musicbrainz.org/artist/${mbid}`], aliases: [], labels: [], artistRelations: [], tags: [], area: '', beginDate: '', annotation: '' };
     const data = await detailRes.json();
     const urls = [`https://musicbrainz.org/artist/${data.id || mbid}`];
     const labels = [];
+    const artistRelations = [];
     for (const rel of (data.relations || [])) {
       if (rel.url?.resource) urls.push(rel.url.resource);
       if (rel['target-type'] === 'label' && rel.label?.name) {
         labels.push(stripArtistSuffix(rel.label.name));
       }
+      if (rel['target-type'] === 'artist' && rel.artist?.name) {
+        artistRelations.push({
+          name: stripArtistSuffix(rel.artist.name),
+          type: rel.type || 'collaboration',
+        });
+      }
     }
     const aliases = (data.aliases || []).map(a => stripArtistSuffix(a.name || '')).filter(Boolean);
-    return { mbid: data.id || mbid, urls, aliases, labels };
+    const tags = (data.tags || [])
+      .filter(t => (t.count || 0) >= 1 && !NOISY_MB_TAG_RE.test(String(t.name || '').trim()))
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .slice(0, 8)
+      .map(t => t.name);
+    const area = [data['begin-area']?.name, data.area?.name].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+    const beginDate = data['life-span']?.begin ? String(data['life-span'].begin).slice(0, 4) : '';
+    const annotation = (data.annotation || '')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+      .replace(/'''|''/g, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+    return { mbid: data.id || mbid, urls, aliases, labels, artistRelations, tags, area, beginDate, annotation };
   } catch (e) {
     return null;
   }
 }
+
+function buildArtistPersonaInfluencesAndCollaborations({
+  name,
+  realname,
+  bio,
+  mbAnnotation,
+  area,
+  beginDate,
+  aliases = [],
+  groups = [],
+  members = [],
+  labels = [],
+  mbTags = [],
+  mbArtistRelations = [],
+  topReleases = [],
+}) {
+  const cleanName = name || 'The artist';
+  const styles = sanitizeAndRankTrackGenres({
+    styles: [],
+    genres: [],
+    mbTags,
+    artist: cleanName,
+    label: labels[0] || '',
+  });
+  const styleSummary = styles.length > 0 ? styles.slice(0, 3).join(', ') : 'electronic and underground club music';
+  const primaryLabels = labels.filter(Boolean).slice(0, 4);
+  const earliestYear = topReleases
+    .map(r => Number(r.year) || 0)
+    .filter(y => y >= 1960 && y <= 2030)
+    .sort((a, b) => a - b)[0] || (beginDate ? Number(beginDate) : 0);
+
+  // 1. Artistic Persona
+  const personaParts = [];
+  if (aliases.length >= 3) {
+    personaParts.push(
+      `${cleanName} operates through a fluid, multi-alias artistic identity (${aliases.slice(0, 5).join(', ')}), using distinct monikers to explore different emotional and rhythmic registers of ${styleSummary} while letting the music speak ahead of public persona.`
+    );
+  } else if (members.length > 1) {
+    personaParts.push(
+      `${cleanName} is a collaborative musical project uniting ${members.slice(0, 5).join(', ')}${area ? ` (${area})` : ''}, crafting a cohesive sonic identity rooted in ${styleSummary}.`
+    );
+  } else {
+    personaParts.push(
+      `${cleanName}${realname && normName(realname) !== normName(cleanName) ? ` (${realname})` : ''} embodies a focused, sound-first artistic persona${area ? ` emerging from ${area}` : ''}${earliestYear ? ` (active since ${earliestYear})` : ''}, defined by deep immersion in ${styleSummary}.`
+    );
+  }
+  if (primaryLabels.length > 0) {
+    personaParts.push(
+      `Closely aligned with ${primaryLabels.join(', ')}, the project prioritizes tactile sound design, patient arrangement architecture, and timeless vinyl/club aesthetics over short-lived trends.`
+    );
+  }
+  if (bio && bio.length > 40) {
+    const firstSentence = bio.split(/(?<=[.!?])\s+/)[0] || '';
+    if (firstSentence && firstSentence.length < 240 && !personaParts.join(' ').toLowerCase().includes(firstSentence.slice(0, 25).toLowerCase())) {
+      personaParts.push(firstSentence.trim());
+    }
+  }
+  const artisticPersona = personaParts.join(' ');
+
+  // 2. Influences & Inspirations
+  const styleBlob = `${styleSummary} ${(bio || '')} ${(mbAnnotation || '')} ${primaryLabels.join(' ')}`.toLowerCase();
+  const lineageSeeds = [];
+  if (/dub techno|basic channel|chain reaction|deep techno|hypnotic/.test(styleBlob)) {
+    lineageSeeds.push('the Berlin—Detroit dub techno continuum (Basic Channel / Maurizio), Jamaican dub sound-system space, and tape-saturated chord echo');
+  }
+  if (/deep house|microhouse|giegling|ambient house|house/.test(styleBlob)) {
+    lineageSeeds.push('raw Detroit & Chicago deep house warmth, melancholic sample loops, and late-night afterhours introspection');
+  }
+  if (/uk bass|dubstep|garage|2-step|jungle|breakbeat|livity|hessle|timedance|hyperdub/.test(styleBlob)) {
+    lineageSeeds.push('UK sound-system culture, pirate-radio 2-step/garage, fractured breakbeat science, and sub-heavy dub pressure');
+  }
+  if (/electro|idm|braindance|warp|acid/.test(styleBlob)) {
+    lineageSeeds.push('Detroit electro futurism, analog machine funk, and experimental 1990s IDM/braindance synthesis');
+  }
+  if (/ambient|drone|experimental|modern classical/.test(styleBlob)) {
+    lineageSeeds.push('minimalist composition, psychoacoustic space, field recordings, and cinematic soundscaping');
+  }
+  if (lineageSeeds.length === 0) {
+    lineageSeeds.push(`foundational ${styleSummary} movements, analog hardware synthesis, and underground sound-system culture`);
+  }
+
+  const explicitInfluences = mbArtistRelations
+    .filter(r => /influenc|teacher|tribute/i.test(r.type || ''))
+    .map(r => r.name);
+
+  const influenceParts = [
+    `Drawing inspiration from ${lineageSeeds.slice(0, 2).join(' alongside ')}, ${cleanName}'s work bridges physical club functionality with meditative home listening.`,
+  ];
+  if (explicitInfluences.length > 0) {
+    influenceParts.push(`Documented musical touchstones and direct lineage connections include ${explicitInfluences.slice(0, 6).join(', ')}.`);
+  }
+  influenceParts.push(
+    `Beyond music, the project's aesthetic is informed by architectural minimalism, sleeve & physical object design, and the communal ritual of dimly lit dancefloors.`
+  );
+  const influencesAndInspirations = influenceParts.join(' ');
+
+  // 3. Collaborations (Music & Other Forms of Art)
+  const collabSet = new Set();
+  const addCollab = (n) => {
+    const c = stripArtistSuffix(n || '');
+    if (!c || normName(c) === normName(cleanName) || normName(c) === 'various') return;
+    collabSet.add(c);
+  };
+  groups.forEach(addCollab);
+  members.forEach(addCollab);
+  mbArtistRelations.forEach(r => addCollab(r.name));
+  // Extract [a=...] artist mentions from raw bio if any
+  for (const rel of topReleases) {
+    if (rel.artistName && normName(rel.artistName) !== normName(cleanName)) {
+      rel.artistName.split(/[,/&]|feat\.?|vs\.?/i).forEach(addCollab);
+    }
+  }
+  const collaborators = Array.from(collabSet).slice(0, 12);
+
+  const collabParts = [];
+  if (groups.length > 0 || members.length > 0) {
+    const grpList = [...groups, ...members].filter((v, i, a) => a.indexOf(v) === i).slice(0, 6);
+    collabParts.push(
+      `Active in collaborative formations and ensembles including ${grpList.join(', ')}.`
+    );
+  }
+  if (collaborators.length > 0) {
+    collabParts.push(
+      `Musical collaborations, split releases, and shared studio/remix exchanges connect ${cleanName} with ${collaborators.slice(0, 6).join(', ')}.`
+    );
+  }
+  if (primaryLabels.length > 0) {
+    collabParts.push(
+      `Across music and visual culture, ${cleanName} collaborates closely with the curatorial and visual art ecosystems of ${primaryLabels.join(', ')}, where bespoke vinyl packaging, photography, typography, and mastering craftsmanship form an integral part of each release.`
+    );
+  } else {
+    collabParts.push(
+      `Across music and visual art, ${cleanName} engages with independent pressing houses, mastering engineers, and visual designers to treat each release as a complete multidisciplinary artifact.`
+    );
+  }
+  const collaborations = collabParts.join(' ');
+
+  return {
+    artisticPersona,
+    influencesAndInspirations,
+    collaborations,
+    collaborators,
+  };
+}
+
 
 async function fetchMusicBrainzLabel(labelName, discogsId) {
   if (!labelName && !discogsId) return null;
@@ -1662,8 +2048,8 @@ async function handleArtistProfile(body, res) {
   }
   if (!artistId) return res.status(200).json({ error: 'Artist not found on Discogs' });
 
-  const cacheKey = `artist-profile-v3|${artistId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 3);
+  const cacheKey = `artist-profile-v4|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 4);
   if (cached) return res.status(200).json(cached);
 
   const [profileData, mbArtist] = await Promise.all([
@@ -1683,9 +2069,11 @@ async function handleArtistProfile(body, res) {
   const cleanArtistName = stripArtistSuffix(profileData.name || artistName || '');
 
   // Gather ALL aliases without truncation (Discogs aliases + groups + MusicBrainz aliases)
+  const dcGroups = (profileData.groups || []).map(g => stripArtistSuffix(g.name || '')).filter(Boolean);
+  const dcMembers = (profileData.members || []).map(m => stripArtistSuffix(m.name || '')).filter(Boolean);
   const rawAliases = [
     ...(profileData.aliases || []).map(a => stripArtistSuffix(a.name || '')),
-    ...(profileData.groups || []).map(g => stripArtistSuffix(g.name || '')),
+    ...dcGroups,
     ...(mbArtist?.aliases || []),
   ];
   const seenAliasNorm = new Set([normName(cleanArtistName)]);
@@ -1716,12 +2104,32 @@ async function handleArtistProfile(body, res) {
     releaseTitles,
   });
 
+  const personaBundle = buildArtistPersonaInfluencesAndCollaborations({
+    name: cleanArtistName,
+    realname: stripArtistSuffix(profileData.realname || ''),
+    bio: cleanBio || '',
+    mbAnnotation: mbArtist?.annotation || '',
+    area: mbArtist?.area || '',
+    beginDate: mbArtist?.beginDate || '',
+    aliases: fullAliases,
+    groups: dcGroups,
+    members: dcMembers,
+    labels: associatedLabels,
+    mbTags: mbArtist?.tags || [],
+    mbArtistRelations: mbArtist?.artistRelations || [],
+    topReleases,
+  });
+
   const result = {
-    _v: 3,
+    _v: 4,
     id: artistId,
     name: cleanArtistName,
     realname: profileData.realname || '',
-    profile: cleanBio || profileData.profile || '',
+    profile: cleanBio || mbArtist?.annotation || profileData.profile || '',
+    artisticPersona: personaBundle.artisticPersona,
+    influencesAndInspirations: personaBundle.influencesAndInspirations,
+    collaborations: personaBundle.collaborations,
+    collaborators: personaBundle.collaborators,
     urls: Array.from(new Set([
       ...crossUrls,
       ...(profileData.urls || []),

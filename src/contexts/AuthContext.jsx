@@ -39,39 +39,69 @@ export function AuthProvider({ children }) {
   // — EntryScreen appears instantly instead of a blank flash
   const [loading,   setLoading]     = useState(false);
   const [avatarSrc, setAvatarSrcRaw] = useState(() => {
-    try { return cached.user ? localStorage.getItem('kyoyu-avatar-' + cached.user.id) || null : null; } catch { return null; }
+    try {
+      const uid = cached.user?.id;
+      const fromUser = uid ? localStorage.getItem('kyoyu-avatar-' + uid) : null;
+      const fromGlobal = localStorage.getItem('kyoyu-avatar-global');
+      const fromNative = typeof window !== 'undefined' ? window.__kyoyuNativeAvatarDataUrl : null;
+      return fromUser || fromGlobal || fromNative || null;
+    } catch { return null; }
   });
   const userRef = useRef(cached.user);
 
   // ── Immediately notify native shell from cache (no network wait) ──
   useEffect(() => {
+    const uid = cached.user?.id;
+    const av = (uid && localStorage.getItem('kyoyu-avatar-' + uid))
+      || localStorage.getItem('kyoyu-avatar-global')
+      || (typeof window !== 'undefined' ? window.__kyoyuNativeAvatarDataUrl : null);
+    if (av) {
+      setAvatarSrcRaw(av);
+      try { window.webkit?.messageHandlers?.avatar?.postMessage(av); } catch (_) {}
+    }
     if (cached.role && cached.user) {
       notifyNative('loggedIn');
-      // Restore avatar to native bridge from cache
-      const av = localStorage.getItem('kyoyu-avatar-' + cached.user.id);
-      if (av) {
-        try { window.webkit?.messageHandlers?.avatar?.postMessage(av); } catch (_) {}
-      }
     }
+    const onNativeAvatar = (e) => {
+      const dataUrl = e?.detail;
+      if (dataUrl && typeof dataUrl === 'string') {
+        setAvatarSrcRaw(prev => prev || dataUrl);
+        try { localStorage.setItem('kyoyu-avatar-global', dataUrl); } catch (_) {}
+      }
+    };
+    window.addEventListener('kyoyu-native-avatar', onNativeAvatar);
+    return () => window.removeEventListener('kyoyu-native-avatar', onNativeAvatar);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const broadcastRef = useRef(null); // holds the live broadcast channel
 
-  function setAvatarSrc(dataUrl, userId) {
-    setAvatarSrcRaw(dataUrl);
-    try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl ?? ''); } catch (_) {}
+  function setAvatarSrc(dataUrl, userId, explicitRemove = false) {
     const uid = userId || userRef.current?.id;
-    if (uid) {
-      if (dataUrl) localStorage.setItem('kyoyu-avatar-' + uid, dataUrl);
-      else         localStorage.removeItem('kyoyu-avatar-' + uid);
+    if (!dataUrl && !explicitRemove) {
+      // Never accidentally clear a saved avatar unless explicitly requested by user
+      return;
+    }
+    setAvatarSrcRaw(dataUrl || null);
+    if (dataUrl) {
+      try { localStorage.setItem('kyoyu-avatar-global', dataUrl); } catch (_) {}
+      if (uid) {
+        try { localStorage.setItem('kyoyu-avatar-' + uid, dataUrl); } catch (_) {}
+      }
+      try { window.webkit?.messageHandlers?.avatar?.postMessage(dataUrl); } catch (_) {}
+    } else if (explicitRemove) {
+      try { localStorage.removeItem('kyoyu-avatar-global'); } catch (_) {}
+      if (uid) {
+        try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
+      }
+      try { window.webkit?.messageHandlers?.avatar?.postMessage('__REMOVE_AVATAR__'); } catch (_) {}
     }
     // Broadcast to all other open sessions immediately (no DB event needed)
     if (broadcastRef.current) {
       broadcastRef.current.send({
         type: 'broadcast',
         event: 'avatar',
-        payload: { url: dataUrl ?? '' },
+        payload: { url: dataUrl ?? '', explicitRemove: !!explicitRemove },
       }).catch(() => {});
     }
   }
@@ -118,16 +148,19 @@ export function AuthProvider({ children }) {
     const uid = userRef.current?.id;
     if (!uid) return;
 
-    function applyUrl(newUrl) {
+    function applyUrl(newUrl, explicitRemove = false) {
       const url = newUrl || null;
+      if (!url && !explicitRemove) return;
       setAvatarSrcRaw(prev => {
         if (prev === url) return prev;
         if (url) {
+          try { localStorage.setItem('kyoyu-avatar-global', url); } catch (_) {}
           try { localStorage.setItem('kyoyu-avatar-' + uid, url); } catch (_) {}
           try { window.webkit?.messageHandlers?.avatar?.postMessage(url); } catch (_) {}
-        } else {
+        } else if (explicitRemove) {
+          try { localStorage.removeItem('kyoyu-avatar-global'); } catch (_) {}
           try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
-          try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+          try { window.webkit?.messageHandlers?.avatar?.postMessage('__REMOVE_AVATAR__'); } catch (_) {}
         }
         return url;
       });
@@ -138,7 +171,7 @@ export function AuthProvider({ children }) {
         config: { broadcast: { self: false } }, // don't echo back to sender
       })
       .on('broadcast', { event: 'avatar' }, ({ payload }) => {
-        applyUrl(payload?.url);
+        applyUrl(payload?.url, payload?.explicitRemove);
       })
       .subscribe();
 
@@ -152,7 +185,7 @@ export function AuthProvider({ children }) {
 
   /* ── Fallback: re-fetch from DB on focus / visibility change ──────────────
      Covers newly-opened tabs and apps that weren't connected when the
-     change was made (broadcast only reaches currently open sessions). */
+     change was made. NEVER overwrites an existing local avatar with null. */
   useEffect(() => {
     const uid = userRef.current?.id;
     if (!uid) return;
@@ -161,17 +194,23 @@ export function AuthProvider({ children }) {
       try {
         const { data } = await supabase
           .from('profiles').select('avatar_url').eq('id', uid).single();
-        const newUrl = data?.avatar_url ?? null;
-        setAvatarSrcRaw(prev => {
-          if (prev === newUrl) return prev;
-          if (newUrl) {
-            try { localStorage.setItem('kyoyu-avatar-' + uid, newUrl); } catch (_) {}
-            try { window.webkit?.messageHandlers?.avatar?.postMessage(newUrl); } catch (_) {}
-          } else {
-            try { localStorage.removeItem('kyoyu-avatar-' + uid); } catch (_) {}
-            try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
+        const dbUrl = data?.avatar_url || null;
+        if (!dbUrl) {
+          // DB has no avatar_url yet — if we have a local one, push it up to DB!
+          const localAv = localStorage.getItem('kyoyu-avatar-' + uid) || localStorage.getItem('kyoyu-avatar-global');
+          if (localAv) {
+            supabase.from('profiles').upsert({ id: uid, avatar_url: localAv }).then(() => {}).catch(() => {});
           }
-          return newUrl;
+          return;
+        }
+        setAvatarSrcRaw(prev => {
+          // If we already have a reliable data:image URL locally, keep it so offline/CDN issues never break it
+          if (prev && prev.startsWith('data:image/')) return prev;
+          if (prev === dbUrl) return prev;
+          try { localStorage.setItem('kyoyu-avatar-global', dbUrl); } catch (_) {}
+          try { localStorage.setItem('kyoyu-avatar-' + uid, dbUrl); } catch (_) {}
+          try { window.webkit?.messageHandlers?.avatar?.postMessage(dbUrl); } catch (_) {}
+          return dbUrl;
         });
       } catch (_) {}
     }
@@ -212,11 +251,18 @@ export function AuthProvider({ children }) {
     setUser(hydrated);
     writeCache(userRole, hydrated); // persist so next open is instant
 
-    const supabaseAvatar = profile?.avatar_url || null;
-    const localAvatar    = localStorage.getItem('kyoyu-avatar-' + authUser.id);
-    const avatarToUse    = supabaseAvatar || localAvatar || null;
+    const localAvatar    = localStorage.getItem('kyoyu-avatar-' + authUser.id)
+                        || localStorage.getItem('kyoyu-avatar-global')
+                        || (typeof window !== 'undefined' ? window.__kyoyuNativeAvatarDataUrl : null);
+    const supabaseAvatar = profile?.avatar_url || authUser.user_metadata?.avatar_url || null;
+    // Prefer local data URL if present so offline/R2 CORS never drops the user's selected photo
+    const avatarToUse    = (localAvatar && localAvatar.startsWith('data:image/'))
+      ? localAvatar
+      : (supabaseAvatar || localAvatar || null);
     if (avatarToUse) {
       setAvatarSrcRaw(avatarToUse);
+      try { localStorage.setItem('kyoyu-avatar-global', avatarToUse); } catch (_) {}
+      try { localStorage.setItem('kyoyu-avatar-' + authUser.id, avatarToUse); } catch (_) {}
       try { window.webkit?.messageHandlers?.avatar?.postMessage(avatarToUse); } catch (_) {}
     }
   }
@@ -236,23 +282,20 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
-    // Clear ONLY auth-related keys — preserve theme, dashboard prefs, etc.
+    // Clear ONLY auth-related keys — preserve avatar, theme, dashboard prefs, etc.
     try {
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (
           k.startsWith('sb-') ||
-          k.startsWith('kyoyu-cached') ||
-          k.startsWith('kyoyu-avatar') ||
-          k === 'kyoyu-vi-state'
+          k.startsWith('kyoyu-cached')
         ) keysToRemove.push(k);
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (_) {}
     try { sessionStorage.clear(); } catch (_) {}
     notifyNative('loggedOut');
-    try { window.webkit?.messageHandlers?.avatar?.postMessage(''); } catch (_) {}
     supabase.auth.signOut().catch(() => {});
     window.location.replace('/');
   }

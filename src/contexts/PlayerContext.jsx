@@ -1208,7 +1208,7 @@ export function PlayerProvider({ children }) {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 11) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 12) {
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
         // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
