@@ -98,12 +98,11 @@ function groupByAlbum(tracks) {
 
 /* ── Shelf card — identical to Home ───────────────────────── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
-  if (cover) pinImageInMemory(cover);
   return (
     <div className="shelf-card">
       <div className="shelf-card-art">
         {cover
-          ? <img src={cover} alt={title} loading="eager" decoding="sync"/>
+          ? <img src={cover} alt={title} loading="lazy" decoding="async"/>
           : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--grey-800)'}}>{fallback||<Music2 size={22} color="var(--text-dim)"/>}</div>
         }
         {badge&&<div className="shelf-card-badge">{BadgeIcon&&<BadgeIcon size={9}/>}<span>{badge}</span></div>}
@@ -117,8 +116,7 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 }
 
 function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) {
-  const cleanSrc = (cover && cover.includes('bcbits.com')) ? cover.replace(/_[0-9]+\.jpg/, '_10.jpg') : cover;
-  if (cleanSrc) pinImageInMemory(cleanSrc);
+  const cleanSrc = (cover && cover.includes('bcbits.com')) ? cover.replace(/_[0-9]+\.jpg/, '_14.jpg') : cover;
   return (
     <div
       onClick={onClick}
@@ -128,7 +126,7 @@ function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) 
         width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
         background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
+        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
              : <Music2 size={22} color="var(--text-dim)" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

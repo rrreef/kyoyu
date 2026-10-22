@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useRef, useEffect, useCallback }
 import { releases, djSets } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { resolveBandcamp, invalidateBandcampResolve } from '../lib/unifiedSearch';
-import { findTrackSource } from '../lib/resolveTrack';
+import { findTrackSource, rememberResolvedTrackProvider, getRememberedTrackProvider } from '../lib/resolveTrack';
 import { activePlaybackService, findStreamingMatch, callStreaming, refreshStreamingStatus, isStreamingAvailable, isStreamingProvider } from '../lib/streaming';
 import { resolveAutoplay } from '../lib/autoplay-resolver';
 
@@ -15,8 +15,8 @@ const EXPIRING_SRC = /bcbits\.com|sndcdn\.com|googlevideo\.com/i;
 /** Work out how a played track can be replayed later (exact same provider + item). */
 export function historyReplayInfo(t) {
   if (!t) return { provider: 'lookup' };
-  if (t.replay?.provider) return t.replay;
-  if (t.origin?.provider) return t.origin;
+  if (t.replay?.provider && t.replay.provider !== 'lookup') return t.replay;
+  if (t.origin?.provider && t.origin.provider !== 'lookup') return t.origin;
   const id = String(t.id || '');
   if (t.provider === 'youtube' && (t.videoId || t.providerItemId)) return { provider: 'youtube', videoId: t.videoId || t.providerItemId };
   if (/^yt-/.test(id)) return { provider: 'youtube', videoId: id.slice(3) };
@@ -28,10 +28,32 @@ export function historyReplayInfo(t) {
     const scId = t.scTrackId || (id.match(/^sc-(\d+)/) || [])[1];
     if (scId) return { provider: 'soundcloud', scTrackId: String(scId), url: t.providerUrl || t.providerItemId || '' };
   }
-  if (t.provider === 'bandcamp' && /^https?:\/\//.test(t.providerItemId || '')) return { provider: 'bandcamp', url: t.providerItemId };
+  if (t.provider === 'bandcamp' && /^https?:\/\//.test(t.providerItemId || t.providerUrl || t.trackUrl || '')) {
+    return { provider: 'bandcamp', url: t.providerItemId || t.providerUrl || t.trackUrl };
+  }
   const src = t.src || t.fileUrl || t.audioUrl || '';
   if (src && !src.startsWith('resolve:') && !EXPIRING_SRC.test(src)) return { provider: 'native' };
-  // No identity (old entries / unresolved placeholders): find it again by artist + title
+  // Check if this title was previously played & resolved on a preferred provider
+  const remembered = getRememberedTrackProvider({
+    id: t.id,
+    title: t.title || t.name || '',
+    artist: t.artist || t.artistName || '',
+  });
+  if (remembered) {
+    if (remembered.provider === 'bandcamp' && remembered.providerItemId) {
+      return { provider: 'bandcamp', url: remembered.providerItemId };
+    }
+    if (remembered.provider === 'soundcloud' && remembered.scTrackId) {
+      return { provider: 'soundcloud', scTrackId: String(remembered.scTrackId), url: remembered.providerItemId || '' };
+    }
+    if (remembered.provider === 'youtube' && remembered.videoId) {
+      return { provider: 'youtube', videoId: remembered.videoId };
+    }
+    if (isStreamingProvider(remembered.provider) && remembered.providerItemId) {
+      return { provider: remembered.provider, itemId: String(remembered.providerItemId) };
+    }
+  }
+  // No identity (never played before): find it by artist + title
   return { provider: 'lookup' };
 }
 
@@ -298,6 +320,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (!state.currentTrack || state.currentTrack.title === 'Loading...') return;
     try {
+      rememberResolvedTrackProvider(state.currentTrack);
       const replay = historyReplayInfo(state.currentTrack);
       const key = historyKey(state.currentTrack, replay);
 
@@ -751,7 +774,13 @@ export function PlayerProvider({ children }) {
       for (let attempt = 0; attempt < 3; attempt++) {
         if (!stillCurrent()) return;
         try {
-          await callStreaming('play', { service, itemId });
+          await callStreaming('play', {
+            service,
+            itemId,
+            title: meta.title || '',
+            artist: meta.artistName || '',
+            duration: Number(meta.duration) || 0,
+          });
           return;
         } catch (err) {
           lastError = err?.message || String(err);

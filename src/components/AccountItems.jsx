@@ -11,34 +11,10 @@ const fmt = (s) => {
 };
 
 const _resolvedArtMem = new Map();
-const _pinnedImages = (typeof window !== 'undefined' && (window.__kyoyuPinnedImages || (window.__kyoyuPinnedImages = new Map()))) || new Map();
 
-/** Pins an artwork URL in memory as a decoded Image() object so WebKit never evicts it when scrolling up/down. */
-export function pinImageInMemory(url) {
-  if (!url || typeof url !== 'string' || typeof window === 'undefined' || typeof Image === 'undefined') return;
-  if (_pinnedImages.has(url)) return;
-  try {
-    const img = new Image();
-    img.decoding = 'sync';
-    img.src = url;
-    _pinnedImages.set(url, img);
-  } catch (_) {}
-}
-
-/** Eagerly preloads and pins artwork URLs for a list of items/tracks/albums in memory. */
-export function preloadImagesInMemory(items, maxCount = 120) {
-  if (!Array.isArray(items) || typeof window === 'undefined') return;
-  let count = 0;
-  for (const it of items) {
-    if (!it || count >= maxCount) break;
-    const raw = it.artworkUrl || it.cover || it.releaseCover || it.avatar;
-    const clean = sanitizeArtworkUrl(raw, it.id || it.trackId || it.playlistId);
-    if (clean) {
-      pinImageInMemory(clean);
-      count++;
-    }
-  }
-}
+/** Legacy no-op exports kept for compatibility */
+export function pinImageInMemory() {}
+export function preloadImagesInMemory() {}
 
 // Clean up any previously cached false-positive artworks for private Apple Music uploads (e.g. am-i.* / i.*)
 if (typeof window !== 'undefined') {
@@ -101,19 +77,20 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-export function sanitizeArtworkUrl(raw, itemId) {
+export function sanitizeArtworkUrl(raw, itemId, hiRes = false) {
   if (itemId && (/^am-i\./i.test(String(itemId)) || /^i\./i.test(String(itemId)))) {
     // Private library items should only use genuine artwork when not accompanied by an invented catalogId
   }
   if (raw && typeof raw === 'string') {
     const s = raw.trim();
     if (s && s !== 'undefined' && s !== 'null' && /^(https?:\/\/|data:|blob:|\/)/i.test(s)) {
+      const dim = hiRes ? '600' : '300';
       let url = s
-        .replace('{w}', '600')
-        .replace('{h}', '600')
+        .replace('{w}', dim)
+        .replace('{h}', dim)
         .replace('{f}', 'jpg')
         .replace('{c}', 'bb');
-      if (url.includes('bcbits.com')) url = url.replace(/_[0-9]+\.jpg/, '_10.jpg');
+      if (url.includes('bcbits.com')) url = url.replace(/_[0-9]+\.jpg/, hiRes ? '_10.jpg' : '_14.jpg');
       return url;
     }
   }
@@ -148,15 +125,13 @@ function useResolvedArtwork(item) {
      (aid.startsWith('l.') && !!item?.catalogId));
 
   const rawArt = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
-  const initial = sanitizeArtworkUrl(rawArt, itemId);
-  if (initial) pinImageInMemory(initial);
+  const initial = sanitizeArtworkUrl(rawArt, itemId, false);
   const [art, setArt] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextRaw = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
-    const next = sanitizeArtworkUrl(nextRaw, itemId);
-    if (next) pinImageInMemory(next);
+    const next = sanitizeArtworkUrl(nextRaw, itemId, false);
     setArt(next);
     setFailed(false);
   }, [item?.artworkUrl, item?.cover, item?.avatar, itemId, isFakePrivateArt]);
@@ -173,16 +148,15 @@ function useResolvedArtwork(item) {
         if (cancelled) return;
         const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
         if (raw) {
-          const hiRes = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1');
-          pinImageInMemory(hiRes);
-          setArt(hiRes);
+          const thumb = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/300x300$1');
+          setArt(thumb);
           setFailed(false);
           if (item) {
-            item.artworkUrl = hiRes;
-            item.cover = hiRes;
+            item.artworkUrl = thumb;
+            item.cover = thumb;
           }
           if (itemId) {
-            _resolvedArtMem.set(itemId, hiRes);
+            _resolvedArtMem.set(itemId, thumb);
           }
         }
       })
@@ -201,7 +175,7 @@ export function toPlayable(it) {
     it?.provider === 'applemusic' &&
     (((tid.startsWith('i.') || String(it?.id || '').startsWith('am-i.')) && !!it?.catalogId) ||
      (aid.startsWith('l.') && !!it?.catalogId));
-  const art = isFakePrivateArt ? '' : sanitizeArtworkUrl(it.artworkUrl || it.cover, it.id);
+  const art = isFakePrivateArt ? '' : sanitizeArtworkUrl(it.artworkUrl || it.cover, it.id, true);
   if (it.provider === 'soundcloud') {
     return {
       id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
@@ -258,7 +232,7 @@ const Art = memo(function Art({ item, src, round }) {
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
+      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
            : <Music2 size={22} color="var(--text-dim)" />}
     </div>
   );
@@ -288,7 +262,7 @@ const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlayi
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
-          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
+          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="lazy" decoding="async" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
         {isActive && (
           <div className="upl-grid-playing">

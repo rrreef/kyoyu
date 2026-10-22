@@ -449,7 +449,6 @@ export default function Home() {
             <>
               <div className="upl-grid upl-grid-3">
                 {featuredAlbums.slice(0, expandedVisibleCount).map((album) => {
-                  if (album.cover) pinImageInMemory(album.cover);
                   return (
                     <button
                       key={album.id}
@@ -465,7 +464,7 @@ export default function Home() {
                     >
                       <div className="upl-grid-art">
                         {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync" />
+                          ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
                           : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
                       </div>
                       <div className="upl-grid-title">{album.title}</div>
@@ -486,7 +485,6 @@ export default function Home() {
                 onScroll={handleFeaturedScroll}
               >
                 {featuredAlbums.map((album) => {
-                  if (album.cover) pinImageInMemory(album.cover);
                   return (
                     <button
                       key={album.id}
@@ -510,7 +508,7 @@ export default function Home() {
                       {/* Cover art */}
                       <div className="featured-hero-art">
                         {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync" />
+                          ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
                           : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                       </div>
 
@@ -702,8 +700,7 @@ export default function Home() {
             <>
               <div className="upl-grid upl-grid-3">
                 {playHistory.slice(0, expandedVisibleCount).map(item => {
-                  const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
-                  if (cleanCover) pinImageInMemory(cleanCover);
+                  const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id, false);
                   return (
                     <button
                       key={item._hkey || item.id}
@@ -713,7 +710,7 @@ export default function Home() {
                     >
                       <div className="upl-grid-art">
                         {cleanCover ? (
-                          <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
+                          <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
                         ) : (
                           <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
                         )}
@@ -731,8 +728,7 @@ export default function Home() {
           ) : (
             <div className="scroll-row">
               {playHistory.map(item => {
-                const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id);
-                if (cleanCover) pinImageInMemory(cleanCover);
+                const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id, false);
                 return (
                   <button 
                     key={item._hkey || item.id} 
@@ -742,7 +738,7 @@ export default function Home() {
                   >
                     <div className="shelf-card-art">
                       {cleanCover ? (
-                        <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
+                        <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
                       ) : (
                         <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
                       )}
@@ -815,7 +811,6 @@ export default function Home() {
         const renderReleaseGrid = (albumsSlice) => (
           <div className="upl-grid upl-grid-3">
             {albumsSlice.map(album => {
-              if (album.cover) pinImageInMemory(album.cover);
               return (
                 <button
                   key={album.id}
@@ -832,7 +827,7 @@ export default function Home() {
                 >
                   <div className="upl-grid-art">
                     {album.cover
-                      ? <img src={album.cover} alt={album.title} loading="eager" decoding="sync"/>
+                      ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
                       : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                   </div>
                   <div className="upl-grid-title">{album.title}</div>

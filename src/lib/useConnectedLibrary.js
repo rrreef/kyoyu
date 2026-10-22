@@ -122,53 +122,35 @@ function triggerConnectedServicePreload(status) {
     ensure('bandcamp', 'collection');
     ensure('bandcamp', 'wishlist');
     ensure('bandcamp', 'newStuff');
-    ensure('bandcamp', 'playlists');
-    ensure('bandcamp', 'following');
   }
   if (status.soundcloud?.connected) {
     ensure('soundcloud', 'likes');
-    ensure('soundcloud', 'playlists');
     ensure('soundcloud', 'newStuff');
-    ensure('soundcloud', 'following');
   }
   if (status.discogs?.connected) {
     ensure('discogs', 'collection');
     ensure('discogs', 'wishlist');
-    ensure('discogs', 'purchases');
     ensure('discogs', 'newStuff');
   }
   if (status.youtube?.connected) {
     ensure('youtube', 'likes');
-    ensure('youtube', 'playlists');
-    ensure('youtube', 'albums');
-    ensure('youtube', 'following');
     ensure('youtube', 'newStuff');
   }
   if (status.spotify?.connected) {
     ensure('spotify', 'likes');
-    ensure('spotify', 'playlists');
-    ensure('spotify', 'albums');
-    ensure('spotify', 'following');
     ensure('spotify', 'newStuff');
   }
   if (status.applemusic?.connected) {
     ensure('applemusic', 'likes');
-    ensure('applemusic', 'playlists');
-    ensure('applemusic', 'albums');
-    ensure('applemusic', 'following');
     ensure('applemusic', 'newStuff');
   }
   if (status.tidal?.connected) {
     ensure('tidal', 'likes');
-    ensure('tidal', 'playlists');
-    ensure('tidal', 'albums');
-    ensure('tidal', 'following');
     ensure('tidal', 'newStuff');
   }
 }
 
 let _preloadStarted = false;
-/** Starts loading all connected accounts' libraries immediately (during the splash animation). */
 export function preloadConnectedLibrary() {
   if (_preloadStarted || typeof window === 'undefined' || !isStreamingAvailable()) return;
   _preloadStarted = true;
@@ -177,10 +159,6 @@ export function preloadConnectedLibrary() {
       if (status) triggerConnectedServicePreload(status);
     })
     .catch(() => {});
-}
-
-if (typeof window !== 'undefined') {
-  preloadConnectedLibrary();
 }
 
 function extractDiscogsRelId(str = '') {
