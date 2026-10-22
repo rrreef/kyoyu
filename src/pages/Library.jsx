@@ -98,11 +98,12 @@ function groupByAlbum(tracks) {
 
 /* ── Shelf card — identical to Home ───────────────────────── */
 function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
+  const cleanCover = cover ? pinImageInMemory(cover) : '';
   return (
     <div className="shelf-card">
       <div className="shelf-card-art">
-        {cover
-          ? <img src={cover} alt={title} loading="lazy" decoding="async"/>
+        {cleanCover
+          ? <img src={cleanCover} alt={title} loading="eager" decoding="sync"/>
           : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--grey-800)'}}>{fallback||<Music2 size={22} color="var(--text-dim)"/>}</div>
         }
         {badge&&<div className="shelf-card-badge">{BadgeIcon&&<BadgeIcon size={9}/>}<span>{badge}</span></div>}
@@ -116,7 +117,7 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
 }
 
 function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) {
-  const cleanSrc = (cover && cover.includes('bcbits.com')) ? cover.replace(/_[0-9]+\.jpg/, '_14.jpg') : cover;
+  const cleanSrc = cover ? pinImageInMemory(cover) : '';
   return (
     <div
       onClick={onClick}
@@ -126,7 +127,7 @@ function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) 
         width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
         background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
+        {cleanSrc ? <img src={cleanSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
              : <Music2 size={22} color="var(--text-dim)" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -735,22 +736,25 @@ export default function Library() {
                   </div>
                 ) : (
                   <div className={`upl-grid upl-grid-${Math.min(5, Math.max(1, gridCols))}`}>
-                    {sortByDate(savedAlbums).map(album => (
-                      <button
-                        key={album.id}
-                        className="upl-grid-cell"
-                        style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
-                        onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
-                      >
-                        <div className="upl-grid-art">
-                          {album.cover
-                            ? <img src={album.cover} alt={album.title} loading="lazy"/>
-                            : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                        </div>
-                        <div className="upl-grid-title">{album.title}</div>
-                        <div className="upl-grid-artist">{album.artist}</div>
-                      </button>
-                    ))}
+                    {sortByDate(savedAlbums).map(album => {
+                      const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
+                      return (
+                        <button
+                          key={album.id}
+                          className="upl-grid-cell"
+                          style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                          onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                        >
+                          <div className="upl-grid-art">
+                            {cleanCover
+                              ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync"/>
+                              : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                          </div>
+                          <div className="upl-grid-title">{album.title}</div>
+                          <div className="upl-grid-artist">{album.artist}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -804,22 +808,25 @@ export default function Library() {
                 </div>
               ) : (
                 <div className={`upl-grid upl-grid-${Math.min(5, Math.max(1, gridCols))}`}>
-                  {sortByDate(savedAlbums).map(album => (
-                    <button
-                      key={album.id}
-                      className="upl-grid-cell"
-                      style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
-                      onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
-                    >
-                      <div className="upl-grid-art">
-                        {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="lazy"/>
-                          : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
-                      </div>
-                      <div className="upl-grid-title">{album.title}</div>
-                      <div className="upl-grid-artist">{album.artist}</div>
-                    </button>
-                  ))}
+                  {sortByDate(savedAlbums).map(album => {
+                    const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
+                    return (
+                      <button
+                        key={album.id}
+                        className="upl-grid-cell"
+                        style={{ background:'none', border:'none', textAlign:'left', cursor:'pointer' }}
+                        onClick={() => setSelectedAlbum(openNativeAlbumFast(album))}
+                      >
+                        <div className="upl-grid-art">
+                          {cleanCover
+                            ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync"/>
+                            : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
+                        </div>
+                        <div className="upl-grid-title">{album.title}</div>
+                        <div className="upl-grid-artist">{album.artist}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </>

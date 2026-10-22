@@ -11,10 +11,51 @@ const fmt = (s) => {
 };
 
 const _resolvedArtMem = new Map();
+const _pinnedPageImages = new Map();
+const MAX_PINNED_PAGE_IMAGES = 320;
 
-/** Legacy no-op exports kept for compatibility */
-export function pinImageInMemory() {}
-export function preloadImagesInMemory() {}
+/**
+ * Pins a compact thumbnail in a bounded LRU Image() cache so scrolling down
+ * and back up on the same page never unloads or re-decodes already-loaded art.
+ */
+export function pinImageInMemory(rawUrl, itemId) {
+  if (typeof window === 'undefined' || !rawUrl) return '';
+  const url = sanitizeArtworkUrl(rawUrl, itemId, false);
+  if (!url) return '';
+  if (_pinnedPageImages.has(url)) {
+    const existing = _pinnedPageImages.get(url);
+    _pinnedPageImages.delete(url);
+    _pinnedPageImages.set(url, existing);
+    return url;
+  }
+  try {
+    const img = new Image();
+    img.decoding = 'sync';
+    img.loading = 'eager';
+    img.src = url;
+    if (typeof img.decode === 'function') {
+      img.decode().catch(() => {});
+    }
+    _pinnedPageImages.set(url, img);
+    while (_pinnedPageImages.size > MAX_PINNED_PAGE_IMAGES) {
+      const oldestKey = _pinnedPageImages.keys().next().value;
+      if (!oldestKey) break;
+      _pinnedPageImages.delete(oldestKey);
+    }
+  } catch (_) {}
+  return url;
+}
+
+export function preloadImagesInMemory(items, maxCount = 18) {
+  if (typeof window === 'undefined' || !Array.isArray(items) || !items.length) return;
+  const limit = Math.min(items.length, Math.max(1, Math.min(maxCount, 24)));
+  for (let i = 0; i < limit; i++) {
+    const it = items[i];
+    if (!it) continue;
+    const raw = it.artworkUrl || it.cover || it.avatar || it.releaseCover;
+    if (raw) pinImageInMemory(raw, it.id || it.trackId || it.playlistId);
+  }
+}
 
 // Clean up any previously cached false-positive artworks for private Apple Music uploads (e.g. am-i.* / i.*)
 if (typeof window !== 'undefined') {
@@ -90,7 +131,15 @@ export function sanitizeArtworkUrl(raw, itemId, hiRes = false) {
         .replace('{h}', dim)
         .replace('{f}', 'jpg')
         .replace('{c}', 'bb');
-      if (url.includes('bcbits.com')) url = url.replace(/_[0-9]+\.jpg/, hiRes ? '_10.jpg' : '_14.jpg');
+      if (url.includes('bcbits.com')) {
+        url = url.replace(/_[0-9]+\.jpg/, hiRes ? '_10.jpg' : '_14.jpg');
+      } else if (url.includes('mzstatic.com')) {
+        url = url.replace(/\/[0-9]+x[0-9]+(bb|cc|sr|bf)?\.(jpg|jpeg|png|webp)/i, `/${dim}x${dim}$1.$2`);
+      } else if (!hiRes && url.includes('sndcdn.com')) {
+        url = url.replace(/-t500x500\./i, '-t300x300.');
+      } else if (!hiRes && url.includes('resources.tidal.com')) {
+        url = url.replace(/\/(640x640|1280x1280|750x750)\.jpg/i, '/320x320.jpg');
+      }
       return url;
     }
   }
@@ -126,14 +175,18 @@ function useResolvedArtwork(item) {
 
   const rawArt = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
   const initial = sanitizeArtworkUrl(rawArt, itemId, false);
+  if (initial) pinImageInMemory(initial, itemId);
   const [art, setArt] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextRaw = isFakePrivateArt ? '' : (item?.artworkUrl || item?.cover || item?.avatar);
     const next = sanitizeArtworkUrl(nextRaw, itemId, false);
-    setArt(next);
-    setFailed(false);
+    if (next) pinImageInMemory(next, itemId);
+    setArt(prev => {
+      if (prev !== next) setFailed(false);
+      return next;
+    });
   }, [item?.artworkUrl, item?.cover, item?.avatar, itemId, isFakePrivateArt]);
 
   useEffect(() => {
@@ -149,6 +202,7 @@ function useResolvedArtwork(item) {
         const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
         if (raw) {
           const thumb = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/300x300$1');
+          pinImageInMemory(thumb, itemId);
           setArt(thumb);
           setFailed(false);
           if (item) {
@@ -232,7 +286,7 @@ const Art = memo(function Art({ item, src, round }) {
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
+      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
            : <Music2 size={22} color="var(--text-dim)" />}
     </div>
   );
@@ -262,7 +316,7 @@ const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlayi
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
-          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="lazy" decoding="async" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
+          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
         {isActive && (
           <div className="upl-grid-playing">

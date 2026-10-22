@@ -21,6 +21,41 @@ let _cachedPublicReleases = [];
 let _publicReleasesPromise = null;
 const _publicReleaseListeners = new Set();
 const _expandedVisibleCounts = new Map();
+const _horizontalSwipePageCounts = new Map();
+
+function CatalogSwipeRow({ sectionKey, pages, renderPage }) {
+  const [renderedPages, setRenderedPages] = useState(() =>
+    Math.min(pages.length, Math.max(2, _horizontalSwipePageCounts.get(sectionKey) || 2))
+  );
+
+  useEffect(() => {
+    const saved = _horizontalSwipePageCounts.get(sectionKey) || 2;
+    const target = Math.min(pages.length, Math.max(2, saved));
+    if (target > renderedPages) setRenderedPages(target);
+  }, [sectionKey, pages.length, renderedPages]);
+
+  const handleScroll = useCallback((e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    const pageW = Math.max(1, el.clientWidth);
+    const curPage = Math.floor((el.scrollLeft + pageW * 0.25) / pageW);
+    const needed = Math.min(pages.length, curPage + 3);
+    if (needed > renderedPages) {
+      _horizontalSwipePageCounts.set(sectionKey, Math.max(_horizontalSwipePageCounts.get(sectionKey) || 2, needed));
+      setRenderedPages(needed);
+    }
+  }, [sectionKey, pages.length, renderedPages]);
+
+  return (
+    <div className="catalog-swipe-row" onScroll={handleScroll}>
+      {pages.slice(0, renderedPages).map((pageItems, pIdx) => (
+        <div key={`${sectionKey}-p${pIdx}`} className="catalog-swipe-page">
+          {renderPage(pageItems, pIdx)}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 try {
   if (typeof window !== 'undefined') {
@@ -29,14 +64,14 @@ try {
       const parsed = JSON.parse(rawPub);
       if (Array.isArray(parsed) && parsed.length) {
         _cachedPublicReleases = parsed;
-        preloadImagesInMemory(parsed, 60);
+        preloadImagesInMemory(parsed, 18);
       }
     }
     const rawHist = localStorage.getItem('kyoyu-play-history');
     if (rawHist) {
       const parsedHist = JSON.parse(rawHist);
       if (Array.isArray(parsedHist) && parsedHist.length) {
-        preloadImagesInMemory(parsedHist, 40);
+        preloadImagesInMemory(parsedHist, 18);
       }
     }
   }
@@ -449,6 +484,7 @@ export default function Home() {
             <>
               <div className="upl-grid upl-grid-3">
                 {featuredAlbums.slice(0, expandedVisibleCount).map((album) => {
+                  const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
                   return (
                     <button
                       key={album.id}
@@ -463,8 +499,8 @@ export default function Home() {
                       }}
                     >
                       <div className="upl-grid-art">
-                        {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                        {cleanCover
+                          ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync" />
                           : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
                       </div>
                       <div className="upl-grid-title">{album.title}</div>
@@ -485,6 +521,7 @@ export default function Home() {
                 onScroll={handleFeaturedScroll}
               >
                 {featuredAlbums.map((album) => {
+                  const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
                   return (
                     <button
                       key={album.id}
@@ -498,17 +535,17 @@ export default function Home() {
                       }}
                     >
                       {/* Blurred background from cover art */}
-                      {album.cover && (
+                      {cleanCover && (
                         <div
                           className="featured-hero-bg"
-                          style={{ backgroundImage: `url(${album.cover})` }}
+                          style={{ backgroundImage: `url(${cleanCover})` }}
                         />
                       )}
 
                       {/* Cover art */}
                       <div className="featured-hero-art">
-                        {album.cover
-                          ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async" />
+                        {cleanCover
+                          ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync" />
                           : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                       </div>
 
@@ -664,19 +701,19 @@ export default function Home() {
                       <AccountItemList items={pages[0] || []} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
                     )
                   ) : (
-                    <div className="catalog-swipe-row">
-                      {pages.map((pageItems, pIdx) => (
-                        <div key={`${sec.key}-p${pIdx}`} className="catalog-swipe-page">
-                          {sec.type === 'uploads' ? (
-                            viewMode === 'list'
-                              ? <UploadExpandedList uploads={pageItems} />
-                              : <UploadGridView uploads={pageItems} cols={3} />
-                          ) : (
-                            <AccountItemList items={pageItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <CatalogSwipeRow
+                      sectionKey={sec.key}
+                      pages={pages}
+                      renderPage={(pageItems) =>
+                        sec.type === 'uploads' ? (
+                          viewMode === 'list'
+                            ? <UploadExpandedList uploads={pageItems} />
+                            : <UploadGridView uploads={pageItems} cols={3} />
+                        ) : (
+                          <AccountItemList items={pageItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                        )
+                      }
+                    />
                   )}
                 </section>
               );
@@ -700,7 +737,7 @@ export default function Home() {
             <>
               <div className="upl-grid upl-grid-3">
                 {playHistory.slice(0, expandedVisibleCount).map(item => {
-                  const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id, false);
+                  const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
                   return (
                     <button
                       key={item._hkey || item.id}
@@ -710,7 +747,7 @@ export default function Home() {
                     >
                       <div className="upl-grid-art">
                         {cleanCover ? (
-                          <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                          <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
                         ) : (
                           <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
                         )}
@@ -727,8 +764,8 @@ export default function Home() {
             </>
           ) : (
             <div className="scroll-row">
-              {playHistory.map(item => {
-                const cleanCover = sanitizeArtworkUrl(item.cover || item.artworkUrl, item.id, false);
+              {playHistory.slice(0, 30).map(item => {
+                const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
                 return (
                   <button 
                     key={item._hkey || item.id} 
@@ -738,7 +775,7 @@ export default function Home() {
                   >
                     <div className="shelf-card-art">
                       {cleanCover ? (
-                        <img src={cleanCover} alt={item.title} loading="lazy" decoding="async" />
+                        <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
                       ) : (
                         <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
                       )}
@@ -785,16 +822,15 @@ export default function Home() {
                 ? <UploadExpandedList uploads={myUploads}/>
                 : <UploadGridView uploads={myUploads} cols={homeLayout.cols}/>
             ) : (
-              <div className="catalog-swipe-row">
-                {uploadPages.map((pageItems, idx) => (
-                  <div key={`myuploads-p${idx}`} className="catalog-swipe-page">
-                    {homeLayout.mode === 'list'
-                      ? <UploadExpandedList uploads={pageItems}/>
-                      : <UploadGridView uploads={pageItems} cols={homeLayout.cols}/>
-                    }
-                  </div>
-                ))}
-              </div>
+              <CatalogSwipeRow
+                sectionKey="my-uploads"
+                pages={uploadPages}
+                renderPage={(pageItems) =>
+                  homeLayout.mode === 'list'
+                    ? <UploadExpandedList uploads={pageItems}/>
+                    : <UploadGridView uploads={pageItems} cols={homeLayout.cols}/>
+                }
+              />
             )}
           </section>
         );
@@ -811,6 +847,7 @@ export default function Home() {
         const renderReleaseGrid = (albumsSlice) => (
           <div className="upl-grid upl-grid-3">
             {albumsSlice.map(album => {
+              const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
               return (
                 <button
                   key={album.id}
@@ -826,8 +863,8 @@ export default function Home() {
                   }}
                 >
                   <div className="upl-grid-art">
-                    {album.cover
-                      ? <img src={album.cover} alt={album.title} loading="lazy" decoding="async"/>
+                    {cleanCover
+                      ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync"/>
                       : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                   </div>
                   <div className="upl-grid-title">{album.title}</div>
@@ -859,13 +896,11 @@ export default function Home() {
             ) : releasePages.length <= 1 ? (
               renderReleaseGrid(releasePages[0] || [])
             ) : (
-              <div className="catalog-swipe-row">
-                {releasePages.map((pageAlbums, idx) => (
-                  <div key={`releases-p${idx}`} className="catalog-swipe-page">
-                    {renderReleaseGrid(pageAlbums)}
-                  </div>
-                ))}
-              </div>
+              <CatalogSwipeRow
+                sectionKey="releases"
+                pages={releasePages}
+                renderPage={(pageAlbums) => renderReleaseGrid(pageAlbums)}
+              />
             )}
           </section>
         );

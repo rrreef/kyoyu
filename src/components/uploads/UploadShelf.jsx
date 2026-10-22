@@ -45,11 +45,12 @@ function toPlayerTrack(t, albumCover) {
 
 /* ── tiny shelf card ─────────────────────────────────────── */
 const Card = memo(function Card({ cover, title, sub, badge, onClick }) {
+  const cleanCover = cover ? pinImageInMemory(cover) : '';
   return (
     <div className="shelf-card upl-shelf-card" onClick={onClick}>
       <div className="shelf-card-art">
-        {cover
-          ? <img src={cover} alt={title} loading="lazy" decoding="async"/>
+        {cleanCover
+          ? <img src={cleanCover} alt={title} loading="eager" decoding="sync"/>
           : <div className="upl-card-ph"><Music2 size={20} strokeWidth={1.3}/></div>
         }
         {badge && <div className="shelf-card-badge">{badge}</div>}
@@ -280,14 +281,18 @@ function useUploadArtwork(t) {
     !!t?.catalogId;
   const rawArt = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
   const initial = sanitizeArtworkUrl(rawArt, itemId, false);
+  if (initial) pinImageInMemory(initial, itemId);
   const [src, setSrc] = useState(initial);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextRaw = isFakePrivateArt ? '' : (t?.artworkUrl || t?.cover);
     const next = sanitizeArtworkUrl(nextRaw, itemId, false);
-    setSrc(next);
-    setFailed(false);
+    if (next) pinImageInMemory(next, itemId);
+    setSrc(prev => {
+      if (prev !== next) setFailed(false);
+      return next;
+    });
   }, [t?.artworkUrl, t?.cover, itemId, isFakePrivateArt]);
 
   return { cleanSrc: failed ? '' : src, onError: () => setFailed(true) };
@@ -298,7 +303,7 @@ const UploadExpRow = memo(function UploadExpRow({ t, isActive, onPlay }) {
   return (
     <div className={`upl-exp-row${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
       {cleanSrc
-        ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="lazy" decoding="async"/>
+        ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="eager" decoding="sync"/>
         : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
       }
       <div className="upl-exp-info">
@@ -318,7 +323,7 @@ const UploadGridCellItem = memo(function UploadGridCellItem({ t, isActive, isPla
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
       <div className="upl-grid-art">
         {cleanSrc
-          ? <img src={cleanSrc} alt={t.title} onError={onError} loading="lazy" decoding="async"/>
+          ? <img src={cleanSrc} alt={t.title} onError={onError} loading="eager" decoding="sync"/>
           : <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 12 : 22} strokeWidth={1.2}/></div>
         }
         {isActive && (
