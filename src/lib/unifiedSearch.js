@@ -248,29 +248,32 @@ async function searchSoundCloud(query, offset = 0) {
 /**
  * Search Bandcamp via our scraping proxy endpoint.
  */
-async function searchBandcamp(query, { reportFailure = false } = {}) {
+async function searchBandcamp(query, { reportFailure = false, offset = 0, filter = '' } = {}) {
   const fail = () => { const out = []; if (reportFailure) out.failed = true; return out; };
   try {
-    const res = await postWithRetry('/api/bandcamp-search', { query }, 1);
+    const res = await postWithRetry('/api/bandcamp-search', { query, offset, filter }, 1);
     if (!res.ok) return fail();
     const data = await res.json();
     // An empty Bandcamp answer for a real query is almost always a temporary hiccup — flag it for a retry
     if (reportFailure && !(data.results || []).length) return fail();
-    return (data.results || []).map((r, i) => {
+    const mapped = (data.results || []).map((r, i) => {
       const isEntity = r.type === 'artist' || r.type === 'label';
+      const rawLabel = r.label || r.labelName || '';
       const cleaned = isEntity
-        ? { title: r.title, artist: r.artistName, label: r.label || '', album: r.albumName || '' }
-        : splitCleanMetadata(r.title || '', r.artistName || '', r.label || '', r.albumName || '');
+        ? { title: r.title, artist: r.artistName, label: rawLabel, album: r.albumName || '' }
+        : splitCleanMetadata(r.title || '', r.artistName || '', rawLabel, r.albumName || '');
       return {
-        id: `bc-${i}-${r.trackId || ''}-${r.type || ''}`,
+        id: `bc-${offset + i}-${r.trackId || ''}-${r.type || ''}`,
         entityType: r.type,
         title: cleaned.title || r.title,
         artistName: cleaned.artist || r.artistName,
-        label: cleaned.label || r.label || '',
+        label: cleaned.label || rawLabel,
         labelUrl: r.labelUrl || '',
         artworkUrl: r.artworkUrl,
         trackUrl: r.trackUrl,
-        albumName: cleaned.album || r.albumName,
+        albumUrl: r.albumUrl || (r.type === 'album' ? r.trackUrl : ''),
+        albumName: cleaned.album || r.albumName || (r.type === 'album' ? (cleaned.title || r.title) : ''),
+        albumId: r.albumId || null,
         genre: r.genre,
         location: r.location || '',
         released: r.released,
@@ -279,6 +282,9 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
         provider: 'bandcamp',
       };
     });
+    mapped.hasMore = !!data.hasMore;
+    mapped.nextOffset = data.nextOffset || (offset + mapped.length);
+    return mapped;
   } catch (err) {
     console.warn('Bandcamp search failed:', err);
     return fail();
@@ -728,7 +734,10 @@ export async function searchSingleProvider(provider, query, paginationCursor = n
       const data = await searchSoundCloud(q, paginationCursor?.nextOffset || 0);
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
     }
-    case 'bandcamp': return { results: await searchBandcamp(q), pagination: {} };
+    case 'bandcamp': {
+      const list = await searchBandcamp(q, { offset: paginationCursor?.nextOffset || 0, filter: paginationCursor?.filter || '' });
+      return { results: list, pagination: { hasMore: !!list.hasMore, nextOffset: list.nextOffset || 0 } };
+    }
     case 'discogs': {
       const data = await searchDiscogs(q, paginationCursor?.nextOffset || 0);
       return { results: data.results, pagination: { hasMore: data.hasMore, nextOffset: data.nextOffset } };
@@ -772,7 +781,7 @@ export async function unifiedSearch(query) {
   }
   
   let trimmed = query.trim();
-  const cacheKey = trimmed.toLowerCase();
+  const cacheKey = `v2_${trimmed.toLowerCase()}`;
   const hit = unifiedCache.get(cacheKey);
   if (hit && Date.now() - hit.ts < UNIFIED_CACHE_TTL) return hit.value;
   
@@ -803,6 +812,7 @@ export async function unifiedSearch(query) {
   const pagination = {
     youtube: { nextPageToken: ytData.nextPageToken },
     soundcloud: { hasMore: scData.hasMore, nextOffset: scData.nextOffset },
+    bandcamp: { hasMore: !!bcData.hasMore, nextOffset: bcData.nextOffset || 0 },
     discogs: { hasMore: discogsData.hasMore, nextOffset: discogsData.nextOffset }
   };
 

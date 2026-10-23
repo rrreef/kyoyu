@@ -530,7 +530,7 @@ export default function Search() {
     };
   }, [query]);
 
-  // ── Provider filter retry: if user switches to a provider with empty results, retry ──
+  // ── Provider filter retry: if user switches to a provider (or Bandcamp category) with empty results, retry ──
   useEffect(() => {
     if (activeProvider === 'all' || !query || query.trim().length === 0) return;
     
@@ -539,7 +539,20 @@ export default function Search() {
     let hasResults = false;
     if (providerKey === 'youtube') hasResults = externalResults.youtube?.length > 0;
     else if (providerKey === 'soundcloud') hasResults = externalResults.soundcloud?.length > 0;
-    else if (providerKey === 'bandcamp') hasResults = externalResults.bandcamp?.length > 0;
+    else if (providerKey === 'bandcamp') {
+      const bcList = externalResults.bandcamp || [];
+      if (activeFilter === 'albums') {
+        hasResults = bcList.some(x => (x.entityType || x.type) === 'album' || (x.entityType || x.type) === 'release' || Boolean(x.albumName));
+      } else if (activeFilter === 'artists') {
+        hasResults = bcList.some(x => (x.entityType || x.type) === 'artist');
+      } else if (activeFilter === 'labels') {
+        hasResults = bcList.some(x => (x.entityType || x.type) === 'label' || _isLikelyLabelEntity(x.title || x.artistName, x.entityType || x.type) || Boolean(x.label));
+      } else if (activeFilter === 'titles') {
+        hasResults = bcList.some(x => !x.entityType || x.entityType === 'track' || x.type === 'track');
+      } else {
+        hasResults = bcList.length > 0;
+      }
+    }
     else if (providerKey === 'spotify') hasResults = externalResults.spotify?.length > 0;
     else if (providerKey === 'applemusic') hasResults = externalResults.applemusic?.length > 0;
     else if (providerKey === 'tidal') hasResults = externalResults.tidal?.length > 0;
@@ -550,7 +563,7 @@ export default function Search() {
     let ignore = false;
     setProviderRetrying(true);
     
-    searchSingleProvider(providerKey, query.trim())
+    searchSingleProvider(providerKey, query.trim(), { filter: activeFilter })
       .then(({ results: freshResults, pagination }) => {
         if (ignore || !freshResults || freshResults.length === 0) return;
         
@@ -558,7 +571,19 @@ export default function Search() {
           const next = { ...prev };
           if (providerKey === 'youtube') next.youtube = freshResults;
           else if (providerKey === 'soundcloud') next.soundcloud = freshResults;
-          else if (providerKey === 'bandcamp') next.bandcamp = freshResults;
+          else if (providerKey === 'bandcamp') {
+            const existing = prev.bandcamp || [];
+            const seenIds = new Set(existing.map(r => `${r.entityType || r.type}|${(r.title || '').toLowerCase()}|${(r.artistName || '').toLowerCase()}`));
+            const merged = [...existing];
+            for (const item of freshResults) {
+              const k = `${item.entityType || item.type}|${(item.title || '').toLowerCase()}|${(item.artistName || '').toLowerCase()}`;
+              if (!seenIds.has(k)) {
+                seenIds.add(k);
+                merged.push(item);
+              }
+            }
+            next.bandcamp = merged;
+          }
           else if (providerKey === 'spotify') next.spotify = freshResults;
           else if (providerKey === 'applemusic') next.applemusic = freshResults;
           else if (providerKey === 'tidal') next.tidal = freshResults;
@@ -579,7 +604,7 @@ export default function Search() {
       .finally(() => { if (!ignore) setProviderRetrying(false); });
     
     return () => { ignore = true; };
-  }, [activeProvider]);
+  }, [activeProvider, activeFilter]);
 
 
   // ── Load More: fetch next 33 results for a specific provider ──
@@ -590,6 +615,7 @@ export default function Search() {
     // Check if there's more to load
     if (providerKey === 'youtube' && !cursor.nextPageToken) return;
     if (providerKey === 'soundcloud' && !cursor.hasMore) return;
+    if (providerKey === 'bandcamp' && !cursor.hasMore) return;
     if (providerKey === 'discogs' && !cursor.hasMore) return;
 
     setLoadingMore(prev => ({ ...prev, [providerKey]: true }));
@@ -853,13 +879,96 @@ export default function Search() {
     ...(providerMatch('soundcloud') ? (externalResults.soundcloudPlaylists || []).map(pl => ({
       ...pl, entityType: 'playlist', provider: 'soundcloud',
     })) : []),
-    ...(providerMatch('bandcamp') ? bcItems.map(bc => {
-      const rawType = bc.entityType || bc.type || 'track';
-      const resolvedType = _isLikelyLabelEntity(bc.title || bc.artistName, rawType) ? 'label' : rawType;
-      return {
-        ...bc, entityType: resolvedType, provider: bc.provider || 'bandcamp',
-      };
-    }) : []),
+    ...(providerMatch('bandcamp') ? (() => {
+      const mapped = bcItems.map(bc => {
+        const rawType = bc.entityType || bc.type || 'track';
+        const resolvedType = _isLikelyLabelEntity(bc.title || bc.artistName, rawType) ? 'label' : rawType;
+        return {
+          ...bc, entityType: resolvedType, provider: bc.provider || 'bandcamp',
+        };
+      });
+      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const seenAlbums = new Set(mapped.filter(x => x.entityType === 'album' || x.entityType === 'release').map(x => `${norm(x.title)}|${norm(x.artistName)}`));
+      const seenArtists = new Set(mapped.filter(x => x.entityType === 'artist').map(x => norm(x.title)));
+      const seenLabels = new Set(mapped.filter(x => x.entityType === 'label').map(x => norm(x.title)));
+      const extra = [];
+
+      for (const bc of mapped) {
+        // Synthesize parent Album from any Bandcamp track that has albumName or /album/ URL
+        if (bc.entityType === 'track' && (bc.albumName || /\/album\//i.test(bc.trackUrl || ''))) {
+          const albTitle = (bc.albumName || bc.title || '').trim();
+          const albKey = `${norm(albTitle)}|${norm(bc.artistName)}`;
+          if (albTitle && !seenAlbums.has(albKey)) {
+            seenAlbums.add(albKey);
+            extra.push({
+              ...bc,
+              id: `${bc.id}-syn-album`,
+              title: albTitle,
+              albumName: albTitle,
+              albumUrl: bc.albumUrl || bc.trackUrl,
+              entityType: 'album',
+              provider: 'bandcamp',
+            });
+          }
+        }
+        // Synthesize Artist from Bandcamp album/track artistName
+        if ((bc.entityType === 'album' || bc.entityType === 'track') && bc.artistName) {
+          const artName = bc.artistName.trim();
+          const artKey = norm(artName);
+          if (artKey.length >= 2 && !/^various(\s+artists)?$/i.test(artName) && !seenArtists.has(artKey)) {
+            seenArtists.add(artKey);
+            extra.push({
+              id: `${bc.id}-syn-artist-${artKey}`,
+              title: artName,
+              artistName: artName,
+              artworkUrl: bc.artworkUrl,
+              trackUrl: bc.labelUrl || bc.trackUrl,
+              labelUrl: bc.labelUrl || '',
+              location: bc.location || '',
+              genre: bc.genre || '',
+              entityType: 'artist',
+              provider: 'bandcamp',
+            });
+          }
+        }
+        // Synthesize Label from Bandcamp album/track label field
+        if ((bc.entityType === 'album' || bc.entityType === 'track') && bc.label) {
+          const lblName = bc.label.trim();
+          const lblKey = norm(lblName);
+          if (lblKey.length >= 2 && !seenLabels.has(lblKey)) {
+            seenLabels.add(lblKey);
+            extra.push({
+              id: `${bc.id}-syn-label-${lblKey}`,
+              title: lblName,
+              artistName: lblName,
+              label: lblName,
+              artworkUrl: bc.artworkUrl,
+              trackUrl: bc.labelUrl || bc.trackUrl,
+              labelUrl: bc.labelUrl || '',
+              location: bc.location || '',
+              genre: bc.genre || '',
+              entityType: 'label',
+              provider: 'bandcamp',
+            });
+          }
+        }
+        // On Bandcamp, labels and artists share 'b' band accounts. When filtering by 'labels' on Bandcamp, allow band accounts to surface as labels if not already present.
+        if (activeProvider === 'bandcamp' && activeFilter === 'labels' && bc.entityType === 'artist') {
+          const bandName = (bc.title || bc.artistName || '').trim();
+          const bandKey = norm(bandName);
+          if (bandKey.length >= 2 && !seenLabels.has(bandKey) && /\.bandcamp\.com/i.test(bc.trackUrl || bc.labelUrl || '')) {
+            seenLabels.add(bandKey);
+            extra.push({
+              ...bc,
+              id: `${bc.id}-syn-bclabel-${bandKey}`,
+              entityType: 'label',
+              provider: 'bandcamp',
+            });
+          }
+        }
+      }
+      return [...mapped, ...extra];
+    })() : []),
     ...(providerMatch('spotify') ? (externalResults.spotify || []).map(sp => ({
       ...sp, entityType: sp.entityType || 'track', provider: sp.provider || 'spotify',
     })) : []),
@@ -931,6 +1040,9 @@ export default function Search() {
       const qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');
       const tNorm = (r.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const aNorm = (r.artistName || r.channelTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const albNorm = (r.albumName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const lblNorm = (r.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const combinedNorm = `${aNorm}${tNorm}${albNorm}${lblNorm}`;
       const entityNameNorm = _normEntityName(r.title || '');
       const artistEntityNorm = _normEntityName(r.artistName || r.channelTitle || '');
       
@@ -943,13 +1055,14 @@ export default function Search() {
         genreKnownLabelsNorm.has(entityNameNorm)
       )) {
         textScore += 2800;
-      } else if (tNorm === qNorm || aNorm === qNorm) {
+      } else if (tNorm === qNorm || aNorm === qNorm || albNorm === qNorm || lblNorm === qNorm) {
         textScore += matchedGenreSearch ? 400 : 1000;
-      } else if (tNorm.includes(qNorm) || aNorm.includes(qNorm)) {
+      } else if (tNorm.includes(qNorm) || aNorm.includes(qNorm) || albNorm.includes(qNorm) || lblNorm.includes(qNorm) || combinedNorm.includes(qNorm)) {
         textScore += matchedGenreSearch ? 300 : 500;
       } else {
         const words = query.toLowerCase().split(' ').filter(Boolean);
-        const matches = words.filter(w => (r.title || '').toLowerCase().includes(w) || (r.artistName || '').toLowerCase().includes(w));
+        const haystack = `${r.title || ''} ${r.artistName || ''} ${r.albumName || ''} ${r.label || ''}`.toLowerCase();
+        const matches = words.filter(w => haystack.includes(w));
         textScore += (matches.length / (words.length || 1)) * 100;
       }
       
@@ -1805,12 +1918,17 @@ export default function Search() {
                     // Universal Album Sheet: fetch tracks from provider, info from Discogs
                     try {
                       let tracks = [];
+                      let bcAlbumMeta = null;
                       if (item.provider === 'bandcamp') {
                         const r = await fetch('/api/bandcamp-search', {
                           method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'fetch-album', albumUrl: item.trackUrl }),
+                          body: JSON.stringify({ action: 'fetch-album', albumUrl: item.albumUrl || item.trackUrl }),
                         });
-                        if (r.ok) tracks = (await r.json()).tracks.map(t => ({ ...t, id: `bc-${t.trackId}`, url: t.streamUrl, trackUrl: t.trackUrl, providerItemId: t.trackUrl, cover: t.artworkUrl || item.artworkUrl || '' }));
+                        if (r.ok) {
+                          const bcData = await r.json();
+                          bcAlbumMeta = bcData.album || null;
+                          tracks = (bcData.tracks || []).map(t => ({ ...t, id: `bc-${t.trackId}`, url: t.streamUrl, trackUrl: t.trackUrl, providerItemId: t.trackUrl, cover: t.artworkUrl || item.artworkUrl || '' }));
+                        }
                       } else if (item.provider === 'spotify') {
                         const r = await fetch('/api/youtube-search', {
                           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1953,12 +2071,12 @@ export default function Search() {
 
                       openNativeAlbumFast({
                         id: item.id || `album-${item.title}`,
-                        title: info.album || item.title || '',
-                        artist: info.artist || item.artistName || '',
-                        cover: item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
-                        year: info.year || item.year || null,
-                        genre: info.genre || '',
-                        label: info.label || '',
+                        title: bcAlbumMeta?.title || info.album || item.title || '',
+                        artist: bcAlbumMeta?.artistName || info.artist || item.artistName || '',
+                        cover: bcAlbumMeta?.artworkUrl || item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
+                        year: bcAlbumMeta?.year || info.year || item.year || null,
+                        genre: info.genre || item.genre || '',
+                        label: bcAlbumMeta?.label || info.label || item.label || '',
                         provider: item.provider,
                         description: desc,
                         tracks: tracks,
