@@ -1186,7 +1186,132 @@ async function handleTrackInfo(body, res) {
 // ── Search orchestration helpers (artist-top-releases, track-release) ──
 
 const stripArtistSuffix = (s) => (s || '').replace(/\s*\(\d+\)\s*$/, '').replace(/\*+$/, '').trim();
-const normName = (s) => stripArtistSuffix(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+const normName = (s) => stripArtistSuffix(s)
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/ß/g, 'ss')
+  .replace(/ø/gi, 'o')
+  .replace(/æ/gi, 'ae')
+  .replace(/œ/gi, 'oe')
+  .replace(/ł/gi, 'l')
+  .toLowerCase()
+  .replace(/[^\w\s]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+const normNameKeepAccents = (s) => stripArtistSuffix(s)
+  .normalize('NFC')
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+async function resolveDiscogsArtistIdByNameAndContext(artistName, context = {}) {
+  const clean = stripArtistSuffix(artistName || '');
+  if (!clean) return { artistId: null, results: [] };
+  const wantPlain = normName(clean);
+  const wantAccent = normNameKeepAccents(clean);
+  const hasAccents = wantAccent !== wantPlain;
+  const ctxAlbum = String(context?.album || '').trim();
+  const ctxTrack = String(context?.trackTitle || '').trim();
+  const ctxLabel = String(context?.label || '').trim();
+
+  // 1. If we have track/album context (e.g. opened from Player Sheet), try resolving the exact artist ID from the release credits in parallel with artist search
+  const releaseContextPromise = (async () => {
+    if (!ctxAlbum && !ctxTrack) return null;
+    const queries = [];
+    if (ctxAlbum && normName(ctxAlbum) !== wantPlain) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&release_title=${encodeURIComponent(ctxAlbum)}&type=release&per_page=5`);
+    }
+    if (ctxTrack) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&track=${encodeURIComponent(ctxTrack)}&type=release&per_page=5`);
+    }
+    queries.push(`https://api.discogs.com/database/search?q=${encodeURIComponent(`${clean} ${ctxAlbum || ctxTrack}`)}&type=release&per_page=5`);
+
+    for (const url of queries.slice(0, 2)) {
+      try {
+        const r = await fetch(url, { headers: DISCOGS_HEADERS });
+        if (!r.ok) continue;
+        const d = await r.json();
+        const relResults = d.results || [];
+        const matchingRel = relResults.find(rel => {
+          const titleStr = String(rel.title || '');
+          const artistPart = titleStr.includes(' - ') ? titleStr.split(' - ')[0] : titleStr;
+          if (hasAccents && normNameKeepAccents(artistPart).includes(wantAccent)) return true;
+          return normName(artistPart) === wantPlain ||
+            artistPart.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(p => normName(p) === wantPlain);
+        });
+        if (matchingRel && matchingRel.id) {
+          const relDetailRes = await fetch(`https://api.discogs.com/releases/${matchingRel.id}`, { headers: DISCOGS_HEADERS });
+          if (relDetailRes.ok) {
+            const relDetail = await relDetailRes.json();
+            const credits = [...(relDetail.artists || []), ...(relDetail.extraartists || [])];
+            const exactAccentCredit = credits.find(a => a && a.id && normNameKeepAccents(a.name) === wantAccent);
+            if (exactAccentCredit) return exactAccentCredit.id;
+            const exactPlainCredit = credits.find(a => a && a.id && normName(a.name) === wantPlain);
+            if (exactPlainCredit) return exactPlainCredit.id;
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  })();
+
+  const artistSearchPromise = (async () => {
+    try {
+      const searchUrls = [
+        `https://api.discogs.com/database/search?q=${encodeURIComponent(clean)}&type=artist&per_page=20`,
+      ];
+      if (hasAccents) {
+        searchUrls.push(`https://api.discogs.com/database/search?q=${encodeURIComponent(wantPlain)}&type=artist&per_page=15`);
+      }
+      const responses = await Promise.all(
+        searchUrls.map(u => fetch(u, { headers: DISCOGS_HEADERS }).then(r => r.ok ? r.json() : null).catch(() => null))
+      );
+      const seenIds = new Set();
+      const merged = [];
+      for (const d of responses) {
+        for (const item of (d?.results || [])) {
+          if (item && item.id && !seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            merged.push(item);
+          }
+        }
+      }
+      return merged;
+    } catch (e) {
+      return [];
+    }
+  })();
+
+  const [contextArtistId, results] = await Promise.all([releaseContextPromise, artistSearchPromise]);
+  if (contextArtistId) {
+    return { artistId: contextArtistId, results };
+  }
+
+  // Strictly prioritize exact accent-preserving match first!
+  if (hasAccents) {
+    const accentMatches = results.filter(a => normNameKeepAccents(a.title) === wantAccent);
+    if (accentMatches.length > 0) {
+      const primaryAccent = accentMatches.find(a => !/\(\d+\)\s*$/.test(String(a.title || '').trim())) || accentMatches[0];
+      return { artistId: primaryAccent.id, results };
+    }
+  }
+
+  // Next, exact accent-stripped match (only when full normalized name equals wantPlain, NEVER loose substring)
+  const plainMatches = results.filter(a => normName(a.title) === wantPlain);
+  if (plainMatches.length > 0) {
+    // If the query did NOT have accents, prefer an unaccented Discogs artist title over an accented one
+    if (!hasAccents) {
+      const unaccentedPrimary = plainMatches.find(a => normNameKeepAccents(a.title) === wantAccent && !/\(\d+\)\s*$/.test(String(a.title || '').trim()))
+        || plainMatches.find(a => normNameKeepAccents(a.title) === wantAccent);
+      if (unaccentedPrimary) return { artistId: unaccentedPrimary.id, results };
+    }
+    const primaryPlain = plainMatches.find(a => !/\(\d+\)\s*$/.test(String(a.title || '').trim())) || plainMatches[0];
+    return { artistId: primaryPlain.id, results };
+  }
+
+  return { artistId: null, results };
+}
 
 async function cacheGet(supabase, key, maxAgeMs, version) {
   try {
@@ -1230,18 +1355,15 @@ const ARTIST_TOP_MAX_RATED = 24;
  */
 async function handleArtistTopReleases(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-  let { artistId, artistName } = body || {};
+  let { artistId, artistName, trackTitle, album, label } = body || {};
 
   if (!artistId && artistName) {
-    try {
-      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(artistName)}&type=artist&per_page=5`, { headers: DISCOGS_HEADERS });
-      if (r.ok) {
-        const d = await r.json();
-        const want = normName(artistName);
-        const hit = (d.results || []).find(a => normName(a.title) === want) || (d.results || [])[0];
-        if (hit) artistId = hit.id;
-      }
-    } catch (e) {}
+    const resolved = await resolveDiscogsArtistIdByNameAndContext(artistName, { trackTitle, album, label });
+    if (resolved.artistId) {
+      artistId = resolved.artistId;
+    } else if (resolved.results[0]) {
+      artistId = resolved.results[0].id;
+    }
   }
   if (!artistId) return res.status(200).json({ releases: [] });
 
@@ -2031,7 +2153,7 @@ async function fetchMusicBrainzLabel(labelName, discogsId) {
 
 async function handleArtistProfile(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-  let { artistId, artistName } = body || {};
+  let { artistId, artistName, trackTitle, album, label } = body || {};
 
   // Guard: If no explicit artistId and artistName has obvious label keywords, check if it's actually a label on Discogs
   if (!artistId && artistName && LABEL_KEYWORD_RE.test(artistName)) {
@@ -2047,35 +2169,28 @@ async function handleArtistProfile(body, res) {
 
   if (!artistId && artistName) {
     try {
-      const r = await fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(artistName)}&type=artist&per_page=8`, { headers: DISCOGS_HEADERS });
-      if (r.ok) {
-        const d = await r.json();
-        const want = normName(artistName);
-        const results = d.results || [];
-        // Only match an artist whose name actually matches artistName (never blindly take results[0] which may be a label founder whose bio mentions the label!)
-        const exactHit = results.find(a => normName(a.title) === want)
-          || results.find(a => normName(a.title).includes(want) || want.includes(normName(a.title)));
-        if (exactHit) {
-          artistId = exactHit.id;
-        } else {
-          // Check if artistName is actually a label on Discogs
-          const labelHit = await findDiscogsLabelHit(artistName);
-          if (labelHit && (normLabelName(labelHit.title) === normLabelName(artistName) || normName(labelHit.title).includes(want))) {
-            return res.status(200).json({
-              isLabel: true,
-              labelId: labelHit.id,
-              labelName: stripArtistSuffix(labelHit.title || artistName),
-            });
-          }
-          if (results[0]) artistId = results[0].id;
+      const want = normName(artistName);
+      const resolved = await resolveDiscogsArtistIdByNameAndContext(artistName, { trackTitle, album, label });
+      if (resolved.artistId) {
+        artistId = resolved.artistId;
+      } else {
+        // Check if artistName is actually a label on Discogs
+        const labelHit = await findDiscogsLabelHit(artistName);
+        if (labelHit && (normLabelName(labelHit.title) === normLabelName(artistName) || normName(labelHit.title).includes(want))) {
+          return res.status(200).json({
+            isLabel: true,
+            labelId: labelHit.id,
+            labelName: stripArtistSuffix(labelHit.title || artistName),
+          });
         }
+        if (resolved.results[0]) artistId = resolved.results[0].id;
       }
     } catch (e) {}
   }
   if (!artistId) return res.status(200).json({ error: 'Artist not found on Discogs' });
 
-  const cacheKey = `artist-profile-v5|${artistId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 5);
+  const cacheKey = `artist-profile-v6|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 6);
   if (cached) return res.status(200).json(cached);
 
   const [profileData, mbArtist] = await Promise.all([
@@ -2189,7 +2304,7 @@ async function handleArtistProfile(body, res) {
   }
 
   const result = {
-    _v: 5,
+    _v: 6,
     id: artistId,
     name: cleanArtistName,
     realname: profileData.realname || '',

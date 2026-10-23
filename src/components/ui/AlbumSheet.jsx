@@ -783,7 +783,24 @@ export function openNativeLabelFast(label, opts = {}) {
   return safeLabel;
 }
 
-const _normStr = (s) => String(s || '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const _normStr = (s) => String(s || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/ß/g, 'ss')
+  .replace(/ø/gi, 'o')
+  .replace(/æ/gi, 'ae')
+  .replace(/œ/gi, 'oe')
+  .replace(/ł/gi, 'l')
+  .toLowerCase()
+  .replace(/\s*\(\d+\)\s*$/, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+const _normKeepAccents = (s) => String(s || '')
+  .normalize('NFC')
+  .toLowerCase()
+  .replace(/\s*\(\d+\)\s*$/, '')
+  .replace(/[^\p{L}\p{N}]+/gu, ' ')
+  .trim();
 const _normLabelCore = (s) => {
   const full = _normStr(s);
   const stripped = full.replace(/\b(records|recordings|record|label|disques|tapes|editions|edizioni|imprint|recs|platten|schallplatten|discos)\b/g, '').replace(/\s+/g, ' ').trim();
@@ -1047,14 +1064,32 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
     return openRichLabelSheet(artistInput, opts);
   }
 
-  const cacheKey = _normStr(cleanName);
-  const cachedArtist = typeof window !== 'undefined' && window.__kyoyuPreloadedArtists?.[cacheKey];
+  const hasAccents = _normKeepAccents(cleanName) !== _normStr(cleanName);
+  const cacheKey = _normKeepAccents(cleanName) || _normStr(cleanName);
+  const cachedArtist = typeof window !== 'undefined' && (
+    window.__kyoyuPreloadedArtists?.[cacheKey] ||
+    (!hasAccents ? window.__kyoyuPreloadedArtists?.[_normStr(cleanName)] : null)
+  );
   if (cachedArtist && cachedArtist._enriched) {
     if (!isPreload) {
       openNativeArtistFast(cachedArtist);
     }
     return cachedArtist;
   }
+
+  // Extract context from artistInput, opts, or currently playing track if it matches this artist
+  const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack) ? window.__kyoyuGetCurrentTrack() : null;
+  const curArtistRaw = String(curTrack?.artistName || curTrack?.artist || '').trim();
+  const curArtistMatches = Boolean(
+    curArtistRaw && (
+      _normStr(curArtistRaw) === _normStr(cleanName) ||
+      curArtistRaw.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(p => _normStr(p) === _normStr(cleanName))
+    )
+  );
+  const ctxTrackTitle = (isObj && (artistInput.trackTitle || artistInput.currentTrackTitle)) || opts?.trackTitle || (curArtistMatches ? (curTrack?.title || '') : '') || '';
+  const ctxAlbum = (isObj && (artistInput.album || artistInput.albumName)) || opts?.album || (curArtistMatches ? (curTrack?.album || curTrack?.albumName || '') : '') || '';
+  const ctxLabel = (isObj && artistInput.label) || opts?.label || (curArtistMatches ? (curTrack?.label || '') : '') || '';
+  const ctxTrackUrl = (isObj && (artistInput.trackUrl || artistInput.url)) || opts?.trackUrl || (curArtistMatches ? (curTrack?.trackUrl || curTrack?.providerUrl || curTrack?.albumUrl || '') : '') || '';
 
   const initialCrossLinks = _discoverCrossEntityLinksForNames([
     cleanName,
@@ -1098,7 +1133,15 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
       fetch('/api/discogs-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'artist-profile', artistId, artistName: cleanName }),
+        body: JSON.stringify({
+          action: 'artist-profile',
+          artistId,
+          artistName: cleanName,
+          trackTitle: ctxTrackTitle,
+          album: ctxAlbum,
+          label: ctxLabel,
+          trackUrl: ctxTrackUrl,
+        }),
       }).catch(() => null),
       fetch('/api/bandcamp-search', {
         method: 'POST',
@@ -1136,10 +1179,31 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
       )).filter(p => p && !p.error && !p.isLabel);
     }
 
-    const bcItems = (bcSearchRes?.results || []).filter(item =>
-      item && (item.type === 'album' || item.type === 'track') &&
-      _normStr(item.artistName || '').includes(_normStr(cleanName))
+    const wantPlain = _normStr(cleanName);
+    const wantAccent = _normKeepAccents(cleanName);
+    const knownReleaseTitles = new Set(
+      [
+        ...((profile && Array.isArray(profile.topReleases)) ? profile.topReleases.map(rel => _normStr(rel.title)) : []),
+        ctxAlbum ? _normStr(ctxAlbum) : '',
+        ctxTrackTitle ? _normStr(ctxTrackTitle) : '',
+      ].filter(Boolean)
     );
+    const bcItems = (bcSearchRes?.results || []).filter(item => {
+      if (!item || (item.type !== 'album' && item.type !== 'track')) return false;
+      const itemArtistRaw = String(item.artistName || '');
+      const itemArtistPlain = _normStr(itemArtistRaw);
+      const itemArtistAccent = _normKeepAccents(itemArtistRaw);
+      const exactOrCollabMatch = itemArtistPlain === wantPlain ||
+        itemArtistRaw.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(part => _normStr(part) === wantPlain);
+      if (!exactOrCollabMatch) return false;
+      if (hasAccents && profile && !profile.error) {
+        const accentMatches = itemArtistAccent === wantAccent ||
+          itemArtistRaw.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(part => _normKeepAccents(part) === wantAccent);
+        const releaseMatches = knownReleaseTitles.has(_normStr(item.title || ''));
+        return accentMatches || releaseMatches;
+      }
+      return true;
+    });
 
     if ((profile && !profile.error) || memberProfiles.length > 0 || bcItems.length > 0) {
       const pObj = (profile && !profile.error) ? profile : {};
@@ -1218,7 +1282,9 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
 
       const bcArtistHit = (bcSearchRes?.results || []).find(item =>
         (item.type === 'artist' || item.type === 'label') &&
-        _normStr(item.title || item.artistName || '') === _normStr(cleanName)
+        (hasAccents
+          ? _normKeepAccents(item.title || item.artistName || '') === wantAccent
+          : _normStr(item.title || item.artistName || '') === wantPlain)
       );
       let resolvedLocation = pObj.location
         || memberProfiles.map(mp => mp.location).filter(Boolean).join(' / ')
@@ -1263,7 +1329,11 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
       if (typeof window !== 'undefined' && cacheKey) {
         window.__kyoyuPreloadedArtists[cacheKey] = enrichedArtist;
         if (enrichedArtist.name) {
-          window.__kyoyuPreloadedArtists[_normStr(enrichedArtist.name)] = enrichedArtist;
+          const enrichedKey = _normKeepAccents(enrichedArtist.name);
+          if (enrichedKey) window.__kyoyuPreloadedArtists[enrichedKey] = enrichedArtist;
+          if (!hasAccents) {
+            window.__kyoyuPreloadedArtists[_normStr(enrichedArtist.name)] = enrichedArtist;
+          }
         }
       }
 

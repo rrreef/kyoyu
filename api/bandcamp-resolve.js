@@ -98,6 +98,12 @@ export default async function handler(req, res) {
       }
 
       const unescapeEntity = (str) => String(str || '')
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)); } catch { return _; } })
+        .replace(/&#(\d+);/g, (_, dec) => { try { return String.fromCodePoint(parseInt(dec, 10)); } catch { return _; } })
+        .replace(/&([a-zA-Z])(acute|grave|circ|uml|tilde|cedil|ring|slash);/g, (_, ch, mod) => {
+          const comb = { acute: '\u0301', grave: '\u0300', circ: '\u0302', uml: '\u0308', tilde: '\u0303', cedil: '\u0327', ring: '\u030a' }[mod];
+          return comb ? (ch + comb).normalize('NFC') : _;
+        })
         .replace(/&quot;/g, '"')
         .replace(/&#39;|&apos;/g, "'")
         .replace(/&#x27;/g, "'")
@@ -111,7 +117,7 @@ export default async function handler(req, res) {
         if (!t) return '';
         const leadMatch = t.match(/^(?:[A-D]\d{1,2}|\d{1,2})\s*[.)\-]\s*(.+-.+)$/i);
         if (leadMatch && leadMatch[1]) t = leadMatch[1].trim();
-        const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
         const aNorm = norm(rawArtist);
         for (const sep of [' — ', ' – ', ' - ']) {
           const idx = t.indexOf(sep);
