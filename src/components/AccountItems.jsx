@@ -1,6 +1,7 @@
 import { useState, useEffect, memo } from 'react';
 import { Play, Music2 } from 'lucide-react';
 import { usePlayer } from '../contexts/PlayerContext';
+import { cleanTrackOrReleaseTitle, splitCleanMetadata } from '../lib/streaming';
 
 /* Items coming from a connected SoundCloud / Bandcamp account (tracks, albums, playlists, followed profiles)
    with tap-to-play, as a list or as an icon grid (same look as the liked tracks). Shared by the account page and the Library. */
@@ -230,51 +231,57 @@ export function toPlayable(it) {
     (((tid.startsWith('i.') || String(it?.id || '').startsWith('am-i.')) && !!it?.catalogId) ||
      (aid.startsWith('l.') && !!it?.catalogId));
   const art = isFakePrivateArt ? '' : sanitizeArtworkUrl(it.artworkUrl || it.cover, it.id, true);
+  const meta = splitCleanMetadata(it.title, it.artistName || it.artist || '', it.label || it.labelName || '', it.albumName || it.album || '');
+  const cleanTitle = meta.title || it.title;
+  const cleanArtist = meta.artist || it.artistName || it.artist || '';
+  const cleanLabel = meta.label || it.label || it.labelName || undefined;
+  const cleanAlbum = meta.album || it.albumName || it.album || undefined;
   if (it.provider === 'soundcloud') {
     return {
-      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+      id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, albumName: cleanAlbum, artworkUrl: art, duration: it.duration || 0,
       provider: 'soundcloud', providerItemId: it.permalinkUrl, scTrackId: it.trackId, trackId: it.trackId,
     };
   }
   if (it.provider === 'spotify') {
     return {
-      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+      id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, artworkUrl: art, duration: it.duration || 0,
       provider: 'spotify', providerItemId: it.spotifyId || it.trackId, spotifyId: it.spotifyId || it.trackId,
-      albumName: it.albumName, uri: it.uri,
+      albumName: cleanAlbum, uri: it.uri,
     };
   }
   if (it.provider === 'applemusic') {
     const amId = it.appleMusicId || it.trackId || it.providerItemId || String(it.id || '').replace(/^am-/, '');
     return {
-      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+      id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, artworkUrl: art, duration: it.duration || 0,
       provider: 'applemusic', providerItemId: amId, appleMusicId: amId, trackId: amId,
-      albumName: it.albumName, url: it.url,
+      albumName: cleanAlbum, url: it.url,
     };
   }
   if (it.provider === 'tidal') {
     return {
-      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+      id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, artworkUrl: art, duration: it.duration || 0,
       provider: 'tidal', providerItemId: it.tidalId || it.trackId, tidalId: it.tidalId || it.trackId,
-      albumName: it.albumName, url: it.url,
+      albumName: cleanAlbum, url: it.url,
     };
   }
   if (it.provider === 'discogs') {
     return {
-      id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+      id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, artworkUrl: art, duration: it.duration || 0,
       provider: 'discogs', providerItemId: it.trackUrl || it.id, trackUrl: it.trackUrl,
-      albumName: it.albumName || it.title, url: it.url,
+      albumName: cleanAlbum || cleanTitle, url: it.url, year: it.year || undefined,
     };
   }
   if (it.provider === 'youtube') {
     const vid = it.videoId || it.trackId || it.providerItemId || String(it.id || '').replace(/^yt-|^youtube-/, '');
     return {
-      id: it.id || `yt-${vid}`, title: it.title, artistName: it.artistName || it.artist, artworkUrl: art, duration: it.duration || 0,
+      id: it.id || `yt-${vid}`, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, artworkUrl: art, duration: it.duration || 0,
       provider: 'youtube', providerItemId: vid, videoId: vid, trackId: vid,
-      albumName: it.albumName, url: it.url || `https://music.youtube.com/watch?v=${vid}`,
+      albumName: cleanAlbum, url: it.url || `https://music.youtube.com/watch?v=${vid}`,
     };
   }
   return {
-    id: it.id, title: it.title, artistName: it.artistName, artworkUrl: art, duration: it.duration || 0,
+    id: it.id, title: cleanTitle, artistName: cleanArtist, label: cleanLabel, albumName: cleanAlbum, year: it.year || undefined,
+    artworkUrl: art, duration: it.duration || 0,
     provider: 'bandcamp', providerItemId: it.trackUrl, trackUrl: it.trackUrl, streamUrl: it.streamUrl || undefined,
   };
 }
@@ -293,6 +300,10 @@ const Art = memo(function Art({ item, src, round }) {
 });
 
 const Row = memo(function Row({ item, onClick, right, sub, round }) {
+  const isProfile = item.kind === 'profile';
+  const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
+  const displayTitle = meta.title || item.title;
+  const displayArtist = sub ?? (meta.artist || item.artistName);
   return (
     <div
       onClick={onClick}
@@ -300,8 +311,8 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
     >
       <Art item={item} src={item.artworkUrl} round={round} isPlaylist={item.kind === 'playlist'} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-        <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub ?? item.artistName}</div>
+        <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayTitle}</div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayArtist}</div>
       </div>
       {right && <div style={{ display: 'flex', alignItems: 'center', paddingRight: 14, flexShrink: 0 }}>{right}</div>}
     </div>
@@ -311,12 +322,16 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
 /** One cell of the icon view (same classes as the liked-tracks grid) */
 const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlaying }) {
   const isPlaylist = item.kind === 'playlist';
+  const isProfile = item.kind === 'profile';
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
+  const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
+  const displayTitle = meta.title || item.title;
+  const displayArtist = meta.artist || item.artistName;
   return (
     <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-      <div className="upl-grid-art" style={item.kind === 'profile' ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
+      <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
-          ? <img src={cleanSrc} alt={item.title} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
+          ? <img src={cleanSrc} alt={displayTitle} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
         {isActive && (
           <div className="upl-grid-playing">
@@ -326,8 +341,8 @@ const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlayi
           </div>
         )}
       </div>
-      <div className="upl-grid-title">{item.title}</div>
-      {item.artistName ? <div className="upl-grid-artist">{item.artistName}</div> : null}
+      <div className="upl-grid-title">{displayTitle}</div>
+      {displayArtist ? <div className="upl-grid-artist">{displayArtist}</div> : null}
     </div>
   );
 });
@@ -374,18 +389,26 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
     const isAlbum = pl.kind === 'album';
-    const creator = pl.artistName || pl.creator || 'You';
+    const rawCreator = pl.artistName || pl.artist || pl.creator || 'You';
+    const meta = splitCleanMetadata(pl.title, rawCreator, pl.label || pl.labelName || '');
+    let creator = meta.artist || rawCreator;
+    let cleanAlbumTitle = meta.title || pl.title;
+    let resolvedLabel = meta.label || pl.label || pl.labelName || null;
+    let resolvedYear = pl.year ? String(pl.year) : null;
     const cover = pl.artworkUrl || pl.cover || null;
 
     const postSheet = (tracksList) => {
-      const mappedTracks = (tracksList || []).map(t => ({
-        id: t.id || String(Date.now() + Math.random()),
-        title: t.title || t.name || 'Unknown Track',
-        artist: t.artist || t.artistName || creator || '',
-        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-        cover: t.artworkUrl || t.cover || cover || null,
-        provider: t.provider || pl.provider || null,
-      }));
+      const mappedTracks = (tracksList || []).map(t => {
+        const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator || '', resolvedLabel || '');
+        return {
+          id: t.id || String(Date.now() + Math.random()),
+          title: tm.title || t.title || t.name || 'Unknown Track',
+          artist: tm.artist || t.artist || t.artistName || creator || '',
+          url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+          cover: t.artworkUrl || t.cover || cover || null,
+          provider: t.provider || pl.provider || null,
+        };
+      });
       try {
         if (isAlbum) {
           window.webkit?.messageHandlers?.player?.postMessage({
@@ -393,12 +416,12 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
             nativeAlbum: {
               _ts: String(ts),
               id: pl.id,
-              title: pl.title,
+              title: cleanAlbumTitle,
               artist: creator,
               cover,
               genre: pl.genre || null,
-              year: pl.year ? String(pl.year) : null,
-              label: pl.label || null,
+              year: resolvedYear,
+              label: resolvedLabel,
               provider: pl.provider || null,
               tracks: mappedTracks,
             }
@@ -409,7 +432,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
             nativePlaylist: {
               _ts: String(ts),
               id: pl.id,
-              title: pl.title,
+              title: cleanAlbumTitle,
               cover,
               creator,
               provider: pl.provider || null,
@@ -431,14 +454,26 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
           body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url }),
         });
         const data = r.ok ? await r.json() : { tracks: [] };
+        if (data.album) {
+          if (data.album.label && !resolvedLabel) resolvedLabel = data.album.label;
+          if (data.album.year && !resolvedYear) resolvedYear = String(data.album.year);
+          if (data.album.artistName) {
+            const m2 = splitCleanMetadata(data.album.title || cleanAlbumTitle, data.album.artistName, resolvedLabel || '');
+            creator = m2.artist || creator;
+            cleanAlbumTitle = m2.title || cleanAlbumTitle;
+            if (m2.label && !resolvedLabel) resolvedLabel = m2.label;
+          }
+        }
         const now = Date.now();
         const tracks = (data.tracks || []).map((t, i) => ({
           id: `bc-${t.trackId || i}`,
           kind: 'track',
           provider: 'bandcamp',
-          title: t.title,
+          title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
           artist: t.artistName || creator,
           artistName: t.artistName || creator,
+          label: resolvedLabel || undefined,
+          year: resolvedYear || undefined,
           artworkUrl: t.artworkUrl || cover,
           cover: t.artworkUrl || cover,
           duration: t.duration || 0,
@@ -451,6 +486,8 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
         }));
         if (tracks.length > 0) {
           pl.tracks = tracks;
+          pl.label = resolvedLabel || pl.label;
+          pl.year = resolvedYear || pl.year;
           if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
             postSheet(tracks);
           }

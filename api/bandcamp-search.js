@@ -101,24 +101,129 @@ export default async function handler(req, res) {
         }
       }
 
+      const decodeEntities = (str) => String(str || '')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .trim();
+
+      const stripArtistFromTitle = (rawTitle, rawArtist) => {
+        let t = String(rawTitle || '').trim();
+        if (!t) return '';
+        const leadMatch = t.match(/^(?:[A-D]\d{1,2}|\d{1,2})\s*[.)\-]\s*(.+-.+)$/i);
+        if (leadMatch && leadMatch[1]) t = leadMatch[1].trim();
+        const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const aNorm = norm(rawArtist);
+        for (const sep of [' — ', ' – ', ' - ']) {
+          const idx = t.indexOf(sep);
+          if (idx > 0) {
+            const left = t.slice(0, idx).trim();
+            const right = t.slice(idx + sep.length).trim();
+            if (!left || !right) continue;
+            if (aNorm && (norm(left) === aNorm || norm(left).includes(aNorm) || aNorm.includes(norm(left)))) {
+              return right;
+            }
+            if (aNorm && norm(right) === aNorm) {
+              return left;
+            }
+            const isTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+)$/i.test(left);
+            if (isTrackPos) return right;
+            const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+            if (!isRightDesc && left.length >= 2) return right;
+          }
+        }
+        return t;
+      };
+
       const albumArt =
         (html.match(/<a class="popupImage"[^>]*href="([^"]+)"/) || [])[1] ||
         (html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/) || [])[1] ||
         '';
 
+      // Extract the Bandcamp page's band/label name (e.g. "NAFF" on naffrecordings.bandcamp.com)
+      let bandPageName = decodeEntities(
+        (html.match(/<p id="band-name-location">\s*<span class="title">([^<]+)<\/span>/i) || [])[1] ||
+        (html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/i) || [])[1] ||
+        ''
+      );
+      if (!bandPageName) {
+        const bandAttr = (html.match(/data-band="([^"]+)"/) || [])[1];
+        if (bandAttr) {
+          try {
+            const bandJson = JSON.parse(decodeEntities(bandAttr));
+            if (bandJson?.name) bandPageName = String(bandJson.name).trim();
+          } catch (e) {}
+        }
+      }
+
+      let originUrl = '';
+      try { originUrl = new URL(body.albumUrl).origin; } catch (e) {}
+
+      let albumArtist = decodeEntities(tralbum?.artist || '');
+      let rawAlbumTitle = decodeEntities(tralbum?.current?.title || '');
+      if (!rawAlbumTitle) {
+        rawAlbumTitle = decodeEntities((html.match(/<h2 class="trackTitle">\s*([\s\S]*?)\s*<\/h2>/i) || [])[1] || '');
+      }
+      // If artist matches bandPageName (or is empty) and albumTitle is "Artist - Title", split out the real artist
+      for (const sep of [' — ', ' – ', ' - ']) {
+        const idx = rawAlbumTitle.indexOf(sep);
+        if (idx > 0) {
+          const left = rawAlbumTitle.slice(0, idx).trim();
+          const right = rawAlbumTitle.slice(idx + sep.length).trim();
+          const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+          if (left && right && !isRightDesc) {
+            if (!albumArtist || albumArtist.toLowerCase() === bandPageName.toLowerCase() || /^various(\s+artists)?$/i.test(albumArtist)) {
+              if (!bandPageName && albumArtist) bandPageName = albumArtist;
+              albumArtist = left;
+            }
+            rawAlbumTitle = right;
+            break;
+          }
+        }
+      }
+      const cleanAlbumTitle = stripArtistFromTitle(rawAlbumTitle, albumArtist);
+      const releaseDateRaw = String(tralbum?.current?.release_date || tralbum?.album_release_date || tralbum?.current?.publish_date || '');
+      const releaseYear = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
+      const resolvedLabel = bandPageName || albumArtist || '';
+
       if (tralbum && Array.isArray(tralbum.trackinfo)) {
         for (const t of tralbum.trackinfo) {
           const file = t.file;
           const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || '') : '';
+          let trackArtist = decodeEntities(t.artist || albumArtist || '');
+          let rawTrackTitle = decodeEntities(t.title || '');
+          for (const sep of [' — ', ' – ', ' - ']) {
+            const idx = rawTrackTitle.indexOf(sep);
+            if (idx > 0) {
+              const left = rawTrackTitle.slice(0, idx).trim();
+              const right = rawTrackTitle.slice(idx + sep.length).trim();
+              const isTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+)$/i.test(left);
+              const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+              if (!isTrackPos && !isRightDesc && left && right) {
+                if (!t.artist && (!trackArtist || trackArtist.toLowerCase() === bandPageName.toLowerCase() || /^various(\s+artists)?$/i.test(trackArtist))) {
+                  trackArtist = left;
+                }
+                rawTrackTitle = right;
+                break;
+              }
+            }
+          }
+          const cleanTrackTitle = stripArtistFromTitle(rawTrackTitle, trackArtist);
           tracks.push({
             trackId: t.track_id || t.id,
-            title: t.title || '',
+            title: cleanTrackTitle,
             duration: Math.round((t.duration || 0)),
             streamUrl,
             // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
             trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, body.albumUrl).href : body.albumUrl; } catch (e) { return body.albumUrl; } })(),
             artworkUrl: albumArt,
-            artistName: tralbum.artist || '',
+            artistName: trackArtist,
+            albumName: cleanAlbumTitle,
+            label: resolvedLabel,
+            labelUrl: originUrl,
+            year: releaseYear,
           });
         }
       }
@@ -130,22 +235,39 @@ export default async function handler(req, res) {
           try {
             const ld = JSON.parse(ldMatch[1]);
             const ldArt = ld.image || albumArt;
+            const ldArtist = ld.byArtist?.name || albumArtist || '';
+            const ldLabel = ld.publisher?.name || resolvedLabel || ldArtist || '';
             for (const t of (ld.track?.itemListElement || [])) {
               const item = t.item || t;
+              const tArtist = item.byArtist?.name || ldArtist;
               tracks.push({
                 trackId: item['@id'] || t.position,
                 trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : body.albumUrl,
-                title: item.name || '',
+                title: stripArtistFromTitle(item.name || '', tArtist),
                 duration: 0,
                 artworkUrl: ldArt,
-                artistName: ld.byArtist?.name || '',
+                artistName: tArtist,
+                albumName: cleanAlbumTitle || ld.name || '',
+                label: ldLabel,
+                labelUrl: originUrl,
+                year: releaseYear,
               });
             }
           } catch (e) { /* parse error */ }
         }
       }
       
-      return res.status(200).json({ tracks });
+      return res.status(200).json({
+        tracks,
+        album: {
+          title: cleanAlbumTitle,
+          artistName: albumArtist,
+          label: resolvedLabel,
+          labelUrl: originUrl,
+          year: releaseYear,
+          artworkUrl: albumArt,
+        }
+      });
     } catch (err) {
       console.error('Bandcamp album fetch error:', err);
       return res.status(200).json({ tracks: [] });
@@ -213,14 +335,39 @@ export default async function handler(req, res) {
         const looksLikeLabel = item.type === 'b' && (item.is_label || LABEL_NAME_RE.test(item.name || ''));
         const type = item.type === 'b' ? (looksLikeLabel ? 'label' : 'artist') : item.type === 'a' ? 'album' : item.type === 'f' ? 'fan' : 'track';
 
+        let rawTitle = String(item.name || '').trim();
+        let artistName = String(item.band_name || (type === 'artist' || type === 'label' ? item.name : '')).trim();
+        let labelName = '';
+        if (type === 'track' || type === 'album') {
+          for (const sep of [' — ', ' – ', ' - ']) {
+            const idx = rawTitle.indexOf(sep);
+            if (idx > 0) {
+              const left = rawTitle.slice(0, idx).trim();
+              const right = rawTitle.slice(idx + sep.length).trim();
+              const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+              if (left && right && !isRightDesc) {
+                if (artistName && left.toLowerCase() !== artistName.toLowerCase()) {
+                  labelName = artistName;
+                  artistName = left;
+                } else if (!artistName) {
+                  artistName = left;
+                }
+                rawTitle = right;
+                break;
+              }
+            }
+          }
+        }
+
         return {
           trackId: item.id,
           type,
-          title: item.name || '',
-          artistName: item.band_name || (type === 'artist' || type === 'label' ? item.name : ''),
+          title: rawTitle,
+          artistName,
+          labelName: labelName || (item.band_name || ''),
           artworkUrl,
           trackUrl: item.item_url_path || item.item_url_root || item.url || '',
-          albumName: item.album_name || (type === 'album' ? item.name : ''),
+          albumName: item.album_name || (type === 'album' ? rawTitle : ''),
           albumId: item.album_id || null,
           location: item.location || '',
           genre: item.genre_name || '',

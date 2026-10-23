@@ -8,9 +8,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory } from '../components/AccountItems';
+import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory, toPlayable } from '../components/AccountItems';
 import { useConnectedLibrary, preloadConnectedLibrary } from '../lib/useConnectedLibrary';
-import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW } from '../lib/streaming';
+import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
 import EventSheet from '../components/ui/EventSheet';
@@ -107,22 +107,23 @@ if (typeof window !== 'undefined') {
 function groupByAlbum(tracks) {
   const map = new Map();
   tracks.forEach(t => {
-    const hasAlbum = t.album && t.album.trim() && t.album.trim() !== t.title.trim();
-    const key = hasAlbum ? `album::${t.album.trim()}::${t.artist.trim()}` : `single::${t.id}`;
+    const cleanT = splitCleanMetadata(t.title, t.artist, t.label, t.album);
+    const hasAlbum = cleanT.album && cleanT.album.trim() && cleanT.album.trim() !== cleanT.title.trim();
+    const key = hasAlbum ? `album::${cleanT.album.trim()}::${cleanT.artist.trim()}` : `single::${t.id}`;
     if (!map.has(key)) {
       map.set(key, {
         id:     key,
-        title:  hasAlbum ? t.album.trim() : t.title,
-        artist: t.artist,
+        title:  hasAlbum ? cleanT.album.trim() : cleanT.title,
+        artist: cleanT.artist || t.artist,
         cover:  t.cover,
-        label:  t.label,
+        label:  cleanT.label || t.label,
         genre:  t.genre,
         year:   t.year,
         tracks: [],
       });
     }
     const entry = map.get(key);
-    entry.tracks.push(t);
+    entry.tracks.push({ ...t, title: cleanT.title || t.title, artist: cleanT.artist || t.artist });
     if (!entry.cover && t.cover) entry.cover = t.cover;
   });
   const extractNum = (t) => {
@@ -139,7 +140,7 @@ function groupByAlbum(tracks) {
 }
 
 export default function Home() {
-  const { playRelease, playTrack, playFromHistory } = usePlayer();
+  const { playRelease, playTrack, playFromHistory, setSearchQueue, playSearchItem } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads, playlists } = useLibrary();
   const acct = useConnectedLibrary();
@@ -155,23 +156,44 @@ export default function Home() {
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
-    const creator = pl.artistName || pl.creator || user?.displayName || 'You';
+    const rawCreator = pl.artistName || pl.artist || pl.creator || user?.displayName || 'You';
+    const meta = splitCleanMetadata(pl.title, rawCreator, pl.label || pl.labelName || '');
+    let creator = meta.artist || rawCreator;
+    let cleanAlbumTitle = meta.title || pl.title;
+    let resolvedLabel = meta.label || pl.label || pl.labelName || null;
+    let resolvedYear = pl.year ? String(pl.year) : null;
     let cover = pl.artworkUrl || pl.cover || null;
     if (cover && cover.includes('bcbits.com')) {
       cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
     }
 
     const pushToSheet = (currentTracks) => {
+      const cleanedTracks = (currentTracks || []).map(t => {
+        const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator, resolvedLabel || '');
+        return {
+          ...t,
+          title: tm.title || t.title || t.name || 'Unknown Track',
+          artist: tm.artist || t.artist || t.artistName || creator,
+          artistName: tm.artist || t.artistName || t.artist || creator,
+          label: t.label || resolvedLabel || undefined,
+          year: t.year || resolvedYear || undefined,
+          album: cleanAlbumTitle,
+          releaseTitle: cleanAlbumTitle,
+        };
+      });
       const albumObj = {
         ...pl,
+        title: cleanAlbumTitle,
         artist: creator,
+        label: resolvedLabel,
+        year: resolvedYear,
         cover,
-        tracks: currentTracks,
+        tracks: cleanedTracks,
         _ts: ts,
       };
       setSelectedAlbum(albumObj);
       registerAlbumPlayback(albumObj);
-      const mappedTracks = currentTracks.map(t => ({
+      const mappedTracks = cleanedTracks.map(t => ({
         id: t.id || String(Date.now() + Math.random()),
         title: t.title || t.name || 'Unknown Track',
         artist: t.artist || t.artistName || '',
@@ -186,12 +208,12 @@ export default function Home() {
             nativeAlbum: {
               _ts: String(ts),
               id: pl.id,
-              title: pl.title,
+              title: cleanAlbumTitle,
               artist: creator,
               cover,
               genre: pl.genre || null,
-              year: pl.year ? String(pl.year) : null,
-              label: pl.label || null,
+              year: resolvedYear,
+              label: resolvedLabel,
               provider: pl.provider || null,
               tracks: mappedTracks,
             }
@@ -202,7 +224,7 @@ export default function Home() {
             nativePlaylist: {
               _ts: String(ts),
               id: pl.id,
-              title: pl.title,
+              title: cleanAlbumTitle,
               cover,
               creator,
               provider: pl.provider || null,
@@ -224,14 +246,28 @@ export default function Home() {
           body: JSON.stringify({ action: 'fetch-album', albumUrl }),
         });
         const data = r.ok ? await r.json() : { tracks: [] };
+        if (data.album) {
+          if (data.album.label && !resolvedLabel) resolvedLabel = data.album.label;
+          if (data.album.year && !resolvedYear) resolvedYear = String(data.album.year);
+          if (data.album.artistName) {
+            const m2 = splitCleanMetadata(data.album.title || cleanAlbumTitle, data.album.artistName, resolvedLabel || '');
+            creator = m2.artist || creator;
+            cleanAlbumTitle = m2.title || cleanAlbumTitle;
+            if (m2.label && !resolvedLabel) resolvedLabel = m2.label;
+          }
+        }
         const now = Date.now();
         let fetched = (data.tracks || []).map((t, i) => ({
           id: `bc-${t.trackId || i}`,
           kind: 'track',
           provider: 'bandcamp',
-          title: t.title,
+          title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
           artist: t.artistName || creator,
           artistName: t.artistName || creator,
+          label: resolvedLabel || undefined,
+          year: resolvedYear || undefined,
+          album: cleanAlbumTitle,
+          releaseTitle: cleanAlbumTitle,
           artworkUrl: t.artworkUrl || cover,
           cover: t.artworkUrl || cover,
           duration: t.duration || 0,
@@ -239,6 +275,7 @@ export default function Home() {
           audioUrl: t.streamUrl || '',
           url: t.streamUrl || t.trackUrl || '',
           trackUrl: t.trackUrl || albumUrl,
+          albumUrl,
           providerItemId: t.trackUrl || albumUrl,
           streamFetchedAt: t.streamUrl ? now : undefined,
         }));
@@ -249,13 +286,25 @@ export default function Home() {
             body: JSON.stringify({ action: 'album-tracks', url: albumUrl }),
           }).catch(() => null);
           const data2 = r2 && r2.ok ? await r2.json() : { tracks: [] };
+          if (data2.label && !resolvedLabel) resolvedLabel = data2.label;
+          if (data2.year && !resolvedYear) resolvedYear = String(data2.year);
+          if (data2.artist) {
+            const m3 = splitCleanMetadata(data2.albumTitle || cleanAlbumTitle, data2.artist, resolvedLabel || '');
+            creator = m3.artist || creator;
+            cleanAlbumTitle = m3.title || cleanAlbumTitle;
+            if (m3.label && !resolvedLabel) resolvedLabel = m3.label;
+          }
           fetched = (data2.tracks || []).map((t, i) => ({
             id: `bc-${t.trackId || t.trackNum || i}`,
             kind: 'track',
             provider: 'bandcamp',
-            title: t.title,
+            title: cleanTrackOrReleaseTitle(t.title, t.artist || t.artistName || creator),
             artist: t.artist || t.artistName || creator,
             artistName: t.artist || t.artistName || creator,
+            label: resolvedLabel || undefined,
+            year: resolvedYear || undefined,
+            album: cleanAlbumTitle,
+            releaseTitle: cleanAlbumTitle,
             artworkUrl: t.artworkUrl || cover,
             cover: t.artworkUrl || cover,
             duration: t.duration || 0,
@@ -263,6 +312,7 @@ export default function Home() {
             audioUrl: t.streamUrl || '',
             url: t.streamUrl || t.url || albumUrl,
             trackUrl: t.url || albumUrl,
+            albumUrl,
             providerItemId: t.url || albumUrl,
             streamFetchedAt: t.streamUrl ? now : undefined,
           }));
@@ -272,6 +322,8 @@ export default function Home() {
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
+          pl.label = resolvedLabel || pl.label;
+          pl.year = resolvedYear || pl.year;
           if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
             pushToSheet(fetched);
           }
@@ -310,6 +362,8 @@ export default function Home() {
   // Featured carousel state
   const featuredRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const bandcampHeroRef = useRef(null);
+  const [activeBcSlide, setActiveBcSlide] = useState(0);
 
   // Track active slide on scroll
   const handleFeaturedScroll = useCallback(() => {
@@ -320,6 +374,16 @@ export default function Home() {
     const gap = 14;
     const idx = Math.round(scrollLeft / (cardWidth + gap));
     setActiveSlide(idx);
+  }, []);
+
+  const handleBcHeroScroll = useCallback(() => {
+    const el = bandcampHeroRef.current;
+    if (!el) return;
+    const scrollLeft = el.scrollLeft;
+    const cardWidth = el.firstChild?.offsetWidth || 1;
+    const gap = 14;
+    const idx = Math.round(scrollLeft / (cardWidth + gap));
+    setActiveBcSlide(idx);
   }, []);
 
   // Load real public releases from prewarmed cache / backend
@@ -607,7 +671,7 @@ export default function Home() {
 
         const sectionsByProvider = {
           bandcamp: [
-            { key: 'bandcamp-new',  title: 'Bandcamp · New Stuff',  provider: 'bandcamp', category: 'newStuff',  items: acct.bandcamp?.newStuff || [],   pageSize: limitFor('bandcamp-new'),  type: 'acct' },
+            { key: 'bandcamp-new',  title: 'New on Bandcamp',       provider: 'bandcamp', category: 'newStuff',  items: acct.bandcamp?.newStuff || [],   pageSize: limitFor('bandcamp-new'),  type: 'acct' },
             { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: acct.bandcamp?.collection || [], pageSize: limitFor('bandcamp-col'),  type: 'acct' },
             { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: acct.bandcamp?.wishlist || [],   pageSize: limitFor('bandcamp-wish'), type: 'acct' },
             { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: acct.bandcamp?.playlists || [],  pageSize: limitFor('bandcamp-pl'),   type: 'acct' },
@@ -678,6 +742,102 @@ export default function Home() {
                     )}
                     {expandedVisibleCount < sec.items.length && (
                       <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                    )}
+                  </section>
+                );
+              }
+
+              // Render "New on Bandcamp" using the Featured hero carousel layout
+              if (sec.key === 'bandcamp-new') {
+                const bcHeroItems = sec.items.slice(0, Math.max(sec.pageSize || 9, 15));
+                return (
+                  <section key={sec.key} className="home-section">
+                    <div className="section-title">
+                      <span onClick={() => toggleExpandSection(sec.key)} style={{ cursor: 'pointer' }}>{sec.title}</span>
+                    </div>
+                    <div
+                      className="featured-hero-row"
+                      ref={bandcampHeroRef}
+                      onScroll={handleBcHeroScroll}
+                    >
+                      {bcHeroItems.map((it, idx) => {
+                        const rawCover = it.artworkUrl || it.cover || '';
+                        const cleanCover = rawCover ? pinImageInMemory(rawCover, it.id || `bc-new-${idx}`) : '';
+                        const meta = splitCleanMetadata(it.title, it.artistName || it.artist || '', it.label || it.labelName || '');
+                        const u = String(it.trackUrl || it.url || '');
+                        const isAlb = it.kind === 'album' || (u.includes('/album/') && !u.includes('/track/'));
+                        const showLabel = meta.label && meta.label.toLowerCase() !== (meta.artist || '').toLowerCase() ? meta.label : '';
+                        return (
+                          <button
+                            key={it.id || `bc-new-${idx}`}
+                            className="featured-hero-card"
+                            onClick={() => {
+                              if (isAlb) {
+                                openPlaylistSheet({
+                                  ...it,
+                                  kind: 'album',
+                                  title: meta.title || it.title,
+                                  artistName: meta.artist || it.artistName,
+                                  label: meta.label || it.label,
+                                });
+                              } else {
+                                const playable = toPlayable({
+                                  ...it,
+                                  title: meta.title || it.title,
+                                  artistName: meta.artist || it.artistName,
+                                  label: meta.label || it.label,
+                                });
+                                const queue = bcHeroItems
+                                  .filter(x => !(x.kind === 'album' || String(x.trackUrl || x.url || '').includes('/album/')))
+                                  .map(x => {
+                                    const xm = splitCleanMetadata(x.title, x.artistName || x.artist || '', x.label || x.labelName || '');
+                                    return toPlayable({ ...x, title: xm.title || x.title, artistName: xm.artist || x.artistName, label: xm.label || x.label });
+                                  });
+                                const qIdx = queue.findIndex(q => q.id === playable.id);
+                                setSearchQueue(queue.length > 0 ? queue : [playable], qIdx >= 0 ? qIdx : 0);
+                                playSearchItem(playable);
+                              }
+                            }}
+                          >
+                            {cleanCover && (
+                              <div
+                                className="featured-hero-bg"
+                                style={{ backgroundImage: `url(${cleanCover})` }}
+                              />
+                            )}
+                            <div className="featured-hero-art">
+                              {cleanCover
+                                ? <img src={cleanCover} alt={meta.title || it.title} loading="eager" decoding="sync" />
+                                : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
+                            </div>
+                            <div className="featured-hero-info">
+                              <div className="featured-hero-title">{meta.title || it.title}</div>
+                              <div className="featured-hero-artist">{meta.artist || it.artistName}</div>
+                              {showLabel && <div className="featured-hero-label">{showLabel}</div>}
+                              <div className="featured-hero-meta">
+                                {isAlb ? 'Release' : 'Track'}
+                                {it.year ? ` · ${it.year}` : ''}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {bcHeroItems.length > 1 && (
+                      <div className="featured-dots">
+                        {bcHeroItems.map((_, i) => (
+                          <div
+                            key={i}
+                            className={`featured-dot${i === activeBcSlide ? ' active' : ''}`}
+                            onClick={() => {
+                              const el = bandcampHeroRef.current;
+                              if (!el || !el.firstChild) return;
+                              const cardW = el.firstChild.offsetWidth + 14;
+                              el.scrollTo({ left: i * cardW, behavior: 'smooth' });
+                            }}
+                          />
+                        ))}
+                      </div>
                     )}
                   </section>
                 );

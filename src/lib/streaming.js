@@ -115,9 +115,150 @@ const HOME_ROWS_KEY = 'kyoyu-home-section-rows';
 export const HOME_TITLES_PER_ROW = 3;
 export const DEFAULT_HOME_SECTION_ROWS = 3;
 
+export function cleanTrackOrReleaseTitle(rawTitle, rawArtist = '') {
+  if (!rawTitle || typeof rawTitle !== 'string') return '';
+  let t = rawTitle.trim();
+  if (!t) return '';
+
+  const norm = (s) => String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  const artistClean = String(rawArtist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+  const artistNorm = norm(artistClean);
+  const artistPartsNorm = artistClean
+    .split(/\s*(?:&|\band\b|,|\bx\b|\bvs\.?\b|\bfeat\.?\b|\bft\.?\b|\/|\+)\s*/i)
+    .map(norm)
+    .filter(s => s.length >= 2);
+
+  const matchesArtist = (candidate) => {
+    const cNorm = norm(candidate);
+    if (!cNorm) return false;
+    if (artistNorm && (cNorm === artistNorm || (artistNorm.length >= 3 && cNorm.includes(artistNorm)) || (cNorm.length >= 3 && artistNorm.includes(cNorm)))) {
+      return true;
+    }
+    if (artistPartsNorm.length > 0 && artistPartsNorm.some(ap => cNorm === ap || (ap.length >= 4 && cNorm.includes(ap)))) {
+      return true;
+    }
+    return false;
+  };
+
+  // Strip leading track numbers when followed by separator + artist/title, e.g. "03. Benedikt Frey - Trace"
+  const leadingTrackMatch = t.match(/^(?:[A-D]\d{1,2}|\d{1,2})\s*[.)\-]\s*(.+-.+)$/i);
+  if (leadingTrackMatch && leadingTrackMatch[1]) {
+    t = leadingTrackMatch[1].trim();
+  }
+
+  const seps = [' — ', ' – ', ' - ', ' —', '— ', ' –', '– '];
+  for (const sep of seps) {
+    const idx = t.indexOf(sep);
+    if (idx > 0) {
+      const left = t.slice(0, idx).trim();
+      const right = t.slice(idx + sep.length).trim();
+      if (left && right) {
+        if (matchesArtist(left)) {
+          return right;
+        }
+        if (matchesArtist(right)) {
+          return left;
+        }
+      }
+    }
+  }
+
+  // Also check if no artist was matched yet, or if title is in "Artist - Title" format from Bandcamp/SoundCloud/Discogs
+  for (const sep of [' — ', ' – ', ' - ']) {
+    const idx = t.indexOf(sep);
+    if (idx > 0) {
+      const left = t.slice(0, idx).trim();
+      const right = t.slice(idx + sep.length).trim();
+      if (!left || !right) continue;
+      const isLeftTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+|intro|outro)$/i.test(left);
+      if (isLeftTrackPos) {
+        return right;
+      }
+      const isRightDescriptor = /^(ep|lp|single|album|ost|soundtrack|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|act\s*[0-9ivx]+|chapter\s*\d+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|bootleg|flip|refix|instru|instrumental|acapella|bonus.*))$/i.test(right);
+      if (!isRightDescriptor && left.length >= 2 && right.length >= 1) {
+        return right;
+      }
+    }
+  }
+
+  return t;
+}
+
+export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawAlbum = '') {
+  const origTitle = String(rawTitle || '').trim();
+  let artist = String(rawArtist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+  let label = String(rawLabel || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+  let title = origTitle;
+
+  const norm = (s) => String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  // Strip leading track numbers when followed by "Artist - Title"
+  const leadingTrackMatch = title.match(/^(?:[A-D]\d{1,2}|\d{1,2})\s*[.)\-]\s*(.+-.+)$/i);
+  if (leadingTrackMatch && leadingTrackMatch[1]) {
+    title = leadingTrackMatch[1].trim();
+  }
+
+  for (const sep of [' — ', ' – ', ' - ']) {
+    const idx = title.indexOf(sep);
+    if (idx > 0) {
+      const left = title.slice(0, idx).trim();
+      const right = title.slice(idx + sep.length).trim();
+      if (!left || !right) continue;
+      const leftNorm = norm(left);
+      const rightNorm = norm(right);
+      const artistNorm = norm(artist);
+
+      if (artistNorm && (leftNorm === artistNorm || leftNorm.includes(artistNorm) || artistNorm.includes(leftNorm))) {
+        title = right;
+        break;
+      }
+      if (artistNorm && (rightNorm === artistNorm || rightNorm.includes(artistNorm))) {
+        title = left;
+        break;
+      }
+
+      const isLeftTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+)$/i.test(left);
+      if (isLeftTrackPos) {
+        title = right;
+        break;
+      }
+
+      const isRightDescriptor = /^(ep|lp|single|album|ost|soundtrack|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|act\s*[0-9ivx]+|chapter\s*\d+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|bootleg|flip|refix|instru|instrumental|acapella|bonus.*))$/i.test(right);
+      if (!isRightDescriptor && left.length >= 2) {
+        if (!artist || /^(various(\s+artists)?|unknown(\s+artist)?|—|-)$/i.test(artist)) {
+          artist = left;
+        } else if (leftNorm !== artistNorm) {
+          // Existing artist was likely the label/channel that uploaded "Artist - Title"
+          if (!label) label = artist;
+          artist = left;
+        }
+        title = right;
+        break;
+      }
+    }
+  }
+
+  title = cleanTrackOrReleaseTitle(title, artist);
+  const album = rawAlbum ? cleanTrackOrReleaseTitle(rawAlbum, artist) : '';
+  return { title, artist, label, album };
+}
+
 export const HOME_PROVIDER_SECTIONS = {
   bandcamp: [
-    { key: 'bandcamp-new',  shortLabel: 'New Stuff',  title: 'Bandcamp · New Stuff' },
+    { key: 'bandcamp-new',  shortLabel: 'New on Bandcamp', title: 'New on Bandcamp' },
     { key: 'bandcamp-col',  shortLabel: 'Collection', title: 'Bandcamp · Collection' },
     { key: 'bandcamp-wish', shortLabel: 'Wishlist',   title: 'Bandcamp · Wishlist' },
     { key: 'bandcamp-pl',   shortLabel: 'Playlists',  title: 'Bandcamp · Playlists' },

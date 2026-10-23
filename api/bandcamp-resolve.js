@@ -97,6 +97,57 @@ export default async function handler(req, res) {
         return res.status(200).json({ tracks: [], error: 'No track data found' });
       }
 
+      const unescapeEntity = (str) => String(str || '')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&#x27;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .trim();
+
+      const stripArtistPrefix = (rawTitle, rawArtist) => {
+        let t = String(rawTitle || '').trim();
+        if (!t) return '';
+        const leadMatch = t.match(/^(?:[A-D]\d{1,2}|\d{1,2})\s*[.)\-]\s*(.+-.+)$/i);
+        if (leadMatch && leadMatch[1]) t = leadMatch[1].trim();
+        const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const aNorm = norm(rawArtist);
+        for (const sep of [' — ', ' – ', ' - ']) {
+          const idx = t.indexOf(sep);
+          if (idx > 0) {
+            const left = t.slice(0, idx).trim();
+            const right = t.slice(idx + sep.length).trim();
+            if (!left || !right) continue;
+            if (aNorm && (norm(left) === aNorm || norm(left).includes(aNorm) || aNorm.includes(norm(left)))) return right;
+            if (aNorm && norm(right) === aNorm) return left;
+            const isTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+)$/i.test(left);
+            if (isTrackPos) return right;
+            const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+            if (!isRightDesc && left.length >= 2) return right;
+          }
+        }
+        return t;
+      };
+
+      const extractBandPageLabel = (pageHtml) => {
+        let bName = unescapeEntity(
+          (pageHtml.match(/<p[^>]*id="band-name-location"[^>]*>[\s\S]*?<span[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] ||
+          (pageHtml.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/i) || [])[1] ||
+          ''
+        );
+        if (!bName) {
+          const bandAttr = (pageHtml.match(/data-band="([^"]+)"/) || [])[1];
+          if (bandAttr) {
+            try {
+              const bandJson = JSON.parse(unescapeEntity(bandAttr));
+              if (bandJson?.name) bName = String(bandJson.name).trim();
+            } catch (e) {}
+          }
+        }
+        return bName.replace(/<[^>]+>/g, '').trim();
+      };
+
       // Extract artwork
       let artworkUrl = '';
       const artMatch = html.match(/<a class="popupImage"[^>]*href="([^"]+)"/);
@@ -107,23 +158,51 @@ export default async function handler(req, res) {
         if (ogImgMatch) artworkUrl = ogImgMatch[1];
       }
 
+      const bandPageName = extractBandPageLabel(html);
+      let originUrl = '';
+      try { originUrl = new URL(url).origin; } catch (e) {}
+
       // Extract artist
-      let artist = tralbumData.artist || '';
+      let artist = unescapeEntity(tralbumData.artist || '');
       if (!artist) {
-        const artistMatch = html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/);
-        if (artistMatch) artist = artistMatch[1];
+        artist = bandPageName;
       }
 
-      const albumName = tralbumData.current?.title || '';
+      let rawAlbumName = unescapeEntity(tralbumData.current?.title || '');
+      for (const sep of [' — ', ' – ', ' - ']) {
+        const idx = rawAlbumName.indexOf(sep);
+        if (idx > 0) {
+          const left = rawAlbumName.slice(0, idx).trim();
+          const right = rawAlbumName.slice(idx + sep.length).trim();
+          const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+          if (left && right && !isRightDesc) {
+            if (!artist || artist.toLowerCase() === bandPageName.toLowerCase() || /^various(\s+artists)?$/i.test(artist)) {
+              artist = left;
+            }
+            rawAlbumName = right;
+            break;
+          }
+        }
+      }
+      const albumName = stripArtistPrefix(rawAlbumName, artist);
+      const releaseDateRaw = String(tralbumData.current?.release_date || tralbumData.album_release_date || tralbumData.current?.publish_date || '');
+      const year = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
+      const label = bandPageName || artist || '';
 
       const tracks = tralbumData.trackinfo.map((t, i) => {
         const file = t.file;
         const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || null) : null;
+        let trackArtist = unescapeEntity(t.artist || artist || '');
+        let rawTrackTitle = unescapeEntity(t.title || `Track ${i + 1}`);
+        const cleanTitle = stripArtistPrefix(rawTrackTitle, trackArtist);
         return {
-          title: t.title || `Track ${i + 1}`,
-          artist,
+          title: cleanTitle,
+          artist: trackArtist,
           artworkUrl,
           albumName,
+          label,
+          labelUrl: originUrl,
+          year,
           duration: t.duration ? Math.round(t.duration) : 0,
           streamUrl,
           trackNum: t.track_num || i + 1,
@@ -131,7 +210,7 @@ export default async function handler(req, res) {
         };
       });
 
-      const result = { tracks, albumName, artist, artworkUrl };
+      const result = { tracks, albumName, artist, label, labelUrl: originUrl, year, artworkUrl };
       resolveCache.set(cacheKey, { data: result, timestamp: now });
       return res.status(200).json(result);
     } catch (err) {
@@ -170,8 +249,38 @@ export default async function handler(req, res) {
         .replace(/&#x27;/g, "'")
         .replace(/&quot;/g, '"');
 
+      const cleanRelTitleAndArtist = (rawTitle, rawArtist, labelBandName) => {
+        let t = String(rawTitle || '').trim();
+        let a = String(rawArtist || '').trim();
+        for (const sep of [' — ', ' – ', ' - ']) {
+          const idx = t.indexOf(sep);
+          if (idx > 0) {
+            const left = t.slice(0, idx).trim();
+            const right = t.slice(idx + sep.length).trim();
+            const isRightDesc = /^(ep|lp|single|album|ost|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|instrumental|bonus.*))$/i.test(right);
+            if (left && right && !isRightDesc) {
+              if (!a || (labelBandName && a.toLowerCase() === labelBandName.toLowerCase())) {
+                a = left;
+              }
+              t = right;
+              break;
+            }
+          }
+        }
+        return { title: t, artist: a };
+      };
+
+      let preliminaryBandName = '';
+      const prelimNameMatch = html.match(/<p[^>]*id="band-name-location"[^>]*>[\s\S]*?<span[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+      if (prelimNameMatch) {
+        preliminaryBandName = unescapeHtml(prelimNameMatch[1].replace(/<[^>]+>/g, '').trim());
+      }
+
       const addRel = (rel) => {
         if (!rel || !rel.title) return;
+        const cleaned = cleanRelTitleAndArtist(rel.title, rel.artist, preliminaryBandName);
+        rel.title = cleaned.title || rel.title;
+        rel.artist = cleaned.artist || rel.artist || '';
         const cleanUrl = (rel.url || '').split('?')[0];
         const key = cleanUrl || rel.title.toLowerCase();
         const existingIdx = releases.findIndex(r => ((r.url || '').split('?')[0] || r.title.toLowerCase()) === key);
@@ -179,9 +288,11 @@ export default async function handler(req, res) {
           if (!releases[existingIdx].artworkUrl && rel.artworkUrl) releases[existingIdx].artworkUrl = rel.artworkUrl;
           if (!releases[existingIdx].artist && rel.artist) releases[existingIdx].artist = rel.artist;
           if (!releases[existingIdx].year && rel.year) releases[existingIdx].year = rel.year;
+          if (!releases[existingIdx].releaseTimestamp && rel.releaseTimestamp) releases[existingIdx].releaseTimestamp = rel.releaseTimestamp;
           return;
         }
         seenRelUrls.add(key);
+        rel.gridIndex = releases.length;
         releases.push(rel);
       };
 
@@ -212,7 +323,7 @@ export default async function handler(req, res) {
             title = unescapeHtml(titlePart.replace(/<[^>]+>/g, '').trim());
           }
           if (title) {
-            addRel({ url: relUrl, artworkUrl, title, artist, year: null });
+            addRel({ url: relUrl, artworkUrl, title, artist, year: null, releaseTimestamp: 0 });
           }
         }
       }
@@ -230,14 +341,34 @@ export default async function handler(req, res) {
               const relUrl = ci.page_url ? new URL(ci.page_url, originUrl).toString().split('?')[0] : '';
               const artworkUrl = ci.art_id ? `https://f4.bcbits.com/img/a${ci.art_id}_10.jpg` : '';
               let year = null;
-              if (ci.release_date) {
-                const ym = String(ci.release_date).match(/\b((?:19|20)\d{2})\b/);
+              let releaseTimestamp = 0;
+              if (ci.release_date || ci.publish_date) {
+                const dateStr = String(ci.release_date || ci.publish_date);
+                const ym = dateStr.match(/\b((?:19|20)\d{2})\b/);
                 if (ym) year = ym[1];
+                const parsedTs = Date.parse(dateStr);
+                if (!Number.isNaN(parsedTs)) releaseTimestamp = parsedTs;
               }
-              addRel({ url: relUrl, artworkUrl, title, artist, year });
+              addRel({ url: relUrl, artworkUrl, title, artist, year, releaseTimestamp });
             }
           }
         } catch (e) {}
+      }
+
+      // Fill in years for top releases that came from initial HTML before data-client-items
+      let latestKnownYear = new Date().getFullYear();
+      for (const r of releases) {
+        if (r.year && Number(r.year) > 1950) {
+          latestKnownYear = Number(r.year);
+          break;
+        }
+      }
+      for (let i = 0; i < releases.length; i++) {
+        if (releases[i].year) {
+          latestKnownYear = Number(releases[i].year) || latestKnownYear;
+        } else {
+          releases[i].year = String(latestKnownYear);
+        }
       }
 
       const parseMetaFromHtml = (pageHtml) => {
@@ -391,10 +522,31 @@ export default async function handler(req, res) {
     const artMatch = html.match(/<a class="popupImage"[^>]*href="([^"]+)"/);
     if (artMatch) artworkUrl = artMatch[1]; else { const ogImgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/); if (ogImgMatch) artworkUrl = ogImgMatch[1]; }
 
-    let artist = tralbumData.artist || '';
-    if (!artist) { const artistMatch = html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/); if (artistMatch) artist = artistMatch[1]; }
+    let bandPageName = (
+      (html.match(/<p[^>]*id="band-name-location"[^>]*>[\s\S]*?<span[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] ||
+      (html.match(/<meta\s+property="og:site_name"\s+content="([^"]+)"/i) || [])[1] ||
+      ''
+    ).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 
-    const result = { streamUrl, title: track.title || '', artist, artworkUrl, duration: track.duration ? Math.round(track.duration) : 0, albumName: tralbumData.current?.title || '', trackUrl: url };
+    let artist = tralbumData.artist || bandPageName || '';
+    const label = bandPageName || artist || '';
+    let originUrl = '';
+    try { originUrl = new URL(url).origin; } catch (e) {}
+    const releaseDateRaw = String(tralbumData.current?.release_date || tralbumData.album_release_date || tralbumData.current?.publish_date || '');
+    const year = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
+
+    const result = {
+      streamUrl,
+      title: track.title || '',
+      artist,
+      label,
+      labelUrl: originUrl,
+      year,
+      artworkUrl,
+      duration: track.duration ? Math.round(track.duration) : 0,
+      albumName: tralbumData.current?.title || '',
+      trackUrl: url,
+    };
     resolveCache.set(url, { data: result, timestamp: now });
     if (resolveCache.size > 500) { const oldest = [...resolveCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp).slice(0, 100); oldest.forEach(([key]) => resolveCache.delete(key)); }
     return res.status(200).json(result);

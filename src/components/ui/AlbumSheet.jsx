@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { usePlayer, historyReplayInfo, trackIdentity } from '../../contexts/PlayerContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { syncProviderLike, getProviderPriority } from '../../lib/streaming';
+import { syncProviderLike, getProviderPriority, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../../lib/streaming';
 import { isItemInConnectedLikes } from '../../lib/useConnectedLibrary';
 import { buildInitialGenreSheetPayload, resolveGenreNode, select5050GenreTracks, selectGenreThreeSections, classifyTrackGenre, orderTracksByProviderPriority, buildInitialSceneSheetPayload } from '../../lib/genreIntelligence';
 
@@ -38,14 +38,22 @@ export function registerAlbumPlayback(album) {
         || activeAlbum.cover
         || '';
       const rawTrackAlbum = String(t.album || t.releaseTitle || t.albumTitle || (isRadioAlbum ? '' : activeAlbum.title) || '').trim();
-      const cleanTrackAlbum = (/\s+radio$/i.test(rawTrackAlbum) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlbum))
+      const prelimAlbum = (/\s+radio$/i.test(rawTrackAlbum) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlbum))
         ? ''
         : rawTrackAlbum;
+      const rawArtist = t.artist || t.artistName || (isRadioAlbum ? '' : activeAlbum.artist) || '';
+      const rawLabel = t.label || t.labelName || (isRadioAlbum ? '' : activeAlbum.label) || '';
+      const cleaned = splitCleanMetadata(t.title || t.name || '', rawArtist, rawLabel, prelimAlbum);
+      const cleanTrackAlbum = cleanTrackOrReleaseTitle(cleaned.album || prelimAlbum, cleaned.artist || rawArtist);
       return {
         ...t,
         id: t.id,
-        title: t.title || t.name,
-        artist: t.artist || t.artistName || (isRadioAlbum ? '' : activeAlbum.artist) || '',
+        title: cleaned.title || t.title || t.name,
+        artist: cleaned.artist || rawArtist,
+        label: cleaned.label || rawLabel,
+        labelUrl: t.labelUrl || activeAlbum.labelUrl || '',
+        year: t.year || t.releaseYear || (isRadioAlbum ? '' : activeAlbum.year) || '',
+        albumUrl: t.albumUrl || activeAlbum.url || activeAlbum.trackUrl || '',
         cover: resolvedCover,
         artworkUrl: t.artworkUrl || resolvedCover,
         releaseCover: resolvedCover,
@@ -84,22 +92,28 @@ export function registerAlbumPlayback(album) {
 export function openNativePlaylistFast(pl, opts = {}) {
   if (!pl) return null;
   const ts = Date.now();
+  const plCreator = pl.artist || pl.artistName || pl.creator || 'You';
   const albumForm = {
     id: pl.id,
-    title: pl.title || pl.name || 'Playlist',
-    artist: pl.artist || pl.artistName || pl.creator || 'You',
+    title: cleanTrackOrReleaseTitle(pl.title || pl.name || 'Playlist', plCreator),
+    artist: plCreator,
     cover: pl.cover || pl.artworkUrl || '/album1.png',
     provider: pl.provider || null,
     isPublic: !!pl.isPublic,
-    tracks: (pl.tracks || []).map((t, idx) => ({
-      ...t,
-      id: t.id || `${pl.id}-t-${idx}`,
-      title: t.title || t.name || 'Unknown Track',
-      artist: t.artist || t.artistName || pl.artist || pl.artistName || '',
-      url: t.url || t.trackUrl || t.streamUrl || t.audioUrl || t.src || '',
-      cover: t.cover || t.artworkUrl || t.releaseCover || pl.cover || pl.artworkUrl || null,
-      provider: t.provider || pl.provider || null,
-    })),
+    tracks: (pl.tracks || []).map((t, idx) => {
+      const tArtist = t.artist || t.artistName || plCreator || '';
+      const cleaned = splitCleanMetadata(t.title || t.name || 'Unknown Track', tArtist, t.label || '');
+      return {
+        ...t,
+        id: t.id || `${pl.id}-t-${idx}`,
+        title: cleaned.title || t.title || t.name || 'Unknown Track',
+        artist: cleaned.artist || tArtist,
+        label: cleaned.label || t.label || '',
+        url: t.url || t.trackUrl || t.streamUrl || t.audioUrl || t.src || '',
+        cover: t.cover || t.artworkUrl || t.releaseCover || pl.cover || pl.artworkUrl || null,
+        provider: t.provider || pl.provider || null,
+      };
+    }),
     _ts: ts,
   };
   window.__lastFastOpenTs = ts;
@@ -133,10 +147,13 @@ export function openNativeAlbumFast(album, opts = {}) {
   if (!album) return null;
   const isPreload = Boolean(opts && opts.preload);
   const ts = Date.now();
-  if (!isPreload) {
-    window.__lastFastOpenTs = ts;
-    window.__kyoyuCurrentNativeAlbum = album;
-  }
+  const isRadio = album.provider === 'radio' || String(album.id || '').startsWith('radio-') || /\s+radio$/i.test(String(album.title || '').trim());
+  const albumArtist = album.artist || '';
+  const cleanAlbumTitle = isRadio ? (album.title || '') : cleanTrackOrReleaseTitle(album.title || '', albumArtist);
+  album = {
+    ...album,
+    title: cleanAlbumTitle || album.title || '',
+  };
 
   // Sanitize Discogs tracks unconditionally (covers groupByAlbum which drops album.provider)
   // Also make generic Discogs track ids ("discogs-track-0") unique per album, otherwise
@@ -146,11 +163,20 @@ export function openNativeAlbumFast(album, opts = {}) {
     album.tracks = album.tracks.map(t => {
       let nt = t.provider === 'discogs' ? { ...t, provider: '' } : t;
       if (/^discogs-track-\d+$/.test(String(nt.id || ''))) nt = { ...nt, id: `${albumKey}::${nt.id}` };
-      return nt;
+      const tArtist = nt.artist || nt.artistName || (isRadio ? '' : albumArtist) || '';
+      const cleaned = splitCleanMetadata(nt.title || nt.name || 'Unknown Track', tArtist, nt.label || album.label || '');
+      return {
+        ...nt,
+        title: cleaned.title || nt.title || nt.name || 'Unknown Track',
+        artist: cleaned.artist || tArtist,
+        label: cleaned.label || nt.label || (isRadio ? '' : album.label) || '',
+      };
     });
   }
 
   if (!isPreload) {
+    window.__lastFastOpenTs = ts;
+    window.__kyoyuCurrentNativeAlbum = album;
     registerAlbumPlayback(album);
   }
 
@@ -249,29 +275,83 @@ if (typeof window !== 'undefined') {
       return albumObj;
     };
 
-    const searchTitle = cleanAlbumOrTitle.replace(/\s*\(Single\)\s*$/i, '').trim() || cleanAlbumOrTitle;
+    const searchTitle = cleanTrackOrReleaseTitle(cleanAlbumOrTitle.replace(/\s*\(Single\)\s*$/i, '').trim() || cleanAlbumOrTitle, cleanArtist);
     const query = `${cleanArtist} ${searchTitle}`.trim();
+    const bcTrackUrl = [
+      opts.url,
+      curTrack?.albumUrl,
+      curTrack?.providerUrl,
+      curTrack?.trackUrl,
+      curTrack?.providerItemId,
+      curTrack?.replay?.url,
+      curTrack?.origin?.url,
+    ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
     try {
-      // First check if track-info is already in __kyoyuInfoCache or fetch it
+      // First check if track-info is already in __kyoyuInfoCache or fetch it (in parallel with Bandcamp album-tracks if applicable)
       const infoKey = [cleanArtist, curTrack?.title || searchTitle, searchTitle].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
       let info = window.__kyoyuInfoCache?.[infoKey] || null;
-      if (!info) {
-        const r = await fetch('/api/discogs-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'track-info', title: curTrack?.title || searchTitle, artist: cleanArtist, album: searchTitle }),
+      const [fetchedInfo, bcAlbumData] = await Promise.all([
+        !info
+          ? fetch('/api/discogs-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'track-info', title: curTrack?.title || searchTitle, artist: cleanArtist, album: searchTitle }),
+            }).then(r => r.ok ? r.json() : null).catch(() => null)
+          : Promise.resolve(info),
+        bcTrackUrl
+          ? fetch('/api/bandcamp-resolve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'album-tracks', url: bcTrackUrl }),
+            }).then(r => r.ok ? r.json() : null).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      if (fetchedInfo) info = fetchedInfo;
+
+      if (bcAlbumData && Array.isArray(bcAlbumData.tracks) && bcAlbumData.tracks.length > 0) {
+        const bcArtist = bcAlbumData.artist || info?.artist || cleanArtist || '';
+        const bcTitle = cleanTrackOrReleaseTitle(bcAlbumData.albumName || info?.album || searchTitle || '', bcArtist);
+        const bcLabel = bcAlbumData.label || info?.label || curTrack?.label || '';
+        const bcYear = bcAlbumData.year || info?.year || curTrack?.year || null;
+        return emitAndCacheAlbum({
+          id: tempId,
+          title: bcTitle || searchTitle || '',
+          artist: bcArtist,
+          cover: bcAlbumData.artworkUrl || info?.coverImage || info?.thumb || fallbackCover || '',
+          year: bcYear ? String(bcYear) : null,
+          genre: info?.genre || curTrack?.genre || '',
+          label: bcLabel,
+          labelUrl: bcAlbumData.labelUrl || '',
+          provider: 'bandcamp',
+          description: [
+            info?.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
+            info?.country ? `Country: ${info.country}` : '',
+            info?.description || '',
+          ].filter(Boolean).join('\n'),
+          tracks: bcAlbumData.tracks.map((t, i) => ({
+            id: `bc-alb-${i}-${Date.now()}`,
+            title: cleanTrackOrReleaseTitle(t.title || `Track ${i + 1}`, t.artist || bcArtist),
+            artist: t.artist || bcArtist,
+            label: bcLabel,
+            year: bcYear ? String(bcYear) : '',
+            url: t.streamUrl || t.trackUrl || bcTrackUrl,
+            trackUrl: t.trackUrl || bcTrackUrl,
+            providerItemId: t.trackUrl || bcTrackUrl,
+            cover: t.artworkUrl || bcAlbumData.artworkUrl || fallbackCover || '',
+            provider: 'bandcamp',
+          })),
         });
-        if (r.ok) info = await r.json();
       }
+
       if (info && info.tracklist && info.tracklist.length > 0) {
         return emitAndCacheAlbum({
           id: info.discogsId ? `discogs-${info.discogsId}` : tempId,
-          title: info.album || searchTitle || '',
+          title: cleanTrackOrReleaseTitle(info.album || searchTitle || '', info.artist || cleanArtist),
           artist: info.artist || cleanArtist || '',
           cover: info.coverImage || info.thumb || fallbackCover || '',
           year: info.year || null,
           genre: info.genre || '',
-          label: info.label || '',
+          label: info.label || bcAlbumData?.label || '',
           provider: 'discogs',
           description: [
             info.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
@@ -282,7 +362,7 @@ if (typeof window !== 'undefined') {
           ].filter(Boolean).join('\n'),
           tracks: (info.tracklist || []).map((t, i) => ({
             id: `discogs-track-${i}`,
-            title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+            title: `${t.position ? t.position + '. ' : ''}${cleanTrackOrReleaseTitle(t.title || '', t.artists?.join(', ') || info.artist || cleanArtist)}`,
             artist: t.artists?.join(', ') || info.artist || cleanArtist || '',
             url: `resolve:${t.artists?.join(', ') || info.artist || cleanArtist} ${t.title || ''}`,
             cover: info.coverImage || info.thumb || fallbackCover || '',
@@ -314,7 +394,7 @@ if (typeof window !== 'undefined') {
             if (tinfo.tracklist && tinfo.tracklist.length > 0) {
               return emitAndCacheAlbum({
                 id: `discogs-${release.id || release.discogsId}`,
-                title: tinfo.album || releaseTitle || searchTitle || '',
+                title: cleanTrackOrReleaseTitle(tinfo.album || releaseTitle || searchTitle || '', tinfo.artist || releaseArtist || cleanArtist),
                 artist: tinfo.artist || releaseArtist || cleanArtist || '',
                 cover: release.cover_image || release.coverImage || release.thumb || fallbackCover || '',
                 year: tinfo.year || release.year || null,
@@ -323,7 +403,7 @@ if (typeof window !== 'undefined') {
                 provider: 'discogs',
                 tracks: (tinfo.tracklist || []).map((t, i) => ({
                   id: `discogs-track-${i}`,
-                  title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+                  title: `${t.position ? t.position + '. ' : ''}${cleanTrackOrReleaseTitle(t.title || '', t.artists?.join(', ') || tinfo.artist || releaseArtist)}`,
                   artist: t.artists?.join(', ') || tinfo.artist || releaseArtist || '',
                   url: `resolve:${t.artists?.join(', ') || tinfo.artist || releaseArtist} ${t.title || ''}`,
                   cover: release.cover_image || release.coverImage || release.thumb || fallbackCover || '',
@@ -339,17 +419,17 @@ if (typeof window !== 'undefined') {
       if (info || curTrack) {
         return emitAndCacheAlbum({
           id: tempId,
-          title: info?.album || searchTitle || curTrack?.title || 'Single',
+          title: cleanTrackOrReleaseTitle(info?.album || bcAlbumData?.albumName || searchTitle || curTrack?.title || 'Single', info?.artist || cleanArtist),
           artist: info?.artist || cleanArtist || '',
           cover: info?.coverImage || info?.thumb || fallbackCover || '',
-          year: info?.year || curTrack?.year || null,
+          year: info?.year || bcAlbumData?.year || curTrack?.year || null,
           genre: info?.genre || curTrack?.genre || '',
-          label: info?.label || curTrack?.label || '',
+          label: info?.label || bcAlbumData?.label || curTrack?.label || '',
           provider: curTrack?.provider || 'native',
           description: info?.description || '',
           tracks: [{
             id: curTrack?.id || `${tempId}-0`,
-            title: curTrack?.title || searchTitle,
+            title: cleanTrackOrReleaseTitle(curTrack?.title || searchTitle, cleanArtist),
             artist: cleanArtist,
             url: curTrack?.providerUrl || curTrack?.trackUrl || curTrack?.src || `resolve:${cleanArtist} ${curTrack?.title || searchTitle}`,
             cover: info?.coverImage || fallbackCover || '',
@@ -1000,74 +1080,139 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
       }).then(res => res.ok ? res.json() : null).catch(() => null),
     ]);
 
-    if (r && r.ok) {
-      const profile = await r.json();
-      // If Discogs determined that this name is actually a Record Label (not an artist), switch to Label Sheet immediately!
-      if (profile && profile.isLabel) {
-        return openRichLabelSheet({
-          ...(isObj ? artistInput : {}),
-          id: profile.labelId || initialArtist.id,
-          discogsId: profile.labelId || null,
-          name: profile.labelName || cleanName,
-          provider: 'discogs',
-          replaceArtist: !isPreload,
-        }, opts);
-      }
-      if (profile && !profile.error) {
-        const allAliases = Array.from(new Set([
-          ...(initialArtist.aliases || []),
-          ...(Array.isArray(profile.aliases) ? profile.aliases : []),
-        ])).filter(Boolean);
+    let profile = (r && r.ok) ? await r.json().catch(() => null) : null;
+    // If Discogs determined that this name is actually a Record Label (not an artist), switch to Label Sheet immediately!
+    if (profile && profile.isLabel) {
+      return openRichLabelSheet({
+        ...(isObj ? artistInput : {}),
+        id: profile.labelId || initialArtist.id,
+        discogsId: profile.labelId || null,
+        name: profile.labelName || cleanName,
+        provider: 'discogs',
+        replaceArtist: !isPreload,
+      }, opts);
+    }
 
-        const releaseLabels = (profile.topReleases || [])
-          .flatMap(rel => Array.isArray(rel.labels) ? rel.labels : (rel.label ? [rel.label] : []))
-          .filter(Boolean);
+    // If this is a collaborative artist (e.g. "Cousin & Priori") and Discogs didn't find a joint artist profile,
+    // also fetch individual member profiles so the joint Artist Sheet is rich with bios, members, and releases!
+    const collabParts = cleanName.split(/\s+(?:&|and|x|vs\.?|feat\.?|ft\.?|\+)\s+/i).map(s => s.trim()).filter(Boolean);
+    let memberProfiles = [];
+    if (collabParts.length >= 2 && (!profile || profile.error || (!profile.profile && !(profile.topReleases || []).length))) {
+      memberProfiles = (await Promise.all(
+        collabParts.slice(0, 3).map(mName =>
+          fetch('/api/discogs-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'artist-profile', artistName: mName }),
+          }).then(res => res.ok ? res.json() : null).catch(() => null)
+        )
+      )).filter(p => p && !p.error && !p.isLabel);
+    }
 
-        const crossLinks = _discoverCrossEntityLinksForNames(
-          [cleanName, profile.name, profile.realname, ...allAliases, ...releaseLabels.slice(0, 6)],
-          bcSearchRes?.results || []
-        );
+    const bcItems = (bcSearchRes?.results || []).filter(item =>
+      item && (item.type === 'album' || item.type === 'track') &&
+      _normStr(item.artistName || '').includes(_normStr(cleanName))
+    );
 
-        const mergedUrls = _prioritizeAndDedupeLinks([
-          ...crossLinks,
-          ...(initialArtist.urls || []),
-          ...(profile.urls || []),
-          profile.id ? `https://www.discogs.com/artist/${profile.id}` : '',
-        ]);
-        const mergedImages = (profile.images && profile.images.length) ? profile.images : initialArtist.images;
-        const mergedReleases = (profile.topReleases || []).map(rel => ({
+    if ((profile && !profile.error) || memberProfiles.length > 0 || bcItems.length > 0) {
+      const pObj = (profile && !profile.error) ? profile : {};
+      const allAliases = Array.from(new Set([
+        ...(initialArtist.aliases || []),
+        ...(Array.isArray(pObj.aliases) ? pObj.aliases : []),
+        ...collabParts,
+      ])).filter(a => a && _normStr(a) !== _normStr(cleanName));
+
+      const releaseLabels = [
+        ...(pObj.topReleases || []),
+        ...memberProfiles.flatMap(mp => mp.topReleases || []),
+      ]
+        .flatMap(rel => Array.isArray(rel.labels) ? rel.labels : (rel.label ? [rel.label] : []))
+        .filter(Boolean);
+
+      const crossLinks = _discoverCrossEntityLinksForNames(
+        [cleanName, pObj.name, pObj.realname, ...collabParts, ...allAliases, ...releaseLabels.slice(0, 6)],
+        bcSearchRes?.results || []
+      );
+
+      const mergedUrls = _prioritizeAndDedupeLinks([
+        ...crossLinks,
+        ...(initialArtist.urls || []),
+        ...(pObj.urls || []),
+        ...memberProfiles.flatMap(mp => mp.urls || []),
+        pObj.id ? `https://www.discogs.com/artist/${pObj.id}` : '',
+      ]);
+      const mergedImages = (pObj.images && pObj.images.length)
+        ? pObj.images
+        : (memberProfiles.flatMap(mp => mp.images || []).filter(Boolean).length
+            ? memberProfiles.flatMap(mp => mp.images || []).filter(Boolean)
+            : initialArtist.images);
+
+      const relMap = new Map();
+      const pushRel = (rel) => {
+        if (!rel || !rel.title) return;
+        const relArtist = rel.artist || rel.artistName || cleanName;
+        const cleanTitle = cleanTrackOrReleaseTitle(rel.title, relArtist);
+        const k = _normStr(cleanTitle);
+        if (!k || relMap.has(k)) return;
+        relMap.set(k, {
           ...rel,
           id: String(rel.id || `discogs-a-${rel.discogsId || Math.random()}`),
           discogsId: rel.discogsId ? String(rel.discogsId) : null,
-          title: rel.title || 'Unknown',
-          artist: rel.artist || rel.artistName || cleanName,
+          title: cleanTitle || rel.title || 'Unknown',
+          artist: relArtist,
           label: Array.isArray(rel.labels) ? rel.labels[0] : (rel.label || null),
           year: rel.year ? String(rel.year) : null,
-          thumb: rel.thumb || rel.coverImage || null,
-          coverImage: rel.coverImage || rel.thumb || null,
+          thumb: rel.thumb || rel.coverImage || rel.artworkUrl || null,
+          coverImage: rel.coverImage || rel.thumb || rel.artworkUrl || null,
+          trackUrl: rel.trackUrl || rel.url || null,
           type: rel.type || 'release',
-          provider: 'discogs',
-        }));
+          provider: rel.provider || 'discogs',
+        });
+      };
+      bcItems.forEach(item => pushRel({
+        id: `bc-a-${_normStr(item.title)}`,
+        title: item.title,
+        artist: item.artistName || cleanName,
+        label: item.label || null,
+        year: item.year || null,
+        artworkUrl: item.artworkUrl ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : null,
+        trackUrl: item.trackUrl,
+        provider: 'bandcamp',
+        type: item.type || 'release',
+      }));
+      (pObj.topReleases || []).forEach(pushRel);
+      (initialArtist.topReleases || []).forEach(pushRel);
+      memberProfiles.forEach(mp => (mp.topReleases || []).slice(0, 10).forEach(pushRel));
 
-        const enrichedArtist = {
-          ...initialArtist,
-          ...profile,
-          name: (profile.name || cleanName).replace(/\s*\(\d+\)\s*$/, ''),
-          aliases: allAliases,
-          images: mergedImages,
-          urls: mergedUrls,
-          topReleases: mergedReleases.length ? mergedReleases : initialArtist.topReleases,
-          _enriched: true,
-        };
-        if (typeof window !== 'undefined' && cacheKey) {
-          window.__kyoyuPreloadedArtists[cacheKey] = enrichedArtist;
-          if (enrichedArtist.name) {
-            window.__kyoyuPreloadedArtists[_normStr(enrichedArtist.name)] = enrichedArtist;
-          }
+      const mergedReleases = Array.from(relMap.values());
+      const combinedBio = pObj.profile
+        || memberProfiles.map(mp => mp.profile ? `${mp.name}: ${mp.profile}` : '').filter(Boolean).join('\n\n')
+        || initialArtist.profile;
+
+      const enrichedArtist = {
+        ...initialArtist,
+        ...pObj,
+        name: (pObj.name || cleanName).replace(/\s*\(\d+\)\s*$/, ''),
+        profile: combinedBio || null,
+        collaborators: Array.from(new Set([
+          ...(initialArtist.collaborators || []),
+          ...(pObj.collaborators || []),
+          ...(collabParts.length >= 2 ? collabParts : []),
+        ])).filter(Boolean),
+        aliases: allAliases,
+        images: mergedImages,
+        urls: mergedUrls,
+        topReleases: mergedReleases.length ? mergedReleases : initialArtist.topReleases,
+        _enriched: true,
+      };
+      if (typeof window !== 'undefined' && cacheKey) {
+        window.__kyoyuPreloadedArtists[cacheKey] = enrichedArtist;
+        if (enrichedArtist.name) {
+          window.__kyoyuPreloadedArtists[_normStr(enrichedArtist.name)] = enrichedArtist;
         }
-
-        openNativeArtistFast(enrichedArtist, { isUpdate: !isPreload, preload: isPreload });
       }
+
+      openNativeArtistFast(enrichedArtist, { isUpdate: !isPreload, preload: isPreload });
     }
   } catch (err) {
     console.warn('[openRichArtistSheet] error:', err);
@@ -1078,7 +1223,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
   const isPreload = Boolean(opts && opts.preload);
   const isObj = labelInput && typeof labelInput === 'object';
   const rawName = isObj ? (labelInput.name || labelInput.label || labelInput.title || labelInput.artistName || '') : String(labelInput || '');
-  const cleanName = String(rawName)
+  let cleanName = String(rawName)
     .replace(/\[.*?\]/g, '')
     .replace(/\(sub-label.*?\)/i, '')
     .split('—')[0]
@@ -1086,11 +1231,35 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     .trim();
   if (!cleanName || cleanName === '—') return;
 
+  // Check if the currently playing track is on a Bandcamp label domain while cleanName temporarily fell back to the artist name
+  const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack) ? window.__kyoyuGetCurrentTrack() : null;
+  const curArtist = String(curTrack?.artistName || curTrack?.artist || '').trim();
+  const curBcTrackUrl = [
+    isObj ? labelInput.labelUrl : '',
+    isObj ? labelInput.url : '',
+    curTrack?.labelUrl,
+    curTrack?.albumUrl,
+    curTrack?.providerUrl,
+    curTrack?.trackUrl,
+    curTrack?.providerItemId,
+    curTrack?.replay?.url,
+    curTrack?.origin?.url,
+  ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
+  const curBcOrigin = (() => {
+    try { return curBcTrackUrl ? new URL(curBcTrackUrl).origin : ''; } catch { return ''; }
+  })();
+  const isArtistFallbackForBandcampTrack = Boolean(
+    curBcOrigin && curArtist && _normStr(cleanName) === _normStr(curArtist)
+  );
+  if (curTrack?.label && isArtistFallbackForBandcampTrack && _normStr(curTrack.label) !== _normStr(curArtist)) {
+    cleanName = String(curTrack.label).trim();
+  }
+
   if (typeof window !== 'undefined') {
     window.__kyoyuPreloadedLabels = window.__kyoyuPreloadedLabels || {};
   }
   const cacheKey = _normLabelCore(cleanName);
-  const cachedLabel = typeof window !== 'undefined' && window.__kyoyuPreloadedLabels?.[cacheKey];
+  const cachedLabel = !isArtistFallbackForBandcampTrack && typeof window !== 'undefined' && window.__kyoyuPreloadedLabels?.[cacheKey];
   if (cachedLabel && cachedLabel._enriched) {
     if (!isPreload) {
       openNativeLabelFast(cachedLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
@@ -1108,8 +1277,12 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
   const initialUrls = [...initialCrossLinks];
   if (isObj) {
     if (Array.isArray(labelInput.urls)) initialUrls.push(...labelInput.urls);
+    if (labelInput.labelUrl) initialUrls.push(labelInput.labelUrl);
     if (labelInput.url) initialUrls.push(labelInput.url);
     if (labelInput.trackUrl) initialUrls.push(labelInput.trackUrl);
+  }
+  if (curBcOrigin && (isArtistFallbackForBandcampTrack || _normStr(cleanName) === _normStr(curTrack?.label || ''))) {
+    initialUrls.unshift(curBcOrigin);
   }
   const initialImages = [];
   if (isObj) {
@@ -1168,7 +1341,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       }).then(r => r.ok ? r.json() : null).catch(() => null)
     : Promise.resolve(null);
 
-  const [discogsData, bcSearchData] = await Promise.all([discogsPromise, bcSearchPromise]);
+  let [discogsData, bcSearchData] = await Promise.all([discogsPromise, bcSearchPromise]);
 
   // Discover Bandcamp URL from Discogs/MusicBrainz urls, cross-entity links, or Bandcamp search results
   if (discogsData) {
@@ -1262,19 +1435,23 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       rawUrls.push(bcUrl.replace(/\/music\/?$/, ''));
     }
 
-    const canonicalLabelName = (dc && dc.name) ? dc.name : ((bc && bc.name) ? bc.name : currentLabel.name);
+    const canonicalLabelName = (bc && bc.name && isArtistFallbackForBandcampTrack)
+      ? bc.name
+      : ((dc && dc.name) ? dc.name : ((bc && bc.name) ? bc.name : currentLabel.name));
+
+    if (bc && bc.name && isArtistFallbackForBandcampTrack) {
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({ label: canonicalLabelName });
+      } catch (e) {}
+    }
 
     // Merge releases from Discogs and Bandcamp (deduplicated by normalized title)
     const releaseMap = new Map();
     const addRelease = (rel) => {
       if (!rel || !rel.title) return;
-      let titleStr = String(rel.title).trim();
-      let artistStr = String(rel.artist || rel.artistName || '').trim();
-      if (!artistStr && titleStr.includes(' - ')) {
-        const parts = titleStr.split(' - ');
-        artistStr = parts[0].trim();
-        titleStr = parts.slice(1).join(' - ').trim();
-      }
+      const cleaned = splitCleanMetadata(String(rel.title).trim(), String(rel.artist || rel.artistName || '').trim(), canonicalLabelName);
+      let titleStr = cleanTrackOrReleaseTitle(cleaned.title || String(rel.title).trim(), cleaned.artist);
+      let artistStr = cleaned.artist || String(rel.artist || rel.artistName || '').trim();
       const key = _normStr(titleStr);
       if (!key) return;
       const existing = releaseMap.get(key);
@@ -1290,6 +1467,8 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
           trackUrl: rel.trackUrl || rel.url || null,
           discogsId: rel.discogsId ? String(rel.discogsId) : null,
           year: rel.year ? String(rel.year) : null,
+          releaseTimestamp: rel.releaseTimestamp || 0,
+          gridIndex: typeof rel.gridIndex === 'number' ? rel.gridIndex : 9999,
           thumb: rel.artworkUrl || rel.coverImage || rel.thumb || null,
           coverImage: rel.artworkUrl || rel.coverImage || rel.thumb || null,
           type: rel.type || 'release',
@@ -1307,6 +1486,8 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
           existing.thumb = existing.coverImage;
         }
         if (!existing.year && rel.year) existing.year = String(rel.year);
+        if (!existing.releaseTimestamp && rel.releaseTimestamp) existing.releaseTimestamp = rel.releaseTimestamp;
+        if (typeof rel.gridIndex === 'number' && rel.gridIndex < existing.gridIndex) existing.gridIndex = rel.gridIndex;
         if (!existing.catno && rel.catno) existing.catno = rel.catno;
         if (!existing.format && rel.format) existing.format = rel.format;
         if (!existing.discogsId && rel.discogsId) existing.discogsId = String(rel.discogsId);
@@ -1315,11 +1496,13 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     };
 
     if (bc && Array.isArray(bc.releases)) {
-      bc.releases.forEach(r => addRelease({
-        id: `bc-lbl-${_normStr(r.title)}`,
+      bc.releases.forEach((r, idx) => addRelease({
+        id: `bc-lbl-${_normStr(r.title)}-${idx}`,
         title: r.title,
         artist: r.artist || canonicalLabelName,
         year: r.year || null,
+        releaseTimestamp: r.releaseTimestamp || 0,
+        gridIndex: typeof r.gridIndex === 'number' ? r.gridIndex : idx,
         artworkUrl: r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '',
         trackUrl: r.url,
         provider: 'bandcamp',
@@ -1327,11 +1510,25 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       }));
     }
     if (dc && Array.isArray(dc.topReleases)) {
-      dc.topReleases.forEach(r => addRelease(r));
+      dc.topReleases.forEach((r, idx) => addRelease({
+        ...r,
+        gridIndex: typeof r.gridIndex === 'number' ? r.gridIndex : (1000 + idx),
+      }));
     }
     (currentLabel.topReleases || []).forEach(r => addRelease(r));
 
-    const mergedReleases = Array.from(releaseMap.values());
+    // Sort releases in chronological order (Newest -> Oldest by default)
+    const mergedReleases = Array.from(releaseMap.values()).sort((a, b) => {
+      const tsA = Number(a.releaseTimestamp || 0);
+      const tsB = Number(b.releaseTimestamp || 0);
+      const yrA = parseInt(a.year, 10) || 0;
+      const yrB = parseInt(b.year, 10) || 0;
+      if (yrA && yrB && yrA !== yrB) return yrB - yrA;
+      if (tsA && tsB && tsA !== tsB) return tsB - tsA;
+      if (yrA && !yrB && (a.gridIndex ?? 9999) > 25) return -1;
+      if (!yrA && yrB && (b.gridIndex ?? 9999) > 25) return 1;
+      return (a.gridIndex ?? 9999) - (b.gridIndex ?? 9999);
+    });
 
     // If label has no profile image yet, fall back to the first release's cover
     const finalImages = Array.from(images).filter(Boolean);
@@ -1381,7 +1578,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     openNativeLabelFast(currentLabel, { isUpdate: !isPreload, preload: isPreload });
   };
 
-  if (discogsData && !discogsData.error) {
+  if (discogsData && !discogsData.error && !isArtistFallbackForBandcampTrack) {
     mergeAndEmit(discogsData, null);
   }
 
@@ -1395,6 +1592,18 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       });
       if (bcRes.ok) {
         const bcData = await bcRes.json();
+        // If cleanName was an artist fallback (e.g. "Cousin & Priori") and Bandcamp revealed the real label name (e.g. "NAFF"),
+        // fetch Discogs + MusicBrainz label profile for the real label name too!
+        if (bcData && bcData.name && (_normStr(bcData.name) !== _normStr(cleanName))) {
+          const realDcRes = await fetch('/api/discogs-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'label-profile', labelName: bcData.name }),
+          }).then(r => r.ok ? r.json() : null).catch(() => null);
+          if (realDcRes && !realDcRes.error) {
+            discogsData = realDcRes;
+          }
+        }
         mergeAndEmit(discogsData, bcData);
       }
     } catch (e) {}
@@ -1403,9 +1612,11 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
 
 export async function openReleaseFromSheet(releaseObj) {
   if (!releaseObj) return;
-  const title = releaseObj.title || '';
-  const artist = releaseObj.artist || releaseObj.artistName || '';
-  const label = releaseObj.label || '';
+  const rawArtist = releaseObj.artist || releaseObj.artistName || '';
+  const cleaned = splitCleanMetadata(releaseObj.title || '', rawArtist, releaseObj.label || '');
+  const title = cleaned.title || releaseObj.title || '';
+  const artist = cleaned.artist || rawArtist;
+  const label = cleaned.label || releaseObj.label || '';
   const cover = releaseObj.coverImage || releaseObj.thumb || releaseObj.artworkUrl || '';
   const year = releaseObj.year ? String(releaseObj.year) : null;
   const trackUrl = releaseObj.trackUrl || releaseObj.url || '';
@@ -1450,16 +1661,19 @@ export async function openReleaseFromSheet(releaseObj) {
         }).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
+      const bcArtist = bcRes?.artist || artist;
+      const bcLabel = bcRes?.label || label;
       let tracks = [];
       if (bcRes && Array.isArray(bcRes.tracks) && bcRes.tracks.length > 0) {
         tracks = bcRes.tracks.map((t, idx) => ({
           id: `bc-${t.trackId || idx}-${Date.now()}`,
-          title: t.title || `Track ${idx + 1}`,
-          artist: t.artist || artist,
+          title: cleanTrackOrReleaseTitle(t.title || `Track ${idx + 1}`, t.artist || bcArtist),
+          artist: t.artist || bcArtist,
+          label: bcLabel,
           url: t.streamUrl || t.trackUrl || trackUrl,
           trackUrl: t.trackUrl || trackUrl,
           providerItemId: t.trackUrl || trackUrl,
-          cover: t.artworkUrl || cover,
+          cover: t.artworkUrl || bcRes.artworkUrl || cover,
           provider: 'bandcamp',
         }));
       }
@@ -1467,19 +1681,21 @@ export async function openReleaseFromSheet(releaseObj) {
       const info = dcInfoRes || {};
       openNativeAlbumFast({
         id: tempAlbumId,
-        title: info.album || title,
-        artist: info.artist || artist,
-        cover: cover || info.coverImage || info.thumb || '',
-        year: info.year || year,
+        title: cleanTrackOrReleaseTitle(bcRes?.albumName || info.album || title, bcArtist),
+        artist: info.artist || bcArtist,
+        cover: bcRes?.artworkUrl || cover || info.coverImage || info.thumb || '',
+        year: info.year || bcRes?.year || year,
         genre: info.genre || '',
-        label: info.label || label,
+        label: info.label || bcLabel,
+        labelUrl: bcRes?.labelUrl || '',
         provider: 'bandcamp',
         description: info.description || '',
         tracks: tracks.length > 0 ? tracks : [
           {
             id: `${tempAlbumId}-0`,
             title,
-            artist,
+            artist: bcArtist,
+            label: bcLabel,
             url: trackUrl,
             trackUrl,
             providerItemId: trackUrl,
@@ -1503,7 +1719,7 @@ export async function openReleaseFromSheet(releaseObj) {
         if (d && Array.isArray(d.tracks) && d.tracks.length > 0) {
           openNativeAlbumFast({
             id: `discogs-${discogsId}`,
-            title: d.title || title,
+            title: cleanTrackOrReleaseTitle(d.title || title, d.artist || artist),
             artist: d.artist || artist,
             cover: d.cover || cover,
             year: d.year || year,
@@ -1511,14 +1727,18 @@ export async function openReleaseFromSheet(releaseObj) {
             label: d.label || label,
             provider: 'discogs',
             description: d.notes || '',
-            tracks: d.tracks.map((t, i) => ({
-              id: `discogs-${discogsId}-track-${i}`,
-              title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
-              artist: t.artist || d.artist || artist,
-              url: `resolve:${t.artist || d.artist || artist} ${t.title || ''}`.trim(),
-              cover: d.cover || cover,
-              provider: '',
-            })),
+            tracks: d.tracks.map((t, i) => {
+              const trArtist = t.artist || d.artist || artist;
+              const trTitle = cleanTrackOrReleaseTitle(t.title || '', trArtist);
+              return {
+                id: `discogs-${discogsId}-track-${i}`,
+                title: `${t.position ? t.position + '. ' : ''}${trTitle}`,
+                artist: trArtist,
+                url: `resolve:${trArtist} ${trTitle}`.trim(),
+                cover: d.cover || cover,
+                provider: '',
+              };
+            }),
           }, { isUpdate: true });
           return;
         }
@@ -1535,22 +1755,26 @@ export async function openReleaseFromSheet(releaseObj) {
 }
 
 function _mapSafeGenreTrackList(list) {
-  return (Array.isArray(list) ? list : []).map(t => ({
-    id: String(t.id || Math.random()),
-    title: String(t.title || 'Unknown'),
-    artist: t.artist || t.artistName ? String(t.artist || t.artistName) : null,
-    label: t.label ? String(t.label) : null,
-    catno: t.catno ? String(t.catno) : null,
-    format: t.format ? String(t.format) : null,
-    provider: t.provider ? String(t.provider) : null,
-    trackUrl: t.trackUrl || t.url ? String(t.trackUrl || t.url) : null,
-    scTrackId: t.scTrackId ? String(t.scTrackId) : null,
-    discogsId: t.discogsId ? String(t.discogsId) : null,
-    year: t.year ? String(t.year) : null,
-    thumb: t.thumb || t.coverImage || t.cover ? String(t.thumb || t.coverImage || t.cover) : null,
-    coverImage: t.coverImage || t.cover || t.artworkUrl || t.thumb ? String(t.coverImage || t.cover || t.artworkUrl || t.thumb) : null,
-    type: t.type ? String(t.type) : 'track',
-  }));
+  return (Array.isArray(list) ? list : []).map(t => {
+    const rawArtist = t.artist || t.artistName ? String(t.artist || t.artistName) : '';
+    const cleanedTitle = cleanTrackOrReleaseTitle(String(t.title || 'Unknown'), rawArtist) || String(t.title || 'Unknown');
+    return {
+      id: String(t.id || Math.random()),
+      title: cleanedTitle,
+      artist: rawArtist || null,
+      label: t.label ? String(t.label) : null,
+      catno: t.catno ? String(t.catno) : null,
+      format: t.format ? String(t.format) : null,
+      provider: t.provider ? String(t.provider) : null,
+      trackUrl: t.trackUrl || t.url ? String(t.trackUrl || t.url) : null,
+      scTrackId: t.scTrackId ? String(t.scTrackId) : null,
+      discogsId: t.discogsId ? String(t.discogsId) : null,
+      year: t.year ? String(t.year) : null,
+      thumb: t.thumb || t.coverImage || t.cover ? String(t.thumb || t.coverImage || t.cover) : null,
+      coverImage: t.coverImage || t.cover || t.artworkUrl || t.thumb ? String(t.coverImage || t.cover || t.artworkUrl || t.thumb) : null,
+      type: t.type ? String(t.type) : 'track',
+    };
+  });
 }
 
 export function openNativeGenreFast(genreObj, opts = {}) {
@@ -1606,7 +1830,7 @@ export function openNativeGenreFast(genreObj, opts = {}) {
 
 /**
  * Resolves real HTTP cover artwork for any tracks in a list that currently only have a fallback SVG data: URI
- * or empty coverImage, using an in-memory cache + coverByTitleArtist map + iTunes Search API.
+ * or empty coverImage, using an in-memory cache + coverByTitleArtist map + iTunes Search API + Bandcamp fallback.
  */
 async function _enrichTracksWithRealArtwork(tracks = [], coverMap = new Map(), providerTrackMap = new Map()) {
   if (typeof window !== 'undefined') {
@@ -1616,13 +1840,14 @@ async function _enrichTracksWithRealArtwork(tracks = [], coverMap = new Map(), p
 
   const resolved = await Promise.all(tracks.map(async (t) => {
     if (!t) return t;
-    const normTitle = _normStr(t.title);
+    const cleanedTitle = cleanTrackOrReleaseTitle(t.title || '', t.artist || '') || t.title || '';
+    const normTitle = _normStr(cleanedTitle);
     const normArtist = _normStr(t.artist);
     const pairKey = `${normArtist}|${normTitle}`;
 
     // 1. Check if we discovered a direct playable provider match (Bandcamp / SoundCloud) for this artist+title
     const provMatch = providerTrackMap.get(pairKey) || providerTrackMap.get(normTitle);
-    let updated = { ...t };
+    let updated = { ...t, title: cleanedTitle };
     if (provMatch) {
       if (String(updated.trackUrl || '').startsWith('resolve:') && provMatch.trackUrl) {
         updated.trackUrl = provMatch.trackUrl;
@@ -1651,8 +1876,8 @@ async function _enrichTracksWithRealArtwork(tracks = [], coverMap = new Map(), p
       return { ...updated, coverImage: mappedCover, thumb: mappedCover };
     }
 
-    // 4. Query fast public iTunes Search API for cover art
-    const q = `${t.artist || ''} ${t.title || ''}`.trim();
+    // 4. Query fast public iTunes Search API (song -> album) + Bandcamp fallback for cover art
+    const q = `${t.artist || ''} ${cleanedTitle}`.trim();
     if (q.length >= 3) {
       try {
         const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`);
@@ -1661,6 +1886,34 @@ async function _enrichTracksWithRealArtwork(tracks = [], coverMap = new Map(), p
           const hit = itJson?.results?.[0];
           const art = hit?.artworkUrl100 ? hit.artworkUrl100.replace('100x100bb', '600x600bb') : '';
           if (art) {
+            cache[pairKey] = art;
+            return { ...updated, coverImage: art, thumb: art };
+          }
+        }
+      } catch (e) {}
+      try {
+        const itAlbRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=album&limit=1`);
+        if (itAlbRes.ok) {
+          const itAlbJson = await itAlbRes.json();
+          const hit = itAlbJson?.results?.[0];
+          const art = hit?.artworkUrl100 ? hit.artworkUrl100.replace('100x100bb', '600x600bb') : '';
+          if (art) {
+            cache[pairKey] = art;
+            return { ...updated, coverImage: art, thumb: art };
+          }
+        }
+      } catch (e) {}
+      try {
+        const bcRes = await fetch('/api/bandcamp-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        });
+        if (bcRes.ok) {
+          const bcJson = await bcRes.json();
+          const hit = (bcJson?.results || []).find(r => r && r.artworkUrl && /^https?:\/\//i.test(r.artworkUrl));
+          if (hit?.artworkUrl) {
+            const art = hit.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg');
             cache[pairKey] = art;
             return { ...updated, coverImage: art, thumb: art };
           }
@@ -1688,13 +1941,15 @@ function _collectPlatformPlaylistTracksForGenre(node) {
         if (!tr || !tr.title) continue;
         const classified = classifyTrackGenre(tr);
         if (classified && (subNorms.has(_normStr(classified.primaryGenre)) || _normStr(pl.title || '').includes(targetGenreNorm))) {
+          const trArtist = tr.artist || tr.artistName || '';
+          const trTitle = cleanTrackOrReleaseTitle(tr.title, trArtist) || tr.title;
           out.push({
             id: tr.id || `pl-rec-${Math.random()}`,
-            title: tr.title,
-            artist: tr.artist || tr.artistName || '',
+            title: trTitle,
+            artist: trArtist,
             label: tr.label || pl.title || 'Kyoyu Playlist',
             year: tr.year ? String(tr.year) : '',
-            trackUrl: tr.trackUrl || tr.url || `resolve:${tr.artist || ''} ${tr.title || ''}`.trim(),
+            trackUrl: tr.trackUrl || tr.url || `resolve:${trArtist} ${trTitle}`.trim(),
             coverImage: tr.cover || tr.artworkUrl || tr.coverImage || '',
             thumb: tr.cover || tr.artworkUrl || tr.thumb || '',
             provider: tr.provider || 'bandcamp',
@@ -1726,8 +1981,8 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
     ? window.__kyoyuGetCurrentTrack()
     : null;
   const ctxArtist = (contextInput && contextInput.artist) || (isObj && genreInput.artist) || curTrack?.artistName || curTrack?.artist || '';
-  const ctxTitle = (contextInput && contextInput.title) || (isObj && genreInput.title) || curTrack?.title || '';
-  const ctxAlbum = (contextInput && contextInput.album) || curTrack?.releaseTitle || curTrack?.album || '';
+  const ctxTitle = cleanTrackOrReleaseTitle((contextInput && contextInput.title) || (isObj && genreInput.title) || curTrack?.title || '', ctxArtist);
+  const ctxAlbum = cleanTrackOrReleaseTitle((contextInput && contextInput.album) || curTrack?.releaseTitle || curTrack?.album || '', ctxArtist);
   let ctxLabel = (contextInput && contextInput.label) || curTrack?.label || curTrack?.labelName || '';
 
   // Check cached track-info for collaborators, remixers, label, and aliases
@@ -1842,11 +2097,13 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
 
     allBcItems.forEach((r, idx) => {
       const cleanCover = r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '';
+      const rawArtist = r.artistName || r.artist || '';
+      const cleanedMeta = splitCleanMetadata(r.title || 'Unknown', rawArtist, r.labelName || '', r.albumTitle || '');
       const item = {
         id: `bc-genre-${idx}-${Date.now()}`,
-        title: r.title || 'Unknown',
-        artist: r.artistName || r.artist || '',
-        label: r.labelName || r.albumTitle || node.name,
+        title: cleanedMeta.title || 'Unknown',
+        artist: cleanedMeta.artist || rawArtist,
+        label: cleanedMeta.label || r.labelName || cleanedMeta.album || node.name,
         year: r.year ? String(r.year) : '',
         trackUrl: r.trackUrl || r.url || '',
         coverImage: cleanCover,
@@ -1871,11 +2128,13 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
       scTracksRes.results.forEach((r, idx) => {
         const likes = Number(r.likesCount || 0);
         const followers = Number(r.userFollowersCount || 0);
+        const rawArtist = r.artistName || r.artist || '';
+        const cleanedMeta = splitCleanMetadata(r.title || 'Unknown', rawArtist, '', '');
         const item = {
           id: r.id || `sc-genre-${idx}-${Date.now()}`,
           scTrackId: r.scTrackId ? String(r.scTrackId) : '',
-          title: r.title || 'Unknown',
-          artist: r.artistName || r.artist || '',
+          title: cleanedMeta.title || 'Unknown',
+          artist: cleanedMeta.artist || rawArtist,
           label: r.genre || node.name,
           year: '',
           trackUrl: r.trackUrl || '',
@@ -1901,11 +2160,13 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
       scPlaylistsRes.playlists.forEach((pl) => {
         (pl.tracks || []).slice(0, 8).forEach((tr, idx) => {
           if (!tr || !tr.title) return;
+          const rawArtist = tr.artistName || tr.artist || pl.artistName || '';
+          const cleanedMeta = splitCleanMetadata(tr.title, rawArtist, '', '');
           const item = {
             id: tr.id || `sc-pl-genre-${idx}-${Date.now()}`,
             scTrackId: tr.scTrackId ? String(tr.scTrackId) : '',
-            title: tr.title,
-            artist: tr.artistName || tr.artist || pl.artistName || '',
+            title: cleanedMeta.title || tr.title,
+            artist: cleanedMeta.artist || rawArtist,
             label: pl.title || node.name,
             year: '',
             trackUrl: tr.trackUrl || '',
@@ -1933,14 +2194,16 @@ export async function openRichGenreSheet(genreInput, contextInput = null, refres
       if (rel.label && !/not on label/i.test(rel.label)) discoveredLabels.add(rel.label);
       if (rel.artist && !/various/i.test(rel.artist)) discoveredArtists.add(rel.artist);
       const cov = rel.coverImage || rel.thumb || '';
+      const relArtist = rel.artist || '';
+      const relTitle = cleanTrackOrReleaseTitle(rel.title || 'Unknown', relArtist) || rel.title || 'Unknown';
       const item = {
         id: rel.id || `dc-genre-${Math.random()}`,
         discogsId: rel.discogsId ? String(rel.discogsId) : '',
-        title: rel.title || 'Unknown',
-        artist: rel.artist || '',
+        title: relTitle,
+        artist: relArtist,
         label: rel.label || node.name,
         year: rel.year ? String(rel.year) : '',
-        trackUrl: `resolve:${rel.artist || ''} ${rel.title || ''}`.trim(),
+        trackUrl: `resolve:${relArtist} ${relTitle}`.trim(),
         coverImage: cov,
         thumb: rel.thumb || cov,
         provider: providerPriority[0] || 'bandcamp',
@@ -2163,8 +2426,8 @@ export function openRichSceneSheet(sceneNameInput, contextInput = null) {
 export async function playGenreTrack(trackItem) {
   if (!trackItem) return;
   const obj = typeof trackItem === 'string' ? JSON.parse(trackItem) : trackItem;
-  const title = obj.title || '';
   const artist = obj.artist || obj.artistName || '';
+  const title = cleanTrackOrReleaseTitle(obj.title || '', artist) || obj.title || '';
   const cover = obj.coverImage || obj.thumb || obj.cover || '';
   const trackUrl = obj.trackUrl || obj.url || '';
   const isResolveUrl = !trackUrl || trackUrl.startsWith('resolve:');
@@ -2199,9 +2462,9 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
   try {
     const cur = trackInput || (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack ? window.__kyoyuGetCurrentTrack() : null);
     if (!cur) return;
-    const title = String(cur.title || cur.name || '').trim();
     const artist = String(cur.artistName || cur.artist || infoData?.artist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
-    const rawAlbum = String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').replace(/\s*\(single\)\s*$/i, '').trim();
+    const title = cleanTrackOrReleaseTitle(String(cur.title || cur.name || '').trim(), artist);
+    const rawAlbum = cleanTrackOrReleaseTitle(String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').replace(/\s*\(single\)\s*$/i, '').trim(), artist);
     const isInvalidAlb = /^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio)$/i.test(rawAlbum) || /\s+radio$/i.test(rawAlbum);
     const album = (isInvalidAlb ? '' : rawAlbum) || title || '';
     const rawLabel = String(infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
@@ -2210,6 +2473,8 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
       .replace(/\(sub-label.*?\)/i, '')
       .split('—')[0]
       .trim();
+    const labelUrl = String(infoData?.labelUrl || cur.labelUrl || '').trim();
+    const bcTrackUrl = [cur.trackUrl, cur.url, cur.providerItemId, cur.albumUrl, infoData?.labelUrl].find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
     const cover = String(infoData?.coverImage || cur.releaseCover || cur.artworkUrl || cur.cover || '').trim();
 
     const tasks = [];
@@ -2217,7 +2482,9 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
       tasks.push(openRichArtistSheet({ name: artist, cover }, { preload: true }).catch(() => null));
     }
     if (label && label !== '—' && !/not on label|unknown/i.test(label)) {
-      tasks.push(openRichLabelSheet({ name: label, cover }, { preload: true }).catch(() => null));
+      tasks.push(openRichLabelSheet({ name: label, labelUrl: labelUrl || bcTrackUrl, cover }, { preload: true }).catch(() => null));
+    } else if (bcTrackUrl && artist) {
+      tasks.push(openRichLabelSheet({ name: artist, labelUrl: bcTrackUrl, cover }, { preload: true }).catch(() => null));
     }
     if ((artist || album || title) && typeof window !== 'undefined' && window.__kyoyuGoToAlbum) {
       tasks.push(window.__kyoyuGoToAlbum(artist, album || title, { preload: true, cover }).catch(() => null));

@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
-import { callStreaming, isStreamingProvider, onStreamingEvent } from '../../lib/streaming';
+import { callStreaming, isStreamingProvider, onStreamingEvent, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../../lib/streaming';
 import { classifyTrackGenre } from '../../lib/genreIntelligence';
 import { openRichGenreSheet, refreshGenreSheetTracks, openRichSceneSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
@@ -1043,20 +1043,28 @@ export default function Player({ hideMini = false }) {
         if (/\s+radio$/i.test(t) || /^(seeded|inspired)\s+by\s+/i.test(t)) return true;
         return false;
       };
+      const rawArtist = currentTrack.artistName || currentTrack.artist || '';
+      const rawTitle = currentTrack.title || '';
+      const rawLabel = currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '';
       const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
         .find(a => !isInvalidAlbumName(a)) || '';
       const cleanRawAlbum = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
-      const fallbackAlbum = cleanRawAlbum || (currentTrack.title ? (String(currentTrack.title).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || currentTrack.title) : '');
+      const cleanedMeta = splitCleanMetadata(rawTitle, rawArtist, rawLabel, cleanRawAlbum);
+      const cleanTitle = cleanedMeta.title || rawTitle;
+      const cleanArtist = cleanedMeta.artist || rawArtist;
+      const cleanLabel = cleanedMeta.label || rawLabel;
+      const cleanAlbumFromMeta = cleanTrackOrReleaseTitle(cleanedMeta.album || cleanRawAlbum, cleanArtist);
+      const fallbackAlbum = cleanAlbumFromMeta || (cleanTitle ? (String(cleanTitle).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || cleanTitle) : '');
       postNative({
         visible: true,
         playing: isPlaying,
-        title: currentTrack.title || '',
+        title: cleanTitle,
         artwork: validArt,
         trackId: String(currentTrack.id || ''),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
-        artist: currentTrack.artistName || currentTrack.artist || '',
+        artist: cleanArtist,
         albumName: fallbackAlbum,
-        label: currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '',
+        label: cleanLabel,
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         bpm: String(currentTrack.bpm || ''),
         key: String(currentTrack.key || currentTrack.musicalKey || ''),
@@ -1090,11 +1098,23 @@ export default function Player({ hideMini = false }) {
     };
     const trackKey = `${currentTrack.id || ''}:${currentTrack.title || ''}`;
     const srcProv = badgeProviderOf(provider, currentTrack);
-    const title = currentTrack.title || '';
-    const artist = currentTrack.artistName || currentTrack.artist || '';
+    const rawTitle = currentTrack.title || '';
+    const rawArtist = currentTrack.artistName || currentTrack.artist || '';
+    const rawLabel = currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '';
     const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
       .find(a => !isInvalidAlbumName(a)) || '';
-    const album = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
+    const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim());
+    const title = cleaned.title || rawTitle;
+    const artist = cleaned.artist || rawArtist;
+    const album = cleanTrackOrReleaseTitle(cleaned.album || rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim(), artist);
+    const bcTrackUrl = [
+      currentTrack.albumUrl,
+      currentTrack.providerUrl,
+      currentTrack.trackUrl,
+      currentTrack.providerItemId,
+      currentTrack.replay?.url,
+      currentTrack.origin?.url,
+    ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
     const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
     const fullCacheKey = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
 
@@ -1113,9 +1133,9 @@ export default function Player({ hideMini = false }) {
     if (cachedInfo?.bpm) initialPatch.bpm = String(cachedInfo.bpm);
     if (cachedInfo?.key) initialPatch.key = String(cachedInfo.key);
     if (cachedInfo?.album && !isInvalidAlbumName(cachedInfo.album)) {
-      initialPatch.albumName = String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim();
+      initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
     }
-    if (cachedInfo?.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
+    if (cachedInfo?.label && !(cleaned.label || currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
       initialPatch.label = cachedInfo.label;
     }
     if (cachedInfo?.year && !(currentTrack.year || currentTrack.releaseYear)) {
@@ -1128,12 +1148,12 @@ export default function Player({ hideMini = false }) {
       window.__kyoyuPreloadPlayingEntities(currentTrack, cachedInfo || null);
     }
 
-    if (cachedInfo && cachedInfo._v === 13) return;
+    if (cachedInfo && cachedInfo._v === 13 && (cachedInfo.label || !bcTrackUrl)) return;
 
-    // 2. Asynchronously query /api/discogs-search (action: 'track-info') to refine genre, label, year, BPM, key, and album for EVERY provider
+    // 2. Asynchronously query /api/discogs-search (action: 'track-info') AND /api/bandcamp-resolve (when on Bandcamp)
     (async () => {
       try {
-        const res = await fetch('/api/discogs-search', {
+        const discogsPromise = fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1144,10 +1164,34 @@ export default function Player({ hideMini = false }) {
             provider: srcProv,
             trackId: String(currentTrack.id || ''),
           }),
-        });
-        if (!res.ok || cancelled) return;
-        const infoData = await res.json();
-        if (cancelled || !infoData) return;
+        }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+        const bcPagePromise = bcTrackUrl
+          ? fetch('/api/bandcamp-resolve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'album-tracks', url: bcTrackUrl }),
+            }).then(r => r.ok ? r.json() : null).catch(() => null)
+          : Promise.resolve(null);
+
+        const [rawInfoData, bcPageData] = await Promise.all([discogsPromise, bcPagePromise]);
+        if (cancelled || (!rawInfoData && !bcPageData)) return;
+
+        const infoData = { ...(rawInfoData || {}) };
+        if (bcPageData && !bcPageData.error) {
+          if (bcPageData.label && (!infoData.label || /not on label|unknown/i.test(infoData.label))) {
+            infoData.label = bcPageData.label;
+          }
+          if (bcPageData.labelUrl) {
+            infoData.labelUrl = bcPageData.labelUrl;
+          }
+          if (bcPageData.albumName && (isInvalidAlbumName(infoData.album) || infoData.album === title)) {
+            infoData.album = cleanTrackOrReleaseTitle(bcPageData.albumName, artist || bcPageData.artist || '');
+          }
+          if (bcPageData.year && !infoData.year) {
+            infoData.year = String(bcPageData.year);
+          }
+        }
 
         window.__kyoyuInfoCache = window.__kyoyuInfoCache || {};
         window.__kyoyuInfoCache[cacheKey] = infoData;
@@ -1167,17 +1211,18 @@ export default function Player({ hideMini = false }) {
         if (infoData.bpm) nativePatch.bpm = String(infoData.bpm);
         if (infoData.key) nativePatch.key = String(infoData.key);
         if (infoData.album && !isInvalidAlbumName(infoData.album)) {
-          nativePatch.albumName = String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim();
+          nativePatch.albumName = cleanTrackOrReleaseTitle(String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
         }
-        if (infoData.label && !(currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
-          nativePatch.label = infoData.label;
+        const resolvedLabel = infoData.label || bcPageData?.label || cleaned.label || '';
+        if (resolvedLabel) {
+          nativePatch.label = resolvedLabel;
         }
         if (infoData.year && !(currentTrack.year || currentTrack.releaseYear)) {
           nativePatch.year = String(infoData.year);
         }
         postNative(nativePatch);
 
-        // Preload Album, Artist, and Label sheets with enriched Discogs/MusicBrainz info
+        // Preload Album, Artist, and Label sheets with enriched Discogs/MusicBrainz/Bandcamp info
         if (typeof window.__kyoyuPreloadPlayingEntities === 'function') {
           window.__kyoyuPreloadPlayingEntities(currentTrack, infoData);
         }

@@ -3,7 +3,7 @@
  * Native results are always ranked first when an exact match exists.
  */
 import { fetchPublicTracks } from './uploadPipeline';
-import { callStreaming, isStreamingAvailable, getCachedStreamingStatus, refreshStreamingStatus } from './streaming';
+import { callStreaming, isStreamingAvailable, getCachedStreamingStatus, refreshStreamingStatus, splitCleanMetadata, cleanTrackOrReleaseTitle } from './streaming';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -125,10 +125,12 @@ function categorizeDiscogsResults(discogsResults, nativeResults) {
         entityType: 'label',
       });
     } else if (r.type === 'release' || r.type === 'master') {
+      const cleanRelTitle = cleanTrackOrReleaseTitle(parsed.release || r.title, parsed.artist);
       releases.push({
         ...r,
+        title: cleanRelTitle || parsed.release || r.title,
         artistName: parsed.artist,
-        releaseName: parsed.release,
+        releaseName: cleanRelTitle || parsed.release,
         entityType: 'release',
       });
     }
@@ -156,18 +158,23 @@ async function searchYouTube(query, pageToken = null, retries = 2) {
     }
     const data = await res.json();
     return {
-      results: (data.results || []).map(yt => ({
-        id: `yt-${yt.videoId}`,
-        videoId: yt.videoId,
-        title: yt.title,
-        channelTitle: yt.channelTitle,
-        thumbnail: yt.thumbnail,
-        duration: yt.duration,
-        year: yt.publishedAt ? yt.publishedAt.slice(0, 4) : null,
-        entityType: 'track',
-        isExternal: true,
-        nativeAvailable: false,
-      })),
+      results: (data.results || []).map(yt => {
+        const cleaned = splitCleanMetadata(yt.title || '', yt.channelTitle || '');
+        return {
+          id: `yt-${yt.videoId}`,
+          videoId: yt.videoId,
+          title: cleaned.title || yt.title,
+          channelTitle: cleaned.artist || yt.channelTitle,
+          artistName: cleaned.artist || yt.channelTitle,
+          label: cleaned.label || '',
+          thumbnail: yt.thumbnail,
+          duration: yt.duration,
+          year: yt.publishedAt ? yt.publishedAt.slice(0, 4) : null,
+          entityType: 'track',
+          isExternal: true,
+          nativeAvailable: false,
+        };
+      }),
       nextPageToken: data.nextPageToken || null
     };
   } catch (err) {
@@ -192,30 +199,41 @@ async function searchSoundCloud(query, offset = 0) {
       return { results: [], playlists: [], hasMore: false, nextOffset: 0 };
     }
     const data = await res.json();
-    const results = (data.results || []).map(r => ({
-      id: `sc-${r.trackId}`,
-      trackId: r.trackId,
-      title: r.title,
-      artistName: r.artistName,
-      artworkUrl: r.artworkUrl,
-      duration: r.duration,
-      permalinkUrl: r.permalinkUrl,
-      playbackCount: r.playbackCount,
-      genre: r.genre,
-      year: r.year || null,
-      isExternal: true,
-      provider: 'soundcloud',
-    }));
+    const results = (data.results || []).map(r => {
+      const cleaned = splitCleanMetadata(r.title || '', r.artistName || '');
+      return {
+        id: `sc-${r.trackId}`,
+        trackId: r.trackId,
+        title: cleaned.title || r.title,
+        artistName: cleaned.artist || r.artistName,
+        label: cleaned.label || '',
+        artworkUrl: r.artworkUrl,
+        duration: r.duration,
+        permalinkUrl: r.permalinkUrl,
+        playbackCount: r.playbackCount,
+        genre: r.genre,
+        year: r.year || null,
+        isExternal: true,
+        provider: 'soundcloud',
+      };
+    });
     const playlists = (data.playlists || []).map(pl => ({
       id: `sc-pl-${pl.playlistId}`,
       playlistId: pl.playlistId,
-      title: pl.title,
+      title: cleanTrackOrReleaseTitle(pl.title, pl.artistName),
       artistName: pl.artistName,
       artworkUrl: pl.artworkUrl,
       trackCount: pl.trackCount,
       permalinkUrl: pl.permalinkUrl,
       duration: pl.duration,
-      tracks: pl.tracks || [],
+      tracks: (pl.tracks || []).map(tr => {
+        const cleaned = splitCleanMetadata(tr.title || '', tr.artistName || pl.artistName || '');
+        return {
+          ...tr,
+          title: cleaned.title || tr.title,
+          artistName: cleaned.artist || tr.artistName || pl.artistName,
+        };
+      }),
       isExternal: true,
       provider: 'soundcloud',
       entityType: 'playlist',
@@ -238,20 +256,29 @@ async function searchBandcamp(query, { reportFailure = false } = {}) {
     const data = await res.json();
     // An empty Bandcamp answer for a real query is almost always a temporary hiccup — flag it for a retry
     if (reportFailure && !(data.results || []).length) return fail();
-    return (data.results || []).map((r, i) => ({
-      id: `bc-${i}-${r.trackId || ''}-${r.type || ''}`,
-      entityType: r.type,
-      title: r.title,
-      artistName: r.artistName,
-      artworkUrl: r.artworkUrl,
-      trackUrl: r.trackUrl,
-      albumName: r.albumName,
-      genre: r.genre,
-      location: r.location || '',
-      released: r.released,
-      isExternal: true,
-      provider: 'bandcamp',
-    }));
+    return (data.results || []).map((r, i) => {
+      const isEntity = r.type === 'artist' || r.type === 'label';
+      const cleaned = isEntity
+        ? { title: r.title, artist: r.artistName, label: r.label || '', album: r.albumName || '' }
+        : splitCleanMetadata(r.title || '', r.artistName || '', r.label || '', r.albumName || '');
+      return {
+        id: `bc-${i}-${r.trackId || ''}-${r.type || ''}`,
+        entityType: r.type,
+        title: cleaned.title || r.title,
+        artistName: cleaned.artist || r.artistName,
+        label: cleaned.label || r.label || '',
+        labelUrl: r.labelUrl || '',
+        artworkUrl: r.artworkUrl,
+        trackUrl: r.trackUrl,
+        albumName: cleaned.album || r.albumName,
+        genre: r.genre,
+        location: r.location || '',
+        released: r.released,
+        year: r.year || null,
+        isExternal: true,
+        provider: 'bandcamp',
+      };
+    });
   } catch (err) {
     console.warn('Bandcamp search failed:', err);
     return fail();
