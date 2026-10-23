@@ -168,7 +168,18 @@ export default async function handler(req, res) {
         artist = bandPageName;
       }
 
-      let rawAlbumName = unescapeEntity(tralbumData.current?.title || '');
+      const isTrackUrl = /\/track\//i.test(url) || tralbumData.item_type === 'track';
+      const fromAlbumHtml = unescapeEntity(
+        ((html.match(/<span[^>]*class="fromAlbum"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '')
+          .replace(/<[^>]+>/g, '')
+          .trim()
+      );
+      const inAlbumLd = unescapeEntity(
+        ((html.match(/"inAlbum"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+      );
+      let rawAlbumName = isTrackUrl
+        ? (unescapeEntity(tralbumData.album_title || '') || fromAlbumHtml || inAlbumLd || unescapeEntity(tralbumData.current?.title || ''))
+        : (unescapeEntity(tralbumData.current?.title || tralbumData.album_title || '') || fromAlbumHtml || inAlbumLd);
       for (const sep of [' — ', ' – ', ' - ']) {
         const idx = rawAlbumName.indexOf(sep);
         if (idx > 0) {
@@ -355,20 +366,79 @@ export default async function handler(req, res) {
         } catch (e) {}
       }
 
-      // Fill in years for top releases that came from initial HTML before data-client-items
-      let latestKnownYear = new Date().getFullYear();
-      for (const r of releases) {
-        if (r.year && Number(r.year) > 1950) {
-          latestKnownYear = Number(r.year);
-          break;
+      // If this page itself is a single release page (when a label/artist has only 1 release or redirects to /album/...)
+      if (releases.length === 0) {
+        const singleTitle = ((html.match(/<h2[^>]*class="[^"]*trackTitle[^"]*"[^>]*>([\s\S]*?)<\/h2>/i) || [])[1] || '').replace(/<[^>]+>/g, '').trim();
+        if (singleTitle) {
+          const singleArt = ((html.match(/<a class="popupImage"[^>]*href="([^"]+)"/i) || [])[1]) || ((html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) || [])[1]) || '';
+          const dateRaw = ((html.match(/(?:released|published)\s+([A-Za-z]+\s+\d{1,2},\s*(?:19|20)\d{2})/i) || [])[1]) || '';
+          const ym = dateRaw.match(/\b((?:19|20)\d{2})\b/);
+          addRel({
+            url: originUrl,
+            artworkUrl: singleArt,
+            title: unescapeHtml(singleTitle),
+            artist: preliminaryBandName,
+            year: ym ? ym[1] : null,
+            releaseTimestamp: dateRaw ? (Date.parse(dateRaw) || 0) : 0,
+          });
         }
       }
-      for (let i = 0; i < releases.length; i++) {
-        if (releases[i].year) {
-          latestKnownYear = Number(releases[i].year) || latestKnownYear;
-        } else {
-          releases[i].year = String(latestKnownYear);
-        }
+
+      // Resolve actual release years & artists for initial HTML grid items that were not in data-client-items
+      const missingYearItems = releases.filter(r => !r.year && r.url && /^https?:\/\//i.test(r.url)).slice(0, 28);
+      if (missingYearItems.length > 0) {
+        let nextIdx = 0;
+        const workers = Array.from({ length: Math.min(8, missingYearItems.length) }, async () => {
+          while (nextIdx < missingYearItems.length) {
+            const item = missingYearItems[nextIdx++];
+            try {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), 3500);
+              const rRes = await fetch(item.url, {
+                signal: controller.signal,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                  'Accept': 'text/html,application/xhtml+xml',
+                },
+              });
+              clearTimeout(timer);
+              if (!rRes.ok) continue;
+              const rHtml = await rRes.text();
+              // 1. Check data-tralbum release_date / album_release_date / publish_date
+              let dateStr = '';
+              const trMatch = rHtml.match(/data-tralbum="([^"]+)"/i);
+              if (trMatch) {
+                const decodedTr = unescapeHtml(trMatch[1]);
+                const relDateMatch = decodedTr.match(/"(?:release_date|album_release_date|publish_date)"\s*:\s*"([^"]+)"/i);
+                if (relDateMatch && relDateMatch[1]) dateStr = relDateMatch[1];
+                if (!item.artist || (preliminaryBandName && item.artist.toLowerCase() === preliminaryBandName.toLowerCase())) {
+                  const artMatch = decodedTr.match(/"artist"\s*:\s*"([^"]+)"/i);
+                  if (artMatch && artMatch[1]) {
+                    const cleaned = cleanRelTitleAndArtist(item.title, artMatch[1], preliminaryBandName);
+                    if (cleaned.artist) item.artist = cleaned.artist;
+                    if (cleaned.title) item.title = cleaned.title;
+                  }
+                }
+              }
+              // 2. Fallback: JSON-LD datePublished or visible "released Month DD, YYYY"
+              if (!dateStr) {
+                const ldDate = rHtml.match(/"datePublished"\s*:\s*"([^"]+)"/i);
+                if (ldDate && ldDate[1]) dateStr = ldDate[1];
+              }
+              if (!dateStr) {
+                const visDate = rHtml.match(/(?:released|published)\s+([A-Za-z]+\s+\d{1,2},\s*(?:19|20)\d{2})/i);
+                if (visDate && visDate[1]) dateStr = visDate[1];
+              }
+              if (dateStr) {
+                const ym = dateStr.match(/\b((?:19|20)\d{2})\b/);
+                if (ym) item.year = ym[1];
+                const ts = Date.parse(dateStr);
+                if (!Number.isNaN(ts)) item.releaseTimestamp = ts;
+              }
+            } catch (e) {}
+          }
+        });
+        await Promise.all(workers);
       }
 
       const parseMetaFromHtml = (pageHtml) => {
@@ -535,6 +605,36 @@ export default async function handler(req, res) {
     const releaseDateRaw = String(tralbumData.current?.release_date || tralbumData.album_release_date || tralbumData.current?.publish_date || '');
     const year = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
 
+    const isTrackPage = /\/track\//i.test(url) || tralbumData.item_type === 'track';
+    const decodeEnt = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+    const fromAlbumHtml = decodeEnt(
+      ((html.match(/<span[^>]*class="fromAlbum"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '').replace(/<[^>]+>/g, '').trim()
+    );
+    const inAlbumLd = decodeEnt(
+      ((html.match(/"inAlbum"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+    );
+    let rawAlbumName = isTrackPage
+      ? (decodeEnt(tralbumData.album_title || tralbumData.current?.album_title || '') || fromAlbumHtml || inAlbumLd || '')
+      : (decodeEnt(tralbumData.current?.title || tralbumData.album_title || '') || fromAlbumHtml || inAlbumLd || '');
+    for (const sep of [' — ', ' – ', ' - ']) {
+      const idx = rawAlbumName.indexOf(sep);
+      if (idx > 0) {
+        const left = rawAlbumName.slice(0, idx).trim();
+        const right = rawAlbumName.slice(idx + sep.length).trim();
+        if (left && right && left.toLowerCase() === String(artist || '').toLowerCase()) {
+          rawAlbumName = right;
+          break;
+        }
+      }
+    }
+    let albumUrl = '';
+    const rawAlbumHref = tralbumData.album_url || ((html.match(/<a[^>]*href="([^"]*\/album\/[^"?#]+)"/i) || [])[1] || '');
+    if (rawAlbumHref) {
+      try { albumUrl = new URL(rawAlbumHref, originUrl || url).href; } catch (e) {}
+    } else if (/\/album\//i.test(url)) {
+      albumUrl = url;
+    }
+
     const result = {
       streamUrl,
       title: track.title || '',
@@ -544,7 +644,8 @@ export default async function handler(req, res) {
       year,
       artworkUrl,
       duration: track.duration ? Math.round(track.duration) : 0,
-      albumName: tralbumData.current?.title || '',
+      albumName: rawAlbumName,
+      albumUrl,
       trackUrl: url,
     };
     resolveCache.set(url, { data: result, timestamp: now });

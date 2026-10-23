@@ -747,9 +747,23 @@ export default function Home() {
                 );
               }
 
-              // Render "New on Bandcamp" using the Featured hero carousel layout
+              // Render "New on Bandcamp" using the Featured hero carousel layout (featuring new releases/albums from followings)
               if (sec.key === 'bandcamp-new') {
-                const bcHeroItems = sec.items.slice(0, Math.max(sec.pageSize || 9, 15));
+                const sortedBcReleases = [...(sec.items || [])].sort((a, b) => {
+                  const ua = String(a.albumUrl || a.trackUrl || a.url || '');
+                  const ub = String(b.albumUrl || b.trackUrl || b.url || '');
+                  const isAlbA = a.kind === 'album' || ua.includes('/album/') ? 1 : 0;
+                  const isAlbB = b.kind === 'album' || ub.includes('/album/') ? 1 : 0;
+                  const tsA = Number(a.releaseTimestamp || 0);
+                  const tsB = Number(b.releaseTimestamp || 0);
+                  if (tsA && tsB && tsA !== tsB) return tsB - tsA;
+                  if (isAlbA !== isAlbB) return isAlbB - isAlbA;
+                  const yrA = parseInt(a.year, 10) || 0;
+                  const yrB = parseInt(b.year, 10) || 0;
+                  if (yrA !== yrB) return yrB - yrA;
+                  return 0;
+                });
+                const bcHeroItems = sortedBcReleases.slice(0, Math.max(sec.pageSize || 9, 15));
                 return (
                   <section key={sec.key} className="home-section">
                     <div className="section-title">
@@ -763,40 +777,24 @@ export default function Home() {
                       {bcHeroItems.map((it, idx) => {
                         const rawCover = it.artworkUrl || it.cover || '';
                         const cleanCover = rawCover ? pinImageInMemory(rawCover, it.id || `bc-new-${idx}`) : '';
-                        const meta = splitCleanMetadata(it.title, it.artistName || it.artist || '', it.label || it.labelName || '');
-                        const u = String(it.trackUrl || it.url || '');
-                        const isAlb = it.kind === 'album' || (u.includes('/album/') && !u.includes('/track/'));
+                        const displayRawTitle = it.album || it.releaseTitle || it.title || '';
+                        const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
+                        const releaseUrl = it.albumUrl || it.trackUrl || it.url || '';
                         const showLabel = meta.label && meta.label.toLowerCase() !== (meta.artist || '').toLowerCase() ? meta.label : '';
                         return (
                           <button
                             key={it.id || `bc-new-${idx}`}
                             className="featured-hero-card"
                             onClick={() => {
-                              if (isAlb) {
-                                openPlaylistSheet({
-                                  ...it,
-                                  kind: 'album',
-                                  title: meta.title || it.title,
-                                  artistName: meta.artist || it.artistName,
-                                  label: meta.label || it.label,
-                                });
-                              } else {
-                                const playable = toPlayable({
-                                  ...it,
-                                  title: meta.title || it.title,
-                                  artistName: meta.artist || it.artistName,
-                                  label: meta.label || it.label,
-                                });
-                                const queue = bcHeroItems
-                                  .filter(x => !(x.kind === 'album' || String(x.trackUrl || x.url || '').includes('/album/')))
-                                  .map(x => {
-                                    const xm = splitCleanMetadata(x.title, x.artistName || x.artist || '', x.label || x.labelName || '');
-                                    return toPlayable({ ...x, title: xm.title || x.title, artistName: xm.artist || x.artistName, label: xm.label || x.label });
-                                  });
-                                const qIdx = queue.findIndex(q => q.id === playable.id);
-                                setSearchQueue(queue.length > 0 ? queue : [playable], qIdx >= 0 ? qIdx : 0);
-                                playSearchItem(playable);
-                              }
+                              openPlaylistSheet({
+                                ...it,
+                                kind: 'album',
+                                title: meta.title || displayRawTitle || it.title,
+                                artistName: meta.artist || it.artistName || it.artist,
+                                label: meta.label || it.label,
+                                url: releaseUrl,
+                                trackUrl: releaseUrl,
+                              });
                             }}
                           >
                             {cleanCover && (
@@ -807,15 +805,15 @@ export default function Home() {
                             )}
                             <div className="featured-hero-art">
                               {cleanCover
-                                ? <img src={cleanCover} alt={meta.title || it.title} loading="eager" decoding="sync" />
+                                ? <img src={cleanCover} alt={meta.title || displayRawTitle} loading="eager" decoding="sync" />
                                 : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                             </div>
                             <div className="featured-hero-info">
-                              <div className="featured-hero-title">{meta.title || it.title}</div>
+                              <div className="featured-hero-title">{meta.title || displayRawTitle}</div>
                               <div className="featured-hero-artist">{meta.artist || it.artistName}</div>
                               {showLabel && <div className="featured-hero-label">{showLabel}</div>}
                               <div className="featured-hero-meta">
-                                {isAlb ? 'Release' : 'Track'}
+                                Release
                                 {it.year ? ` · ${it.year}` : ''}
                               </div>
                             </div>

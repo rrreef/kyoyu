@@ -57,47 +57,71 @@ export default async function handler(req, res) {
   // ── Action: fetch album tracks ──
   if (body?.action === 'fetch-album' && body?.albumUrl) {
     try {
-      const albumRes = await fetch(body.albumUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
+      const fetchHtml = async (targetUrl) => {
+        const r = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          }
+        });
+        return r.ok ? await r.text() : '';
+      };
+
+      const parseTralbum = (pageHtml) => {
+        let tr = null;
+        const tralbumMatch = pageHtml.match(/data-tralbum="([^"]+)"/) || pageHtml.match(/data-tralbum='([^']+)'/);
+        if (tralbumMatch) {
+          try {
+            const decoded = tralbumMatch[1]
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&amp;/g, '&');
+            tr = JSON.parse(decoded);
+          } catch (e) {}
         }
-      });
-      if (!albumRes.ok) return res.status(200).json({ tracks: [] });
-      const html = await albumRes.text();
-      
-      // Extract track data from the page's data-tralbum, TralbumData var, inline trackinfo, or LD+JSON
+        if (!tr || !tr.trackinfo) {
+          const varMatch = pageHtml.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/);
+          if (varMatch) {
+            try { tr = JSON.parse(varMatch[1]); } catch (e) {}
+          }
+        }
+        if (!tr || !tr.trackinfo) {
+          const scriptMatch = pageHtml.match(/"trackinfo"\s*:\s*(\[[\s\S]*?\])\s*,/);
+          if (scriptMatch) {
+            try { tr = { trackinfo: JSON.parse(scriptMatch[1]) }; } catch (e) {}
+          }
+        }
+        return tr;
+      };
+
+      let effectiveUrl = body.albumUrl;
+      let html = await fetchHtml(effectiveUrl);
+      if (!html) return res.status(200).json({ tracks: [] });
+
       const tracks = [];
-      let tralbum = null;
+      let tralbum = parseTralbum(html);
 
-      // 1. Try data-tralbum JSON (double or single quotes)
-      const tralbumMatch = html.match(/data-tralbum="([^"]+)"/) || html.match(/data-tralbum='([^']+)'/);
-      if (tralbumMatch) {
-        try {
-          const decoded = tralbumMatch[1]
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&');
-          tralbum = JSON.parse(decoded);
-        } catch (e) { /* parse error, fall through */ }
-      }
-
-      // 2. Fallback: var TralbumData = {...};
-      if (!tralbum || !tralbum.trackinfo) {
-        const varMatch = html.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/);
-        if (varMatch) {
-          try { tralbum = JSON.parse(varMatch[1]); } catch (e) { /* ignore */ }
-        }
-      }
-
-      // 3. Fallback: "trackinfo": [...] in script
-      if (!tralbum || !tralbum.trackinfo) {
-        const scriptMatch = html.match(/"trackinfo"\s*:\s*(\[[\s\S]*?\])\s*,/);
-        if (scriptMatch) {
-          try { tralbum = { trackinfo: JSON.parse(scriptMatch[1]) }; } catch (e) { /* ignore */ }
+      // If given a /track/ URL that belongs to a parent /album/, fetch the parent /album/ so we get all album tracks and true album title!
+      if (/\/track\//i.test(effectiveUrl) || tralbum?.item_type === 'track') {
+        const parentHref = tralbum?.album_url || ((html.match(/<a[^>]*href="([^"]*\/album\/[^"?#]+)"/i) || [])[1] || '');
+        if (parentHref) {
+          try {
+            const parentFullUrl = new URL(parentHref, effectiveUrl).href;
+            if (parentFullUrl && parentFullUrl !== effectiveUrl) {
+              const parentHtml = await fetchHtml(parentFullUrl);
+              if (parentHtml) {
+                const parentTralbum = parseTralbum(parentHtml);
+                if (parentTralbum && Array.isArray(parentTralbum.trackinfo) && parentTralbum.trackinfo.length > 0) {
+                  effectiveUrl = parentFullUrl;
+                  html = parentHtml;
+                  tralbum = parentTralbum;
+                }
+              }
+            }
+          } catch (e) {}
         }
       }
 
@@ -159,10 +183,19 @@ export default async function handler(req, res) {
       }
 
       let originUrl = '';
-      try { originUrl = new URL(body.albumUrl).origin; } catch (e) {}
+      try { originUrl = new URL(effectiveUrl).origin; } catch (e) {}
 
       let albumArtist = decodeEntities(tralbum?.artist || '');
-      let rawAlbumTitle = decodeEntities(tralbum?.current?.title || '');
+      const isStillTrackPage = /\/track\//i.test(effectiveUrl) || tralbum?.item_type === 'track';
+      const fromAlbumHtml = decodeEntities(
+        ((html.match(/<span[^>]*class="fromAlbum"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '').replace(/<[^>]+>/g, '').trim()
+      );
+      const inAlbumLd = decodeEntities(
+        ((html.match(/"inAlbum"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+      );
+      let rawAlbumTitle = isStillTrackPage
+        ? (decodeEntities(tralbum?.album_title || '') || fromAlbumHtml || inAlbumLd || decodeEntities(tralbum?.current?.title || ''))
+        : (decodeEntities(tralbum?.current?.title || tralbum?.album_title || '') || fromAlbumHtml || inAlbumLd);
       if (!rawAlbumTitle) {
         rawAlbumTitle = decodeEntities((html.match(/<h2 class="trackTitle">\s*([\s\S]*?)\s*<\/h2>/i) || [])[1] || '');
       }
@@ -217,7 +250,7 @@ export default async function handler(req, res) {
             duration: Math.round((t.duration || 0)),
             streamUrl,
             // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
-            trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, body.albumUrl).href : body.albumUrl; } catch (e) { return body.albumUrl; } })(),
+            trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, effectiveUrl).href : effectiveUrl; } catch (e) { return effectiveUrl; } })(),
             artworkUrl: albumArt,
             artistName: trackArtist,
             albumName: cleanAlbumTitle,
@@ -242,7 +275,7 @@ export default async function handler(req, res) {
               const tArtist = item.byArtist?.name || ldArtist;
               tracks.push({
                 trackId: item['@id'] || t.position,
-                trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : body.albumUrl,
+                trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : effectiveUrl,
                 title: stripArtistFromTitle(item.name || '', tArtist),
                 duration: 0,
                 artworkUrl: ldArt,

@@ -928,15 +928,22 @@ export function PlayerProvider({ children }) {
     if (resolved?.streamUrl) {
       const mergedArtist = meta.artistName || resolved.artist || '';
       const mergedTitle = cleanTrackOrReleaseTitle(meta.title || resolved.title || '', mergedArtist);
-      const mergedAlbum = cleanTrackOrReleaseTitle(meta.releaseTitle || resolved.albumName || '', mergedArtist);
+      const rawMetaAlbum = cleanTrackOrReleaseTitle(meta.releaseTitle || '', mergedArtist);
+      const rawResolvedAlbum = cleanTrackOrReleaseTitle(resolved.albumName || '', mergedArtist);
+      const isMetaAlbumSameAsTitle = rawMetaAlbum && mergedTitle && rawMetaAlbum.toLowerCase() === mergedTitle.toLowerCase();
+      const mergedAlbum = (rawResolvedAlbum && (!rawMetaAlbum || isMetaAlbumSameAsTitle))
+        ? rawResolvedAlbum
+        : (rawMetaAlbum || rawResolvedAlbum || '');
       const mergedLabel = meta.label || resolved.label || '';
       const mergedLabelUrl = meta.labelUrl || resolved.labelUrl || '';
+      const mergedAlbumUrl = meta.albumUrl || resolved.albumUrl || '';
       playTrack({
         id: meta.id,
         title: mergedTitle || meta.title || resolved.title,
         artistName: mergedArtist,
         releaseCover: meta.releaseCover || resolved.artworkUrl || '',
         releaseTitle: mergedAlbum,
+        albumUrl: mergedAlbumUrl,
         label: mergedLabel,
         labelUrl: mergedLabelUrl,
         year: meta.year || resolved.year || '',
@@ -947,6 +954,14 @@ export function PlayerProvider({ children }) {
         providerUrl: meta.url,
         origin: { provider: 'bandcamp', url: meta.url },
       });
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          albumName: mergedAlbum,
+          label: mergedLabel,
+          labelUrl: mergedLabelUrl,
+          year: String(meta.year || resolved.year || ''),
+        });
+      } catch (e) {}
       return;
     }
     console.warn('[Player] Bandcamp stream unavailable, looking for the same song elsewhere:', meta.url);
@@ -1376,11 +1391,56 @@ export function PlayerProvider({ children }) {
     // In-memory cache for current session (keyed by lookup key)
     if (!window.__kyoyuInfoCache) window.__kyoyuInfoCache = {};
 
+    const syncResolvedTrackMetaToBridge = (data, reqTitle, reqArtist) => {
+      if (!data || typeof data !== 'object') return;
+      const cur = stateRef.current.currentTrack;
+      if (!cur) return;
+      const curTitle = String(cur.title || cur.name || '').trim().toLowerCase();
+      const curArtist = String(cur.artistName || cur.artist || '').trim().toLowerCase();
+      if (reqTitle && curTitle && curTitle !== String(reqTitle).trim().toLowerCase()) return;
+      if (reqArtist && curArtist && !curArtist.includes(String(reqArtist).trim().toLowerCase()) && !String(reqArtist).trim().toLowerCase().includes(curArtist)) return;
+
+      const resolvedAlb = cleanTrackOrReleaseTitle(String(data.album || '').replace(/\s*\(single\)\s*$/i, '').trim(), cur.artistName || cur.artist || '');
+      const curAlb = String(cur.releaseTitle || cur.albumTitle || cur.album || '').trim();
+      const shouldUpdateAlb = resolvedAlb && !/^unknown/i.test(resolvedAlb) && (!curAlb || curAlb.toLowerCase() === curTitle);
+      const resolvedLbl = String(data.label || '').replace(/\[.*?\]/g, '').replace(/\(sub-label.*?\)/i, '').split('—')[0].trim();
+      const resolvedYr = data.year ? String(data.year) : '';
+      const bcLink = Array.isArray(data.links) ? (data.links.find(l => l && typeof l.url === 'string' && l.url.includes('bandcamp.com'))?.url || '') : '';
+      const bcOrigin = (() => {
+        try { return bcLink ? new URL(bcLink).origin : ''; } catch { return ''; }
+      })();
+
+      const patch = {};
+      if (shouldUpdateAlb) {
+        cur.releaseTitle = resolvedAlb;
+        patch.albumName = resolvedAlb;
+      }
+      if (resolvedLbl && !cur.label) {
+        cur.label = resolvedLbl;
+        patch.label = resolvedLbl;
+      }
+      if (bcOrigin && !cur.labelUrl) {
+        cur.labelUrl = bcOrigin;
+        patch.labelUrl = bcOrigin;
+      }
+      if (resolvedYr && !cur.year) {
+        cur.year = resolvedYr;
+        patch.year = resolvedYr;
+      }
+      if (Object.keys(patch).length > 0) {
+        try { window.webkit?.messageHandlers?.player?.postMessage(patch); } catch (e) {}
+      }
+    };
+
     // Prefetch: called by Swift on track change — warms the cache
     window.__kyoyuPrefetchTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
-        if (!key || window.__kyoyuInfoCache[key]) return; // Already cached
+        if (!key) return;
+        if (window.__kyoyuInfoCache[key]) {
+          syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
+          return;
+        }
         const res = await fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1389,6 +1449,7 @@ export function PlayerProvider({ children }) {
         if (res.ok) {
           const data = await res.json();
           window.__kyoyuInfoCache[key] = data;
+          syncResolvedTrackMetaToBridge(data, title, artist);
         }
       } catch (e) { console.warn('Prefetch info error:', e); }
     };
@@ -1396,12 +1457,33 @@ export function PlayerProvider({ children }) {
     // Expose current track getter for native/web genre & artist sheets
     window.__kyoyuGetCurrentTrack = () => stateRef.current.currentTrack;
 
+    // Expose share payload getter for native iOS share sheet
+    window.__kyoyuGetShareInfo = () => {
+      const cur = stateRef.current.currentTrack || {};
+      const title = String(cur.title || cur.name || '').trim();
+      const artist = String(cur.artistName || cur.artist || '').trim();
+      const album = String(cur.releaseTitle || cur.albumTitle || cur.album || '').trim();
+      let url = String(cur.providerUrl || cur.trackUrl || cur.url || cur.providerItemId || cur.origin?.url || '').trim();
+      if (url.startsWith('resolve:')) url = '';
+      if (!url && (cur.videoId || (cur.provider === 'youtube' && cur.providerItemId))) {
+        url = `https://www.youtube.com/watch?v=${cur.videoId || cur.providerItemId}`;
+      }
+      if (!url && cur.spotifyId) {
+        url = `https://open.spotify.com/track/${String(cur.spotifyId).replace(/^sp-/, '')}`;
+      }
+      if (!url && cur.tidalId) {
+        url = `https://tidal.com/browse/track/${String(cur.tidalId).replace(/^td-/, '')}`;
+      }
+      return JSON.stringify({ title, artist, album, url });
+    };
+
     // Get cached info: called when user opens info panel — returns instantly
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
         if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 13) {
+          syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
         // Cache miss — fetch synchronously (shouldn't happen often since prefetch runs on track change)
@@ -1413,6 +1495,7 @@ export function PlayerProvider({ children }) {
         if (res.ok) {
           const data = await res.json();
           window.__kyoyuInfoCache[key] = data;
+          syncResolvedTrackMetaToBridge(data, title, artist);
           return JSON.stringify(data);
         }
         return JSON.stringify({ description: 'Could not fetch info.', genre: '', label: '', year: '', links: [] });

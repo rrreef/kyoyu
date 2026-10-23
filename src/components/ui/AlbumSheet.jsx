@@ -688,6 +688,8 @@ export function openNativeArtistFast(artist, opts = {}) {
     id: String(artist.id || Math.random()),
     name: String(artist.name || 'Unknown'),
     realname: artist.realname ? String(artist.realname) : null,
+    location: artist.location ? String(artist.location) : null,
+    summary: artist.summary ? String(artist.summary) : null,
     profile: artist.profile ? String(artist.profile) : null,
     artisticPersona: artist.artisticPersona ? String(artist.artisticPersona) : null,
     influencesAndInspirations: artist.influencesAndInspirations ? String(artist.influencesAndInspirations) : null,
@@ -911,9 +913,12 @@ const CLIENT_CROSS_ENTITY_LINKS = {
   'shed': ['https://delsinrecords.bandcamp.com', 'https://ostgutton.bandcamp.com'],
   'head high': ['https://headhigh.bandcamp.com'],
   'rene pawlowitz': ['https://headhigh.bandcamp.com'],
+  'moonshoe': ['https://moonshoerecords.bandcamp.com'],
+  'moonshoe records': ['https://moonshoerecords.bandcamp.com'],
 };
 
-function _discoverCrossEntityLinksForNames(names = [], bcSearchResults = []) {
+function _discoverCrossEntityLinksForNames(names = [], bcSearchResults = [], opts = {}) {
+  const isLabel = Boolean(opts && opts.isLabel);
   const discovered = [];
   for (const raw of names) {
     const n = _normStr(raw);
@@ -922,15 +927,35 @@ function _discoverCrossEntityLinksForNames(names = [], bcSearchResults = []) {
     if (l && CLIENT_CROSS_ENTITY_LINKS[l]) discovered.push(...CLIENT_CROSS_ENTITY_LINKS[l]);
   }
   const wantNorms = new Set(names.map(_normStr).filter(Boolean));
+  const wantCores = new Set(names.map(_normLabelCore).filter(Boolean));
+  const wantSlugs = new Set([...wantCores].map(c => c.replace(/[^a-z0-9]/g, '')).filter(s => s.length >= 4));
+
   for (const item of (bcSearchResults || [])) {
     if (!item) continue;
     const itemUrl = item.trackUrl || item.url || '';
     if (!itemUrl || !itemUrl.includes('bandcamp.com')) continue;
     const itemArtistNorm = _normStr(item.artistName || item.artist || '');
-    const itemTitleNorm = _normStr(item.title || '');
-    const matchesEntity = [...wantNorms].some(w =>
-      w.length >= 3 && (itemArtistNorm === w || itemArtistNorm.includes(w) || itemTitleNorm === w || itemTitleNorm.includes(w))
-    );
+    const itemArtistCore = _normLabelCore(item.artistName || item.artist || '');
+    const itemTitleCore = _normLabelCore(item.title || '');
+    const isBandEntity = item.type === 'label' || item.type === 'artist';
+
+    let matchesEntity = false;
+    if (isLabel) {
+      try {
+        const u = new URL(itemUrl);
+        const sub = u.hostname.replace(/\.bandcamp\.com$/i, '').replace(/-/g, '').toLowerCase();
+        const subMatches = [...wantSlugs].some(s =>
+          sub === s || sub === `${s}records` || sub === `${s}recordings` || sub === `${s}music` || sub === `${s}label` || sub === `${s}tapes`
+        );
+        const bandMatches = isBandEntity && ([...wantCores].some(c => c.length >= 3 && (itemTitleCore === c || itemArtistCore === c)));
+        matchesEntity = subMatches || bandMatches;
+      } catch (e) {}
+    } else {
+      matchesEntity = [...wantNorms].some(w =>
+        w.length >= 3 && (itemArtistNorm === w || (isBandEntity && _normStr(item.title || '') === w))
+      );
+    }
+
     if (matchesEntity) {
       try {
         const u = new URL(itemUrl);
@@ -1040,6 +1065,8 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
     id: (isObj && artistInput.id) ? String(artistInput.id) : `artist-${_normStr(cleanName)}`,
     name: cleanName,
     realname: isObj ? (artistInput.realname || null) : null,
+    location: isObj ? (artistInput.location || null) : null,
+    summary: isObj ? (artistInput.summary || null) : null,
     profile: isObj ? (artistInput.profile || null) : null,
     artisticPersona: isObj ? (artistInput.artisticPersona || null) : null,
     influencesAndInspirations: isObj ? (artistInput.influencesAndInspirations || null) : null,
@@ -1189,10 +1216,38 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         || memberProfiles.map(mp => mp.profile ? `${mp.name}: ${mp.profile}` : '').filter(Boolean).join('\n\n')
         || initialArtist.profile;
 
+      const bcArtistHit = (bcSearchRes?.results || []).find(item =>
+        (item.type === 'artist' || item.type === 'label') &&
+        _normStr(item.title || item.artistName || '') === _normStr(cleanName)
+      );
+      let resolvedLocation = pObj.location
+        || memberProfiles.map(mp => mp.location).filter(Boolean).join(' / ')
+        || bcArtistHit?.location
+        || initialArtist.location
+        || '';
+      if (!resolvedLocation && combinedBio) {
+        const locM = combinedBio.match(/\b(?:based|located|living|residing)\s+in\s+([A-Z][A-Za-z\s,.-]{2,40}?)(?:\.|,|;|\s+and\s+|\s+who\s+|$)/)
+          || combinedBio.match(/\b(?:producer|dj|artist|musician|duo|project|trio|collective)\s+from\s+([A-Z][A-Za-z\s,.-]{2,35}?)(?:\.|,|;|\s+and\s+|$)/i);
+        if (locM && locM[1]) resolvedLocation = locM[1].trim().replace(/[.,;]+$/, '');
+      }
+
+      let resolvedSummary = pObj.summary || initialArtist.summary || '';
+      if (!resolvedSummary) {
+        const sourceText = (combinedBio || pObj.artisticPersona || '').replace(/\s+/g, ' ').trim();
+        if (sourceText) {
+          const firstSent = (sourceText.split(/(?<=[.!?])\s+/)[0] || '').trim();
+          if (firstSent) {
+            resolvedSummary = /[.!?]$/.test(firstSent) ? firstSent : `${firstSent}.`;
+          }
+        }
+      }
+
       const enrichedArtist = {
         ...initialArtist,
         ...pObj,
         name: (pObj.name || cleanName).replace(/\s*\(\d+\)\s*$/, ''),
+        location: resolvedLocation || null,
+        summary: resolvedSummary || null,
         profile: combinedBio || null,
         collaborators: Array.from(new Set([
           ...(initialArtist.collaborators || []),
@@ -1231,13 +1286,43 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     .trim();
   if (!cleanName || cleanName === '—') return;
 
+  const isBandcampUrlMatchingLabel = (urlStr, targetLabelName) => {
+    if (!urlStr || typeof urlStr !== 'string' || !urlStr.includes('bandcamp.com')) return false;
+    try {
+      const u = new URL(urlStr);
+      const sub = u.hostname.replace(/\.bandcamp\.com$/i, '').replace(/-/g, '').toLowerCase();
+      const targetCore = _normLabelCore(targetLabelName);
+      const targetSlug = targetCore.replace(/[^a-z0-9]/g, '');
+      if (targetSlug.length >= 3 && (
+        sub === targetSlug ||
+        sub === `${targetSlug}records` ||
+        sub === `${targetSlug}recordings` ||
+        sub === `${targetSlug}music` ||
+        sub === `${targetSlug}label` ||
+        sub === `${targetSlug}tapes` ||
+        sub.startsWith(targetSlug)
+      )) {
+        return true;
+      }
+      const mapped = CLIENT_CROSS_ENTITY_LINKS[_normStr(targetLabelName)] || CLIENT_CROSS_ENTITY_LINKS[targetCore] || [];
+      if (mapped.some(m => m.toLowerCase().includes(u.hostname.toLowerCase()))) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   // Check if the currently playing track is on a Bandcamp label domain while cleanName temporarily fell back to the artist name
   const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack) ? window.__kyoyuGetCurrentTrack() : null;
   const curArtist = String(curTrack?.artistName || curTrack?.artist || '').trim();
-  const curBcTrackUrl = [
+  const explicitLabelUrl = [
+    opts?.labelUrl,
     isObj ? labelInput.labelUrl : '',
-    isObj ? labelInput.url : '',
     curTrack?.labelUrl,
+  ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
+  const curBcTrackUrl = [
+    explicitLabelUrl,
+    isObj ? labelInput.url : '',
     curTrack?.albumUrl,
     curTrack?.providerUrl,
     curTrack?.trackUrl,
@@ -1260,7 +1345,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
   }
   const cacheKey = _normLabelCore(cleanName);
   const cachedLabel = !isArtistFallbackForBandcampTrack && typeof window !== 'undefined' && window.__kyoyuPreloadedLabels?.[cacheKey];
-  if (cachedLabel && cachedLabel._enriched) {
+  if (cachedLabel && cachedLabel._enriched && (cachedLabel.topReleases || []).length > 0) {
     if (!isPreload) {
       openNativeLabelFast(cachedLabel, { replaceArtist: Boolean(isObj && labelInput.replaceArtist) });
     }
@@ -1270,9 +1355,8 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
   const initialCrossLinks = _discoverCrossEntityLinksForNames([
     cleanName,
     ...(isObj && Array.isArray(labelInput.aliases) ? labelInput.aliases : []),
-    ...(isObj && Array.isArray(labelInput.founders) ? labelInput.founders : []),
     isObj ? labelInput.parentLabel : '',
-  ]);
+  ], [], { isLabel: true });
 
   const initialUrls = [...initialCrossLinks];
   if (isObj) {
@@ -1281,7 +1365,8 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     if (labelInput.url) initialUrls.push(labelInput.url);
     if (labelInput.trackUrl) initialUrls.push(labelInput.trackUrl);
   }
-  if (curBcOrigin && (isArtistFallbackForBandcampTrack || _normStr(cleanName) === _normStr(curTrack?.label || ''))) {
+  if (opts?.labelUrl) initialUrls.push(opts.labelUrl);
+  if (curBcOrigin && (isArtistFallbackForBandcampTrack || isBandcampUrlMatchingLabel(curBcOrigin, cleanName))) {
     initialUrls.unshift(curBcOrigin);
   }
   const initialImages = [];
@@ -1324,7 +1409,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     ? labelInput.id
     : (isObj && labelInput.discogsId ? labelInput.discogsId : null);
 
-  let bcUrl = initialUrls.find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
+  let bcUrl = initialUrls.find(u => isBandcampUrlMatchingLabel(u, cleanName) || (isArtistFallbackForBandcampTrack && u === curBcOrigin)) || '';
 
   // 1. Fetch Discogs + MusicBrainz label profile & releases, and Bandcamp search in parallel
   const discogsPromise = fetch('/api/discogs-search', {
@@ -1333,12 +1418,24 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     body: JSON.stringify({ action: 'label-profile', labelId, labelName: cleanName }),
   }).then(r => r.ok ? r.json() : null).catch(() => null);
 
+  const labelCoreForSearch = _normLabelCore(cleanName);
+  const bcSearchQueries = Array.from(new Set([
+    cleanName,
+    (!/\brecords\b/i.test(cleanName) && labelCoreForSearch) ? `${cleanName} Records` : '',
+  ])).filter(Boolean);
+
   const bcSearchPromise = (!bcUrl)
-    ? fetch('/api/bandcamp-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: cleanName }),
-      }).then(r => r.ok ? r.json() : null).catch(() => null)
+    ? Promise.all(
+        bcSearchQueries.map(q =>
+          fetch('/api/bandcamp-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+          }).then(r => r.ok ? r.json() : null).catch(() => null)
+        )
+      ).then(resArr => ({
+        results: resArr.flatMap(r => (r && Array.isArray(r.results)) ? r.results : []),
+      }))
     : Promise.resolve(null);
 
   let [discogsData, bcSearchData] = await Promise.all([discogsPromise, bcSearchPromise]);
@@ -1351,10 +1448,10 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
         discogsData.name,
         discogsData.parentLabel,
         ...(discogsData.aliases || []),
-        ...(discogsData.founders || []),
         ...(discogsData.sublabels || []),
       ].filter(Boolean),
-      bcSearchData?.results || []
+      bcSearchData?.results || [],
+      { isLabel: true }
     );
     dcCrossLinks.forEach(u => {
       if (!bcUrl && u.includes('bandcamp.com')) bcUrl = u;
@@ -1368,16 +1465,15 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     }
   }
   if (bcSearchData && Array.isArray(bcSearchData.results)) {
-    const targetNorm = _normStr(cleanName);
-    const targetCore = _normLabelCore(cleanName);
-    const bcHit = bcSearchData.results.find(item =>
-      (item.type === 'label' || item.type === 'artist') &&
-      (_normStr(item.title) === targetNorm ||
-       _normLabelCore(item.title) === targetCore ||
-       _normStr(item.artistName) === targetNorm ||
-       _normStr(item.title).includes(targetCore) ||
-       targetCore.includes(_normLabelCore(item.title)))
-    );
+    const targetNorm = _normStr(discogsData?.name || cleanName);
+    const targetCore = _normLabelCore(discogsData?.name || cleanName);
+    const bcHit = bcSearchData.results.find(item => {
+      if (item.type !== 'label' && item.type !== 'artist') return false;
+      const itemNorm = _normStr(item.title || item.artistName || '');
+      const itemCore = _normLabelCore(item.title || item.artistName || '');
+      const itemUrl = item.trackUrl || item.url || '';
+      return itemNorm === targetNorm || itemCore === targetCore || isBandcampUrlMatchingLabel(itemUrl, discogsData?.name || cleanName);
+    });
     if (bcHit) {
       if (!bcUrl && (bcHit.trackUrl || bcHit.url)) {
         bcUrl = bcHit.trackUrl || bcHit.url;
@@ -1397,6 +1493,10 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     const rawUrls = [...(currentLabel.urls || [])];
     const images = new Set(currentLabel.images || []);
     const genres = new Set(currentLabel.genres || []);
+
+    const canonicalLabelName = (bc && bc.name && isArtistFallbackForBandcampTrack)
+      ? bc.name
+      : ((dc && dc.name) ? dc.name : ((bc && bc.name) ? bc.name : currentLabel.name));
 
     let profileParts = [];
     if (dc && !dc.error) {
@@ -1432,12 +1532,23 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     }
     if (bcUrl) {
       sources.add('Bandcamp');
-      rawUrls.push(bcUrl.replace(/\/music\/?$/, ''));
+      rawUrls.unshift(bcUrl.replace(/\/music\/?$/, ''));
     }
 
-    const canonicalLabelName = (bc && bc.name && isArtistFallbackForBandcampTrack)
-      ? bc.name
-      : ((dc && dc.name) ? dc.name : ((bc && bc.name) ? bc.name : currentLabel.name));
+    // Filter out any unrelated Bandcamp URLs that don't match the label or official Discogs/MB links
+    const officialDcBcUrls = new Set([
+      dc?.bandcampUrl,
+      ...(Array.isArray(dc?.urls) ? dc.urls : []),
+      bcUrl ? bcUrl.replace(/\/music\/?$/, '') : '',
+    ].filter(Boolean).map(u => u.toLowerCase().replace(/\/+$/, '')));
+
+    const validatedRawUrls = rawUrls.filter(u => {
+      if (!u || typeof u !== 'string') return false;
+      if (!u.toLowerCase().includes('bandcamp.com')) return true;
+      const normU = u.toLowerCase().replace(/\/music\/?$/, '').replace(/\/+$/, '');
+      if (officialDcBcUrls.has(normU)) return true;
+      return isBandcampUrlMatchingLabel(u, canonicalLabelName) || isBandcampUrlMatchingLabel(u, cleanName);
+    });
 
     if (bc && bc.name && isArtistFallbackForBandcampTrack) {
       try {
@@ -1455,6 +1566,8 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       const key = _normStr(titleStr);
       if (!key) return;
       const existing = releaseMap.get(key);
+      const relYearInt = parseInt(rel.year, 10);
+      const validRelYear = (relYearInt >= 1950 && relYearInt <= new Date().getFullYear() + 1) ? String(relYearInt) : null;
       if (!existing) {
         releaseMap.set(key, {
           id: String(rel.id || `rel-${key}-${Math.random()}`),
@@ -1466,7 +1579,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
           provider: rel.provider || 'discogs',
           trackUrl: rel.trackUrl || rel.url || null,
           discogsId: rel.discogsId ? String(rel.discogsId) : null,
-          year: rel.year ? String(rel.year) : null,
+          year: validRelYear,
           releaseTimestamp: rel.releaseTimestamp || 0,
           gridIndex: typeof rel.gridIndex === 'number' ? rel.gridIndex : 9999,
           thumb: rel.artworkUrl || rel.coverImage || rel.thumb || null,
@@ -1485,7 +1598,12 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
           existing.coverImage = rel.coverImage || rel.thumb || rel.artworkUrl;
           existing.thumb = existing.coverImage;
         }
-        if (!existing.year && rel.year) existing.year = String(rel.year);
+        if (validRelYear) {
+          const exYr = parseInt(existing.year, 10);
+          if (!exYr || Number(validRelYear) < exYr) {
+            existing.year = validRelYear;
+          }
+        }
         if (!existing.releaseTimestamp && rel.releaseTimestamp) existing.releaseTimestamp = rel.releaseTimestamp;
         if (typeof rel.gridIndex === 'number' && rel.gridIndex < existing.gridIndex) existing.gridIndex = rel.gridIndex;
         if (!existing.catno && rel.catno) existing.catno = rel.catno;
@@ -1562,7 +1680,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       location: (bc && bc.location) ? bc.location : ((dc && dc.location) ? dc.location : currentLabel.location),
       genres: Array.from(genres),
       sources: orderedSources,
-      urls: _prioritizeAndDedupeLinks(rawUrls),
+      urls: _prioritizeAndDedupeLinks(validatedRawUrls),
       images: finalImages,
       topReleases: mergedReleases,
       _enriched: true,
