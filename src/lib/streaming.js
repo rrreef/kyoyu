@@ -222,6 +222,9 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
       const artistNorm = norm(artist);
 
       if (artistNorm && (leftNorm === artistNorm || leftNorm.includes(artistNorm) || artistNorm.includes(leftNorm))) {
+        if (leftNorm.includes(artistNorm) && left.length > artist.length && left.length <= 64) {
+          artist = left;
+        }
         title = right;
         break;
       }
@@ -230,8 +233,8 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
         break;
       }
 
-      const isLeftTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+)$/i.test(left);
-      if (isLeftTrackPos) {
+      const isLeftTrackPosOrCatno = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+|[a-z]{2,8}\s*[-#.]?\s*\d{1,5}[a-z]?)$/i.test(left);
+      if (isLeftTrackPosOrCatno) {
         title = right;
         break;
       }
@@ -249,6 +252,18 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
         break;
       }
     }
+  }
+
+  const labelNorm = norm(label);
+  const finalArtistNorm = norm(artist);
+  const artistCollabs = String(artist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(norm).filter(Boolean);
+  if (
+    !labelNorm ||
+    labelNorm === finalArtistNorm ||
+    artistCollabs.includes(labelNorm) ||
+    /^(not on label.*|self[- ]?released.*|independent|no label|\[no label\]|none|unknown.*|various(\s+artists)?)$/i.test(label.trim())
+  ) {
+    label = '';
   }
 
   title = cleanTrackOrReleaseTitle(title, artist);

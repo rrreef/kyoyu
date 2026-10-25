@@ -968,10 +968,10 @@ async function handleTrackInfo(body, res) {
 
   const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
 
-  // Check cache (_v: 13 ensures all tracks get 100% accurate genres, resolved album title without synthetic (Single), resolved bracket tags, artist & label bios, and BPM/Key)
+  // Check cache (_v: 14 ensures all tracks get 100% accurate genres, verified label distinct from artist, resolved album title without synthetic (Single), resolved bracket tags, artist & label bios, and BPM/Key)
   try {
     const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 13) {
+    if (cached?.data && cached.data._v === 14) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) return res.status(200).json(cached.data);
     }
@@ -984,8 +984,25 @@ async function handleTrackInfo(body, res) {
     fetchMusicBrainz(cleanTitle, cleanArtist),
   ]);
 
-  const primaryLabelName = discogs?.labels?.[0]?.name || mb?.label || '';
-  const primaryLabelId = discogs?.labels?.[0]?.id || null;
+  const artistNormForLabel = normName(cleanArtist);
+  const artistCollabsForLabel = String(cleanArtist || '')
+    .split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i)
+    .map(normName)
+    .filter(Boolean);
+  const isValidLabelForArtist = (cand) => {
+    const clean = stripArtistSuffix(String(cand || '').trim());
+    if (!clean || clean === '—' || clean === '-') return false;
+    if (/^(not on label.*|self[- ]?released.*|independent|no label|\[no label\]|none|unknown.*|various(\s+artists)?)$/i.test(clean)) return false;
+    const cNorm = normName(clean);
+    if (!cNorm) return false;
+    if (artistNormForLabel && cNorm === artistNormForLabel) return false;
+    if (artistCollabsForLabel.includes(cNorm)) return false;
+    return true;
+  };
+
+  const validDiscogsLabelObj = (discogs?.labels || []).find(l => l && isValidLabelForArtist(l.name)) || null;
+  const primaryLabelName = validDiscogsLabelObj?.name || (isValidLabelForArtist(mb?.label) ? mb.label : '');
+  const primaryLabelId = validDiscogsLabelObj?.id || null;
   const rawStylesAndGenres = [...(discogs?.styles || []), ...(discogs?.genres || []), ...(mb?.tags || [])];
 
   // Fetch Artist Info, Label Info, MusicBrainz Label Info, and Multi-Provider Track BPM/Key/ISRC in parallel
@@ -1002,11 +1019,17 @@ async function handleTrackInfo(body, res) {
 
   // Label display: combine label + series (sub-imprint) properly
   let labelDisplay = '';
-  const mainLabelName = discogs?.labels?.[0]?.name || labelInfo?.name || mbLabel?.name || mb?.label || trackMeta?.labelFallback || '';
+  const mainLabelName = [
+    validDiscogsLabelObj?.name,
+    labelInfo?.name,
+    mbLabel?.name,
+    mb?.label,
+    trackMeta?.labelFallback,
+  ].find(isValidLabelForArtist) || '';
   const seriesName = discogs?.series?.[0]?.name || '';
   const parentLabelName = labelInfo?.parentLabel || mbLabel?.parentLabel || '';
 
-  if (seriesName && seriesName.toLowerCase() !== mainLabelName.toLowerCase()) {
+  if (seriesName && mainLabelName && seriesName.toLowerCase() !== mainLabelName.toLowerCase()) {
     labelDisplay = `${mainLabelName} — ${seriesName}`;
   } else if (mainLabelName) {
     labelDisplay = mainLabelName;
@@ -1018,7 +1041,7 @@ async function handleTrackInfo(body, res) {
       }
     }
   }
-  const catno = (discogs?.labels?.[0]?.catno && discogs.labels[0].catno !== 'none') ? discogs.labels[0].catno : (mb?.catno || '');
+  const catno = (validDiscogsLabelObj?.catno && validDiscogsLabelObj.catno !== 'none') ? validDiscogsLabelObj.catno : (mb?.catno || '');
   if (catno && labelDisplay) labelDisplay += ` [${catno}]`;
 
   // Sanitize and rank genres with 100% precision
@@ -1122,7 +1145,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 13,
+    _v: 14,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',

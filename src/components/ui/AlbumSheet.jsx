@@ -1620,7 +1620,14 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       return isBandcampUrlMatchingLabel(u, canonicalLabelName) || isBandcampUrlMatchingLabel(u, cleanName);
     });
 
-    if (bc && bc.name && isArtistFallbackForBandcampTrack) {
+    const isCanonicalDistinctFromArtist = Boolean(
+      canonicalLabelName &&
+      (!curArtist || (
+        _normStr(canonicalLabelName) !== _normStr(curArtist) &&
+        !String(curArtist).split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).some(part => _normStr(part) === _normStr(canonicalLabelName))
+      ))
+    );
+    if (bc && bc.name && isArtistFallbackForBandcampTrack && isCanonicalDistinctFromArtist) {
       try {
         window.webkit?.messageHandlers?.player?.postMessage({ label: canonicalLabelName });
       } catch (e) {}
@@ -2655,12 +2662,22 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
     const rawAlbum = cleanTrackOrReleaseTitle(String(infoData?.album || cur.releaseTitle || cur.albumTitle || cur.album || '').replace(/\s*\(single\)\s*$/i, '').trim(), artist);
     const isInvalidAlb = /^(unknown(\s+album|\s+release)?|single\s+release|radio|track\s+radio)$/i.test(rawAlbum) || /\s+radio$/i.test(rawAlbum);
     const album = (isInvalidAlb ? '' : rawAlbum) || title || '';
-    const rawLabel = String(infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
-    const label = rawLabel
+    const rawLabel = String(infoData?.labelName || infoData?.label || cur.label || cur.labelName || cur.releaseLabel || '').trim();
+    const candidateLabel = rawLabel
       .replace(/\[.*?\]/g, '')
       .replace(/\(sub-label.*?\)/i, '')
       .split('—')[0]
       .trim();
+    const artistNorm = _normStr(artist);
+    const artistCollabs = String(artist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(_normStr).filter(Boolean);
+    const isLabelDistinctFromArtist = Boolean(
+      candidateLabel &&
+      candidateLabel !== '—' &&
+      !/^(not on label.*|self[- ]?released.*|independent|no label|\[no label\]|none|unknown.*|various(\s+artists)?)$/i.test(candidateLabel) &&
+      _normStr(candidateLabel) !== artistNorm &&
+      !artistCollabs.includes(_normStr(candidateLabel))
+    );
+    const label = isLabelDistinctFromArtist ? candidateLabel : '';
     const labelUrl = String(infoData?.labelUrl || cur.labelUrl || '').trim();
     const bcTrackUrl = [cur.trackUrl, cur.url, cur.providerItemId, cur.albumUrl, infoData?.labelUrl].find(u => typeof u === 'string' && u.includes('bandcamp.com')) || '';
     const cover = String(infoData?.coverImage || cur.releaseCover || cur.artworkUrl || cur.cover || '').trim();
@@ -2669,10 +2686,14 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
     if (artist && !/^unknown/i.test(artist)) {
       tasks.push(openRichArtistSheet({ name: artist, cover }, { preload: true }).catch(() => null));
     }
-    if (label && label !== '—' && !/not on label|unknown/i.test(label)) {
+    if (label) {
       tasks.push(openRichLabelSheet({ name: label, labelUrl: labelUrl || bcTrackUrl, cover }, { preload: true }).catch(() => null));
     } else if (bcTrackUrl && artist) {
-      tasks.push(openRichLabelSheet({ name: artist, labelUrl: bcTrackUrl, cover }, { preload: true }).catch(() => null));
+      const bcSubdomain = ((bcTrackUrl.match(/^https?:\/\/([^/.]+)\.bandcamp\.com/i) || [])[1] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const compactArtist = artistNorm.replace(/\s+/g, '');
+      if (bcSubdomain && compactArtist && bcSubdomain !== compactArtist && !bcSubdomain.includes(compactArtist) && !compactArtist.includes(bcSubdomain)) {
+        tasks.push(openRichLabelSheet({ name: artist, labelUrl: bcTrackUrl, cover }, { preload: true }).catch(() => null));
+      }
     }
     if ((artist || album || title) && typeof window !== 'undefined' && window.__kyoyuGoToAlbum) {
       tasks.push(window.__kyoyuGoToAlbum(artist, album || title, { preload: true, cover }).catch(() => null));

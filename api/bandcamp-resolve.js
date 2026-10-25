@@ -204,7 +204,26 @@ export default async function handler(req, res) {
       const albumName = stripArtistPrefix(rawAlbumName, artist);
       const releaseDateRaw = String(tralbumData.current?.release_date || tralbumData.album_release_date || tralbumData.current?.publish_date || '');
       const year = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
-      const label = bandPageName || artist || '';
+      const backToLabelName = unescapeEntity(
+        ((html.match(/<a[^>]*class="[^"]*back-to-label-link[^"]*"[^>]*>[\s\S]*?<span[^>]*class="[^"]*label-welcome[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/^visit\s+/i, '')
+          .trim()
+      );
+      const publisherLdName = unescapeEntity(
+        ((html.match(/"(?:recordLabel|publisher)"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+      );
+      const normKey = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, '');
+      const artistNorm = normKey(artist);
+      const artistCollabs = String(artist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(normKey).filter(Boolean);
+      const isDistinctFromArtist = (cand) => {
+        const cNorm = normKey(cand);
+        if (!cNorm || cNorm === 'bandcamp' || /^(notonlabel|selfreleased|independent|nolabel|none|unknown)/.test(cNorm)) return false;
+        if (artistNorm && cNorm === artistNorm) return false;
+        if (artistCollabs.includes(cNorm)) return false;
+        return true;
+      };
+      const label = [backToLabelName, bandPageName, publisherLdName].find(isDistinctFromArtist) || '';
 
       const tracks = tralbumData.trackinfo.map((t, i) => {
         const file = t.file;
@@ -604,15 +623,34 @@ export default async function handler(req, res) {
       ''
     ).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 
-    let artist = tralbumData.artist || bandPageName || '';
-    const label = bandPageName || artist || '';
+    const decodeEnt = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+    let artist = decodeEnt(tralbumData.artist || bandPageName || '');
+    const backToLabelName = decodeEnt(
+      ((html.match(/<a[^>]*class="[^"]*back-to-label-link[^"]*"[^>]*>[\s\S]*?<span[^>]*class="[^"]*label-welcome[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/^visit\s+/i, '')
+        .trim()
+    );
+    const publisherLdName = decodeEnt(
+      ((html.match(/"(?:recordLabel|publisher)"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+    );
+    const normKey = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, '');
+    const artistNorm = normKey(artist);
+    const artistCollabs = String(artist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(normKey).filter(Boolean);
+    const isDistinctFromArtist = (cand) => {
+      const cNorm = normKey(cand);
+      if (!cNorm || cNorm === 'bandcamp' || /^(notonlabel|selfreleased|independent|nolabel|none|unknown)/.test(cNorm)) return false;
+      if (artistNorm && cNorm === artistNorm) return false;
+      if (artistCollabs.includes(cNorm)) return false;
+      return true;
+    };
+    const label = [backToLabelName, bandPageName, publisherLdName].find(isDistinctFromArtist) || '';
     let originUrl = '';
     try { originUrl = new URL(url).origin; } catch (e) {}
     const releaseDateRaw = String(tralbumData.current?.release_date || tralbumData.album_release_date || tralbumData.current?.publish_date || '');
     const year = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
 
     const isTrackPage = /\/track\//i.test(url) || tralbumData.item_type === 'track';
-    const decodeEnt = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
     const fromAlbumHtml = decodeEnt(
       ((html.match(/<span[^>]*class="fromAlbum"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '').replace(/<[^>]+>/g, '').trim()
     );

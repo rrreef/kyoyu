@@ -1396,14 +1396,30 @@ export function PlayerProvider({ children }) {
       const cur = stateRef.current.currentTrack;
       if (!cur) return;
       const curTitle = String(cur.title || cur.name || '').trim().toLowerCase();
-      const curArtist = String(cur.artistName || cur.artist || '').trim().toLowerCase();
+      const curArtistRaw = String(cur.artistName || cur.artist || '').trim();
+      const curArtist = curArtistRaw.toLowerCase();
       if (reqTitle && curTitle && curTitle !== String(reqTitle).trim().toLowerCase()) return;
       if (reqArtist && curArtist && !curArtist.includes(String(reqArtist).trim().toLowerCase()) && !String(reqArtist).trim().toLowerCase().includes(curArtist)) return;
 
-      const resolvedAlb = cleanTrackOrReleaseTitle(String(data.album || '').replace(/\s*\(single\)\s*$/i, '').trim(), cur.artistName || cur.artist || '');
+      const normLbl = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, '');
+      const artistNorm = normLbl(curArtistRaw);
+      const artistCollabs = curArtistRaw.split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(normLbl).filter(Boolean);
+      const isValidLabel = (cand) => {
+        const clean = String(cand || '').trim();
+        if (!clean || clean === '—' || clean === '-') return false;
+        if (/^(not on label.*|self[- ]?released.*|independent|no label|\[no label\]|none|unknown.*|various(\s+artists)?|track\s+radio|radio)$/i.test(clean)) return false;
+        const cNorm = normLbl(clean);
+        if (!cNorm) return false;
+        if (artistNorm && cNorm === artistNorm) return false;
+        if (artistCollabs.includes(cNorm)) return false;
+        return true;
+      };
+
+      const resolvedAlb = cleanTrackOrReleaseTitle(String(data.album || '').replace(/\s*\(single\)\s*$/i, '').trim(), curArtistRaw);
       const curAlb = String(cur.releaseTitle || cur.albumTitle || cur.album || '').trim();
       const shouldUpdateAlb = resolvedAlb && !/^unknown/i.test(resolvedAlb) && (!curAlb || curAlb.toLowerCase() === curTitle);
-      const resolvedLbl = String(data.label || '').replace(/\[.*?\]/g, '').replace(/\(sub-label.*?\)/i, '').split('—')[0].trim();
+      const rawResolvedLbl = String(data.labelName || data.label || '').replace(/\[.*?\]/g, '').replace(/\(sub-label.*?\)/i, '').split('—')[0].trim();
+      const resolvedLbl = isValidLabel(rawResolvedLbl) ? rawResolvedLbl : '';
       const resolvedYr = data.year ? String(data.year) : '';
       const bcLink = Array.isArray(data.links) ? (data.links.find(l => l && typeof l.url === 'string' && l.url.includes('bandcamp.com'))?.url || '') : '';
       const bcOrigin = (() => {
@@ -1415,9 +1431,13 @@ export function PlayerProvider({ children }) {
         cur.releaseTitle = resolvedAlb;
         patch.albumName = resolvedAlb;
       }
-      if (resolvedLbl && !cur.label) {
+      const curLblValid = isValidLabel(cur.label);
+      if (resolvedLbl && !curLblValid) {
         cur.label = resolvedLbl;
         patch.label = resolvedLbl;
+      } else if (!curLblValid && cur.label) {
+        cur.label = '';
+        patch.label = '';
       }
       if (bcOrigin && !cur.labelUrl) {
         cur.labelUrl = bcOrigin;
@@ -1437,7 +1457,7 @@ export function PlayerProvider({ children }) {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key) return;
-        if (window.__kyoyuInfoCache[key]) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 14) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return;
         }
@@ -1482,7 +1502,7 @@ export function PlayerProvider({ children }) {
       try {
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 13) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 14) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
