@@ -598,14 +598,6 @@ export default function Home() {
                         }
                       }}
                     >
-                      {/* Blurred background from cover art */}
-                      {cleanCover && (
-                        <div
-                          className="featured-hero-bg"
-                          style={{ backgroundImage: `url(${cleanCover})` }}
-                        />
-                      )}
-
                       {/* Cover art */}
                       <div className="featured-hero-art">
                         {cleanCover
@@ -629,24 +621,6 @@ export default function Home() {
                   );
                 })}
               </div>
-
-              {/* Dot indicators */}
-              {featuredAlbums.length > 1 && (
-                <div className="featured-dots">
-                  {featuredAlbums.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`featured-dot${i === activeSlide ? ' active' : ''}`}
-                      onClick={() => {
-                        const el = featuredRef.current;
-                        if (!el || !el.firstChild) return;
-                        const cardW = el.firstChild.offsetWidth + 14;
-                        el.scrollTo({ left: i * cardW, behavior: 'smooth' });
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
             </>
           )}
         </section>
@@ -781,6 +755,8 @@ export default function Home() {
                         const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
                         const releaseUrl = it.albumUrl || it.trackUrl || it.url || '';
                         const showLabel = meta.label && meta.label.toLowerCase() !== (meta.artist || '').toLowerCase() ? meta.label : '';
+                        const releaseDateStr = it.releaseDate || it.year || (it.releaseTimestamp ? new Date(Number(it.releaseTimestamp) * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+                        const locationStr = String(it.location || it.country || '').trim();
                         return (
                           <button
                             key={it.id || `bc-new-${idx}`}
@@ -797,12 +773,6 @@ export default function Home() {
                               });
                             }}
                           >
-                            {cleanCover && (
-                              <div
-                                className="featured-hero-bg"
-                                style={{ backgroundImage: `url(${cleanCover})` }}
-                              />
-                            )}
                             <div className="featured-hero-art">
                               {cleanCover
                                 ? <img src={cleanCover} alt={meta.title || displayRawTitle} loading="eager" decoding="sync" />
@@ -813,30 +783,18 @@ export default function Home() {
                               <div className="featured-hero-artist">{meta.artist || it.artistName}</div>
                               {showLabel && <div className="featured-hero-label">{showLabel}</div>}
                               <div className="featured-hero-meta">
-                                Release
-                                {it.year ? ` · ${it.year}` : ''}
+                                {releaseDateStr ? `Released ${releaseDateStr}` : 'New Release'}
                               </div>
+                              {locationStr && (
+                                <div className="featured-hero-location">
+                                  {locationStr}
+                                </div>
+                              )}
                             </div>
                           </button>
                         );
                       })}
                     </div>
-                    {bcHeroItems.length > 1 && (
-                      <div className="featured-dots">
-                        {bcHeroItems.map((_, i) => (
-                          <div
-                            key={i}
-                            className={`featured-dot${i === activeBcSlide ? ' active' : ''}`}
-                            onClick={() => {
-                              const el = bandcampHeroRef.current;
-                              if (!el || !el.firstChild) return;
-                              const cardW = el.firstChild.offsetWidth + 14;
-                              el.scrollTo({ left: i * cardW, behavior: 'smooth' });
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
                   </section>
                 );
               }

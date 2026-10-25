@@ -1237,42 +1237,85 @@ async function resolveDiscogsArtistIdByNameAndContext(artistName, context = {}) 
   const ctxAlbum = String(context?.album || '').trim();
   const ctxTrack = String(context?.trackTitle || '').trim();
   const ctxLabel = String(context?.label || '').trim();
+  const wantAlbumNorm = ctxAlbum ? normName(ctxAlbum) : '';
+  const wantTrackNorm = ctxTrack ? normName(ctxTrack) : '';
+  const wantLabelCore = ctxLabel ? normLabelName(ctxLabel) : '';
 
-  // 1. If we have track/album context (e.g. opened from Player Sheet), try resolving the exact artist ID from the release credits in parallel with artist search
+  // 1. If we have track/album/label context (e.g. opened from Player Sheet), resolve the exact artist ID from release & tracklist credits in parallel with artist search
   const releaseContextPromise = (async () => {
-    if (!ctxAlbum && !ctxTrack) return null;
+    if (!ctxAlbum && !ctxTrack && !ctxLabel) return null;
     const queries = [];
-    if (ctxAlbum && normName(ctxAlbum) !== wantPlain) {
-      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&release_title=${encodeURIComponent(ctxAlbum)}&type=release&per_page=5`);
+    if (ctxAlbum && ctxLabel && wantAlbumNorm !== wantPlain) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&release_title=${encodeURIComponent(ctxAlbum)}&label=${encodeURIComponent(ctxLabel)}&type=release&per_page=8`);
+    }
+    if (ctxTrack && ctxLabel) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&track=${encodeURIComponent(ctxTrack)}&label=${encodeURIComponent(ctxLabel)}&type=release&per_page=8`);
+    }
+    if (ctxAlbum && wantAlbumNorm !== wantPlain) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&release_title=${encodeURIComponent(ctxAlbum)}&type=release&per_page=8`);
     }
     if (ctxTrack) {
-      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&track=${encodeURIComponent(ctxTrack)}&type=release&per_page=5`);
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&track=${encodeURIComponent(ctxTrack)}&type=release&per_page=8`);
     }
-    queries.push(`https://api.discogs.com/database/search?q=${encodeURIComponent(`${clean} ${ctxAlbum || ctxTrack}`)}&type=release&per_page=5`);
+    if (ctxLabel) {
+      queries.push(`https://api.discogs.com/database/search?artist=${encodeURIComponent(clean)}&label=${encodeURIComponent(ctxLabel)}&type=release&per_page=8`);
+    }
+    const qCombo = [clean, ctxAlbum || ctxTrack, ctxLabel].filter(Boolean).join(' ');
+    queries.push(`https://api.discogs.com/database/search?q=${encodeURIComponent(qCombo)}&type=release&per_page=8`);
 
-    for (const url of queries.slice(0, 2)) {
+    const uniqueQueries = Array.from(new Set(queries)).slice(0, 4);
+    const inspectedReleaseIds = new Set();
+
+    for (const url of uniqueQueries) {
       try {
         const r = await fetch(url, { headers: DISCOGS_HEADERS });
         if (!r.ok) continue;
         const d = await r.json();
         const relResults = d.results || [];
-        const matchingRel = relResults.find(rel => {
+        const matchingRels = relResults.filter(rel => {
           const titleStr = String(rel.title || '');
           const artistPart = titleStr.includes(' - ') ? titleStr.split(' - ')[0] : titleStr;
+          const isVarious = /^various(\s+artists)?$/i.test(stripArtistSuffix(artistPart));
+          if (isVarious && (ctxTrack || ctxAlbum)) return true;
           if (hasAccents && normNameKeepAccents(artistPart).includes(wantAccent)) return true;
           return normName(artistPart) === wantPlain ||
             artistPart.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(p => normName(p) === wantPlain);
         });
-        if (matchingRel && matchingRel.id) {
+
+        // Prioritize releases whose label or title matches the playing context
+        matchingRels.sort((a, b) => {
+          const scoreRel = (rel) => {
+            let s = 0;
+            const relLabels = Array.isArray(rel.label) ? rel.label : (rel.label ? [rel.label] : []);
+            if (wantLabelCore && relLabels.some(l => normLabelName(l) === wantLabelCore || normName(l).includes(wantLabelCore))) s += 4;
+            const parts = String(rel.title || '').split(' - ');
+            const relTitleNorm = normName(parts.length > 1 ? parts.slice(1).join(' - ') : rel.title || '');
+            if (wantAlbumNorm && (relTitleNorm === wantAlbumNorm || relTitleNorm.includes(wantAlbumNorm))) s += 3;
+            if (wantTrackNorm && (relTitleNorm === wantTrackNorm || relTitleNorm.includes(wantTrackNorm))) s += 2;
+            return s;
+          };
+          return scoreRel(b) - scoreRel(a);
+        });
+
+        for (const matchingRel of matchingRels.slice(0, 3)) {
+          if (!matchingRel?.id || inspectedReleaseIds.has(matchingRel.id)) continue;
+          inspectedReleaseIds.add(matchingRel.id);
           const relDetailRes = await fetch(`https://api.discogs.com/releases/${matchingRel.id}`, { headers: DISCOGS_HEADERS });
-          if (relDetailRes.ok) {
-            const relDetail = await relDetailRes.json();
-            const credits = [...(relDetail.artists || []), ...(relDetail.extraartists || [])];
-            const exactAccentCredit = credits.find(a => a && a.id && normNameKeepAccents(a.name) === wantAccent);
-            if (exactAccentCredit) return exactAccentCredit.id;
-            const exactPlainCredit = credits.find(a => a && a.id && normName(a.name) === wantPlain);
-            if (exactPlainCredit) return exactPlainCredit.id;
-          }
+          if (!relDetailRes.ok) continue;
+          const relDetail = await relDetailRes.json();
+          const trackCredits = (relDetail.tracklist || []).flatMap(t => [
+            ...(t.artists || []),
+            ...(t.extraartists || []),
+          ]);
+          const credits = [
+            ...(relDetail.artists || []),
+            ...trackCredits,
+            ...(relDetail.extraartists || []),
+          ];
+          const exactAccentCredit = credits.find(a => a && a.id && normNameKeepAccents(a.name) === wantAccent);
+          if (exactAccentCredit) return exactAccentCredit.id;
+          const exactPlainCredit = credits.find(a => a && a.id && normName(a.name) === wantPlain);
+          if (exactPlainCredit) return exactPlainCredit.id;
         }
       } catch (e) {}
     }
@@ -1323,6 +1366,40 @@ async function resolveDiscogsArtistIdByNameAndContext(artistName, context = {}) 
   // Next, exact accent-stripped match (only when full normalized name equals wantPlain, NEVER loose substring)
   const plainMatches = results.filter(a => normName(a.title) === wantPlain);
   if (plainMatches.length > 0) {
+    // If there are multiple homonym artists with the same name and we have track/album/label context,
+    // verify which candidate's Discogs catalog actually contains a release matching the playing album, track, or label!
+    if (plainMatches.length > 1 && (wantAlbumNorm || wantTrackNorm || wantLabelCore)) {
+      try {
+        const checkedCandidates = await Promise.all(
+          plainMatches.slice(0, 5).map(async (cand) => {
+            try {
+              const relRes = await fetch(
+                `https://api.discogs.com/artists/${cand.id}/releases?sort=year&sort_order=desc&per_page=50`,
+                { headers: DISCOGS_HEADERS }
+              );
+              if (!relRes.ok) return { id: cand.id, score: 0 };
+              const relData = await relRes.json();
+              let score = 0;
+              for (const rel of (relData.releases || [])) {
+                const rTitle = normName(rel.title || '');
+                const rLabel = normLabelName(rel.label || '');
+                if (wantAlbumNorm && rTitle && (rTitle === wantAlbumNorm || rTitle.includes(wantAlbumNorm) || wantAlbumNorm.includes(rTitle))) score += 5;
+                if (wantTrackNorm && rTitle && (rTitle === wantTrackNorm || rTitle.includes(wantTrackNorm))) score += 4;
+                if (wantLabelCore && rLabel && (rLabel === wantLabelCore || rLabel.includes(wantLabelCore))) score += 4;
+              }
+              return { id: cand.id, score };
+            } catch (e) {
+              return { id: cand.id, score: 0 };
+            }
+          })
+        );
+        const bestCand = checkedCandidates.sort((a, b) => b.score - a.score)[0];
+        if (bestCand && bestCand.score > 0) {
+          return { artistId: bestCand.id, results };
+        }
+      } catch (e) {}
+    }
+
     // If the query did NOT have accents, prefer an unaccented Discogs artist title over an accented one
     if (!hasAccents) {
       const unaccentedPrimary = plainMatches.find(a => normNameKeepAccents(a.title) === wantAccent && !/\(\d+\)\s*$/.test(String(a.title || '').trim()))

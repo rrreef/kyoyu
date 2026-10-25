@@ -698,6 +698,7 @@ export function openNativeArtistFast(artist, opts = {}) {
     urls: Array.isArray(artist.urls) ? artist.urls.filter(Boolean).map(String) : [],
     aliases: Array.isArray(artist.aliases) ? artist.aliases.filter(Boolean).map(String) : [],
     images: Array.isArray(artist.images) ? artist.images.filter(Boolean).map(String) : [],
+    _contextKey: artist._contextKey ? String(artist._contextKey) : null,
     topReleases: (Array.isArray(artist.topReleases) ? artist.topReleases : []).map(r => ({
       ...r,
       id: String(r.id || Math.random()),
@@ -1066,16 +1067,6 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
 
   const hasAccents = _normKeepAccents(cleanName) !== _normStr(cleanName);
   const cacheKey = _normKeepAccents(cleanName) || _normStr(cleanName);
-  const cachedArtist = typeof window !== 'undefined' && (
-    window.__kyoyuPreloadedArtists?.[cacheKey] ||
-    (!hasAccents ? window.__kyoyuPreloadedArtists?.[_normStr(cleanName)] : null)
-  );
-  if (cachedArtist && cachedArtist._enriched) {
-    if (!isPreload) {
-      openNativeArtistFast(cachedArtist);
-    }
-    return cachedArtist;
-  }
 
   // Extract context from artistInput, opts, or currently playing track if it matches this artist
   const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack) ? window.__kyoyuGetCurrentTrack() : null;
@@ -1086,10 +1077,35 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
       curArtistRaw.split(/\s*(?:,|&|and|x|vs\.?|feat\.?|ft\.?|\/|\+)\s*/i).some(p => _normStr(p) === _normStr(cleanName))
     )
   );
-  const ctxTrackTitle = (isObj && (artistInput.trackTitle || artistInput.currentTrackTitle)) || opts?.trackTitle || (curArtistMatches ? (curTrack?.title || '') : '') || '';
-  const ctxAlbum = (isObj && (artistInput.album || artistInput.albumName)) || opts?.album || (curArtistMatches ? (curTrack?.album || curTrack?.albumName || '') : '') || '';
-  const ctxLabel = (isObj && artistInput.label) || opts?.label || (curArtistMatches ? (curTrack?.label || '') : '') || '';
-  const ctxTrackUrl = (isObj && (artistInput.trackUrl || artistInput.url)) || opts?.trackUrl || (curArtistMatches ? (curTrack?.trackUrl || curTrack?.providerUrl || curTrack?.albumUrl || '') : '') || '';
+  const ctxTrackTitle = String((isObj && (artistInput.trackTitle || artistInput.currentTrackTitle)) || opts?.trackTitle || (curArtistMatches ? (curTrack?.title || '') : '') || '').trim();
+  const ctxAlbum = String((isObj && (artistInput.album || artistInput.albumName)) || opts?.album || (curArtistMatches ? (curTrack?.album || curTrack?.albumName || '') : '') || '').trim();
+  const ctxLabel = String((isObj && artistInput.label) || opts?.label || (curArtistMatches ? (curTrack?.label || '') : '') || '').trim();
+  const ctxTrackUrl = String((isObj && (artistInput.trackUrl || artistInput.url)) || opts?.trackUrl || (curArtistMatches ? (curTrack?.trackUrl || curTrack?.providerUrl || curTrack?.albumUrl || '') : '') || '').trim();
+  const forceContextVerify = Boolean((isObj && artistInput.forceContextVerify) || opts?.forceContextVerify);
+
+  // Build composite context key when track/album/label context is available so homonym artists never collide
+  const contextKey = (ctxTrackTitle || ctxAlbum || ctxLabel)
+    ? `${cacheKey}|${_normStr(ctxTrackTitle)}|${_normStr(ctxAlbum)}|${_normStr(ctxLabel)}`
+    : '';
+
+  const cachedByContext = (typeof window !== 'undefined' && contextKey)
+    ? window.__kyoyuPreloadedArtists?.[contextKey]
+    : null;
+  const cachedByName = typeof window !== 'undefined' && (
+    window.__kyoyuPreloadedArtists?.[cacheKey] ||
+    (!hasAccents ? window.__kyoyuPreloadedArtists?.[_normStr(cleanName)] : null)
+  );
+  const cachedArtist = cachedByContext || (
+    (!contextKey && !forceContextVerify) || (cachedByName && cachedByName._contextKey && cachedByName._contextKey === contextKey)
+      ? cachedByName
+      : null
+  );
+  if (cachedArtist && cachedArtist._enriched) {
+    if (!isPreload) {
+      openNativeArtistFast(cachedArtist);
+    }
+    return cachedArtist;
+  }
 
   const initialCrossLinks = _discoverCrossEntityLinksForNames([
     cleanName,
@@ -1099,6 +1115,7 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
   const initialArtist = {
     id: (isObj && artistInput.id) ? String(artistInput.id) : `artist-${_normStr(cleanName)}`,
     name: cleanName,
+    _contextKey: contextKey || null,
     realname: isObj ? (artistInput.realname || null) : null,
     location: isObj ? (artistInput.location || null) : null,
     summary: isObj ? (artistInput.summary || null) : null,
@@ -1312,6 +1329,7 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         ...initialArtist,
         ...pObj,
         name: (pObj.name || cleanName).replace(/\s*\(\d+\)\s*$/, ''),
+        _contextKey: contextKey || null,
         location: resolvedLocation || null,
         summary: resolvedSummary || null,
         profile: combinedBio || null,
@@ -1327,6 +1345,9 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         _enriched: true,
       };
       if (typeof window !== 'undefined' && cacheKey) {
+        if (contextKey) {
+          window.__kyoyuPreloadedArtists[contextKey] = enrichedArtist;
+        }
         window.__kyoyuPreloadedArtists[cacheKey] = enrichedArtist;
         if (enrichedArtist.name) {
           const enrichedKey = _normKeepAccents(enrichedArtist.name);
@@ -2684,7 +2705,15 @@ export async function preloadPlayingEntities(trackInput = null, infoData = null)
 
     const tasks = [];
     if (artist && !/^unknown/i.test(artist)) {
-      tasks.push(openRichArtistSheet({ name: artist, cover }, { preload: true }).catch(() => null));
+      tasks.push(openRichArtistSheet({
+        name: artist,
+        trackTitle: title,
+        album,
+        label,
+        trackUrl: bcTrackUrl || String(cur.trackUrl || cur.url || cur.providerItemId || '').trim(),
+        cover,
+        forceContextVerify: true,
+      }, { preload: true }).catch(() => null));
     }
     if (label) {
       tasks.push(openRichLabelSheet({ name: label, labelUrl: labelUrl || bcTrackUrl, cover }, { preload: true }).catch(() => null));

@@ -188,8 +188,9 @@ export function LibraryProvider({ children }) {
   }
   function isDownloaded(trackId) { return downloads.some(d => d.id === trackId); }
 
-  function createPlaylist(name) {
-    const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false, isPublic: false };
+  function createPlaylist(name, providers = []) {
+    const cleanProviders = Array.isArray(providers) ? providers.filter(Boolean) : [];
+    const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false, isPublic: false, providers: cleanProviders };
     updatePlaylists(prev => [...prev, newPl]);
     return newPl;
   }

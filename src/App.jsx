@@ -475,9 +475,9 @@ function PlaylistBridge() {
       return window.__kyoyuAddToPlaylist(playlistId, fallbackTrackId);
     };
 
-    window.__kyoyuCreatePlaylist = (name) => {
-      const pl = createRef.current(name);
-      return JSON.stringify({ id: pl.id, name: pl.title || pl.name, trackCount: 0, containsTrack: false });
+    window.__kyoyuCreatePlaylist = (name, providers = []) => {
+      const pl = createRef.current(name, providers);
+      return JSON.stringify({ id: pl.id, name: pl.title || pl.name, trackCount: 0, containsTrack: false, providers: pl.providers || [] });
     };
 
     window.__kyoyuUpdatePlaylistCover = (playlistId, coverDataUrl) => {
