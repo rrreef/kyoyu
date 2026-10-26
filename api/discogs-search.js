@@ -395,13 +395,15 @@ function filterReleaseNotesForTrack(cleanNotes, matchedTrack, allTracks, targetT
   return keptLines.join('\n').trim();
 }
 
-async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArtist = '', targetTitle = '', targetArtist = '', targetAlbum = '') {
+async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArtist = '', targetTitle = '', targetArtist = '', targetAlbum = '', preferredLabel = '') {
   try {
     let best = null;
     let explicitType = 'release';
     const wantTitle = normName(targetTitle || '');
     const wantArtist = normName(targetArtist || fallbackArtist || '');
     const wantAlbum = (targetAlbum && !/unknown album/i.test(targetAlbum)) ? normName(targetAlbum) : '';
+    const wantLabelCore = preferredLabel ? normLabelName(preferredLabel) : '';
+    const wantLabelExact = preferredLabel ? normName(preferredLabel) : '';
 
     const artistMatchesString = (candStr, targetArtNorm) => {
       if (!targetArtNorm) return true;
@@ -441,6 +443,14 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
             .then(r => r.ok ? r.json() : null).catch(() => null)
         );
       }
+      if (preferredLabel && (targetTitle || targetAlbum)) {
+        const artParam = (targetArtist || fallbackArtist || '').trim();
+        const relOrTrack = (targetAlbum || targetTitle || '').trim();
+        searches.push(
+          fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(`${artParam} ${relOrTrack}`.trim())}&label=${encodeURIComponent(preferredLabel.trim())}&type=release&per_page=6`, { headers: DISCOGS_HEADERS })
+            .then(r => r.ok ? r.json() : null).catch(() => null)
+        );
+      }
       if (query) {
         searches.push(
           fetch(`https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=10`, { headers: DISCOGS_HEADERS })
@@ -475,7 +485,7 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
 
           let score = 0;
           if (wantArtist && hasArtistMatch) score += 60;
-          else if (isVarious) score += 15;
+          else if (isVarious) score += 5;
 
           if (wantAlbum && (candRelNorm === wantAlbum || candRelNorm.includes(wantAlbum) || wantAlbum.includes(candRelNorm))) {
             score += candRelNorm === wantAlbum ? 65 : 45;
@@ -483,7 +493,13 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
           if (wantTitle && (candRelNorm === wantTitle || candRelNorm.includes(wantTitle) || wantTitle.includes(candRelNorm))) {
             score += candRelNorm === wantTitle ? 50 : 35;
           }
-          if (!(c.format || []).some(f => /comp|mixed|unofficial/i.test(f))) score += 10;
+          const cLabels = Array.isArray(c.label) ? c.label : (c.label ? [c.label] : []);
+          if (wantLabelCore && cLabels.some(l => normLabelName(l) === wantLabelCore || normName(stripArtistSuffix(l)) === wantLabelExact)) {
+            score += 65;
+          }
+          const isCompOrUnofficial = (c.format || []).some(f => /comp|mixed|unofficial|promo|sampler/i.test(f));
+          if (!isCompOrUnofficial) score += 18;
+          else score -= 15;
           if (c.year) score += 5;
 
           if (score > bestScore) {
@@ -957,7 +973,7 @@ async function fetchMusicBrainzArtist(mbid, fallbackArtistName = '') {
 
 async function handleTrackInfo(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-  const { title, artist, album, provider, trackId, discogsReleaseId } = body || {};
+  const { title, artist, album, provider, trackId, discogsReleaseId, knownLabel } = body || {};
   if (!title && !artist) return res.status(400).json({ error: 'Missing title or artist' });
 
   const cleanTitle = (title || '').trim();
@@ -965,24 +981,6 @@ async function handleTrackInfo(body, res) {
   const cleanAlbum = (album && !/unknown album/i.test(album))
     ? String(album).replace(/\s*\(single\)\s*$/i, '').trim()
     : '';
-
-  const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
-
-  // Check cache (_v: 14 ensures all tracks get 100% accurate genres, verified label distinct from artist, resolved album title without synthetic (Single), resolved bracket tags, artist & label bios, and BPM/Key)
-  try {
-    const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 14) {
-      const age = Date.now() - new Date(cached.updated_at).getTime();
-      if (age < 30 * 24 * 60 * 60 * 1000) return res.status(200).json(cached.data);
-    }
-  } catch (e) {}
-
-  // Fetch primary release & recording sources in parallel
-  const searchQuery = [cleanArtist, cleanAlbum || cleanTitle].filter(Boolean).join(' ');
-  const [discogs, mb] = await Promise.all([
-    fetchDiscogsRelease(searchQuery, discogsReleaseId, cleanArtist, cleanTitle, cleanArtist, cleanAlbum),
-    fetchMusicBrainz(cleanTitle, cleanArtist),
-  ]);
 
   const artistNormForLabel = normName(cleanArtist);
   const artistCollabsForLabel = String(cleanArtist || '')
@@ -1000,9 +998,44 @@ async function handleTrackInfo(body, res) {
     return true;
   };
 
-  const validDiscogsLabelObj = (discogs?.labels || []).find(l => l && isValidLabelForArtist(l.name)) || null;
-  const primaryLabelName = validDiscogsLabelObj?.name || (isValidLabelForArtist(mb?.label) ? mb.label : '');
-  const primaryLabelId = validDiscogsLabelObj?.id || null;
+  const cleanKnownLabel = isValidLabelForArtist(knownLabel)
+    ? stripArtistSuffix(String(knownLabel || '').replace(/\s*\[[^\]]+\]\s*$/, '').split(' — ')[0].split(' (sub-label')[0].trim())
+    : '';
+
+  const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
+
+  // Check cache (_v: 15 ensures 100% accurate and consistent label between player sheet and info sheet, accurate genres, artist & label bios, and BPM/Key)
+  try {
+    const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
+    if (cached?.data && cached.data._v === 15) {
+      const age = Date.now() - new Date(cached.updated_at).getTime();
+      if (age < 30 * 24 * 60 * 60 * 1000) {
+        if (cleanKnownLabel && normLabelName(cached.data.labelName || cached.data.label || '') !== normLabelName(cleanKnownLabel)) {
+          return res.status(200).json({
+            ...cached.data,
+            label: cleanKnownLabel,
+            labelName: cleanKnownLabel,
+          });
+        }
+        return res.status(200).json(cached.data);
+      }
+    }
+  } catch (e) {}
+
+  // Fetch primary release & recording sources in parallel
+  const searchQuery = [cleanArtist, cleanAlbum || cleanTitle].filter(Boolean).join(' ');
+  const [discogs, mb] = await Promise.all([
+    fetchDiscogsRelease(searchQuery, discogsReleaseId, cleanArtist, cleanTitle, cleanArtist, cleanAlbum, cleanKnownLabel),
+    fetchMusicBrainz(cleanTitle, cleanArtist),
+  ]);
+
+  const validDiscogsLabels = (discogs?.labels || []).filter(l => l && isValidLabelForArtist(l.name));
+  const matchingKnownDiscogsLabel = cleanKnownLabel
+    ? validDiscogsLabels.find(l => normLabelName(l.name) === normLabelName(cleanKnownLabel) || normName(l.name) === normName(cleanKnownLabel))
+    : null;
+  const validDiscogsLabelObj = matchingKnownDiscogsLabel || validDiscogsLabels[0] || null;
+  const primaryLabelName = cleanKnownLabel || validDiscogsLabelObj?.name || (isValidLabelForArtist(mb?.label) ? mb.label : '');
+  const primaryLabelId = matchingKnownDiscogsLabel?.id || (!cleanKnownLabel ? validDiscogsLabelObj?.id : null) || null;
   const rawStylesAndGenres = [...(discogs?.styles || []), ...(discogs?.genres || []), ...(mb?.tags || [])];
 
   // Fetch Artist Info, Label Info, MusicBrainz Label Info, and Multi-Provider Track BPM/Key/ISRC in parallel
@@ -1020,6 +1053,7 @@ async function handleTrackInfo(body, res) {
   // Label display: combine label + series (sub-imprint) properly
   let labelDisplay = '';
   const mainLabelName = [
+    cleanKnownLabel,
     validDiscogsLabelObj?.name,
     labelInfo?.name,
     mbLabel?.name,
@@ -1145,7 +1179,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 14,
+    _v: 15,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',
@@ -1443,7 +1477,7 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
-const ARTIST_TOP_VERSION = 1;
+const ARTIST_TOP_VERSION = 2;
 const ARTIST_TOP_TTL = 7 * 24 * 60 * 60 * 1000;
 const ARTIST_TOP_MAX_RATED = 24;
 
@@ -1507,10 +1541,16 @@ async function handleArtistTopReleases(body, res) {
     const d = details[i];
     const rating = d?.community?.rating || {};
     const img = (d?.images || []).find(im => im.type === 'primary') || (d?.images || [])[0];
+    const validLabelObj = (d?.labels || []).find(l => l?.name && !/^(not on label|self[- ]?released|no label|none)$/i.test(stripArtistSuffix(l.name)))
+      || (d?.labels || [])[0];
+    const rawRelLabel = validLabelObj?.name ? stripArtistSuffix(validLabelObj.name) : stripArtistSuffix(r.label || '');
+    const cleanRelLabel = (!rawRelLabel || /^(not on label.*|self[- ]?released.*|no label|none)$/i.test(rawRelLabel))
+      ? stripArtistSuffix(r.artist || artistName || '')
+      : rawRelLabel;
     return {
       r, avg: Number(rating.average) || 0, count: Number(rating.count) || 0,
       cover: img?.uri || img?.uri150 || r.thumb || '',
-      label: d?.labels?.[0]?.name ? stripArtistSuffix(d.labels[0].name) : (r.label || ''),
+      label: cleanRelLabel,
       formats: (d?.formats || []).map(f => [f.name, ...(f.descriptions || [])].join(', ')),
     };
   });
@@ -1533,7 +1573,8 @@ async function handleArtistTopReleases(body, res) {
     year: r.year || null,
     thumb: r.thumb || '',
     coverImage: cover,
-    labels: label ? [label] : [],
+    label: label || stripArtistSuffix(r.artist || artistName || ''),
+    labels: label ? [label] : (r.artist ? [stripArtistSuffix(r.artist)] : []),
     formats,
     rating: count > 0 ? Math.round(avg * 100) / 100 : null,
     ratingCount: count,
@@ -2289,8 +2330,8 @@ async function handleArtistProfile(body, res) {
   }
   if (!artistId) return res.status(200).json({ error: 'Artist not found on Discogs' });
 
-  const cacheKey = `artist-profile-v6|${artistId}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 6);
+  const cacheKey = `artist-profile-v7|${artistId}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 7);
   if (cached) return res.status(200).json(cached);
 
   const [profileData, mbArtist] = await Promise.all([
@@ -2404,7 +2445,7 @@ async function handleArtistProfile(body, res) {
   }
 
   const result = {
-    _v: 6,
+    _v: 7,
     id: artistId,
     name: cleanArtistName,
     realname: profileData.realname || '',
@@ -2440,8 +2481,8 @@ async function handleLabelProfile(body, res) {
     if (hit) labelId = hit.id;
   }
 
-  const cacheKey = `label-profile-v5|${labelId || normLabelName(labelName || '')}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 5);
+  const cacheKey = `label-profile-v6|${labelId || normLabelName(labelName || '')}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 6);
   if (cached) return res.status(200).json(cached);
 
   // 2. Fetch MusicBrainz label data in parallel with Discogs label data
@@ -2506,12 +2547,30 @@ async function handleLabelProfile(body, res) {
       }
     }
 
-    // Extract high-res covers, years, genres, styles, and country from Discogs search results
+    const wantLabelExact = normName(resolvedLabelName);
+    const wantLabelCore = normLabelName(resolvedLabelName);
+    const matchesTargetLabel = (lblStr) => {
+      const cleanLbl = stripArtistSuffix(lblStr || '');
+      if (!cleanLbl) return false;
+      const nExact = normName(cleanLbl);
+      if (nExact === wantLabelExact) return true;
+      const nCore = normLabelName(cleanLbl);
+      return wantLabelCore.length >= 4 && nCore === wantLabelCore;
+    };
+
+    const verifiedSearchResults = Array.isArray(relSearchRes?.results)
+      ? relSearchRes.results.filter(sr => {
+          const srLabels = Array.isArray(sr.label) ? sr.label : (sr.label ? [sr.label] : []);
+          return srLabels.length > 0 && srLabels.some(matchesTargetLabel);
+        })
+      : [];
+
+    // Extract high-res covers, years, genres, styles, and country ONLY from verified label search results
     const hiResCovers = new Map();
     const searchYears = new Map();
-    if (relSearchRes && Array.isArray(relSearchRes.results)) {
+    if (verifiedSearchResults.length > 0) {
       const countryCounts = new Map();
-      for (const sr of relSearchRes.results) {
+      for (const sr of verifiedSearchResults) {
         if (sr.country) countryCounts.set(sr.country, (countryCounts.get(sr.country) || 0) + 1);
         for (const g of [...(sr.style || []), ...(sr.genre || [])]) {
           if (g) dcGenres.set(g, (dcGenres.get(g) || 0) + 1);
@@ -2537,6 +2596,7 @@ async function handleLabelProfile(body, res) {
     for (const rel of allDcLabelReleases) {
       const cleanArtist = stripArtistSuffix(rel.artist || '');
       const cleanTitle = (rel.title || '').trim();
+      if (!cleanTitle) continue;
       const dedupKey = `${normName(cleanArtist)}::${normName(cleanTitle)}`;
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
@@ -2563,12 +2623,9 @@ async function handleLabelProfile(body, res) {
       });
     }
 
-    // Also include any releases from Discogs database search for this label that weren't in /labels/{id}/releases
-    if (relSearchRes && Array.isArray(relSearchRes.results)) {
-      const wantLabelCore = normLabelName(resolvedLabelName);
-      for (const sr of relSearchRes.results) {
-        const srLabels = Array.isArray(sr.label) ? sr.label : (sr.label ? [sr.label] : []);
-        if (srLabels.length > 0 && !srLabels.some(l => normLabelName(l) === wantLabelCore)) continue;
+    // Only fallback to verified search results when /labels/{id}/releases returned no releases (e.g. labelId not resolved)
+    if (allDcLabelReleases.length === 0 && verifiedSearchResults.length > 0) {
+      for (const sr of verifiedSearchResults) {
         const parts = (sr.title || '').split(' - ');
         const cleanArtist = stripArtistSuffix(parts.length >= 2 ? parts[0].trim() : '');
         const cleanTitle = (parts.length >= 2 ? parts.slice(1).join(' - ').trim() : (sr.title || '')).trim();
@@ -2739,7 +2796,7 @@ async function handleLabelProfile(body, res) {
   const allUrls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   const result = {
-    _v: 5,
+    _v: 6,
     id: labelId || mbData?.mbid || `label-${normLabelName(resolvedLabelName)}`,
     name: resolvedLabelName,
     profile: bioParts.join('\n\n'),

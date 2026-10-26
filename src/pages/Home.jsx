@@ -101,6 +101,88 @@ if (typeof window !== 'undefined') {
   preloadHomeContent();
 }
 
+const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v2';
+
+function cleanHeroLabel(rawLabel, rawArtist = '') {
+  const clean = String(rawLabel || '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(sub-label.*?\)/i, '')
+    .split('—')[0]
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .trim();
+  if (!clean || clean === '—' || clean === '-') return '';
+  if (/^(not on label.*|self[- ]?released.*|independent|no label|\[no label\]|none|unknown.*|various(\s+artists)?)$/i.test(clean)) return '';
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, '');
+  const lNorm = norm(clean);
+  const aNorm = norm(rawArtist);
+  if (!lNorm || (aNorm && lNorm === aNorm)) return '';
+  const collabs = String(rawArtist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(norm).filter(Boolean);
+  if (collabs.includes(lNorm)) return '';
+  return clean;
+}
+
+function normalizeHeroFormats(rawFormats, defaultDigital = true) {
+  const list = Array.isArray(rawFormats)
+    ? rawFormats
+    : (typeof rawFormats === 'string' && rawFormats.trim() ? rawFormats.split(/[,/·•]+/) : []);
+  const seen = new Set();
+  const ordered = [];
+  const addFmt = (f) => {
+    const clean = String(f || '').trim();
+    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ordered.push(clean);
+  };
+  for (const raw of list) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    if (/\b(t-?shirt|shirt|hoodie|sweater|sweatshirt|tote|bag|poster|print|sticker|hat|cap|beanie|patch|pin|mug|slipmat|ticket)\b/i.test(s)) continue;
+    if (/lathe/i.test(s)) { addFmt('Lathe Cut'); continue; }
+    if (/flexi/i.test(s)) { addFmt('Flexi-disc'); continue; }
+    if (/shellac/i.test(s)) { addFmt('Shellac'); continue; }
+    if (/reel-to-reel|reel to reel/i.test(s)) { addFmt('Reel-To-Reel'); continue; }
+    if (/8-track/i.test(s)) { addFmt('8-Track'); continue; }
+    if (/minidisc/i.test(s)) { addFmt('MiniDisc'); continue; }
+    if (/vinyl|\blp\b|\b12"|\b7"|\b10"|test pressing/i.test(s)) { addFmt('Vinyl'); continue; }
+    if (/cassette|tape/i.test(s)) { addFmt('Cassette'); continue; }
+    if (/compact disc|\bcd\b|cd-r|cd-rom|digipak/i.test(s)) { addFmt('CD'); continue; }
+    if (/\busb\b|memory stick/i.test(s)) { addFmt('USB'); continue; }
+    if (/\bvhs\b/i.test(s)) { addFmt('VHS'); continue; }
+    if (/\bdvd\b|blu-?ray/i.test(s)) { addFmt('DVD'); continue; }
+    if (/box\s*set/i.test(s)) { addFmt('Box Set'); continue; }
+    if (/file|digital|mp3|flac|wav|aiff|alac|aac|ogg/i.test(s)) { addFmt('Digital'); continue; }
+    const firstPart = s.split(',')[0].replace(/^\d+x\s*/i, '').trim();
+    if (firstPart && !/^(album|ep|single|mini-album|compilation|reissue|remastered|limited edition|numbered|stereo|mono|\d+\s*rpm|33\s*⅓\s*rpm|45\s*rpm)$/i.test(firstPart)) {
+      addFmt(firstPart);
+    }
+  }
+  if (defaultDigital && !seen.has('digital')) {
+    addFmt('Digital');
+  }
+  return ordered.join(', ');
+}
+
+function formatHeroReleaseDate(rawDate, fallbackYear = '', fallbackTs = 0) {
+  const s = String(rawDate || '').trim();
+  if (s) {
+    if (/^\d{4}$/.test(s)) return s;
+    const dt = new Date(s);
+    if (!Number.isNaN(dt.getTime()) && dt.getFullYear() >= 1950) {
+      return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    return s;
+  }
+  if (fallbackTs && Number(fallbackTs) > 100000000) {
+    const dt = new Date(Number(fallbackTs) * 1000);
+    if (!Number.isNaN(dt.getTime()) && dt.getFullYear() >= 1950) {
+      return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+  }
+  return fallbackYear ? String(fallbackYear) : '';
+}
+
 /**
  * Groups an array of flat tracks into album objects.
  */
@@ -112,19 +194,24 @@ function groupByAlbum(tracks) {
     const key = hasAlbum ? `album::${cleanT.album.trim()}::${cleanT.artist.trim()}` : `single::${t.id}`;
     if (!map.has(key)) {
       map.set(key, {
-        id:     key,
-        title:  hasAlbum ? cleanT.album.trim() : cleanT.title,
-        artist: cleanT.artist || t.artist,
-        cover:  t.cover,
-        label:  cleanT.label || t.label,
-        genre:  t.genre,
-        year:   t.year,
-        tracks: [],
+        id:          key,
+        title:       hasAlbum ? cleanT.album.trim() : cleanT.title,
+        artist:      cleanT.artist || t.artist,
+        cover:       t.cover,
+        label:       cleanT.label || t.label,
+        genre:       t.genre,
+        year:        t.year,
+        releaseDate: t.releaseDate || t.publishedAt || t.createdAt || (t.year ? String(t.year) : ''),
+        location:    t.location || t.country || '',
+        formats:     t.formats || ['Digital'],
+        tracks:      [],
       });
     }
     const entry = map.get(key);
     entry.tracks.push({ ...t, title: cleanT.title || t.title, artist: cleanT.artist || t.artist });
     if (!entry.cover && t.cover) entry.cover = t.cover;
+    if (!entry.label && (cleanT.label || t.label)) entry.label = cleanT.label || t.label;
+    if (!entry.location && (t.location || t.country)) entry.location = t.location || t.country;
   });
   const extractNum = (t) => {
     const sk = t.storageKey || t.downloadUrl || '';
@@ -364,6 +451,130 @@ export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
   const bandcampHeroRef = useRef(null);
   const [activeBcSlide, setActiveBcSlide] = useState(0);
+  const [heroMetaMap, setHeroMetaMap] = useState(() => {
+    try {
+      const raw = localStorage.getItem(HERO_META_CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const pendingHeroLookupsRef = useRef(new Set());
+
+  // Enrich Featured and New on Bandcamp cards with label, releaseDate, location, and formats
+  useEffect(() => {
+    let cancelled = false;
+    const bcNewItems = (acct.bandcamp?.newStuff || []).slice(0, 18);
+    const featItems = featuredAlbums.slice(0, 15);
+    const candidates = [
+      ...featItems.map(alb => ({
+        key: String(alb.id || `${alb.artist || ''}|${alb.title || ''}`),
+        title: alb.title || '',
+        artist: alb.artist || '',
+        label: alb.label || '',
+        releaseDate: alb.releaseDate || '',
+        location: alb.location || '',
+        formats: alb.formats || [],
+        url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
+      })),
+      ...bcNewItems.map((it, idx) => {
+        const displayRawTitle = it.album || it.releaseTitle || it.title || '';
+        const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
+        const url = it.albumUrl || it.trackUrl || it.url || '';
+        return {
+          key: String(it.id || url || `bc-new-${idx}`),
+          title: meta.title || displayRawTitle,
+          artist: meta.artist || it.artistName || it.artist || '',
+          label: meta.label || it.label || '',
+          releaseDate: it.releaseDate || '',
+          location: it.location || it.country || '',
+          formats: it.formats || [],
+          url,
+        };
+      }),
+    ];
+
+    const toFetch = candidates.filter(c => {
+      if (!c.key || pendingHeroLookupsRef.current.has(c.key)) return false;
+      const existing = heroMetaMap[c.key];
+      if (existing && existing._complete) return false;
+      return Boolean(c.title || c.url);
+    }).slice(0, 12);
+
+    if (toFetch.length === 0) return;
+
+    (async () => {
+      const updates = {};
+      await Promise.all(toFetch.map(async (item) => {
+        pendingHeroLookupsRef.current.add(item.key);
+        let label = cleanHeroLabel(item.label, item.artist);
+        let releaseDate = item.releaseDate || '';
+        let location = item.location || '';
+        let formatsList = Array.isArray(item.formats) ? [...item.formats] : [];
+
+        try {
+          if (item.url && item.url.includes('bandcamp.com')) {
+            const bcRes = await fetch('/api/bandcamp-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'fetch-album', albumUrl: item.url }),
+            }).then(r => r.ok ? r.json() : null).catch(() => null);
+            if (bcRes?.album) {
+              if (!label && bcRes.album.label) label = cleanHeroLabel(bcRes.album.label, bcRes.album.artistName || item.artist);
+              if (bcRes.album.releaseDate) releaseDate = bcRes.album.releaseDate;
+              if (!location && bcRes.album.location) location = bcRes.album.location;
+              if (Array.isArray(bcRes.album.formats) && bcRes.album.formats.length) {
+                formatsList.push(...bcRes.album.formats);
+              }
+            }
+          }
+
+          if ((!label || !location || !releaseDate || formatsList.length <= 1) && (item.title || item.artist)) {
+            const dcRes = await fetch('/api/discogs-search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'track-info',
+                title: item.title,
+                artist: item.artist,
+                album: item.title,
+              }),
+            }).then(r => r.ok ? r.json() : null).catch(() => null);
+            if (dcRes) {
+              if (!label) label = cleanHeroLabel(dcRes.labelName || dcRes.label || '', item.artist);
+              if (!releaseDate && (dcRes.releaseDate || dcRes.year)) releaseDate = String(dcRes.releaseDate || dcRes.year);
+              if (!location && (dcRes.country || dcRes.artistOrigin || dcRes.labelCountry)) {
+                location = String(dcRes.country || dcRes.artistOrigin || dcRes.labelCountry).trim();
+              }
+              if (Array.isArray(dcRes.formats) && dcRes.formats.length) {
+                formatsList.push(...dcRes.formats);
+              }
+            }
+          }
+        } catch (_) {}
+
+        updates[item.key] = {
+          label,
+          releaseDate,
+          location,
+          formats: normalizeHeroFormats(formatsList, true),
+          _complete: true,
+        };
+      }));
+
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setHeroMetaMap(prev => {
+          const next = { ...prev, ...updates };
+          try {
+            localStorage.setItem(HERO_META_CACHE_KEY, JSON.stringify(next));
+          } catch (_) {}
+          return next;
+        });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [featuredAlbums, acct.bandcamp?.newStuff]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track active slide on scroll
   const handleFeaturedScroll = useCallback(() => {
@@ -586,6 +797,15 @@ export default function Home() {
               >
                 {featuredAlbums.map((album) => {
                   const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
+                  const metaKey = `${(album.artist || '').toLowerCase()}::${(album.title || '').toLowerCase()}`;
+                  const rich = heroMetaMap[album.id] || heroMetaMap[metaKey] || {};
+                  const labelStr = cleanHeroLabel(album.label || rich.label || '', album.artist, album.title);
+                  const releaseDateStr = formatHeroReleaseDate(album.releaseDate || rich.releaseDate || album.year || '', album.releaseTimestamp);
+                  const locationStr = String(album.location || rich.location || album.country || '').trim();
+                  const formatsList = normalizeHeroFormats(
+                    (Array.isArray(rich.formats) && rich.formats.length > 0) ? rich.formats : album.formats,
+                    'digital'
+                  );
                   return (
                     <button
                       key={album.id}
@@ -594,7 +814,13 @@ export default function Home() {
                         if (album.id.startsWith('single::') && album.tracks?.length === 1) {
                           playTrack(album.tracks[0]);
                         } else {
-                          setSelectedAlbum(openNativeAlbumFast(album));
+                          setSelectedAlbum(openNativeAlbumFast({
+                            ...album,
+                            label: labelStr || album.label,
+                            releaseDate: releaseDateStr || album.releaseDate,
+                            location: locationStr || album.location,
+                            formats: formatsList,
+                          }));
                         }
                       }}
                     >
@@ -605,19 +831,17 @@ export default function Home() {
                           : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                       </div>
 
-                    {/* Info overlay */}
-                    <div className="featured-hero-info">
-                      <div className="featured-hero-title">{album.title}</div>
-                      <div className="featured-hero-artist">{album.artist}</div>
-                      {album.label && <div className="featured-hero-label">{album.label}</div>}
-                      {album.tracks && (
-                        <div className="featured-hero-meta">
-                          {album.tracks.length} {album.tracks.length === 1 ? 'track' : 'tracks'}
-                          {album.year ? ` · ${album.year}` : ''}
-                        </div>
-                      )}
-                    </div>
-                  </button>
+                      {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Empty row, 7. Formats */}
+                      <div className="featured-hero-info">
+                        <div className="featured-hero-title">{album.title}</div>
+                        <div className="featured-hero-artist">{album.artist}</div>
+                        {labelStr && <div className="featured-hero-label">{labelStr}</div>}
+                        {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
+                        {locationStr && <div className="featured-hero-location">{locationStr}</div>}
+                        <div className="featured-hero-spacer" aria-hidden="true" />
+                        <div className="featured-hero-formats">{formatsList.join(', ')}</div>
+                      </div>
+                    </button>
                   );
                 })}
               </div>
@@ -754,9 +978,17 @@ export default function Home() {
                         const displayRawTitle = it.album || it.releaseTitle || it.title || '';
                         const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
                         const releaseUrl = it.albumUrl || it.trackUrl || it.url || '';
-                        const showLabel = meta.label && meta.label.toLowerCase() !== (meta.artist || '').toLowerCase() ? meta.label : '';
-                        const releaseDateStr = it.releaseDate || it.year || (it.releaseTimestamp ? new Date(Number(it.releaseTimestamp) * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
-                        const locationStr = String(it.location || it.country || '').trim();
+                        const albumTitle = meta.title || displayRawTitle || it.title || '';
+                        const artistDisplay = meta.artist || it.artistName || it.artist || '';
+                        const metaKey = `${artistDisplay.toLowerCase()}::${albumTitle.toLowerCase()}`;
+                        const rich = (releaseUrl && heroMetaMap[releaseUrl]) || (it.id && heroMetaMap[it.id]) || heroMetaMap[metaKey] || {};
+                        const showLabel = cleanHeroLabel(meta.label || rich.label || it.label || it.labelName || '', artistDisplay, albumTitle);
+                        const releaseDateStr = formatHeroReleaseDate(it.releaseDate || rich.releaseDate || it.year || '', it.releaseTimestamp);
+                        const locationStr = String(it.location || rich.location || it.country || '').trim();
+                        const formatsList = normalizeHeroFormats(
+                          (Array.isArray(rich.formats) && rich.formats.length > 0) ? rich.formats : (it.formats || it.format),
+                          'bandcamp'
+                        );
                         return (
                           <button
                             key={it.id || `bc-new-${idx}`}
@@ -765,9 +997,12 @@ export default function Home() {
                               openPlaylistSheet({
                                 ...it,
                                 kind: 'album',
-                                title: meta.title || displayRawTitle || it.title,
-                                artistName: meta.artist || it.artistName || it.artist,
-                                label: meta.label || it.label,
+                                title: albumTitle,
+                                artistName: artistDisplay,
+                                label: showLabel || meta.label || it.label,
+                                releaseDate: releaseDateStr || it.releaseDate,
+                                location: locationStr || it.location,
+                                formats: formatsList,
                                 url: releaseUrl,
                                 trackUrl: releaseUrl,
                               });
@@ -775,21 +1010,18 @@ export default function Home() {
                           >
                             <div className="featured-hero-art">
                               {cleanCover
-                                ? <img src={cleanCover} alt={meta.title || displayRawTitle} loading="eager" decoding="sync" />
+                                ? <img src={cleanCover} alt={albumTitle} loading="eager" decoding="sync" />
                                 : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                             </div>
+                            {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Empty row, 7. Formats */}
                             <div className="featured-hero-info">
-                              <div className="featured-hero-title">{meta.title || displayRawTitle}</div>
-                              <div className="featured-hero-artist">{meta.artist || it.artistName}</div>
+                              <div className="featured-hero-title">{albumTitle}</div>
+                              <div className="featured-hero-artist">{artistDisplay}</div>
                               {showLabel && <div className="featured-hero-label">{showLabel}</div>}
-                              <div className="featured-hero-meta">
-                                {releaseDateStr ? `Released ${releaseDateStr}` : 'New Release'}
-                              </div>
-                              {locationStr && (
-                                <div className="featured-hero-location">
-                                  {locationStr}
-                                </div>
-                              )}
+                              {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
+                              {locationStr && <div className="featured-hero-location">{locationStr}</div>}
+                              <div className="featured-hero-spacer" aria-hidden="true" />
+                              <div className="featured-hero-formats">{formatsList.join(', ')}</div>
                             </div>
                           </button>
                         );

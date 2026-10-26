@@ -219,7 +219,73 @@ export default async function handler(req, res) {
       const cleanAlbumTitle = stripArtistFromTitle(rawAlbumTitle, albumArtist);
       const releaseDateRaw = String(tralbum?.current?.release_date || tralbum?.album_release_date || tralbum?.current?.publish_date || '');
       const releaseYear = (releaseDateRaw.match(/\b(19\d\d|20\d\d)\b/) || [])[1] || '';
-      const resolvedLabel = bandPageName || albumArtist || '';
+      const creditsDateMatch = html.match(/released\s+([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+      let formattedReleaseDate = creditsDateMatch ? creditsDateMatch[1].trim() : '';
+      if (!formattedReleaseDate && releaseDateRaw) {
+        const dt = new Date(releaseDateRaw);
+        if (!Number.isNaN(dt.getTime()) && dt.getFullYear() >= 1950) {
+          formattedReleaseDate = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      }
+      if (!formattedReleaseDate) formattedReleaseDate = releaseYear;
+
+      const bandLocation = decodeEntities(
+        ((html.match(/<p[^>]*id="band-name-location"[^>]*>[\s\S]*?<span[^>]*class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '')
+          .replace(/<[^>]+>/g, '')
+          .trim()
+      );
+
+      const backToLabelName = decodeEntities(
+        ((html.match(/<a[^>]*class="[^"]*back-to-label-link[^"]*"[^>]*>[\s\S]*?<span[^>]*class="[^"]*label-welcome[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/^visit\s+/i, '')
+          .trim()
+      );
+      const publisherLdName = decodeEntities(
+        ((html.match(/"(?:recordLabel|publisher)"\s*:\s*\{[\s\S]*?"name"\s*:\s*"([^"]+)"/i) || [])[1] || '').trim()
+      );
+      const normKey = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s*\(\d+\)\s*$/, '').replace(/[^a-z0-9]+/g, '');
+      const artistNorm = normKey(albumArtist);
+      const artistCollabs = String(albumArtist || '').split(/\s*(?:,|&|\band\b|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b|\bx\b|\/|;|\+)\s*/i).map(normKey).filter(Boolean);
+      const isDistinctFromArtist = (cand) => {
+        const cNorm = normKey(cand);
+        if (!cNorm || cNorm === 'bandcamp' || /^(notonlabel|selfreleased|independent|nolabel|none|unknown)/.test(cNorm)) return false;
+        if (artistNorm && cNorm === artistNorm) return false;
+        if (artistCollabs.includes(cNorm)) return false;
+        return true;
+      };
+      const resolvedLabel = [backToLabelName, bandPageName, publisherLdName].find(isDistinctFromArtist) || '';
+
+      // Extract available formats (Vinyl, Cassette, CD, Digital, etc.)
+      const formatSet = new Set();
+      const normalizeFormatName = (rawFmt) => {
+        const s = String(rawFmt || '').trim();
+        if (!s) return '';
+        if (/\b(t-?shirt|shirt|hoodie|sweater|sweatshirt|tote|bag|poster|print|sticker|hat|cap|beanie|patch|pin|mug|slipmat|ticket)\b/i.test(s)) return '';
+        if (/vinyl|lp|\b12"|\b7"|\b10"|test pressing|lathe/i.test(s)) return /lathe/i.test(s) ? 'Lathe Cut' : 'Vinyl';
+        if (/cassette|tape/i.test(s)) return 'Cassette';
+        if (/compact disc|\bcd\b|cd-r|digipak/i.test(s)) return 'CD';
+        if (/minidisc/i.test(s)) return 'MiniDisc';
+        if (/usb/i.test(s)) return 'USB';
+        if (/vhs/i.test(s)) return 'VHS';
+        if (/dvd|blu-?ray/i.test(s)) return 'DVD';
+        if (/flexi/i.test(s)) return 'Flexi-disc';
+        if (/digital|mp3|flac|wav|aiff|alac/i.test(s)) return 'Digital';
+        return s;
+      };
+      if (Array.isArray(tralbum?.packages)) {
+        for (const pkg of tralbum.packages) {
+          const fmt = normalizeFormatName(pkg?.type_name || pkg?.title || '');
+          if (fmt) formatSet.add(fmt);
+        }
+      }
+      const merchMatches = html.matchAll(/<span[^>]*class="[^"]*merchtype[^"]*"[^>]*>([\s\S]*?)<\/span>/gi);
+      for (const m of merchMatches) {
+        const fmt = normalizeFormatName(decodeEntities(m[1].replace(/<[^>]+>/g, '')));
+        if (fmt) formatSet.add(fmt);
+      }
+      formatSet.add('Digital');
+      const formats = Array.from(formatSet);
 
       if (tralbum && Array.isArray(tralbum.trackinfo)) {
         for (const t of tralbum.trackinfo) {
@@ -257,6 +323,9 @@ export default async function handler(req, res) {
             label: resolvedLabel,
             labelUrl: originUrl,
             year: releaseYear,
+            releaseDate: formattedReleaseDate,
+            location: bandLocation,
+            formats,
           });
         }
       }
@@ -269,7 +338,8 @@ export default async function handler(req, res) {
             const ld = JSON.parse(ldMatch[1]);
             const ldArt = ld.image || albumArt;
             const ldArtist = ld.byArtist?.name || albumArtist || '';
-            const ldLabel = ld.publisher?.name || resolvedLabel || ldArtist || '';
+            const rawLdLabel = ld.publisher?.name || resolvedLabel || '';
+            const ldLabel = isDistinctFromArtist(rawLdLabel) ? rawLdLabel : resolvedLabel;
             for (const t of (ld.track?.itemListElement || [])) {
               const item = t.item || t;
               const tArtist = item.byArtist?.name || ldArtist;
@@ -284,6 +354,9 @@ export default async function handler(req, res) {
                 label: ldLabel,
                 labelUrl: originUrl,
                 year: releaseYear,
+                releaseDate: formattedReleaseDate,
+                location: bandLocation,
+                formats,
               });
             }
           } catch (e) { /* parse error */ }
@@ -298,6 +371,9 @@ export default async function handler(req, res) {
           label: resolvedLabel,
           labelUrl: originUrl,
           year: releaseYear,
+          releaseDate: formattedReleaseDate,
+          location: bandLocation,
+          formats,
           artworkUrl: albumArt,
         }
       });

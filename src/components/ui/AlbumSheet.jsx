@@ -1255,20 +1255,45 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
             ? memberProfiles.flatMap(mp => mp.images || []).filter(Boolean)
             : initialArtist.images);
 
+      const dominantArtistLabel = [
+        ...(pObj.topReleases || []).map(r => (Array.isArray(r.labels) ? r.labels[0] : r.label) || ''),
+        ctxLabel || '',
+      ].map(l => String(l || '').replace(/\s*\(\d+\)\s*$/, '').trim())
+       .find(l => l && !/^(not on label.*|self[- ]?released.*|no label|none|unknown.*)$/i.test(l) && _normStr(l) !== _normStr(cleanName)) || cleanName;
+
       const relMap = new Map();
       const pushRel = (rel) => {
         if (!rel || !rel.title) return;
         const relArtist = rel.artist || rel.artistName || cleanName;
         const cleanTitle = cleanTrackOrReleaseTitle(rel.title, relArtist);
         const k = _normStr(cleanTitle);
-        if (!k || relMap.has(k)) return;
+        if (!k) return;
+        const rawLbl = Array.isArray(rel.labels) ? rel.labels[0] : (rel.label || '');
+        const cleanLbl = String(rawLbl || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+        const validLbl = (cleanLbl && !/^(not on label.*|self[- ]?released.*|no label|none|unknown.*)$/i.test(cleanLbl))
+          ? cleanLbl
+          : '';
+        if (relMap.has(k)) {
+          const existing = relMap.get(k);
+          if (validLbl && (!existing.label || _normStr(existing.label) === _normStr(cleanName))) {
+            existing.label = validLbl;
+          }
+          if (!existing.year && rel.year) existing.year = String(rel.year);
+          if (!existing.discogsId && rel.discogsId) existing.discogsId = String(rel.discogsId);
+          if (!existing.trackUrl && (rel.trackUrl || rel.url)) existing.trackUrl = rel.trackUrl || rel.url;
+          if (!existing.coverImage && (rel.coverImage || rel.thumb || rel.artworkUrl)) {
+            existing.coverImage = rel.coverImage || rel.thumb || rel.artworkUrl;
+            existing.thumb = existing.coverImage;
+          }
+          return;
+        }
         relMap.set(k, {
           ...rel,
           id: String(rel.id || `discogs-a-${rel.discogsId || Math.random()}`),
           discogsId: rel.discogsId ? String(rel.discogsId) : null,
           title: cleanTitle || rel.title || 'Unknown',
           artist: relArtist,
-          label: Array.isArray(rel.labels) ? rel.labels[0] : (rel.label || null),
+          label: validLbl || dominantArtistLabel || cleanName,
           year: rel.year ? String(rel.year) : null,
           thumb: rel.thumb || rel.coverImage || rel.artworkUrl || null,
           coverImage: rel.coverImage || rel.thumb || rel.artworkUrl || null,
@@ -1537,9 +1562,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       [
         cleanName,
         discogsData.name,
-        discogsData.parentLabel,
         ...(discogsData.aliases || []),
-        ...(discogsData.sublabels || []),
       ].filter(Boolean),
       bcSearchData?.results || [],
       { isLabel: true }
@@ -1563,7 +1586,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       const itemNorm = _normStr(item.title || item.artistName || '');
       const itemCore = _normLabelCore(item.title || item.artistName || '');
       const itemUrl = item.trackUrl || item.url || '';
-      return itemNorm === targetNorm || itemCore === targetCore || isBandcampUrlMatchingLabel(itemUrl, discogsData?.name || cleanName);
+      return itemNorm === targetNorm || (targetCore.length >= 4 && itemCore === targetCore) || isBandcampUrlMatchingLabel(itemUrl, discogsData?.name || cleanName);
     });
     if (bcHit) {
       if (!bcUrl && (bcHit.trackUrl || bcHit.url)) {

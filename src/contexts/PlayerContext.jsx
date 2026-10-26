@@ -1435,6 +1435,9 @@ export function PlayerProvider({ children }) {
       if (resolvedLbl && !curLblValid) {
         cur.label = resolvedLbl;
         patch.label = resolvedLbl;
+      } else if (curLblValid) {
+        data.label = String(cur.label).trim();
+        data.labelName = String(cur.label).trim();
       } else if (!curLblValid && cur.label) {
         cur.label = '';
         patch.label = '';
@@ -1453,18 +1456,20 @@ export function PlayerProvider({ children }) {
     };
 
     // Prefetch: called by Swift on track change — warms the cache
-    window.__kyoyuPrefetchTrackInfo = async (trackId, title, artist, album, provider) => {
+    window.__kyoyuPrefetchTrackInfo = async (trackId, title, artist, album, provider, label) => {
       try {
+        const cur = stateRef.current.currentTrack || {};
+        const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key) return;
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 14) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 15) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return;
         }
         const res = await fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId })
+          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId, knownLabel })
         });
         if (res.ok) {
           const data = await res.json();
@@ -1498,11 +1503,13 @@ export function PlayerProvider({ children }) {
     };
 
     // Get cached info: called when user opens info panel — returns instantly
-    window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider) => {
+    window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider, label) => {
       try {
+        const cur = stateRef.current.currentTrack || {};
+        const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 14) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 15) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }
@@ -1510,7 +1517,7 @@ export function PlayerProvider({ children }) {
         const res = await fetch('/api/discogs-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId })
+          body: JSON.stringify({ action: 'track-info', title, artist, album, provider, trackId, knownLabel })
         });
         if (res.ok) {
           const data = await res.json();
@@ -1518,7 +1525,7 @@ export function PlayerProvider({ children }) {
           syncResolvedTrackMetaToBridge(data, title, artist);
           return JSON.stringify(data);
         }
-        return JSON.stringify({ description: 'Could not fetch info.', genre: '', label: '', year: '', links: [] });
+        return JSON.stringify({ description: 'Could not fetch info.', genre: '', label: knownLabel, labelName: knownLabel, year: '', links: [] });
       } catch (err) {
         console.warn('Track info error:', err);
         return JSON.stringify({ description: 'Error loading info.', genre: '', label: '', year: '', links: [] });
