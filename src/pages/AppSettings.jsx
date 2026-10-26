@@ -74,6 +74,8 @@ export default function AppSettings() {
 
   // Player style: 'fullscreen' (classic) or 'sheet' (card)
   const [playerStyle, setPlayerStyle] = useState(() => localStorage.getItem('kyoyu-player-style') || 'sheet');
+  // Key notation: 'standard' (C Major / A Minor) or 'camelot' (8B / 8A)
+  const [keyNotation, setKeyNotation] = useState(() => localStorage.getItem('kyoyu-key-notation') || 'standard');
 
   function changePlayerStyle(style) {
     setPlayerStyle(style);
@@ -81,6 +83,14 @@ export default function AppSettings() {
     // Notify Swift so it knows which player to show
     try {
       window.webkit?.messageHandlers?.player?.postMessage({ playerStyle: style });
+    } catch(e) {}
+  }
+
+  function changeKeyNotation(notation) {
+    setKeyNotation(notation);
+    localStorage.setItem('kyoyu-key-notation', notation);
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({ keyNotation: notation });
     } catch(e) {}
   }
 
@@ -112,7 +122,7 @@ export default function AppSettings() {
         </div>
       </div>
 
-      {/* Player Style */}
+      {/* Player Style & Key Notation */}
       <div className="appsettings-section">
         <div className="appsettings-label">Player</div>
         <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
@@ -139,6 +149,42 @@ export default function AppSettings() {
                   <Icon size={18} strokeWidth={1.8} style={{ color: active ? 'var(--text-primary)' : 'var(--text-muted)' }} />
                   <span style={{ fontSize: '0.68rem', fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                     {active && <Check size={9} strokeWidth={3} />}{label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12, marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Music size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="appsettings-row-title">Key Notation</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+            {[
+              { id: 'standard', label: 'Standard', sub: 'C Major / A Minor' },
+              { id: 'camelot', label: 'Camelot Wheel', sub: '8B / 8A' },
+            ].map(({ id, label, sub }) => {
+              const active = keyNotation === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => changeKeyNotation(id)}
+                  style={{
+                    flex: 1, border: 'none', cursor: 'pointer', padding: '10px 0',
+                    borderRadius: 10,
+                    background: active ? 'var(--glass-bg-active)' : 'var(--glass-bg)',
+                    outline: active ? '1.5px solid var(--glass-border-light)' : '1px solid var(--glass-border)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    transition: 'all .15s',
+                  }}
+                >
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {active && <Check size={9} strokeWidth={3} />}{label}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 500, color: active ? 'var(--text-secondary)' : 'var(--text-muted)', opacity: active ? 0.9 : 0.65 }}>
+                    {sub}
                   </span>
                 </button>
               );

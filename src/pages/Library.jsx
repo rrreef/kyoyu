@@ -184,6 +184,7 @@ export default function Library() {
   const [sortDesc,     setSort]      = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [newPlaylistProviders, setNewPlaylistProviders] = useState([]);
   const [myUploads,    setMyUploads]  = useState([]);
   const [uploadsSort,  setUploadsSort]= useState('newest');
   const [eventsFilter, setEventsFilter]= useState('All');
@@ -231,13 +232,13 @@ export default function Library() {
   const mergeProviderPlaylists = (remoteList, provKey) => {
     const base = Array.isArray(remoteList) ? remoteList : [];
     const localMatching = (playlists || [])
-      .filter(p => Array.isArray(p.providers) && p.providers.includes(provKey))
+      .filter(p => p.provider === provKey || (Array.isArray(p.providers) && p.providers.includes(provKey)))
       .filter(p => !base.some(r => String(r.title || '').trim().toLowerCase() === String(p.title || '').trim().toLowerCase()))
       .map(p => ({
         ...p,
         kind: 'playlist',
         provider: provKey,
-        artworkUrl: p.cover || p.tracks?.[0]?.cover || '',
+        artworkUrl: (p.cover && p.cover !== '/album1.png') ? p.cover : (p.tracks?.[0]?.cover || ''),
         artistName: `${p.tracks?.length || 0} tracks`,
       }));
     return [...localMatching, ...base];
@@ -311,9 +312,29 @@ export default function Library() {
   const sortByDate = arr => sortDesc ? [...arr].reverse() : [...arr];
 
   function handleCreate() {
-    if (!newPlaylistName.trim()) return;
-    createPlaylist(newPlaylistName.trim());
+    const trimmed = newPlaylistName.trim();
+    if (!trimmed) return;
+    const provs = Array.isArray(newPlaylistProviders) ? newPlaylistProviders : [];
+    createPlaylist(trimmed, provs);
+    if (provs.length > 0) {
+      try {
+        window.webkit?.messageHandlers?.streaming?.postMessage({
+          id: `create-pl-${Date.now()}`,
+          action: 'createPlaylistOnProviders',
+          params: {
+            name: trimmed,
+            providers: provs,
+            trackId: '',
+            trackTitle: '',
+            trackArtist: '',
+            trackUrl: '',
+            trackArtwork: '',
+          },
+        });
+      } catch (e) {}
+    }
     setNewPlaylistName('');
+    setNewPlaylistProviders([]);
     setShowCreateModal(false);
   }
 
@@ -1137,8 +1158,44 @@ export default function Library() {
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
               autoFocus
             />
+            <div style={{ marginTop: 12, marginBottom: 4 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
+                Also create on provider account
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[
+                  { id: 'bandcamp', label: 'Bandcamp' },
+                  { id: 'soundcloud', label: 'SoundCloud' },
+                  { id: 'spotify', label: 'Spotify' },
+                  { id: 'applemusic', label: 'Apple Music' },
+                  { id: 'tidal', label: 'TIDAL' },
+                  { id: 'youtube', label: 'YouTube' },
+                ].map(p => {
+                  const selected = newPlaylistProviders.includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setNewPlaylistProviders(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                      style={{
+                        padding: '6px 11px',
+                        borderRadius: 999,
+                        fontSize: '0.72rem',
+                        fontWeight: selected ? 600 : 500,
+                        border: selected ? '1px solid var(--text-primary)' : '1px solid var(--glass-border)',
+                        background: selected ? 'var(--text-primary)' : 'var(--glass-bg)',
+                        color: selected ? 'var(--bg-primary)' : 'var(--text-primary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="modal-actions">
-              <button className="modal-cancel" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button className="modal-cancel" onClick={() => { setShowCreateModal(false); setNewPlaylistProviders([]); }}>Cancel</button>
               <button className="modal-confirm" onClick={handleCreate}>Create</button>
             </div>
           </div>

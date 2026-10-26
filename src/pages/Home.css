@@ -99,66 +99,76 @@
 }
 
 .featured-hero-title {
-  font-size: 0.96rem;
+  font-size: 1.12rem;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.05;
+  line-height: 1.1;
   margin-top: -1px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .featured-hero-artist {
-  font-size: 0.8rem;
+  font-size: 0.94rem;
   font-weight: 600;
   color: var(--text-secondary);
-  line-height: 1.15;
+  line-height: 1.12;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .featured-hero-label {
-  font-size: 0.74rem;
+  font-size: 0.84rem;
   font-weight: 500;
   color: var(--text-secondary);
-  line-height: 1.15;
+  line-height: 1.12;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .featured-hero-date {
-  font-size: 0.68rem;
+  font-size: 0.76rem;
   font-weight: 500;
   color: var(--text-muted);
-  line-height: 1.15;
+  line-height: 1.12;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .featured-hero-location {
-  font-size: 0.68rem;
+  font-size: 0.76rem;
   font-weight: 500;
   color: var(--text-dim);
-  line-height: 1.15;
+  line-height: 1.12;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-.featured-hero-spacer {
-  flex: 1 1 auto;
-  min-height: 2px;
-  height: auto;
 }
 .featured-hero-formats {
-  font-size: 0.68rem;
+  font-size: 0.76rem;
   font-weight: 500;
   color: var(--text-muted);
-  line-height: 1;
-  margin-top: auto;
+  line-height: 1.12;
   margin-bottom: -1px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.featured-hero-marquee-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+}
+.featured-hero-marquee-track.is-overflowing {
+  animation: heroMarqueeRTL var(--hero-marquee-dur, 9s) linear infinite;
+}
+.featured-hero-marquee-copy {
+  display: inline-block;
+  padding-right: 36px;
+}
+@keyframes heroMarqueeRTL {
+  0%, 15% {
+    transform: translate3d(0, 0, 0);
+  }
+  85%, 100% {
+    transform: translate3d(-50%, 0, 0);
+  }
 }
 
 /* ═══ My Music shelf section ══════════════════════════════ */

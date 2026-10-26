@@ -56,6 +56,15 @@ export function LibraryProvider({ children }) {
 
   // Synchronize across multiple WKWebViews
   useEffect(() => {
+    const reloadPlaylistsFromStorage = () => {
+      try {
+        const next = JSON.parse(localStorage.getItem('kyoyu-playlists') || '[]');
+        if (Array.isArray(next)) {
+          playlistsRef.current = next;
+          setPlaylists(next);
+        }
+      } catch (err) {}
+    };
     const handleStorage = (e) => {
       try {
         if (e.key === 'reef-liked') setLikedTracks(JSON.parse(e.newValue || '[]'));
@@ -71,7 +80,13 @@ export function LibraryProvider({ children }) {
       } catch (err) {}
     };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('kyoyu-playlists-sync', reloadPlaylistsFromStorage);
+    window.addEventListener('focus', reloadPlaylistsFromStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('kyoyu-playlists-sync', reloadPlaylistsFromStorage);
+      window.removeEventListener('focus', reloadPlaylistsFromStorage);
+    };
   }, []);
 
   function toggleLike(trackId) {
@@ -230,6 +245,7 @@ export function LibraryProvider({ children }) {
       cover: pl.cover || '/album1.png',
       creator: pl.creator || 'You',
       isPublic: !!pl.isPublic,
+      providers: Array.isArray(pl.providers) ? pl.providers : [],
     }));
   }
   function updatePlaylistCover(playlistId, coverUrl) {

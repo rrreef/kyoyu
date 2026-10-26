@@ -57,6 +57,64 @@ function CatalogSwipeRow({ sectionKey, pages, renderPage }) {
   );
 }
 
+function HeroMarqueeRow({ className, children }) {
+  const wrapRef = useRef(null);
+  const copyRef = useRef(null);
+  const [overflowState, setOverflowState] = useState({ overflowing: false, duration: 9 });
+  const textStr = typeof children === 'string' ? children : String(children ?? '');
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const copy = copyRef.current;
+    if (!wrap || !copy) return;
+    const measure = () => {
+      const containerW = wrap.clientWidth;
+      const contentW = copy.scrollWidth;
+      const isOver = containerW > 0 && contentW > containerW + 1;
+      const dur = Math.max(6, Math.min(18, (contentW + 36) / 28));
+      setOverflowState(prev => (
+        prev.overflowing === isOver && Math.abs(prev.duration - dur) < 0.2
+          ? prev
+          : { overflowing: isOver, duration: dur }
+      ));
+    };
+    measure();
+    const t = setTimeout(measure, 120);
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure);
+      ro.observe(wrap);
+    }
+    return () => {
+      clearTimeout(t);
+      if (ro) ro.disconnect();
+    };
+  }, [textStr]);
+
+  if (!textStr) return null;
+
+  return (
+    <div ref={wrapRef} className={className}>
+      <div
+        className={`featured-hero-marquee-track${overflowState.overflowing ? ' is-overflowing' : ''}`}
+        style={overflowState.overflowing ? { '--hero-marquee-dur': `${overflowState.duration.toFixed(1)}s` } : undefined}
+      >
+        <span
+          ref={copyRef}
+          className={overflowState.overflowing ? 'featured-hero-marquee-copy' : undefined}
+        >
+          {textStr}
+        </span>
+        {overflowState.overflowing && (
+          <span className="featured-hero-marquee-copy" aria-hidden="true">
+            {textStr}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 try {
   if (typeof window !== 'undefined') {
     const rawPub = localStorage.getItem(PUBLIC_RELEASES_CACHE_KEY);
@@ -874,15 +932,14 @@ export default function Home() {
                           : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                       </div>
 
-                      {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Empty row, 7. Formats */}
+                      {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Formats */}
                       <div className="featured-hero-info">
-                        <div className="featured-hero-title">{album.title}</div>
-                        <div className="featured-hero-artist">{album.artist}</div>
-                        {labelStr && <div className="featured-hero-label">{labelStr}</div>}
-                        {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
-                        {locationStr && <div className="featured-hero-location">{locationStr}</div>}
-                        <div className="featured-hero-spacer" aria-hidden="true" />
-                        <div className="featured-hero-formats">{formatsText}</div>
+                        <HeroMarqueeRow className="featured-hero-title">{album.title}</HeroMarqueeRow>
+                        <HeroMarqueeRow className="featured-hero-artist">{album.artist}</HeroMarqueeRow>
+                        {labelStr && <HeroMarqueeRow className="featured-hero-label">{labelStr}</HeroMarqueeRow>}
+                        {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
+                        {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
+                        <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
                       </div>
                     </button>
                   );
@@ -906,16 +963,28 @@ export default function Home() {
           return p === 'youtube' || String(t.id || '').startsWith('yt-');
         });
         const ytAcctLikes = acct.youtube?.likes || [];
-        const ytPlaylists = (acct.youtube?.playlists || []).concat(
-          (playlists || []).filter(p => p.provider === 'youtube')
-        );
+        const mergeProviderPlaylists = (remoteList, provKey) => {
+          const base = Array.isArray(remoteList) ? remoteList : [];
+          const localMatching = (playlists || [])
+            .filter(p => p.provider === provKey || (Array.isArray(p.providers) && p.providers.includes(provKey)))
+            .filter(p => !base.some(r => String(r.title || '').trim().toLowerCase() === String(p.title || '').trim().toLowerCase()))
+            .map(p => ({
+              ...p,
+              kind: 'playlist',
+              provider: provKey,
+              artworkUrl: (p.cover && p.cover !== '/album1.png') ? p.cover : (p.tracks?.[0]?.cover || ''),
+              artistName: `${p.tracks?.length || 0} tracks`,
+            }));
+          return [...localMatching, ...base];
+        };
+        const ytPlaylists = mergeProviderPlaylists(acct.youtube?.playlists || [], 'youtube');
 
         const sectionsByProvider = {
           bandcamp: [
             { key: 'bandcamp-new',  title: 'New on Bandcamp',       provider: 'bandcamp', category: 'newStuff',  items: acct.bandcamp?.newStuff || [],   pageSize: limitFor('bandcamp-new'),  type: 'acct' },
             { key: 'bandcamp-col',  title: 'Bandcamp · Collection', provider: 'bandcamp', category: 'purchases', items: acct.bandcamp?.collection || [], pageSize: limitFor('bandcamp-col'),  type: 'acct' },
             { key: 'bandcamp-wish', title: 'Bandcamp · Wishlist',   provider: 'bandcamp', category: 'wishlist',  items: acct.bandcamp?.wishlist || [],   pageSize: limitFor('bandcamp-wish'), type: 'acct' },
-            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: acct.bandcamp?.playlists || [],  pageSize: limitFor('bandcamp-pl'),   type: 'acct' },
+            { key: 'bandcamp-pl',   title: 'Bandcamp · Playlists',  provider: 'bandcamp', category: 'playlists', items: mergeProviderPlaylists(acct.bandcamp?.playlists || [], 'bandcamp'), pageSize: limitFor('bandcamp-pl'), type: 'acct' },
           ],
           discogs: [
             { key: 'discogs-new',   title: 'Discogs · New Stuff',   provider: 'discogs',  category: 'newStuff',  items: acct.discogs?.newStuff || [],    pageSize: limitFor('discogs-new'),   type: 'acct' },
@@ -925,7 +994,7 @@ export default function Home() {
           soundcloud: [
             { key: 'soundcloud-new',   title: 'SoundCloud · New Stuff', provider: 'soundcloud', category: 'newStuff',  items: acct.soundcloud?.newStuff || [],  pageSize: limitFor('soundcloud-new'),   type: 'acct' },
             { key: 'soundcloud-likes', title: 'SoundCloud · Likes',     provider: 'soundcloud', category: 'titles',    items: acct.soundcloud?.likes || [],     pageSize: limitFor('soundcloud-likes'), type: 'acct' },
-            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: acct.soundcloud?.playlists || [], pageSize: limitFor('soundcloud-pl'),    type: 'acct' },
+            { key: 'soundcloud-pl',    title: 'SoundCloud · Playlists', provider: 'soundcloud', category: 'playlists', items: mergeProviderPlaylists(acct.soundcloud?.playlists || [], 'soundcloud'), pageSize: limitFor('soundcloud-pl'), type: 'acct' },
           ],
           youtube: [
             { key: 'youtube-new',   title: 'YouTube · New Stuff', provider: 'youtube', category: 'newStuff',  items: acct.youtube?.newStuff || [],                        pageSize: limitFor('youtube-new'),   type: 'acct' },
@@ -935,17 +1004,17 @@ export default function Home() {
           spotify: [
             { key: 'spotify-new',   title: 'Spotify · New Stuff', provider: 'spotify', category: 'newStuff',  items: acct.spotify?.newStuff || [],  pageSize: limitFor('spotify-new'),   type: 'acct' },
             { key: 'spotify-likes', title: 'Spotify · Likes',     provider: 'spotify', category: 'titles',    items: acct.spotify?.likes || [],     pageSize: limitFor('spotify-likes'), type: 'acct' },
-            { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: acct.spotify?.playlists || [], pageSize: limitFor('spotify-pl'),    type: 'acct' },
+            { key: 'spotify-pl',    title: 'Spotify · Playlists', provider: 'spotify', category: 'playlists', items: mergeProviderPlaylists(acct.spotify?.playlists || [], 'spotify'), pageSize: limitFor('spotify-pl'), type: 'acct' },
           ],
           applemusic: [
             { key: 'applemusic-new',   title: 'Apple Music · New Stuff', provider: 'applemusic', category: 'newStuff',  items: acct.applemusic?.newStuff || [],  pageSize: limitFor('applemusic-new'),   type: 'acct' },
             { key: 'applemusic-likes', title: 'Apple Music · Likes',     provider: 'applemusic', category: 'titles',    items: acct.applemusic?.likes || [],     pageSize: limitFor('applemusic-likes'), type: 'acct' },
-            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: acct.applemusic?.playlists || [], pageSize: limitFor('applemusic-pl'),    type: 'acct' },
+            { key: 'applemusic-pl',    title: 'Apple Music · Playlists', provider: 'applemusic', category: 'playlists', items: mergeProviderPlaylists(acct.applemusic?.playlists || [], 'applemusic'), pageSize: limitFor('applemusic-pl'), type: 'acct' },
           ],
           tidal: [
             { key: 'tidal-new',   title: 'TIDAL · New Stuff', provider: 'tidal', category: 'newStuff',  items: acct.tidal?.newStuff || [],  pageSize: limitFor('tidal-new'),   type: 'acct' },
             { key: 'tidal-likes', title: 'TIDAL · Likes',     provider: 'tidal', category: 'titles',    items: acct.tidal?.likes || [],     pageSize: limitFor('tidal-likes'), type: 'acct' },
-            { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: acct.tidal?.playlists || [], pageSize: limitFor('tidal-pl'),    type: 'acct' },
+            { key: 'tidal-pl',    title: 'TIDAL · Playlists', provider: 'tidal', category: 'playlists', items: mergeProviderPlaylists(acct.tidal?.playlists || [], 'tidal'), pageSize: limitFor('tidal-pl'), type: 'acct' },
           ],
         };
 
@@ -1068,15 +1137,14 @@ export default function Home() {
                                 ? <img src={showCover} alt={albumTitle} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                                 : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                             </div>
-                            {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Empty row, 7. Formats */}
+                            {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Formats */}
                             <div className="featured-hero-info">
-                              <div className="featured-hero-title">{albumTitle}</div>
-                              <div className="featured-hero-artist">{artistDisplay}</div>
-                              {showLabel && <div className="featured-hero-label">{showLabel}</div>}
-                              {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
-                              {locationStr && <div className="featured-hero-location">{locationStr}</div>}
-                              <div className="featured-hero-spacer" aria-hidden="true" />
-                              <div className="featured-hero-formats">{formatsText}</div>
+                              <HeroMarqueeRow className="featured-hero-title">{albumTitle}</HeroMarqueeRow>
+                              <HeroMarqueeRow className="featured-hero-artist">{artistDisplay}</HeroMarqueeRow>
+                              {showLabel && <HeroMarqueeRow className="featured-hero-label">{showLabel}</HeroMarqueeRow>}
+                              {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
+                              {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
+                              <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
                             </div>
                           </button>
                         );
