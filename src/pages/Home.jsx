@@ -101,7 +101,7 @@ if (typeof window !== 'undefined') {
   preloadHomeContent();
 }
 
-const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v2';
+const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v3';
 
 function cleanHeroLabel(rawLabel, rawArtist = '') {
   const clean = String(rawLabel || '')
@@ -161,10 +161,10 @@ function normalizeHeroFormats(rawFormats, defaultDigital = true) {
   if (defaultDigital && !seen.has('digital')) {
     addFmt('Digital');
   }
-  return ordered.join(', ');
+  return ordered;
 }
 
-function formatHeroReleaseDate(rawDate, fallbackYear = '', fallbackTs = 0) {
+function formatHeroReleaseDate(rawDate, fallbackTs = 0) {
   const s = String(rawDate || '').trim();
   if (s) {
     if (/^\d{4}$/.test(s)) return s;
@@ -180,7 +180,7 @@ function formatHeroReleaseDate(rawDate, fallbackYear = '', fallbackTs = 0) {
       return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
   }
-  return fallbackYear ? String(fallbackYear) : '';
+  return '';
 }
 
 /**
@@ -802,10 +802,11 @@ export default function Home() {
                   const labelStr = cleanHeroLabel(album.label || rich.label || '', album.artist, album.title);
                   const releaseDateStr = formatHeroReleaseDate(album.releaseDate || rich.releaseDate || album.year || '', album.releaseTimestamp);
                   const locationStr = String(album.location || rich.location || album.country || '').trim();
-                  const formatsList = normalizeHeroFormats(
-                    (Array.isArray(rich.formats) && rich.formats.length > 0) ? rich.formats : album.formats,
-                    'digital'
-                  );
+                  const rawHeroFormats = (Array.isArray(rich.formats) && rich.formats.length > 0)
+                    ? rich.formats
+                    : (typeof rich.formats === 'string' && rich.formats.trim() ? rich.formats : album.formats);
+                  const formatsList = normalizeHeroFormats(rawHeroFormats, true);
+                  const formatsText = Array.isArray(formatsList) ? formatsList.join(', ') : String(formatsList || 'Digital');
                   return (
                     <button
                       key={album.id}
@@ -839,7 +840,7 @@ export default function Home() {
                         {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
                         {locationStr && <div className="featured-hero-location">{locationStr}</div>}
                         <div className="featured-hero-spacer" aria-hidden="true" />
-                        <div className="featured-hero-formats">{formatsList.join(', ')}</div>
+                        <div className="featured-hero-formats">{formatsText}</div>
                       </div>
                     </button>
                   );
@@ -985,10 +986,11 @@ export default function Home() {
                         const showLabel = cleanHeroLabel(meta.label || rich.label || it.label || it.labelName || '', artistDisplay, albumTitle);
                         const releaseDateStr = formatHeroReleaseDate(it.releaseDate || rich.releaseDate || it.year || '', it.releaseTimestamp);
                         const locationStr = String(it.location || rich.location || it.country || '').trim();
-                        const formatsList = normalizeHeroFormats(
-                          (Array.isArray(rich.formats) && rich.formats.length > 0) ? rich.formats : (it.formats || it.format),
-                          'bandcamp'
-                        );
+                        const rawBcFormats = (Array.isArray(rich.formats) && rich.formats.length > 0)
+                          ? rich.formats
+                          : (typeof rich.formats === 'string' && rich.formats.trim() ? rich.formats : (it.formats || it.format));
+                        const formatsList = normalizeHeroFormats(rawBcFormats, true);
+                        const formatsText = Array.isArray(formatsList) ? formatsList.join(', ') : String(formatsList || 'Digital');
                         return (
                           <button
                             key={it.id || `bc-new-${idx}`}
@@ -1021,7 +1023,7 @@ export default function Home() {
                               {releaseDateStr && <div className="featured-hero-date">{releaseDateStr}</div>}
                               {locationStr && <div className="featured-hero-location">{locationStr}</div>}
                               <div className="featured-hero-spacer" aria-hidden="true" />
-                              <div className="featured-hero-formats">{formatsList.join(', ')}</div>
+                              <div className="featured-hero-formats">{formatsText}</div>
                             </div>
                           </button>
                         );
