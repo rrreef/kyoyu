@@ -266,7 +266,7 @@ import { isItemInConnectedLikes } from './lib/useConnectedLibrary';
 import { openNativePlaylistFast } from './components/ui/AlbumSheet';
 
 function PlaylistBridge() {
-  const { state } = usePlayer();
+  const { state, playSaved } = usePlayer();
   const {
     getPlaylists, addToPlaylist, createPlaylist, updatePlaylistCover,
     deletePlaylist, removeFromPlaylist, reorderPlaylist, togglePlaylistPublic,
@@ -274,6 +274,8 @@ function PlaylistBridge() {
   } = useLibrary();
   const stateRef = React.useRef(state);
   stateRef.current = state;
+  const playSavedRef = React.useRef(playSaved);
+  playSavedRef.current = playSaved;
   const addRef = React.useRef(addToPlaylist);
   addRef.current = addToPlaylist;
   const getRef = React.useRef(getPlaylists);
@@ -292,6 +294,33 @@ function PlaylistBridge() {
   togglePublicRef.current = togglePlaylistPublic;
   const toggleLikeRef = React.useRef(toggleLikeUpload);
   toggleLikeRef.current = toggleLikeUpload;
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const trackParam = params.get('track') || '';
+      const titleParam = params.get('title') || '';
+      const artistParam = params.get('artist') || '';
+      const albumParam = params.get('album') || '';
+      const providerParam = params.get('provider') || '';
+      const srcParam = params.get('src') || '';
+      if ((trackParam || (titleParam && artistParam)) && !window.__kyoyuSharedLinkHandled) {
+        window.__kyoyuSharedLinkHandled = true;
+        setTimeout(() => {
+          playSavedRef.current?.({
+            id: trackParam || `shared-${Date.now()}`,
+            title: titleParam || 'Track',
+            artist: artistParam || '',
+            artistName: artistParam || '',
+            album: albumParam || '',
+            provider: providerParam || '',
+            trackUrl: srcParam || '',
+            url: srcParam || '',
+          });
+        }, 350);
+      }
+    } catch (e) {}
+  }, []);
 
   useEffect(() => {
     const cleanId = (id) => String(id || '').split('?ts=')[0].trim();

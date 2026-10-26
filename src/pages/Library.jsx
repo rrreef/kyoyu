@@ -228,28 +228,43 @@ export default function Library() {
   // SoundCloud / Bandcamp / Spotify / Apple Music / TIDAL / YouTube Music accounts connected in Settings → their library shows up here automatically
   const acct = useConnectedLibrary();
   const [providerPriority] = useProviderPriority();
+  const mergeProviderPlaylists = (remoteList, provKey) => {
+    const base = Array.isArray(remoteList) ? remoteList : [];
+    const localMatching = (playlists || [])
+      .filter(p => Array.isArray(p.providers) && p.providers.includes(provKey))
+      .filter(p => !base.some(r => String(r.title || '').trim().toLowerCase() === String(p.title || '').trim().toLowerCase()))
+      .map(p => ({
+        ...p,
+        kind: 'playlist',
+        provider: provKey,
+        artworkUrl: p.cover || p.tracks?.[0]?.cover || '',
+        artistName: `${p.tracks?.length || 0} tracks`,
+      }));
+    return [...localMatching, ...base];
+  };
   const bcPurchaseTracks = acct.bandcamp.collection.filter(i => i.kind === 'track');
   const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
   const bcWishTracks     = acct.bandcamp.wishlist.filter(i => i.kind === 'track');
   const bcWishAlbums     = acct.bandcamp.wishlist.filter(i => i.kind === 'album');
+  const bcPlaylists      = mergeProviderPlaylists(acct.bandcamp?.playlists, 'bandcamp');
   const bcFollows        = acct.bandcamp?.following || [];
   const scLikes          = acct.soundcloud.likes;
-  const scPlaylists      = acct.soundcloud.playlists;
+  const scPlaylists      = mergeProviderPlaylists(acct.soundcloud.playlists, 'soundcloud');
   const scFollows        = acct.soundcloud?.following || [];
   const spLikes          = acct.spotify?.likes || [];
-  const spPlaylists      = acct.spotify?.playlists || [];
+  const spPlaylists      = mergeProviderPlaylists(acct.spotify?.playlists, 'spotify');
   const spAlbums         = acct.spotify?.albums || [];
   const spFollows        = acct.spotify?.following || [];
   const amLikes          = acct.applemusic?.likes || [];
-  const amPlaylists      = acct.applemusic?.playlists || [];
+  const amPlaylists      = mergeProviderPlaylists(acct.applemusic?.playlists, 'applemusic');
   const amAlbums         = acct.applemusic?.albums || [];
   const amFollows        = acct.applemusic?.following || [];
   const tdLikes          = acct.tidal?.likes || [];
-  const tdPlaylists      = acct.tidal?.playlists || [];
+  const tdPlaylists      = mergeProviderPlaylists(acct.tidal?.playlists, 'tidal');
   const tdAlbums         = acct.tidal?.albums || [];
   const tdFollows        = acct.tidal?.following || [];
   const ytLikes          = acct.youtube?.likes || [];
-  const ytPlaylists      = acct.youtube?.playlists || [];
+  const ytPlaylists      = mergeProviderPlaylists(acct.youtube?.playlists, 'youtube');
   const ytAlbums         = acct.youtube?.albums || [];
   const ytFollows        = acct.youtube?.following || [];
   const dgCollection     = acct.discogs?.collection || [];
@@ -490,7 +505,7 @@ export default function Library() {
       if (!acct.bandcamp.connected) {
         body = empty('Connect Bandcamp in Settings › Streaming Services to see your purchases and wishlist.');
       } else if (cat === 'playlists') {
-        const bcPl = acct.bandcamp.playlists;
+        const bcPl = bcPlaylists;
         const err = acct.errors['bandcamp:playlists'];
         body = bcPl.length > 0
           ? <AcctSection items={bcPl} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
@@ -980,7 +995,7 @@ export default function Library() {
       {/* Playlists → connected accounts ordered by providerPriority */}
       {activeFilter === 'playlists' && (() => {
         const plByProvider = {
-          bandcamp:   { key: 'bc-pl', title: 'Bandcamp · Playlists',    items: acct.bandcamp?.playlists || [] },
+          bandcamp:   { key: 'bc-pl', title: 'Bandcamp · Playlists',    items: bcPlaylists },
           soundcloud: { key: 'sc-pl', title: 'SoundCloud · Playlists',  items: scPlaylists },
           youtube:    { key: 'yt-pl', title: 'YouTube · Playlists',     items: ytPlaylists },
           spotify:    { key: 'sp-pl', title: 'Spotify · Playlists',     items: spPlaylists },

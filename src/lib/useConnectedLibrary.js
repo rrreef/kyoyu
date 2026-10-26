@@ -121,10 +121,12 @@ function triggerConnectedServicePreload(status) {
   if (status.bandcamp?.connected) {
     ensure('bandcamp', 'collection');
     ensure('bandcamp', 'wishlist');
+    ensure('bandcamp', 'playlists');
     ensure('bandcamp', 'newStuff');
   }
   if (status.soundcloud?.connected) {
     ensure('soundcloud', 'likes');
+    ensure('soundcloud', 'playlists');
     ensure('soundcloud', 'newStuff');
   }
   if (status.discogs?.connected) {
@@ -134,18 +136,22 @@ function triggerConnectedServicePreload(status) {
   }
   if (status.youtube?.connected) {
     ensure('youtube', 'likes');
+    ensure('youtube', 'playlists');
     ensure('youtube', 'newStuff');
   }
   if (status.spotify?.connected) {
     ensure('spotify', 'likes');
+    ensure('spotify', 'playlists');
     ensure('spotify', 'newStuff');
   }
   if (status.applemusic?.connected) {
     ensure('applemusic', 'likes');
+    ensure('applemusic', 'playlists');
     ensure('applemusic', 'newStuff');
   }
   if (status.tidal?.connected) {
     ensure('tidal', 'likes');
+    ensure('tidal', 'playlists');
     ensure('tidal', 'newStuff');
   }
 }
@@ -230,6 +236,14 @@ if (typeof window !== 'undefined') {
       fetchedAt[`${s}:${k}`] = Date.now();
       saveFastConnectedCache();
       emit();
+    } else if (evt.type === 'playlistCreatedOnProvider' && evt.service) {
+      const s = evt.service;
+      delete fetchedAt[`${s}:playlists`];
+      ensure(s, 'playlists', true);
+      setTimeout(() => {
+        delete fetchedAt[`${s}:playlists`];
+        ensure(s, 'playlists', true);
+      }, 900);
     } else if (evt.type === 'libraryOptimistic' && evt.service) {
       const s = evt.service;
       const bucket =
@@ -271,11 +285,11 @@ if (typeof window !== 'undefined') {
     } else if (evt.type === 'libraryChanged' && evt.service) {
       const s = evt.service;
       const buckets =
-        s === 'bandcamp' ? ['wishlist'] :
+        s === 'bandcamp' ? ['wishlist', 'playlists'] :
         s === 'discogs' ? ['wishlist'] :
-        s === 'soundcloud' ? ['likes'] :
+        s === 'soundcloud' ? ['likes', 'playlists'] :
         s === 'youtube' ? ['likes', 'playlists', 'albums'] :
-        ['likes', 'albums'];
+        ['likes', 'playlists', 'albums'];
       setTimeout(() => {
         for (const b of buckets) {
           delete fetchedAt[`${s}:${b}`];
