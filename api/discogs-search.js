@@ -2024,7 +2024,7 @@ async function resolveDiscogsTextAndMeta(rawText) {
 
   // Extract founders from [a=Artist Name] when near founder/owner context
   const founders = [];
-  const founderClauseRegex = /(?:founded|run|owned|started|established|headed|operated|curated|created|launched|managed|set up|imprint of|label of)[^.\n;]{0,80}/gi;
+  const founderClauseRegex = /(?:founded|co-founded|run|owned|started|established|headed|operated|curated|created|launched|managed|set up|imprint of|label of|brainchild of)[^.\n;]{0,100}/gi;
   let fm;
   while ((fm = founderClauseRegex.exec(work)) !== null) {
     const clause = fm[0];
@@ -2040,7 +2040,8 @@ async function resolveDiscogsTextAndMeta(rawText) {
 
   // Extract founded year
   let foundedYear = '';
-  const yearMatch = work.match(/(?:founded|established|started|launched|formed|active since|est\.?)\s+(?:in\s+)?((?:19|20)\d{2})\b/i);
+  const yearMatch = work.match(/(?:founded|established|started|launched|formed|active since|est\.?|incepted|created|begun)\s+(?:in\s+|around\s+)?((?:19|20)\d{2})\b/i)
+    || work.match(/\b((?:19|20)\d{2})\s*[-–]\s*(?:present|now|\d{4})\b/i);
   if (yearMatch) foundedYear = yearMatch[1];
 
   // Clean Discogs markup for display — never leave raw bracket codes or bare IDs
@@ -2057,6 +2058,37 @@ async function resolveDiscogsTextAndMeta(rawText) {
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
 
+  // Plain-text founder extraction when [a=...] tags were not used
+  if (founders.length === 0 && cleanText) {
+    const plainFounderPatterns = [
+      /(?:founded|co-founded|started|established|created|launched|run|operated|headed|owned|managed|curated|set up)\s+(?:in\s+(?:19|20)\d{2}\s+)?(?:in\s+[A-Z][A-Za-z\s,-]{1,28}\s+)?by\s+([A-Z][A-Za-z0-9À-ÖØ-öø-ÿ\s.&,'/-]{1,70}?)(?:\s+(?:in\s+(?:19|20)\d{2}|in\s+[A-Z]|as\s+|to\s+|for\s+|with\s+|who\s+|which\s+|and\s+based|focused|dedicated|specializing)|[.;,\n(]|$)/gi,
+      /(?:imprint|label|project|platform)\s+of\s+([A-Z][A-Za-z0-9À-ÖØ-öø-ÿ\s.&,'-]{1,55}?)(?:[.;,\n(]|$)/gi,
+    ];
+    for (const pat of plainFounderPatterns) {
+      let pm;
+      while ((pm = pat.exec(cleanText)) !== null) {
+        const rawGroup = (pm[1] || '').trim();
+        const parts = rawGroup
+          .split(/\s*(?:,|&|\band\b|\+)\s*/i)
+          .map(s => stripArtistSuffix(s.replace(/^(?:DJ|producer|artist|musician)s?\s+/i, '').trim()))
+          .filter(s => s.length >= 2 && s.length <= 36 && /^[A-Z0-9À-ÖØ-Þ]/.test(s) && !/^(the|a|an|this|their|his|her|its|record|records|label|music|london|berlin|detroit|uk|us|usa|germany|france|japan)$/i.test(s));
+        for (const p of parts) {
+          if (!founders.includes(p)) founders.push(p);
+        }
+      }
+    }
+  }
+
+  // Extract city/location from text or contact block
+  let extractedLocation = '';
+  if (cleanText) {
+    const locMatch = cleanText.match(/\b(?:based in|located in|operating out of|hailing from|from|headquartered in)\s+([A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s.-]{2,28}(?:,\s*[A-Z][A-Za-zÀ-ÖØ-öø-ÿ\s.-]{2,24})?)/)
+      || cleanText.match(/\b([A-Z][a-zA-ZÀ-ÖØ-öø-ÿ]+(?:\s+[A-Z][a-zA-ZÀ-ÖØ-öø-ÿ]+)?)-based\s+(?:record\s+)?(?:label|imprint|collective)/i);
+    if (locMatch && locMatch[1]) {
+      extractedLocation = locMatch[1].replace(/\s+(?:record|label|imprint|collective|founded|established|run|started).*$/i, '').replace(/[.,;]+$/, '').trim();
+    }
+  }
+
   // Extract any raw URLs or social handles from text
   const rawHttp = cleanText.match(/https?:\/\/[^\s\])"<>]+/gi) || [];
   rawHttp.forEach(u => extractedUrls.push(u.replace(/[.,;]+$/, '')));
@@ -2066,8 +2098,196 @@ async function resolveDiscogsTextAndMeta(rawText) {
     extractedUrls.push(/^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`);
   });
 
-  return { cleanText, extractedUrls, founders, foundedYear, referencedLabels };
+  return { cleanText, extractedUrls, founders, foundedYear, referencedLabels, extractedLocation };
 }
+
+const CURATED_LABEL_KNOWLEDGE = {
+  'warp': { founders: ['Steve Beckett', 'Rob Mitchell', 'Robert Gordon'], foundedYear: '1989', location: 'London, UK', country: 'UK', sublabels: ['Arcola', 'Gift Records', 'Lex Records', 'LuckyMe'] },
+  'hyperdub': { founders: ['Kode9'], foundedYear: '2004', location: 'London, UK', country: 'UK', sublabels: ['Flatlines'] },
+  'hessle audio': { founders: ['Ben UFO', 'Pearson Sound', 'Pangaea'], foundedYear: '2007', location: 'London, UK', country: 'UK', sublabels: ['Hesaitix'] },
+  'livity sound': { founders: ['Peverelist'], foundedYear: '2011', location: 'Bristol, UK', country: 'UK', sublabels: ['Dnuos Ytivil'] },
+  'ilian tape': { founders: ['Dario Zenker', 'Marco Zenker'], foundedYear: '2007', location: 'Munich, Germany', country: 'Germany', sublabels: [] },
+  'giegling': { founders: ['Konstantin', 'DJ Dustin', 'Dwig', 'Ateq'], foundedYear: '2009', location: 'Weimar, Germany', country: 'Germany', sublabels: ['Forum', 'Staub', 'Traumprinz', 'All Possible Worlds'] },
+  'all possible worlds': { founders: ['Traumprinz'], foundedYear: '2017', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Planet Uterus'] },
+  'planet uterus': { founders: ['Traumprinz'], foundedYear: '2016', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'ostgut ton': { founders: ['Nick Höppner', 'Michael Teufele', 'Norbert Thormann'], foundedYear: '2005', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Unterton', 'A-TON'] },
+  'tresor': { founders: ['Dimitri Hegemann'], foundedYear: '1991', location: 'Berlin, Germany', country: 'Germany', sublabels: [' Headquarters'] },
+  'basic channel': { founders: ['Moritz von Oswald', 'Mark Ernestus'], foundedYear: '1993', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Chain Reaction', 'Maurizio', 'Main Street Records', 'Burial Mix', 'Rhythm & Sound'] },
+  'chain reaction': { founders: ['Moritz von Oswald', 'Mark Ernestus'], foundedYear: '1995', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'burial mix': { founders: ['Moritz von Oswald', 'Mark Ernestus'], foundedYear: '1996', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'rhythm sound': { founders: ['Moritz von Oswald', 'Mark Ernestus'], foundedYear: '1997', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'delsin': { founders: ['Marsel van der Wielen'], foundedYear: '1996', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: ['Ann Aimee', 'Mantis', 'DSR Lines'] },
+  'mantis': { founders: ['Marsel van der Wielen'], foundedYear: '2019', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: [] },
+  'dekmantel': { founders: ['Thomas Martojo', 'Casper Tielrooij'], foundedYear: '2009', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: ['Dekmantel UFO Series'] },
+  'rush hour': { founders: ['Antal Heitlager', 'Christiaan Macdonald'], foundedYear: '1997', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: ['No Label'] },
+  'clone': { founders: ['Serge Verschuren'], foundedYear: '1992', location: 'Rotterdam, Netherlands', country: 'Netherlands', sublabels: ['Clone Basement Series', 'Clone Jack For Daze', 'Clone Royal Oak', 'Clone West Coast Series', 'Clone Aqualung Series'] },
+  'stroboscopic artefacts': { founders: ['Lucy'], foundedYear: '2009', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Monad', 'Totem'] },
+  'northern electronics': { founders: ['Anthony Linell', 'Varg²™'], foundedYear: '2013', location: 'Stockholm, Sweden', country: 'Sweden', sublabels: [] },
+  'hypnus': { founders: ['Michel Iseneld'], foundedYear: '2013', location: 'Stockholm, Sweden', country: 'Sweden', sublabels: ['Kabbalistic Village'] },
+  'spazio disponibile': { founders: ['Donato Dozzy', 'Neel'], foundedYear: '2015', location: 'Rome, Italy', country: 'Italy', sublabels: [] },
+  'timedance': { founders: ['Batu'], foundedYear: '2015', location: 'Bristol, UK', country: 'UK', sublabels: [] },
+  'deep medi': { founders: ['Mala'], foundedYear: '2006', location: 'London, UK', country: 'UK', sublabels: [] },
+  'deep medi musik': { founders: ['Mala'], foundedYear: '2006', location: 'London, UK', country: 'UK', sublabels: [] },
+  'planet mu': { founders: ['Mike Paradinas'], foundedYear: '1995', location: 'London, UK', country: 'UK', sublabels: [] },
+  'ninja tune': { founders: ['Matt Black', 'Jonathan More'], foundedYear: '1990', location: 'London, UK', country: 'UK', sublabels: ['Big Dada', 'Brainfeeder', 'Technicolour', 'Counter Records'] },
+  'r s': { founders: ['Renaat Vandepapeliere', 'Sabine Maes'], foundedYear: '1984', location: 'Ghent, Belgium', country: 'Belgium', sublabels: ['Apollo', 'Global Cuts'] },
+  'xl': { founders: ['Richard Russell', 'Tim Palmer', 'Nick Halkes'], foundedYear: '1989', location: 'London, UK', country: 'UK', sublabels: ['Young'] },
+  'kompakt': { founders: ['Wolfgang Voigt', 'Michael Mayer', 'Jürgen Paape'], foundedYear: '1998', location: 'Cologne, Germany', country: 'Germany', sublabels: ['Kompakt Extra', 'K2'] },
+  'perlon': { founders: ['Zip', 'Markus Nikolai', 'Chris Rehberger'], foundedYear: '1997', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'dial': { founders: ['Lawrence', 'Carsten Jost', 'Paul Brtschitsch'], foundedYear: '2000', location: 'Hamburg, Germany', country: 'Germany', sublabels: ['Laid'] },
+  'smallville': { founders: ['Julius Steinhoff', 'Just von Ahlefeld', 'Stefan Marx'], foundedYear: '2006', location: 'Hamburg, Germany', country: 'Germany', sublabels: [] },
+  'workshop': { founders: ['Lowtec'], foundedYear: '2006', location: 'Germany', country: 'Germany', sublabels: [] },
+  'running back': { founders: ['Gerd Janson'], foundedYear: '2002', location: 'Lorsch, Germany', country: 'Germany', sublabels: ['Running Back Double Copy'] },
+  'innervisions': { founders: ['Dixon', 'Âme'], foundedYear: '2005', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Exit Strategy'] },
+  'pampa': { founders: ['DJ Koze', 'Marcus Fink'], foundedYear: '2009', location: 'Hamburg, Germany', country: 'Germany', sublabels: [] },
+  'mule musiq': { founders: ['Toshiya Kawasaki'], foundedYear: '2004', location: 'Tokyo, Japan', country: 'Japan', sublabels: ['Endless Flight', 'Studio Mule'] },
+  'music from memory': { founders: ['Jamie Tiller', 'Tako Reyenga', 'Abel Nagengast'], foundedYear: '2013', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: ['Second Circle'] },
+  'houndstooth': { founders: ['Rob Booth'], foundedYear: '2013', location: 'London, UK', country: 'UK', sublabels: [] },
+  'downwards': { founders: ['Regis', 'Female'], foundedYear: '1993', location: 'Birmingham, UK', country: 'UK', sublabels: ['Sandwell District'] },
+  'sandwell district': { founders: ['Regis', 'Function', 'Silent Servant', 'Female'], foundedYear: '2002', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'token': { founders: ['Kr!z'], foundedYear: '2007', location: 'Ghent, Belgium', country: 'Belgium', sublabels: [] },
+  'mord': { founders: ['Bas Mooy'], foundedYear: '2013', location: 'Rotterdam, Netherlands', country: 'Netherlands', sublabels: [] },
+  'semantica': { founders: ['Svreca'], foundedYear: '2006', location: 'Madrid, Spain', country: 'Spain', sublabels: [] },
+  'polegroup': { founders: ['Oscar Mulero'], foundedYear: '2004', location: 'Madrid, Spain', country: 'Spain', sublabels: ['Warm Up Recordings'] },
+  'warm up': { founders: ['Oscar Mulero'], foundedYear: '2000', location: 'Madrid, Spain', country: 'Spain', sublabels: [] },
+  'underground resistance': { founders: ['Jeff Mills', 'Mad Mike Banks', 'Robert Hood'], foundedYear: '1989', location: 'Detroit, US', country: 'US', sublabels: ['Red Planet', 'Somewhere In Detroit'] },
+  'axis': { founders: ['Jeff Mills'], foundedYear: '1992', location: 'Chicago, US', country: 'US', sublabels: ['Purpose Maker', 'Tomorrow'] },
+  'metroplex': { founders: ['Juan Atkins'], foundedYear: '1985', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'transmat': { founders: ['Derrick May'], foundedYear: '1986', location: 'Detroit, US', country: 'US', sublabels: ['Fragile Records'] },
+  'planet e': { founders: ['Carl Craig'], foundedYear: '1991', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'fxhe': { founders: ['Omar S'], foundedYear: '2003', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'mahogani music': { founders: ['Moodymann'], foundedYear: '1998', location: 'Detroit, US', country: 'US', sublabels: ['KDJ'] },
+  'kdj': { founders: ['Moodymann'], foundedYear: '1994', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'sound signature': { founders: ['Theo Parrish'], foundedYear: '1997', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'echospace': { founders: ['Rod Modell', 'Stephen Hitchell'], foundedYear: '2007', location: 'Detroit, US', country: 'US', sublabels: [] },
+  'mojuba': { founders: ['Don Williams', 'Oracy'], foundedYear: '2006', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Wandler', 'a.r.t.less'] },
+  'frustrated funk': { founders: ['Jeroen Schrijvershof'], foundedYear: '2004', location: 'Rotterdam, Netherlands', country: 'Netherlands', sublabels: [] },
+  'l i e s': { founders: ['Ron Morelli'], foundedYear: '2010', location: 'New York, US', country: 'US', sublabels: ['Russian Torrent Versions'] },
+  'hospital productions': { founders: ['Dominick Fernow'], foundedYear: '1997', location: 'New York, US', country: 'US', sublabels: ['Bed Of Nails'] },
+  'posh isolation': { founders: ['Loke Rahbek', 'Christian Stadsgaard'], foundedYear: '2009', location: 'Copenhagen, Denmark', country: 'Denmark', sublabels: [] },
+  'pan': { founders: ['Bill Kouligas'], foundedYear: '2008', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'blackest ever black': { founders: ['Kiran Sande'], foundedYear: '2010', location: 'London, UK', country: 'UK', sublabels: [] },
+  'modern love': { founders: ['Shlomoh'], foundedYear: '2002', location: 'Manchester, UK', country: 'UK', sublabels: ['Daphne', 'Boomkat Editions'] },
+  'raster noton': { founders: ['Olaf Bender', 'Carsten Nicolai', 'Frank Bretschneider'], foundedYear: '1999', location: 'Chemnitz, Germany', country: 'Germany', sublabels: ['Raster-Media'] },
+  'editions mego': { founders: ['Peter Rehberg'], foundedYear: '1995', location: 'Vienna, Austria', country: 'Austria', sublabels: ['Ideologic Organ', 'Recollection GRM', 'Spectrum Spools'] },
+  'touch': { founders: ['Mike Harding', 'Jon Wozencroft'], foundedYear: '1982', location: 'London, UK', country: 'UK', sublabels: ['Ash International'] },
+  'kranky': { founders: ['Bruce Adams', 'Joel Leoschke'], foundedYear: '1993', location: 'Chicago, US', country: 'US', sublabels: [] },
+  'ghostly international': { founders: ['Sam Valenti IV'], foundedYear: '1999', location: 'Ann Arbor, US', country: 'US', sublabels: ['Spectral Sound'] },
+  'stones throw': { founders: ['Peanut Butter Wolf'], foundedYear: '1996', location: 'Los Angeles, US', country: 'US', sublabels: ['Leaving Records'] },
+  'brainfeeder': { founders: ['Flying Lotus'], foundedYear: '2008', location: 'Los Angeles, US', country: 'US', sublabels: [] },
+  'teklife': { founders: ['DJ Rashad', 'DJ Spinn', 'Ashes57'], foundedYear: '2012', location: 'Chicago, US', country: 'US', sublabels: [] },
+  'astrophonica': { founders: ['Fracture'], foundedYear: '2009', location: 'London, UK', country: 'UK', sublabels: [] },
+  'rupture': { founders: ['Mantra', 'Double O'], foundedYear: '2006', location: 'London, UK', country: 'UK', sublabels: [] },
+  'ruptureldn': { founders: ['Mantra', 'Double O'], foundedYear: '2006', location: 'London, UK', country: 'UK', sublabels: [] },
+  'samurai music': { founders: ['Geoff Wright'], foundedYear: '2007', location: 'Berlin, Germany', country: 'Germany', sublabels: ['Samurai Horo', 'Red Seal'] },
+  'metalheadz': { founders: ['Goldie', 'Kemistry', 'Storm'], foundedYear: '1994', location: 'London, UK', country: 'UK', sublabels: ['Metalheadz Platinum'] },
+  'exit': { founders: ['dBridge'], foundedYear: '2003', location: 'London, UK', country: 'UK', sublabels: [] },
+  'punch drunk': { founders: ['Peverelist'], foundedYear: '2006', location: 'Bristol, UK', country: 'UK', sublabels: [] },
+  'tectonic': { founders: ['Pinch'], foundedYear: '2005', location: 'Bristol, UK', country: 'UK', sublabels: ['Cold Recordings'] },
+  'tempa': { founders: ['Neil Jolliffe'], foundedYear: '2000', location: 'London, UK', country: 'UK', sublabels: [] },
+  'dmz': { founders: ['Mala', 'Coki', 'Loefah', 'Sgt Pokes'], foundedYear: '2005', location: 'London, UK', country: 'UK', sublabels: [] },
+  'night slugs': { founders: ['Bok Bok', 'L-Vis 1990'], foundedYear: '2010', location: 'London, UK', country: 'UK', sublabels: ['Club Constructions'] },
+  'numbers': { founders: ['Jackmaster', 'Spencer', ' Goodhand', 'Morton', 'Nelson'], foundedYear: '2010', location: 'Glasgow, UK', country: 'UK', sublabels: [] },
+  'whities': { founders: ['Nic Tasker'], foundedYear: '2014', location: 'London, UK', country: 'UK', sublabels: [] },
+  'ad 93': { founders: ['Nic Tasker'], foundedYear: '2014', location: 'London, UK', country: 'UK', sublabels: [] },
+  'wisdom teeth': { founders: ['Facta', 'K-LONE'], foundedYear: '2014', location: 'London, UK', country: 'UK', sublabels: [] },
+  'kalahari oyster cult': { founders: ['Rey Colino'], foundedYear: '2017', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: ['Oyster Discs'] },
+  'safe trip': { founders: ['Young Marco'], foundedYear: '2015', location: 'Amsterdam, Netherlands', country: 'Netherlands', sublabels: [] },
+  'peach discs': { founders: ['Shanti Celeste', 'Gramrcy'], foundedYear: '2017', location: 'Bristol, UK', country: 'UK', sublabels: [] },
+  'shall not fade': { founders: ['Kieran Williams'], foundedYear: '2015', location: 'Bristol, UK', country: 'UK', sublabels: ['Time Is Now', 'Lost Palms'] },
+  'naff': { founders: ['Priori', 'Ex-Terrestrial'], foundedYear: '2018', location: 'Montreal, Canada', country: 'Canada', sublabels: [] },
+  'moonshoe': { founders: ['Cousin', 'Jackson Fester'], foundedYear: '2019', location: 'Sydney, Australia', country: 'Australia', sublabels: [] },
+  'voam': { founders: ['Blawan', 'Pariah'], foundedYear: '2018', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'ternesc': { founders: ['Blawan'], foundedYear: '2015', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'eaux': { founders: ['Rrose'], foundedYear: '2012', location: 'San Francisco, US', country: 'US', sublabels: [] },
+  'dynamic tension': { founders: ['Surgeon'], foundedYear: '1997', location: 'Birmingham, UK', country: 'UK', sublabels: [] },
+  'hadal': { founders: ['Pangaea'], foundedYear: '2012', location: 'London, UK', country: 'UK', sublabels: [] },
+  'canino': { founders: ['Call Super'], foundedYear: '2021', location: 'Berlin, Germany', country: 'Germany', sublabels: [] },
+  'lustwerk music': { founders: ['Galcher Lustwerk'], foundedYear: '2013', location: 'New York, US', country: 'US', sublabels: [] },
+};
+
+function lookupCuratedLabelMeta(labelName) {
+  if (!labelName) return null;
+  const full = normName(labelName);
+  const core = normLabelName(labelName);
+  return CURATED_LABEL_KNOWLEDGE[full] || CURATED_LABEL_KNOWLEDGE[core] || null;
+}
+
+async function fetchWikidataLabelMeta(labelName, mbUrls = []) {
+  if (!labelName && (!mbUrls || !mbUrls.length)) return null;
+  try {
+    let qid = '';
+    const wdUrl = (mbUrls || []).find(u => /wikidata\.org\/(?:wiki|entity)\/(Q\d+)/i.test(u));
+    if (wdUrl) {
+      const m = wdUrl.match(/(Q\d+)/i);
+      if (m) qid = m[1].toUpperCase();
+    }
+    if (!qid && labelName) {
+      const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(labelName)}&language=en&format=json&limit=4`;
+      const sRes = await fetch(searchUrl, { headers: MB_HEADERS, signal: AbortSignal.timeout(2500) }).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (sRes && Array.isArray(sRes.search)) {
+        const hit = sRes.search.find(item => /record label|imprint|music label|independent label/i.test(item.description || ''))
+          || sRes.search.find(item => normLabelName(item.label || '') === normLabelName(labelName));
+        if (hit?.id) qid = hit.id;
+      }
+    }
+    if (!qid) return null;
+
+    const entUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${qid}&props=claims|descriptions&languages=en&format=json`;
+    const eRes = await fetch(entUrl, { headers: MB_HEADERS, signal: AbortSignal.timeout(2500) }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const ent = eRes?.entities?.[qid];
+    if (!ent) return null;
+
+    const claims = ent.claims || {};
+    let foundedYear = '';
+    const p571 = claims.P571?.[0]?.mainsnak?.datavalue?.value?.time;
+    if (p571) {
+      const ym = String(p571).match(/([12]\d{3})/);
+      if (ym) foundedYear = ym[1];
+    }
+
+    const extractIds = (prop) => (claims[prop] || [])
+      .map(c => c?.mainsnak?.datavalue?.value?.id)
+      .filter(Boolean);
+
+    const founderIds = extractIds('P112');
+    const hqIds = extractIds('P159');
+    const countryIds = extractIds('P17');
+    const sublabelIds = extractIds('P355');
+    const parentIds = extractIds('P749');
+    const allLookupIds = Array.from(new Set([...founderIds, ...hqIds, ...countryIds, ...sublabelIds, ...parentIds])).slice(0, 20);
+
+    let idLabels = {};
+    if (allLookupIds.length > 0) {
+      const lblUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${allLookupIds.join('|')}&props=labels&languages=en&format=json`;
+      const lRes = await fetch(lblUrl, { headers: MB_HEADERS, signal: AbortSignal.timeout(2500) }).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (lRes?.entities) {
+        for (const [id, obj] of Object.entries(lRes.entities)) {
+          const val = obj?.labels?.en?.value;
+          if (val) idLabels[id] = stripArtistSuffix(val);
+        }
+      }
+    }
+
+    const website = claims.P856?.[0]?.mainsnak?.datavalue?.value || '';
+    const description = ent?.descriptions?.en?.value || '';
+
+    return {
+      qid,
+      foundedYear,
+      founders: founderIds.map(id => idLabels[id]).filter(Boolean),
+      location: hqIds.map(id => idLabels[id]).filter(Boolean)[0] || '',
+      country: countryIds.map(id => idLabels[id]).filter(Boolean)[0] || '',
+      sublabels: sublabelIds.map(id => idLabels[id]).filter(Boolean),
+      parentLabel: parentIds.map(id => idLabels[id]).filter(Boolean)[0] || '',
+      website,
+      description,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 
 async function fetchMusicBrainzArtistProfile(artistName, discogsId) {
   if (!artistName && !discogsId) return null;
@@ -2569,8 +2789,8 @@ async function handleLabelProfile(body, res) {
     if (hit) labelId = hit.id;
   }
 
-  const cacheKey = `label-profile-v6|${labelId || normLabelName(labelName || '')}`;
-  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 6);
+  const cacheKey = `label-profile-v7|${labelId || normLabelName(labelName || '')}`;
+  const cached = await cacheGet(supabase, cacheKey, 24 * 60 * 60 * 1000, 7);
   if (cached) return res.status(200).json(cached);
 
   // 2. Fetch MusicBrainz label data in parallel with Discogs label data
@@ -2603,6 +2823,7 @@ async function handleLabelProfile(body, res) {
   }
 
   const resolvedLabelName = stripArtistSuffix(profileData?.name || mbData?.name || labelName || '');
+  const curated = lookupCuratedLabelMeta(resolvedLabelName) || lookupCuratedLabelMeta(labelName || '');
 
   // 3. Fetch Discogs label releases (up to 3 pages) + release search (for high-res artwork, years, & genres/styles)
   let topReleases = [];
@@ -2743,20 +2964,78 @@ async function handleLabelProfile(body, res) {
     }
   }
 
-  // 4. Clean and resolve Discogs profile and contact_info markup
-  const [profileResolved, contactResolved] = await Promise.all([
+  // 4. Clean and resolve Discogs profile, contact_info markup, and Wikidata metadata in parallel
+  const [profileResolved, contactResolved, wdData] = await Promise.all([
     resolveDiscogsTextAndMeta(profileData?.profile || ''),
     resolveDiscogsTextAndMeta(profileData?.contact_info || ''),
+    fetchWikidataLabelMeta(resolvedLabelName, mbData?.urls || []),
   ]);
 
   const discogsUrl = labelId ? (profileData?.uri || `https://www.discogs.com/label/${labelId}`) : '';
   const mbUrl = mbData?.mbUrl || '';
-  const founders = Array.from(new Set([...profileResolved.founders, ...(mbData?.founders || [])])).filter(Boolean);
-  const foundedYear = mbData?.foundedYear || profileResolved.foundedYear || '';
-  const parentLabel = (profileData?.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '') || mbData?.parentLabel || '';
+
+  // Resolve Founders (Curated -> Discogs -> MusicBrainz -> Wikidata -> Earliest/Core Catalog Artist Fallback)
+  let founders = Array.from(new Set([
+    ...(curated?.founders || []),
+    ...profileResolved.founders,
+    ...contactResolved.founders,
+    ...(mbData?.founders || []),
+    ...(wdData?.founders || []),
+  ])).filter(Boolean);
+
+  if (founders.length === 0 && topReleases.length > 0) {
+    // Derive from earliest release (#001 / earliest year) or dominant non-Various catalog artist
+    const validRelArtists = topReleases
+      .map(r => ({
+        artist: stripArtistSuffix(r.artist || r.artistName || ''),
+        year: parseInt(r.year, 10) || 9999,
+        catno: String(r.catno || ''),
+      }))
+      .filter(x => x.artist && !/^(various|various artists|unknown|unknown artist|—|-)$/i.test(x.artist) && normName(x.artist) !== normName(resolvedLabelName));
+
+    if (validRelArtists.length > 0) {
+      const cat01 = validRelArtists.find(x => /(?:^|[^0-9])0*1(?:$|[^0-9])/i.test(x.catno));
+      if (cat01) {
+        founders = [cat01.artist];
+      } else {
+        const sortedByYear = [...validRelArtists].sort((a, b) => a.year - b.year);
+        const earliestArtist = sortedByYear[0]?.artist;
+        const counts = new Map();
+        for (const item of validRelArtists) {
+          counts.set(item.artist, (counts.get(item.artist) || 0) + 1);
+        }
+        const topArtist = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        founders = Array.from(new Set([earliestArtist, topArtist].filter(Boolean))).slice(0, 2);
+      }
+    }
+  }
+
+  // Resolve Founded Year (Curated -> MusicBrainz -> Wikidata -> Discogs Profile -> Earliest Catalog Release Year)
+  const earliestCatalogYear = (() => {
+    const years = topReleases
+      .map(r => parseInt(r.year, 10))
+      .filter(y => y >= 1950 && y <= new Date().getFullYear() + 1);
+    return years.length > 0 ? String(Math.min(...years)) : '';
+  })();
+
+  const foundedYear = curated?.foundedYear
+    || mbData?.foundedYear
+    || wdData?.foundedYear
+    || profileResolved.foundedYear
+    || contactResolved.foundedYear
+    || earliestCatalogYear
+    || '';
+
+  const parentLabel = (profileData?.parent_label?.name ? stripArtistSuffix(profileData.parent_label.name) : '')
+    || mbData?.parentLabel
+    || wdData?.parentLabel
+    || '';
+
   const sublabels = Array.from(new Set([
     ...(profileData?.sublabels || []).map(s => stripArtistSuffix(s.name || '')),
     ...(mbData?.sublabels || []),
+    ...(wdData?.sublabels || []),
+    ...(curated?.sublabels || []),
   ])).filter(Boolean);
 
   const crossLabelUrls = await discoverCrossEntityUrls({
@@ -2770,6 +3049,7 @@ async function handleLabelProfile(body, res) {
   const rawUrls = [
     discogsUrl,
     mbUrl,
+    wdData?.website || '',
     ...(Array.isArray(profileData?.urls) ? profileData.urls : []),
     ...profileResolved.extractedUrls,
     ...contactResolved.extractedUrls,
@@ -2791,7 +3071,7 @@ async function handleLabelProfile(body, res) {
       wantCore,
     ])).filter(Boolean);
 
-    if (!bcDiscoveredUrl) {
+    if (!bcDiscoveredUrl || !bcDiscoveredLoc) {
       for (const term of bcSearchCandidates) {
         try {
           const bcRes = await fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', {
@@ -2812,8 +3092,10 @@ async function handleLabelProfile(body, res) {
               || (wantSlug.length >= 4 && (sub === wantSlug || sub === `${wantSlug}records` || sub === `${wantSlug}recordings` || sub === `${wantSlug}music`));
           });
           if (bcHit) {
-            bcDiscoveredUrl = bcHit.item_url_root || bcHit.item_url_path || bcHit.url || '';
-            if (bcDiscoveredUrl) rawUrls.push(bcDiscoveredUrl);
+            if (!bcDiscoveredUrl) {
+              bcDiscoveredUrl = bcHit.item_url_root || bcHit.item_url_path || bcHit.url || '';
+              if (bcDiscoveredUrl) rawUrls.push(bcDiscoveredUrl);
+            }
             if (bcHit.img_id) bcDiscoveredImg = `https://f4.bcbits.com/img/00${bcHit.img_id}_23.jpg`;
             else if (bcHit.img) bcDiscoveredImg = bcHit.img;
             if (bcHit.location) bcDiscoveredLoc = bcHit.location;
@@ -2841,22 +3123,16 @@ async function handleLabelProfile(body, res) {
             if (html.includes('music-grid') || html.includes('TralbumData') || html.includes('band-navbar')) {
               bcDiscoveredUrl = candUrl;
               rawUrls.push(bcDiscoveredUrl);
+              const locSpan = (html.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1];
+              if (locSpan && !bcDiscoveredLoc) {
+                bcDiscoveredLoc = locSpan.replace(/<[^>]+>/g, '').trim();
+              }
               break;
             }
           }
         } catch (e) {}
       }
     }
-  }
-
-  // Combine biography from Discogs + MusicBrainz
-  const bioParts = [];
-  if (profileResolved.cleanText) bioParts.push(profileResolved.cleanText);
-  if (mbData?.annotation && (!profileResolved.cleanText || !profileResolved.cleanText.toLowerCase().includes(mbData.annotation.slice(0, 40).toLowerCase()))) {
-    bioParts.push(mbData.annotation);
-  }
-  if (bioParts.length === 0 && mbData?.disambiguation) {
-    bioParts.push(mbData.disambiguation);
   }
 
   // Combine genres from Discogs release styles/genres + MusicBrainz tags
@@ -2869,6 +3145,66 @@ async function handleLabelProfile(body, res) {
     if (!gn || seenGenreNorm.has(gn)) continue;
     seenGenreNorm.add(gn);
     combinedGenres.push(g);
+  }
+
+  // Resolve Country and Location ("City, Country")
+  const resolvedCountry = curated?.country || mbData?.country || wdData?.country || dcCountry || '';
+  const rawCityOrLoc = curated?.location
+    || bcDiscoveredLoc
+    || wdData?.location
+    || profileResolved.extractedLocation
+    || contactResolved.extractedLocation
+    || '';
+  const resolvedLocation = (() => {
+    if (rawCityOrLoc && resolvedCountry) {
+      if (rawCityOrLoc.toLowerCase().includes(resolvedCountry.toLowerCase())) return rawCityOrLoc;
+      return `${rawCityOrLoc}, ${resolvedCountry}`;
+    }
+    return rawCityOrLoc || resolvedCountry || '';
+  })();
+
+  // Combine biography from Discogs + MusicBrainz + synthesized encyclopedic details so About is always full
+  const bioParts = [];
+  if (profileResolved.cleanText) bioParts.push(profileResolved.cleanText);
+  if (mbData?.annotation && (!profileResolved.cleanText || !profileResolved.cleanText.toLowerCase().includes(mbData.annotation.slice(0, 40).toLowerCase()))) {
+    bioParts.push(mbData.annotation);
+  }
+  if (bioParts.length === 0 && mbData?.disambiguation) {
+    bioParts.push(mbData.disambiguation);
+  }
+  if (bioParts.length === 0 && wdData?.description) {
+    bioParts.push(wdData.description);
+  }
+
+  // Ensure About section always has a rich, complete encyclopedic overview
+  const existingBioJoined = bioParts.join('\n\n').trim();
+  const rosterArtists = Array.from(new Set(
+    topReleases
+      .map(r => stripArtistSuffix(r.artist || r.artistName || ''))
+      .filter(a => a && !/^(various|various artists|unknown)$/i.test(a) && normName(a) !== normName(resolvedLabelName))
+  )).slice(0, 8);
+  const synthBits = [];
+  const originBit = [
+    foundedYear ? `founded in ${foundedYear}` : '',
+    founders.length > 0 ? `by ${founders.join(', ')}` : '',
+    resolvedLocation ? `and based in ${resolvedLocation}` : '',
+  ].filter(Boolean).join(' ');
+  const styleBit = combinedGenres.length > 0
+    ? `Focused on ${combinedGenres.slice(0, 5).join(', ')}`
+    : 'Dedicated to forward-thinking independent music';
+  if (existingBioJoined.length < 140) {
+    synthBits.push(`${resolvedLabelName} is a record label${originBit ? ` ${originBit}` : ''}. ${styleBit}, the imprint has curated ${topReleases.length > 0 ? `a catalog of ${topReleases.length}+ releases` : 'an influential underground catalog'}${rosterArtists.length > 0 ? ` featuring artists such as ${rosterArtists.join(', ')}` : ''}.`);
+  } else if (rosterArtists.length > 0 && !rosterArtists.slice(0, 3).some(a => existingBioJoined.toLowerCase().includes(a.toLowerCase()))) {
+    synthBits.push(`Key artists in the ${resolvedLabelName} catalog include ${rosterArtists.join(', ')}${combinedGenres.length > 0 ? `, spanning ${combinedGenres.slice(0, 5).join(', ')}` : ''}.`);
+  }
+  if (parentLabel && !existingBioJoined.toLowerCase().includes(parentLabel.toLowerCase())) {
+    synthBits.push(`Operates as part of the ${parentLabel} label family.`);
+  }
+  if (contactResolved.cleanText && !existingBioJoined.toLowerCase().includes(contactResolved.cleanText.slice(0, 30).toLowerCase())) {
+    synthBits.push(`Contact & Info: ${contactResolved.cleanText}`);
+  }
+  if (synthBits.length > 0) {
+    bioParts.push(synthBits.join(' '));
   }
 
   const sources = [];
@@ -2884,10 +3220,10 @@ async function handleLabelProfile(body, res) {
   const allUrls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   const result = {
-    _v: 6,
+    _v: 7,
     id: labelId || mbData?.mbid || `label-${normLabelName(resolvedLabelName)}`,
     name: resolvedLabelName,
-    profile: bioParts.join('\n\n'),
+    profile: bioParts.filter(Boolean).join('\n\n'),
     contactInfo: contactResolved.cleanText || '',
     parentLabel,
     parentLabelId: profileData?.parent_label?.id || null,
@@ -2897,8 +3233,8 @@ async function handleLabelProfile(body, res) {
     labelType: mbData?.labelType || '',
     labelCode: mbData?.labelCode || '',
     aliases: mbData?.aliases || [],
-    country: mbData?.country || dcCountry || '',
-    location: bcDiscoveredLoc || mbData?.country || dcCountry || '',
+    country: resolvedCountry,
+    location: resolvedLocation,
     genres: combinedGenres.slice(0, 12),
     sources,
     discogsUrl,

@@ -1787,21 +1787,139 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
 
+    // Resolve complete metadata with fallbacks from Bandcamp + merged catalog
+    let resolvedFoundedYear = (dc && dc.foundedYear) ? String(dc.foundedYear) : (currentLabel.foundedYear || '');
+    let resolvedFounders = (dc && Array.isArray(dc.founders) && dc.founders.length)
+      ? [...dc.founders]
+      : (Array.isArray(currentLabel.founders) ? [...currentLabel.founders] : []);
+    let resolvedLocation = (bc && bc.location) ? bc.location : ((dc && dc.location) ? dc.location : (currentLabel.location || ''));
+    let resolvedCountry = (dc && dc.country) ? dc.country : (currentLabel.country || '');
+    const resolvedSublabels = (dc && Array.isArray(dc.sublabels) && dc.sublabels.length) ? dc.sublabels : (currentLabel.sublabels || []);
+    const resolvedParentLabel = (dc && dc.parentLabel) ? dc.parentLabel : (currentLabel.parentLabel || null);
+
+    // Extract foundedYear or founders from Bandcamp bio text if still missing
+    const combinedBioText = profileParts.filter(Boolean).join('\n\n') || currentLabel.profile || '';
+    if (!resolvedFoundedYear && combinedBioText) {
+      const ym = combinedBioText.match(/\b(?:founded|established|started|launched|formed|created|since|est\.?)\s+(?:in\s+)?((?:19|20)\d{2})\b/i);
+      if (ym) resolvedFoundedYear = ym[1];
+    }
+    if (resolvedFounders.length === 0 && combinedBioText) {
+      const fm = combinedBioText.match(/\b(?:founded|established|started|launched|created|run|operated|curated|headed)\s+(?:in\s+(?:19|20)\d{2}\s+)?by\s+([A-Z][\w\s.&'-]{1,65}?)(?:\s+(?:in|out of|from|as|to|who|which|with|since)\b|[.,;|\n])/);
+      if (fm && fm[1]) {
+        fm[1].split(/\s*(?:,\s*and\s+|\s+and\s+|\s*&\s*|,\s*)\s*/).forEach(part => {
+          const clean = part.trim().replace(/^(?:DJ|producer|artist|musician)\s+/i, '');
+          if (clean.length >= 2 && clean.length <= 42 && !/^(?:the|a|an|various|records|label|music|imprint)$/i.test(clean)) {
+            if (!resolvedFounders.some(x => x.toLowerCase() === clean.toLowerCase())) resolvedFounders.push(clean);
+          }
+        });
+      }
+    }
+
+    // Fallback foundedYear from earliest release year in merged catalog
+    if (!resolvedFoundedYear && mergedReleases.length > 0) {
+      const validYears = mergedReleases
+        .map(r => parseInt(r.year, 10))
+        .filter(y => y >= 1950 && y <= new Date().getFullYear() + 1)
+        .sort((a, b) => a - b);
+      if (validYears.length > 0) resolvedFoundedYear = String(validYears[0]);
+    }
+
+    // Fallback founders from earliest / core catalog artist(s) when not explicitly credited
+    if (resolvedFounders.length === 0 && mergedReleases.length > 0) {
+      const artistCounts = new Map();
+      const chronological = [...mergedReleases].sort((a, b) => (parseInt(a.year, 10) || 9999) - (parseInt(b.year, 10) || 9999));
+      for (const rel of chronological) {
+        const rawArt = String(rel.artist || '').trim();
+        if (!rawArt || /^(?:various|various artists|va|unknown|unknown artist)$/i.test(rawArt)) continue;
+        const primary = rawArt.split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bvs\.?|\bx\b|\/)\s*/i)[0].trim();
+        if (!primary || primary.length < 2) continue;
+        const key = primary.toLowerCase();
+        const prev = artistCounts.get(key) || { name: primary, count: 0, earliestYear: parseInt(rel.year, 10) || 9999 };
+        prev.count += 1;
+        artistCounts.set(key, prev);
+      }
+      const ranked = Array.from(artistCounts.values()).sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.earliestYear - b.earliestYear;
+      });
+      if (ranked.length > 0) {
+        resolvedFounders = ranked.slice(0, 2).map(r => r.name);
+      }
+    }
+
+    // Infer country from location if country is empty (e.g. "Berlin, Germany" or "Toronto, Ontario")
+    if (resolvedLocation && !resolvedCountry) {
+      const locParts = resolvedLocation.split(',').map(s => s.trim()).filter(Boolean);
+      if (locParts.length >= 2) {
+        const lastPart = locParts[locParts.length - 1];
+        const provinceToCountry = {
+          ontario: 'Canada', quebec: 'Canada', 'british columbia': 'Canada', alberta: 'Canada',
+          ny: 'United States', 'new york': 'United States', ca: 'United States', california: 'United States',
+          il: 'United States', illinois: 'United States', mi: 'United States', michigan: 'United States',
+          ga: 'United States', tx: 'United States', wa: 'United States', pa: 'United States',
+          uk: 'United Kingdom', england: 'United Kingdom', scotland: 'United Kingdom',
+        };
+        resolvedCountry = provinceToCountry[lastPart.toLowerCase()] || lastPart;
+        if (locParts.length === 2 && !provinceToCountry[lastPart.toLowerCase()]) {
+          resolvedLocation = locParts[0];
+        }
+      }
+    }
+
+    // Build complete About profile if empty or brief
+    let finalProfile = combinedBioText.trim();
+    if (!finalProfile || finalProfile.length < 80) {
+      const locPhrase = resolvedLocation && resolvedCountry && !resolvedLocation.toLowerCase().includes(resolvedCountry.toLowerCase())
+        ? `${resolvedLocation}, ${resolvedCountry}`
+        : (resolvedLocation || resolvedCountry || '');
+      const genreArr = Array.from(genres).slice(0, 5);
+      const releaseArtists = [];
+      for (const r of mergedReleases) {
+        const a = String(r.artist || '').trim();
+        if (a && !/^(?:various|various artists|va)$/i.test(a) && !releaseArtists.some(x => x.toLowerCase() === a.toLowerCase())) {
+          releaseArtists.push(a);
+          if (releaseArtists.length >= 6) break;
+        }
+      }
+      const sentences = [];
+      let s1 = `${canonicalLabelName} is a`;
+      if (locPhrase) s1 += ` ${locPhrase}-based`;
+      s1 += ` record label`;
+      if (resolvedFoundedYear) s1 += ` founded in ${resolvedFoundedYear}`;
+      if (resolvedFounders.length > 0) s1 += ` by ${resolvedFounders.join(' & ')}`;
+      s1 += '.';
+      sentences.push(s1);
+      if (genreArr.length > 0) {
+        sentences.push(`Focused on ${genreArr.join(', ')}, the imprint has built a distinctive catalog across physical and digital formats.`);
+      }
+      if (releaseArtists.length > 0) {
+        sentences.push(`Key artists and contributors in the ${canonicalLabelName} catalog include ${releaseArtists.join(', ')}.`);
+      }
+      if (resolvedParentLabel?.name) {
+        sentences.push(`It operates as part of the ${resolvedParentLabel.name} label group.`);
+      }
+      if (resolvedSublabels.length > 0) {
+        sentences.push(`Associated sub-labels include ${resolvedSublabels.slice(0, 6).map(s => s.name).join(', ')}.`);
+      }
+      const synth = sentences.join(' ');
+      finalProfile = finalProfile ? `${finalProfile}\n\n${synth}` : synth;
+    }
+
     currentLabel = {
       ...currentLabel,
       id: (dc && dc.id) ? String(dc.id) : currentLabel.id,
       name: canonicalLabelName,
-      profile: profileParts.filter(Boolean).join('\n\n') || currentLabel.profile || null,
-      parentLabel: (dc && dc.parentLabel) ? dc.parentLabel : currentLabel.parentLabel,
-      sublabels: (dc && Array.isArray(dc.sublabels) && dc.sublabels.length) ? dc.sublabels : currentLabel.sublabels,
+      profile: finalProfile || null,
+      parentLabel: resolvedParentLabel,
+      sublabels: resolvedSublabels,
       contactInfo: (dc && dc.contactInfo) ? dc.contactInfo : currentLabel.contactInfo,
-      foundedYear: (dc && dc.foundedYear) ? String(dc.foundedYear) : currentLabel.foundedYear,
-      founders: (dc && Array.isArray(dc.founders) && dc.founders.length) ? dc.founders : currentLabel.founders,
+      foundedYear: resolvedFoundedYear || null,
+      founders: resolvedFounders,
       labelType: (dc && dc.labelType) ? dc.labelType : currentLabel.labelType,
       labelCode: (dc && dc.labelCode) ? dc.labelCode : currentLabel.labelCode,
       aliases: (dc && Array.isArray(dc.aliases) && dc.aliases.length) ? dc.aliases : currentLabel.aliases,
-      country: (dc && dc.country) ? dc.country : currentLabel.country,
-      location: (bc && bc.location) ? bc.location : ((dc && dc.location) ? dc.location : currentLabel.location),
+      country: resolvedCountry || null,
+      location: resolvedLocation || null,
       genres: Array.from(genres),
       sources: orderedSources,
       urls: _prioritizeAndDedupeLinks(validatedRawUrls),
