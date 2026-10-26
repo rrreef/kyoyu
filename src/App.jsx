@@ -123,11 +123,34 @@ function LabelRoute() {
 function ListenerApp() {
   const { state } = usePlayer();
   const hasTrack = !!state.currentTrack;
-  const { pathname } = useLocation();
-  const hideSidebar = PROFILE_ROUTES.has(pathname)
-    || pathname.startsWith('/release/')
+  const location = useLocation();
+  const { pathname } = location;
+  const isProfileSheetRoute = PROFILE_ROUTES.has(pathname);
+  const lastMainLocationRef = React.useRef(
+    isProfileSheetRoute ? { pathname: window.__kyoyuLastMainRoute || '/', search: '', hash: '', state: null, key: 'main-bg' } : location
+  );
+  if (!isProfileSheetRoute) {
+    lastMainLocationRef.current = location;
+    window.__kyoyuLastMainRoute = pathname;
+  }
+
+  const hideSidebar = pathname.startsWith('/release/')
     || pathname.startsWith('/artist/')
     || pathname.startsWith('/label/');
+
+  const renderProfileSheetPage = () => {
+    switch (pathname) {
+      case '/profile':      return <Profile />;
+      case '/account':      return <Account />;
+      case '/uploads':      return <UserUploads />;
+      case '/app-settings': return <AppSettings />;
+      case '/downloads':    return <Downloads />;
+      case '/orders':       return <Orders />;
+      case '/subscription': return <Subscription />;
+      case '/settings':     return <ListenerSettings />;
+      default:              return <Profile />;
+    }
+  };
 
   return (
     <div className="app-layout">
@@ -139,7 +162,7 @@ function ListenerApp() {
       >
         {/* RouteReporter inside ListenerApp so navigate() uses this Routes context */}
         <RouteReporter />
-        <Routes>
+        <Routes location={isProfileSheetRoute ? lastMainLocationRef.current : location}>
           <Route path="/"               element={<Home />} />
           <Route path="/search"         element={<Search />} />
           <Route path="/all-releases"   element={<AllReleases />} />
@@ -147,26 +170,23 @@ function ListenerApp() {
           <Route path="/shop"           element={<Shop />} />
           <Route path="/marketplace"    element={<Marketplace />} />
           <Route path="/marketplace/:id" element={<Marketplace />} />
-          <Route path="/profile"        element={<Profile />} />
           <Route path="/track/:id"      element={<Home />} />
           <Route path="/album/:id"      element={<Home />} />
           <Route path="/release/:id"    element={<ReleaseRoute />} />
           <Route path="/artist/:id"     element={<ArtistRoute />} />
           <Route path="/label/:id"      element={<LabelRoute />} />
-          <Route path="/subscription"   element={<Subscription />} />
           <Route path="/accounts/:service" element={<AccountLibrary />} />
-          <Route path="/settings"        element={<ListenerSettings />} />
-          <Route path="/orders"          element={<Orders />} />
-          <Route path="/downloads"       element={<Downloads />} />
-          <Route path="/account"         element={<Account />} />
-          <Route path="/uploads"         element={<UserUploads />} />
           <Route path="/my-releases"      element={<MyReleases />} />
-          <Route path="/app-settings"    element={<AppSettings />} />
           <Route path="/messages"        element={<Messages />} />
           <Route path="/events"          element={<Events />} />
           <Route path="*"               element={<Home />} />
         </Routes>
       </div>
+      {isProfileSheetRoute && (
+        <div className="liquid-glass-settings-sheet-overlay">
+          {renderProfileSheetPage()}
+        </div>
+      )}
       {/* BottomDock owns the mini player + nav pill (swipeable, one at a time) */}
       <BottomDock onExpandPlayer={() => window.__kyoyuPlayerCmd?.('expand')} />
       {/* Full-screen Player — mini bar suppressed; BottomDock shows it instead */}

@@ -239,3 +239,55 @@
   border-color: rgba(0,0,0,0.09);
   box-shadow: 0 8px 32px rgba(0,0,0,0.10);
 }
+
+/* ── Floating Liquid Glass Settings Sheet Overlay (Web) ── */
+.liquid-glass-settings-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: transparent;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--page-top, 110px);
+  padding-bottom: calc(var(--kyoyu-tab-h, 83px) + 24px);
+}
+
+.liquid-glass-settings-sheet-overlay .profile-page,
+.liquid-glass-settings-sheet-overlay .appsettings-page,
+.liquid-glass-settings-sheet-overlay .account-page,
+.liquid-glass-settings-sheet-overlay .dl-page,
+.liquid-glass-settings-sheet-overlay .orders-page,
+.liquid-glass-settings-sheet-overlay .sub-page,
+.liquid-glass-settings-sheet-overlay .uploads-page {
+  background: transparent !important;
+}
+
+.liquid-glass-settings-sheet-overlay .profile-hero-card,
+.liquid-glass-settings-sheet-overlay .profile-hub-card,
+.liquid-glass-settings-sheet-overlay .appsettings-group,
+.liquid-glass-settings-sheet-overlay .account-card,
+.liquid-glass-settings-sheet-overlay .dl-card,
+.liquid-glass-settings-sheet-overlay .order-card,
+.liquid-glass-settings-sheet-overlay .sub-card,
+.liquid-glass-settings-sheet-overlay .glass-card {
+  background: var(--kyoyu-glass-lens-tint, rgba(255, 255, 255, 0.08)) !important;
+  backdrop-filter: blur(36px) saturate(195%) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(195%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .profile-hero-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .profile-hub-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .appsettings-group,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .account-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .dl-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .order-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .sub-card,
+[data-theme="white"] .liquid-glass-settings-sheet-overlay .glass-card {
+  background: var(--kyoyu-glass-lens-tint, rgba(255, 255, 255, 0.56)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+

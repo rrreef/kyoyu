@@ -346,6 +346,32 @@ export function AuthProvider({ children }) {
     }
   }
 
+  useEffect(() => {
+    window.__kyoyuSetAvatarFromNative = (dataUrl, explicitRemove = false) => {
+      setAvatarSrc(dataUrl || null, userRef.current?.id, explicitRemove);
+      if (userRef.current?.id && !userRef.current?.demo) {
+        supabase
+          .from('profiles')
+          .upsert({ id: userRef.current.id, avatar_url: dataUrl || null })
+          .then(() => {})
+          .catch(() => {});
+      }
+    };
+    window.__kyoyuLogout = () => logout();
+    window.__kyoyuGetAuthProfile = () => ({
+      user: userRef.current,
+      role,
+      avatarSrc,
+    });
+    window.__kyoyuUpdateAuthProfile = (updates) => updateProfile(updates);
+    return () => {
+      delete window.__kyoyuSetAvatarFromNative;
+      delete window.__kyoyuLogout;
+      delete window.__kyoyuGetAuthProfile;
+      delete window.__kyoyuUpdateAuthProfile;
+    };
+  });
+
   return (
     <AuthContext.Provider value={{ role, user, loading, avatarSrc, setAvatarSrc, signIn, signUp, logout, demoLogin, updateProfile, resetPassword }}>
       {children}
