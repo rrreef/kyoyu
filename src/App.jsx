@@ -98,18 +98,24 @@ const PROFILE_ROUTES = new Set(['/profile','/account','/uploads','/app-settings'
 function ArtistRoute() {
   const { id } = useParams();
   const isCanonical = id?.startsWith('discogs-');
+  const hasShareParams = typeof window !== 'undefined' && (window.location.search.includes('share=') || window.location.search.includes('name='));
+  if (hasShareParams) return <Home />;
   return isCanonical ? <CanonicalArtistPage /> : <ArtistPage />;
 }
 
 function ReleaseRoute() {
   const { id } = useParams();
   const isCanonical = id?.startsWith('discogs-');
+  const hasShareParams = typeof window !== 'undefined' && (window.location.search.includes('share=') || window.location.search.includes('album='));
+  if (hasShareParams) return <Home />;
   return isCanonical ? <CanonicalReleasePage /> : <ReleasePage />;
 }
 
 function LabelRoute() {
   const { id } = useParams();
   const isCanonical = id?.startsWith('discogs-');
+  const hasShareParams = typeof window !== 'undefined' && (window.location.search.includes('share=') || window.location.search.includes('name='));
+  if (hasShareParams) return <Home />;
   return isCanonical ? <CanonicalLabelPage /> : <ArtistPage />;
 }
 
@@ -142,6 +148,8 @@ function ListenerApp() {
           <Route path="/marketplace"    element={<Marketplace />} />
           <Route path="/marketplace/:id" element={<Marketplace />} />
           <Route path="/profile"        element={<Profile />} />
+          <Route path="/track/:id"      element={<Home />} />
+          <Route path="/album/:id"      element={<Home />} />
           <Route path="/release/:id"    element={<ReleaseRoute />} />
           <Route path="/artist/:id"     element={<ArtistRoute />} />
           <Route path="/label/:id"      element={<LabelRoute />} />
@@ -201,6 +209,8 @@ function CreatorApp() {
           <Route path="/marketplace/:id"  element={<Marketplace />} />
           <Route path="/messages"         element={<Messages />} />
           <Route path="/events"           element={<Events />} />
+          <Route path="/track/:id"        element={<Home />} />
+          <Route path="/album/:id"        element={<Home />} />
           <Route path="/release/:id"      element={<ReleaseRoute />} />
           <Route path="/artist/:id"       element={<ArtistRoute />} />
           <Route path="/label/:id"        element={<LabelRoute />} />
@@ -297,19 +307,66 @@ function PlaylistBridge() {
 
   useEffect(() => {
     try {
+      if (window.__kyoyuSharedLinkHandled) return;
+      const pathname = window.location.pathname || '';
       const params = new URLSearchParams(window.location.search || '');
+      const shareType = (params.get('share') || '').toLowerCase();
+      const idParam = params.get('id') || '';
+      const nameParam = params.get('name') || '';
       const trackParam = params.get('track') || '';
       const titleParam = params.get('title') || '';
       const artistParam = params.get('artist') || '';
       const albumParam = params.get('album') || '';
+      const labelParam = params.get('label') || '';
       const providerParam = params.get('provider') || '';
       const srcParam = params.get('src') || '';
-      if ((trackParam || (titleParam && artistParam)) && !window.__kyoyuSharedLinkHandled) {
+
+      const slugMatch = pathname.match(/^\/(track|album|artist|label)\/([^/?#]+)/i);
+      const pathEntity = slugMatch ? slugMatch[1].toLowerCase() : '';
+      const pathSlug = slugMatch ? decodeURIComponent(slugMatch[2]).replace(/-/g, ' ').trim() : '';
+
+      if (shareType === 'artist' || (pathEntity === 'artist' && (nameParam || artistParam))) {
+        window.__kyoyuSharedLinkHandled = true;
+        const targetArtist = nameParam || artistParam || pathSlug;
+        if (targetArtist) {
+          setTimeout(() => {
+            window.__kyoyuOpenArtist?.({ id: idParam || undefined, name: targetArtist });
+          }, 400);
+        }
+        return;
+      }
+
+      if (shareType === 'label' || (pathEntity === 'label' && (nameParam || labelParam))) {
+        window.__kyoyuSharedLinkHandled = true;
+        const targetLabel = nameParam || labelParam || pathSlug;
+        if (targetLabel) {
+          setTimeout(() => {
+            window.__kyoyuOpenLabel?.({ id: idParam || undefined, name: targetLabel });
+          }, 400);
+        }
+        return;
+      }
+
+      if (shareType === 'album' || pathEntity === 'album' || (albumParam && !titleParam && !trackParam)) {
+        window.__kyoyuSharedLinkHandled = true;
+        const targetAlbum = albumParam || titleParam || pathSlug;
+        const targetArtist = artistParam || '';
+        if (targetAlbum || targetArtist) {
+          setTimeout(() => {
+            window.__kyoyuGoToAlbum?.(targetArtist, targetAlbum, {
+              url: /^https?:\/\//i.test(srcParam || idParam) ? (srcParam || idParam) : undefined,
+            });
+          }, 400);
+        }
+        return;
+      }
+
+      if (shareType === 'track' || pathEntity === 'track' || trackParam || (titleParam && artistParam)) {
         window.__kyoyuSharedLinkHandled = true;
         setTimeout(() => {
           playSavedRef.current?.({
-            id: trackParam || `shared-${Date.now()}`,
-            title: titleParam || 'Track',
+            id: trackParam || idParam || `shared-${Date.now()}`,
+            title: titleParam || pathSlug || 'Track',
             artist: artistParam || '',
             artistName: artistParam || '',
             album: albumParam || '',

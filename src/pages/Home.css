@@ -57,8 +57,9 @@
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  width: 42%;
-  aspect-ratio: 1;
+  height: 74.6667%;
+  aspect-ratio: 1 / 1;
+  width: auto;
   border-radius: 16px;
   overflow: hidden;
   z-index: 1;
@@ -80,17 +81,20 @@
   color: var(--text-dim);
 }
 
-/* Info overlay — right side */
+/* Info overlay — right side (exact same top & bottom bounds as .featured-hero-art) */
 .featured-hero-info {
   position: absolute;
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
+  height: 74.6667%;
   width: 46%;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: space-between;
+  padding: 0;
+  box-sizing: border-box;
   text-align: left;
 }
 
@@ -98,7 +102,8 @@
   font-size: 0.96rem;
   font-weight: 700;
   color: var(--text-primary);
-  line-height: 1.18;
+  line-height: 1.05;
+  margin-top: -1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -107,7 +112,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -116,7 +121,7 @@
   font-size: 0.74rem;
   font-weight: 500;
   color: var(--text-secondary);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -125,7 +130,7 @@
   font-size: 0.68rem;
   font-weight: 500;
   color: var(--text-muted);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -134,20 +139,23 @@
   font-size: 0.68rem;
   font-weight: 500;
   color: var(--text-dim);
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .featured-hero-spacer {
-  height: 10px;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-height: 2px;
+  height: auto;
 }
 .featured-hero-formats {
   font-size: 0.68rem;
   font-weight: 500;
   color: var(--text-muted);
-  line-height: 1.2;
+  line-height: 1;
+  margin-top: auto;
+  margin-bottom: -1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

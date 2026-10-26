@@ -1004,10 +1004,10 @@ async function handleTrackInfo(body, res) {
 
   const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
 
-  // Check cache (_v: 15 ensures 100% accurate and consistent label between player sheet and info sheet, accurate genres, artist & label bios, and BPM/Key)
+  // Check cache (_v: 16 ensures 100% accurate and consistent label between player sheet and info sheet, accurate genres, artist & label bios, artwork credits, release/artist/label links, and BPM/Key)
   try {
     const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 15) {
+    if (cached?.data && cached.data._v === 16) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) {
         if (cleanKnownLabel && normLabelName(cached.data.labelName || cached.data.label || '') !== normLabelName(cleanKnownLabel)) {
@@ -1047,8 +1047,11 @@ async function handleTrackInfo(body, res) {
     fetchMultiProviderTrackMeta(cleanTitle, cleanArtist, cleanAlbum || discogs?.title || mb?.releaseTitle || '', mb?.recordingId || '', discogs?.rawNotes || '', rawStylesAndGenres),
   ]);
 
-  // Build links
+  // Build links (both unified and categorized by Release, Artist, Label)
   const links = [];
+  const releaseLinks = [];
+  const artistLinks = [];
+  const labelLinks = [];
 
   // Label display: combine label + series (sub-imprint) properly
   let labelDisplay = '';
@@ -1125,11 +1128,34 @@ async function handleTrackInfo(body, res) {
   }
   const fullLabelProfile = [labelFactParts.join(' · '), coreLabelProfile].filter(Boolean).join('\n');
 
-  if (discogs?.discogsUrl) links.push({ name: 'Release on Discogs', url: discogs.discogsUrl });
-  if (labelInfo?.discogsUrl) links.push({ name: 'Label on Discogs', url: labelInfo.discogsUrl });
-  if (discogsArtist?.discogsUrl) links.push({ name: 'Artist on Discogs', url: discogsArtist.discogsUrl });
-  if (mb?.recordingId) links.push({ name: 'MusicBrainz', url: `https://musicbrainz.org/recording/${mb.recordingId}` });
-  if (trackMeta?.scUrl) links.push({ name: 'SoundCloud', url: trackMeta.scUrl });
+  const labelUrlName = (rawUrl, fallback = 'Website') => {
+    const u = String(rawUrl || '').toLowerCase();
+    if (u.includes('discogs.com')) return 'Discogs';
+    if (u.includes('bandcamp.com')) return 'Bandcamp';
+    if (u.includes('soundcloud.com')) return 'SoundCloud';
+    if (u.includes('musicbrainz.org')) return 'MusicBrainz';
+    if (u.includes('instagram.com')) return 'Instagram';
+    if (u.includes('youtube.com') || u.includes('youtu.be')) return 'YouTube';
+    if (u.includes('ra.co') || u.includes('residentadvisor.net')) return 'Resident Advisor';
+    if (u.includes('facebook.com')) return 'Facebook';
+    if (u.includes('twitter.com') || u.includes('x.com')) return 'X';
+    if (u.includes('wikipedia.org')) return 'Wikipedia';
+    return fallback;
+  };
+
+  if (discogs?.discogsUrl) {
+    links.push({ name: 'Release on Discogs', url: discogs.discogsUrl });
+    releaseLinks.push({ name: 'Discogs', url: discogs.discogsUrl });
+  }
+  if (mb?.recordingId) {
+    const mbRecUrl = `https://musicbrainz.org/recording/${mb.recordingId}`;
+    links.push({ name: 'MusicBrainz', url: mbRecUrl });
+    releaseLinks.push({ name: 'MusicBrainz', url: mbRecUrl });
+  }
+  if (trackMeta?.scUrl) {
+    links.push({ name: 'SoundCloud', url: trackMeta.scUrl });
+    releaseLinks.push({ name: 'SoundCloud', url: trackMeta.scUrl });
+  }
 
   // Bandcamp fallback if missing (also resolves album title if Bandcamp has it!)
   let bcAlbumTitle = '';
@@ -1146,6 +1172,7 @@ async function handleTrackInfo(body, res) {
         const first = bcData.auto?.results?.[0];
         if (first && first.item_url_path) {
           links.push({ name: 'Bandcamp', url: first.item_url_path });
+          releaseLinks.push({ name: 'Bandcamp', url: first.item_url_path });
         }
         if (first) {
           bcAlbumTitle = first.album_name || (first.type === 'a' ? first.name : '') || '';
@@ -1154,8 +1181,64 @@ async function handleTrackInfo(body, res) {
     } catch (e) {}
   }
 
-  if (mb?.releaseUrls) mb.releaseUrls.forEach(u => { if (u.url) links.push({ name: u.type || 'Link', url: u.url }); });
-  if (mbArtist?.urls) mbArtist.urls.forEach(u => { if (u.url) links.push({ name: u.type === 'official homepage' ? 'Official Website' : u.type, url: u.url }); });
+  if (mb?.releaseUrls) {
+    mb.releaseUrls.forEach(u => {
+      if (u.url) {
+        const nm = labelUrlName(u.url, u.type || 'Website');
+        links.push({ name: nm, url: u.url });
+        releaseLinks.push({ name: nm, url: u.url });
+      }
+    });
+  }
+
+  // Artist Links
+  if (discogsArtist?.discogsUrl) {
+    links.push({ name: 'Artist on Discogs', url: discogsArtist.discogsUrl });
+    artistLinks.push({ name: 'Discogs', url: discogsArtist.discogsUrl });
+  }
+  if (Array.isArray(discogsArtist?.urls)) {
+    discogsArtist.urls.forEach(u => {
+      if (u && /^https?:\/\//i.test(u)) {
+        const nm = labelUrlName(u, 'Website');
+        links.push({ name: nm, url: u });
+        artistLinks.push({ name: nm, url: u });
+      }
+    });
+  }
+  if (mbArtist?.urls) {
+    mbArtist.urls.forEach(u => {
+      if (u.url) {
+        const nm = labelUrlName(u.url, u.type === 'official homepage' ? 'Website' : (u.type || 'Website'));
+        links.push({ name: nm, url: u.url });
+        artistLinks.push({ name: nm, url: u.url });
+      }
+    });
+  }
+
+  // Label Links
+  if (labelInfo?.discogsUrl) {
+    links.push({ name: 'Label on Discogs', url: labelInfo.discogsUrl });
+    labelLinks.push({ name: 'Discogs', url: labelInfo.discogsUrl });
+  }
+  if (Array.isArray(labelInfo?.urls)) {
+    labelInfo.urls.forEach(u => {
+      if (u && /^https?:\/\//i.test(u)) {
+        const nm = labelUrlName(u, 'Website');
+        links.push({ name: nm, url: u });
+        labelLinks.push({ name: nm, url: u });
+      }
+    });
+  }
+  if (Array.isArray(mbLabel?.urls)) {
+    mbLabel.urls.forEach(u => {
+      const rawU = typeof u === 'string' ? u : u?.url;
+      if (rawU && /^https?:\/\//i.test(rawU)) {
+        const nm = labelUrlName(rawU, 'Website');
+        links.push({ name: nm, url: rawU });
+        labelLinks.push({ name: nm, url: rawU });
+      }
+    });
+  }
 
   const allAliases = [...(discogsArtist?.aliases || []), ...(mbArtist?.aliases || [])];
   const uniqueAliases = [...new Set(allAliases)].filter(Boolean);
@@ -1179,7 +1262,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 15,
+    _v: 16,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',
@@ -1207,6 +1290,7 @@ async function handleTrackInfo(body, res) {
     mbTags: mb?.tags || [],
     formats: discogs?.formats || [],
     country: discogs?.country || mbArtist?.area || '',
+    location: artistOrigin || labelCountry || discogs?.country || '',
     description: discogs?.description || '',
     tracklist: discogs?.tracklist || [],
     credits: {
@@ -1214,7 +1298,8 @@ async function handleTrackInfo(body, res) {
       production: credits.filter(c => /produc|arrang/i.test(c.role)).map(c => c.name),
       mixing: credits.filter(c => /mix/i.test(c.role)).map(c => c.name),
       mastering: credits.filter(c => /master|lacquer/i.test(c.role)).map(c => c.name),
-      other: credits.filter(c => !/writ|compos|lyric|author|produc|arrang|mix|master|lacquer/i.test(c.role)),
+      artwork: credits.filter(c => /art|design|sleeve|cover|photo|illustr|layout|visual|graphic/i.test(c.role)).map(c => c.name),
+      other: credits.filter(c => !/writ|compos|lyric|author|produc|arrang|mix|master|lacquer|art|design|sleeve|cover|photo|illustr|layout|visual|graphic/i.test(c.role)),
     },
     releaseArtists: (discogs?.releaseArtists || []).map(a => a.name),
     artistBio,
@@ -1227,6 +1312,9 @@ async function handleTrackInfo(body, res) {
     topReleases: discogsArtist?.topReleases || [],
     latestReleases: discogsArtist?.latestReleases || [],
     links,
+    releaseLinks,
+    artistLinks,
+    labelLinks,
   };
 
   // Cache

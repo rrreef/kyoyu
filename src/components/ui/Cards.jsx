@@ -27,7 +27,12 @@ export function ReleaseCard({ release, size = 'md' }) {
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchMove={onTouchMove}
     >
       <div className="card-cover-wrap">
-        <img src={release.cover} alt={release.title} className="card-cover" />
+        <img
+          src={release.cover}
+          alt={release.title}
+          className="card-cover"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
         <div className="card-cover-overlay">
           <button className="card-play-btn" onClick={() => playRelease(release)} aria-label="Play">
             <Play size={18} fill="currentColor" />
@@ -64,7 +69,11 @@ export function ArtistCard({ artist }) {
     <div className="artist-card glass-card">
       <Link to={`/artist/${artist.id}`}>
         <div className="artist-card-photo">
-          <img src={artist.photo} alt={artist.name} />
+          <img
+            src={artist.photo}
+            alt={artist.name}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
         </div>
         <div className="card-body">
           <div className="card-title">{artist.name}</div>
@@ -118,7 +127,11 @@ export function VinylCard({ listing }) {
   return (
     <div className="vinyl-card glass-card">
       <div className="vinyl-card-cover">
-        <img src={listing.cover} alt={listing.release} />
+        <img
+          src={listing.cover}
+          alt={listing.release}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
         <div className="vinyl-card-condition">{listing.condition.split(' ')[0]}</div>
       </div>
       <div className="card-body">
@@ -145,7 +158,12 @@ export function LongFormCard({ item }) {
   return (
     <div className="longform-card glass-card">
       <div className="card-cover-wrap">
-        <img src={item.cover} alt={item.title} className="card-cover" />
+        <img
+          src={item.cover}
+          alt={item.title}
+          className="card-cover"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
         <div className="card-cover-overlay">
           <button
             className="card-play-btn"

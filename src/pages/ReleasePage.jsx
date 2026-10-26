@@ -54,7 +54,30 @@ export default function ReleasePage() {
             <button className={`release-icon-btn glass-sm ${saved ? 'saved' : ''}`} onClick={() => toggleSave(release.id)} title="Save to Library">
               <Heart size={18} fill={saved ? 'currentColor' : 'none'} />
             </button>
-            <button className="release-icon-btn glass-sm" title="Share">
+            <button
+              className="release-icon-btn glass-sm"
+              title="Share"
+              onClick={() => {
+                const slug = `${release.artist || ''}-${release.title || ''}`
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, '') || release.id;
+                const params = new URLSearchParams({
+                  share: 'album',
+                  id: release.id || '',
+                  album: release.title || '',
+                  artist: release.artist || '',
+                  label: release.label || '',
+                });
+                const shareUrl = `https://ree.fm/album/${slug}?${params.toString()}`;
+                const shareTitle = release.artist ? `${release.title} — ${release.artist}` : release.title;
+                if (navigator.share) {
+                  navigator.share({ title: shareTitle, text: shareTitle, url: shareUrl }).catch(() => {});
+                } else if (navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(shareUrl).catch(() => {});
+                }
+              }}
+            >
               <Share2 size={18} />
             </button>
           </div>

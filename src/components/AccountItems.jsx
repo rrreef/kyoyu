@@ -125,7 +125,7 @@ export function sanitizeArtworkUrl(raw, itemId, hiRes = false) {
   }
   if (raw && typeof raw === 'string') {
     const s = raw.trim();
-    if (s && s !== 'undefined' && s !== 'null' && /^(https?:\/\/|data:|blob:|\/)/i.test(s)) {
+    if (s && s !== 'undefined' && s !== 'null' && !s.includes('spacer.gif') && /^(https?:\/\/|data:|blob:|\/)/i.test(s)) {
       const dim = hiRes ? '600' : '300';
       let url = s
         .replace('{w}', dim)
@@ -133,7 +133,21 @@ export function sanitizeArtworkUrl(raw, itemId, hiRes = false) {
         .replace('{f}', 'jpg')
         .replace('{c}', 'bb');
       if (url.includes('bcbits.com')) {
-        url = url.replace(/_[0-9]+\.jpg/, hiRes ? '_10.jpg' : '_14.jpg');
+        // Heal any 32-bit signed int overflow URLs cached in localStorage (e.g. /img/a-403732729_10.jpg -> unsigned 10-digit ID)
+        url = url.replace(/\/img\/(a?)-(\d+)_(\d+\.(?:jpg|png|webp))/i, (_, prefix, negDigits, tail) => {
+          const unsigned = 4294967296 - Number(negDigits);
+          if (Number.isFinite(unsigned) && unsigned > 0) {
+            return `/img/${prefix}${String(unsigned).padStart(10, '0')}_${tail}`;
+          }
+          return `/img/${prefix}${negDigits}_${tail}`;
+        });
+        // Pad any unpadded short album art IDs (/img/a123456789_10.jpg -> 10 digits)
+        url = url.replace(/\/img\/a(\d{1,9})_(\d+\.(?:jpg|png|webp))/i, (_, digits, tail) => {
+          return `/img/a${String(digits).padStart(10, '0')}_${tail}`;
+        });
+        if (/\/img\/a\d+_/i.test(url)) {
+          url = url.replace(/_[0-9]+\.jpg/i, '_10.jpg');
+        }
       } else if (url.includes('mzstatic.com')) {
         url = url.replace(/\/[0-9]+x[0-9]+(bb|cc|sr|bf)?\.(jpg|jpeg|png|webp)/i, `/${dim}x${dim}$1.$2`);
       } else if (!hiRes && url.includes('sndcdn.com')) {
@@ -192,32 +206,68 @@ function useResolvedArtwork(item) {
 
   useEffect(() => {
     if (art && !failed) return;
-    // Only resolve via exact numeric Apple Music catalog ID — never search by title/artist
-    const exactCatId = getExactAppleMusicCatalogId(item);
-    if (!exactCatId) return;
+    if (isFakePrivateArt) return;
     let cancelled = false;
-    fetch(`https://itunes.apple.com/lookup?id=${encodeURIComponent(exactCatId)}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
-        if (cancelled) return;
-        const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
-        if (raw) {
-          const thumb = raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/300x300$1');
-          pinImageInMemory(thumb, itemId);
-          setArt(thumb);
-          setFailed(false);
-          if (item) {
-            item.artworkUrl = thumb;
-            item.cover = thumb;
-          }
-          if (itemId) {
-            _resolvedArtMem.set(itemId, thumb);
-          }
-        }
-      })
-      .catch(() => {});
+
+    const applyResolvedThumb = (rawUrl) => {
+      const thumb = sanitizeArtworkUrl(rawUrl, itemId, false);
+      if (!thumb || cancelled) return false;
+      pinImageInMemory(thumb, itemId);
+      setArt(thumb);
+      setFailed(false);
+      if (item) {
+        item.artworkUrl = thumb;
+        item.cover = thumb;
+      }
+      if (itemId) {
+        _resolvedArtMem.set(itemId, thumb);
+      }
+      return true;
+    };
+
+    const exactCatId = getExactAppleMusicCatalogId(item);
+    if (exactCatId) {
+      fetch(`https://itunes.apple.com/lookup?id=${encodeURIComponent(exactCatId)}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => {
+          const raw = d?.results?.[0]?.artworkUrl100 || d?.results?.[0]?.artworkUrl60;
+          if (raw) applyResolvedThumb(raw.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/300x300$1'));
+        })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }
+
+    const bcUrl = String(item?.albumUrl || item?.trackUrl || item?.url || '');
+    const title = String(item?.title || item?.album || '').trim();
+    const artist = String(item?.artistName || item?.artist || '').trim();
+    if (!bcUrl && !title && !artist) return;
+
+    (async () => {
+      if (bcUrl.includes('bandcamp.com')) {
+        try {
+          const bcRes = await fetch('/api/bandcamp-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'fetch-album', albumUrl: bcUrl }),
+          }).then(r => (r.ok ? r.json() : null));
+          const bcCov = bcRes?.album?.artworkUrl || bcRes?.album?.cover;
+          if (bcCov && applyResolvedThumb(bcCov)) return;
+        } catch {}
+      }
+
+      if (title || artist) {
+        try {
+          const q = `${artist} ${title}`.trim();
+          const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=3`)
+            .then(r => (r.ok ? r.json() : null));
+          const rawIt = itRes?.results?.[0]?.artworkUrl100 || itRes?.results?.[0]?.artworkUrl60;
+          if (rawIt && applyResolvedThumb(rawIt.replace(/\/[0-9]+x[0-9]+([a-zA-Z0-9._-]*)$/, '/600x600$1'))) return;
+        } catch {}
+      }
+    })();
+
     return () => { cancelled = true; };
-  }, [art, failed, item, itemId]);
+  }, [art, failed, item, itemId, isFakePrivateArt]);
 
   return { src: failed ? '' : art, onError: () => setFailed(true) };
 }

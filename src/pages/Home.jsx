@@ -101,7 +101,7 @@ if (typeof window !== 'undefined') {
   preloadHomeContent();
 }
 
-const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v3';
+const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v4';
 
 function cleanHeroLabel(rawLabel, rawArtist = '') {
   const clean = String(rawLabel || '')
@@ -451,6 +451,11 @@ export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
   const bandcampHeroRef = useRef(null);
   const [activeBcSlide, setActiveBcSlide] = useState(0);
+  const [brokenCovers, setBrokenCovers] = useState({});
+  const markCoverBroken = useCallback((url) => {
+    if (!url) return;
+    setBrokenCovers(prev => (prev[url] ? prev : { ...prev, [url]: true }));
+  }, []);
   const [heroMetaMap, setHeroMetaMap] = useState(() => {
     try {
       const raw = localStorage.getItem(HERO_META_CACHE_KEY);
@@ -461,7 +466,7 @@ export default function Home() {
   });
   const pendingHeroLookupsRef = useRef(new Set());
 
-  // Enrich Featured and New on Bandcamp cards with label, releaseDate, location, and formats
+  // Enrich Featured and New on Bandcamp cards with cover, title, artist, label, releaseDate, location, and formats
   useEffect(() => {
     let cancelled = false;
     const bcNewItems = (acct.bandcamp?.newStuff || []).slice(0, 18);
@@ -475,6 +480,7 @@ export default function Home() {
         releaseDate: alb.releaseDate || '',
         location: alb.location || '',
         formats: alb.formats || [],
+        cover: sanitizeArtworkUrl(alb.cover || '', alb.id, false),
         url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
       })),
       ...bcNewItems.map((it, idx) => {
@@ -483,12 +489,14 @@ export default function Home() {
         const url = it.albumUrl || it.trackUrl || it.url || '';
         return {
           key: String(it.id || url || `bc-new-${idx}`),
+          altUrlKey: url || '',
           title: meta.title || displayRawTitle,
           artist: meta.artist || it.artistName || it.artist || '',
           label: meta.label || it.label || '',
           releaseDate: it.releaseDate || '',
           location: it.location || it.country || '',
           formats: it.formats || [],
+          cover: sanitizeArtworkUrl(it.artworkUrl || it.cover || '', it.id, false),
           url,
         };
       }),
@@ -499,7 +507,7 @@ export default function Home() {
       const existing = heroMetaMap[c.key];
       if (existing && existing._complete) return false;
       return Boolean(c.title || c.url);
-    }).slice(0, 12);
+    }).slice(0, 15);
 
     if (toFetch.length === 0) return;
 
@@ -510,6 +518,9 @@ export default function Home() {
         let label = cleanHeroLabel(item.label, item.artist);
         let releaseDate = item.releaseDate || '';
         let location = item.location || '';
+        let cover = item.cover || '';
+        let cleanTitle = item.title || '';
+        let cleanArtist = item.artist || '';
         let formatsList = Array.isArray(item.formats) ? [...item.formats] : [];
 
         try {
@@ -520,7 +531,19 @@ export default function Home() {
               body: JSON.stringify({ action: 'fetch-album', albumUrl: item.url }),
             }).then(r => r.ok ? r.json() : null).catch(() => null);
             if (bcRes?.album) {
-              if (!label && bcRes.album.label) label = cleanHeroLabel(bcRes.album.label, bcRes.album.artistName || item.artist);
+              if (bcRes.album.artworkUrl) {
+                cover = sanitizeArtworkUrl(bcRes.album.artworkUrl, item.key, false) || cover;
+              }
+              if (bcRes.album.title || bcRes.album.artistName) {
+                const bcMeta = splitCleanMetadata(
+                  bcRes.album.title || cleanTitle,
+                  bcRes.album.artistName || cleanArtist,
+                  bcRes.album.label || label
+                );
+                if (bcMeta.title) cleanTitle = bcMeta.title;
+                if (bcMeta.artist) cleanArtist = bcMeta.artist;
+              }
+              if (!label && bcRes.album.label) label = cleanHeroLabel(bcRes.album.label, cleanArtist);
               if (bcRes.album.releaseDate) releaseDate = bcRes.album.releaseDate;
               if (!location && bcRes.album.location) location = bcRes.album.location;
               if (Array.isArray(bcRes.album.formats) && bcRes.album.formats.length) {
@@ -529,19 +552,22 @@ export default function Home() {
             }
           }
 
-          if ((!label || !location || !releaseDate || formatsList.length <= 1) && (item.title || item.artist)) {
+          if ((!label || !location || !releaseDate || !cover || formatsList.length <= 1) && (cleanTitle || cleanArtist)) {
             const dcRes = await fetch('/api/discogs-search', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 action: 'track-info',
-                title: item.title,
-                artist: item.artist,
-                album: item.title,
+                title: cleanTitle,
+                artist: cleanArtist,
+                album: cleanTitle,
               }),
             }).then(r => r.ok ? r.json() : null).catch(() => null);
             if (dcRes) {
-              if (!label) label = cleanHeroLabel(dcRes.labelName || dcRes.label || '', item.artist);
+              if (!cover && (dcRes.coverImage || dcRes.thumb)) {
+                cover = sanitizeArtworkUrl(dcRes.coverImage || dcRes.thumb, item.key, false);
+              }
+              if (!label) label = cleanHeroLabel(dcRes.labelName || dcRes.label || '', cleanArtist);
               if (!releaseDate && (dcRes.releaseDate || dcRes.year)) releaseDate = String(dcRes.releaseDate || dcRes.year);
               if (!location && (dcRes.country || dcRes.artistOrigin || dcRes.labelCountry)) {
                 location = String(dcRes.country || dcRes.artistOrigin || dcRes.labelCountry).trim();
@@ -553,13 +579,18 @@ export default function Home() {
           }
         } catch (_) {}
 
-        updates[item.key] = {
+        const entry = {
+          title: cleanTitle,
+          artist: cleanArtist,
+          cover,
           label,
           releaseDate,
           location,
           formats: normalizeHeroFormats(formatsList, true),
           _complete: true,
         };
+        updates[item.key] = entry;
+        if (item.altUrlKey) updates[item.altUrlKey] = entry;
       }));
 
       if (!cancelled && Object.keys(updates).length > 0) {
@@ -759,7 +790,13 @@ export default function Home() {
             <>
               <div className="upl-grid upl-grid-3">
                 {featuredAlbums.slice(0, expandedVisibleCount).map((album) => {
-                  const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
+                  const metaKey = `${(album.artist || '').toLowerCase()}::${(album.title || '').toLowerCase()}`;
+                  const rich = heroMetaMap[album.id] || heroMetaMap[metaKey] || {};
+                  const rawCov = album.cover || rich.cover || '';
+                  const cleanCover = rawCov ? pinImageInMemory(rawCov, album.id) : '';
+                  const showCover = cleanCover && !brokenCovers[cleanCover]
+                    ? cleanCover
+                    : (rich.cover && !brokenCovers[rich.cover] ? rich.cover : '');
                   return (
                     <button
                       key={album.id}
@@ -774,8 +811,8 @@ export default function Home() {
                       }}
                     >
                       <div className="upl-grid-art">
-                        {cleanCover
-                          ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync" />
+                        {showCover
+                          ? <img src={showCover} alt={album.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                           : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
                       </div>
                       <div className="upl-grid-title">{album.title}</div>
@@ -796,9 +833,13 @@ export default function Home() {
                 onScroll={handleFeaturedScroll}
               >
                 {featuredAlbums.map((album) => {
-                  const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
                   const metaKey = `${(album.artist || '').toLowerCase()}::${(album.title || '').toLowerCase()}`;
                   const rich = heroMetaMap[album.id] || heroMetaMap[metaKey] || {};
+                  const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
+                  const richCover = rich.cover ? pinImageInMemory(rich.cover, album.id) : '';
+                  const showCover = (cleanCover && !brokenCovers[cleanCover])
+                    ? cleanCover
+                    : ((richCover && !brokenCovers[richCover]) ? richCover : '');
                   const labelStr = cleanHeroLabel(album.label || rich.label || '', album.artist, album.title);
                   const releaseDateStr = formatHeroReleaseDate(album.releaseDate || rich.releaseDate || album.year || '', album.releaseTimestamp);
                   const locationStr = String(album.location || rich.location || album.country || '').trim();
@@ -817,6 +858,7 @@ export default function Home() {
                         } else {
                           setSelectedAlbum(openNativeAlbumFast({
                             ...album,
+                            cover: showCover || album.cover,
                             label: labelStr || album.label,
                             releaseDate: releaseDateStr || album.releaseDate,
                             location: locationStr || album.location,
@@ -827,8 +869,8 @@ export default function Home() {
                     >
                       {/* Cover art */}
                       <div className="featured-hero-art">
-                        {cleanCover
-                          ? <img src={cleanCover} alt={album.title} loading="eager" decoding="sync" />
+                        {showCover
+                          ? <img src={showCover} alt={album.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                           : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                       </div>
 
@@ -974,15 +1016,24 @@ export default function Home() {
                       onScroll={handleBcHeroScroll}
                     >
                       {bcHeroItems.map((it, idx) => {
-                        const rawCover = it.artworkUrl || it.cover || '';
-                        const cleanCover = rawCover ? pinImageInMemory(rawCover, it.id || `bc-new-${idx}`) : '';
-                        const displayRawTitle = it.album || it.releaseTitle || it.title || '';
-                        const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
                         const releaseUrl = it.albumUrl || it.trackUrl || it.url || '';
-                        const albumTitle = meta.title || displayRawTitle || it.title || '';
-                        const artistDisplay = meta.artist || it.artistName || it.artist || '';
-                        const metaKey = `${artistDisplay.toLowerCase()}::${albumTitle.toLowerCase()}`;
-                        const rich = (releaseUrl && heroMetaMap[releaseUrl]) || (it.id && heroMetaMap[it.id]) || heroMetaMap[metaKey] || {};
+                        const rawTitleCandidate = it.album || it.releaseTitle || it.title || '';
+                        const prelimMeta = splitCleanMetadata(rawTitleCandidate, it.artistName || it.artist || '', it.label || it.labelName || '');
+                        const prelimKey = `${(prelimMeta.artist || '').toLowerCase()}::${(prelimMeta.title || '').toLowerCase()}`;
+                        const rich = (releaseUrl && heroMetaMap[releaseUrl]) || (it.id && heroMetaMap[it.id]) || heroMetaMap[prelimKey] || {};
+                        const displayRawTitle = (rich.title && (/^[A-Z]{1,8}\s*[-#.]?\s*\d{1,5}[A-Z]?$/i.test(prelimMeta.title) || !prelimMeta.title))
+                          ? rich.title
+                          : (rawTitleCandidate || rich.title || '');
+                        const displayRawArtist = prelimMeta.artist || rich.artist || it.artistName || it.artist || '';
+                        const meta = splitCleanMetadata(displayRawTitle, displayRawArtist, it.label || it.labelName || rich.label || '');
+                        const albumTitle = meta.title || rich.title || displayRawTitle || it.title || '';
+                        const artistDisplay = meta.artist || rich.artist || it.artistName || it.artist || '';
+                        const rawCover = it.artworkUrl || it.cover || rich.cover || '';
+                        const cleanCover = rawCover ? pinImageInMemory(rawCover, it.id || `bc-new-${idx}`) : '';
+                        const richCover = rich.cover ? pinImageInMemory(rich.cover, `${it.id || `bc-new-${idx}`}-rich`) : '';
+                        const showCover = (cleanCover && !brokenCovers[cleanCover])
+                          ? cleanCover
+                          : ((richCover && !brokenCovers[richCover]) ? richCover : '');
                         const showLabel = cleanHeroLabel(meta.label || rich.label || it.label || it.labelName || '', artistDisplay, albumTitle);
                         const releaseDateStr = formatHeroReleaseDate(it.releaseDate || rich.releaseDate || it.year || '', it.releaseTimestamp);
                         const locationStr = String(it.location || rich.location || it.country || '').trim();
@@ -1001,6 +1052,8 @@ export default function Home() {
                                 kind: 'album',
                                 title: albumTitle,
                                 artistName: artistDisplay,
+                                artworkUrl: showCover || cleanCover || it.artworkUrl,
+                                cover: showCover || cleanCover || it.cover,
                                 label: showLabel || meta.label || it.label,
                                 releaseDate: releaseDateStr || it.releaseDate,
                                 location: locationStr || it.location,
@@ -1011,8 +1064,8 @@ export default function Home() {
                             }}
                           >
                             <div className="featured-hero-art">
-                              {cleanCover
-                                ? <img src={cleanCover} alt={albumTitle} loading="eager" decoding="sync" />
+                              {showCover
+                                ? <img src={showCover} alt={albumTitle} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                                 : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
                             </div>
                             {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Empty row, 7. Formats */}
@@ -1088,6 +1141,7 @@ export default function Home() {
               <div className="upl-grid upl-grid-3">
                 {playHistory.slice(0, expandedVisibleCount).map(item => {
                   const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
+                  const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
                   return (
                     <button
                       key={item._hkey || item.id}
@@ -1096,8 +1150,8 @@ export default function Home() {
                       onClick={() => playFromHistory(item)}
                     >
                       <div className="upl-grid-art">
-                        {cleanCover ? (
-                          <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
+                        {showCover ? (
+                          <img src={showCover} alt={item.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                         ) : (
                           <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
                         )}
@@ -1116,6 +1170,7 @@ export default function Home() {
             <div className="scroll-row">
               {playHistory.slice(0, 30).map(item => {
                 const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
+                const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
                 return (
                   <button 
                     key={item._hkey || item.id} 
@@ -1124,8 +1179,8 @@ export default function Home() {
                     onClick={() => playFromHistory(item)}
                   >
                     <div className="shelf-card-art">
-                      {cleanCover ? (
-                        <img src={cleanCover} alt={item.title} loading="eager" decoding="sync" />
+                      {showCover ? (
+                        <img src={showCover} alt={item.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
                       ) : (
                         <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
                       )}

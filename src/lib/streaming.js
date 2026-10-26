@@ -115,9 +115,36 @@ const HOME_ROWS_KEY = 'kyoyu-home-section-rows';
 export const HOME_TITLES_PER_ROW = 3;
 export const DEFAULT_HOME_SECTION_ROWS = 3;
 
+const _CATNO_SEGMENT_RE = /^(?:\[|\()?([A-Z]{2,8}\s*[-#.]?\s*\d{1,5}[A-Z]?|[A-Z]{1,5}\d{2,5}[A-Z]?)(?:\]|\))?$/i;
+
+function _stripCatnoNoise(str) {
+  let s = String(str || '').trim()
+    .replace(/^\s*\[([A-Z]{2,8}\s*[-#.]?\s*\d{1,5}[A-Z]?|[A-Z]{1,5}\d{2,5}[A-Z]?)\]\s*[-–—]?\s*/i, '')
+    .replace(/\s*[-–—]?\s*\[([A-Z]{2,8}\s*[-#.]?\s*\d{1,5}[A-Z]?|[A-Z]{1,5}\d{2,5}[A-Z]?)\]\s*$/i, '')
+    .replace(/\s*\(([A-Z]{2,8}\s*[-#.]?\s*\d{1,5}[A-Z]?|[A-Z]{1,5}\d{2,5}[A-Z]?)\)\s*$/i, '')
+    .trim();
+  for (const sep of [' — ', ' – ', ' - ', ' // ']) {
+    if (!s.includes(sep)) continue;
+    const parts = s.split(sep).map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      if (_CATNO_SEGMENT_RE.test(parts[parts.length - 1])) {
+        parts.pop();
+      }
+      if (parts.length >= 2 && _CATNO_SEGMENT_RE.test(parts[0])) {
+        parts.shift();
+      }
+      if (parts.length > 0) {
+        s = parts.join(' - ');
+        break;
+      }
+    }
+  }
+  return s || String(str || '').trim();
+}
+
 export function cleanTrackOrReleaseTitle(rawTitle, rawArtist = '') {
   if (!rawTitle || typeof rawTitle !== 'string') return '';
-  let t = rawTitle.trim();
+  let t = _stripCatnoNoise(rawTitle);
   if (!t) return '';
 
   const norm = (s) => String(s || '')
@@ -160,6 +187,12 @@ export function cleanTrackOrReleaseTitle(rawTitle, rawArtist = '') {
       const left = t.slice(0, idx).trim();
       const right = t.slice(idx + sep.length).trim();
       if (left && right) {
+        if (_CATNO_SEGMENT_RE.test(right)) {
+          return left;
+        }
+        if (_CATNO_SEGMENT_RE.test(left)) {
+          return right;
+        }
         if (matchesArtist(left)) {
           return right;
         }
@@ -177,12 +210,16 @@ export function cleanTrackOrReleaseTitle(rawTitle, rawArtist = '') {
       const left = t.slice(0, idx).trim();
       const right = t.slice(idx + sep.length).trim();
       if (!left || !right) continue;
-      const isLeftTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+|intro|outro)$/i.test(left);
+      if (_CATNO_SEGMENT_RE.test(right)) {
+        return left;
+      }
+      const isLeftTrackPos = /^([A-D]\d{1,2}|\d{1,3}|track\s*\d+|part\s*[0-9ivx]+|pt\.?\s*[0-9ivx]+|side\s*[a-d]|cd\s*\d+|disc\s*\d+|intro|outro|[a-z]{2,8}\s*[-#.]?\s*\d{1,5}[a-z]?)$/i.test(left);
       if (isLeftTrackPos) {
         return right;
       }
+      const isLeftAlbumPhrase = /\b(ep|lp|incl\.|including|sampler|remixes|various|ost|soundtrack)\b/i.test(left);
       const isRightDescriptor = /^(ep|lp|single|album|ost|soundtrack|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|act\s*[0-9ivx]+|chapter\s*\d+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|bootleg|flip|refix|instru|instrumental|acapella|bonus.*))$/i.test(right);
-      if (!isRightDescriptor && left.length >= 2 && right.length >= 1) {
+      if (!isRightDescriptor && !isLeftAlbumPhrase && left.length >= 2 && right.length >= 1) {
         return right;
       }
     }
@@ -195,7 +232,13 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
   const origTitle = String(rawTitle || '').trim();
   let artist = String(rawArtist || '').replace(/\s*\(\d+\)\s*$/, '').trim();
   let label = String(rawLabel || '').replace(/\s*\(\d+\)\s*$/, '').trim();
-  let title = origTitle;
+  let title = _stripCatnoNoise(origTitle);
+
+  // Heal items previously cached with inverted catno title + EP/LP phrase in artist (e.g. title="MOCD024", artist="Phenomena EP (Incl. ...)")
+  if (_CATNO_SEGMENT_RE.test(title) && artist && /\b(ep|lp|incl\.|including|sampler|remixes|ost|soundtrack|album)\b/i.test(artist)) {
+    title = _stripCatnoNoise(artist);
+    artist = label || '';
+  }
 
   const norm = (s) => String(s || '')
     .normalize('NFD')
@@ -217,6 +260,14 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
       const left = title.slice(0, idx).trim();
       const right = title.slice(idx + sep.length).trim();
       if (!left || !right) continue;
+      if (_CATNO_SEGMENT_RE.test(right)) {
+        title = left;
+        break;
+      }
+      if (_CATNO_SEGMENT_RE.test(left)) {
+        title = right;
+        break;
+      }
       const leftNorm = norm(left);
       const rightNorm = norm(right);
       const artistNorm = norm(artist);
@@ -239,8 +290,9 @@ export function splitCleanMetadata(rawTitle, rawArtist = '', rawLabel = '', rawA
         break;
       }
 
+      const isLeftAlbumPhrase = /\b(ep|lp|incl\.|including|sampler|remixes|various|ost|soundtrack)\b/i.test(left);
       const isRightDescriptor = /^(ep|lp|single|album|ost|soundtrack|vol\.?\s*\d+|pt\.?\s*[0-9ivx]+|part\s*[0-9ivx]+|act\s*[0-9ivx]+|chapter\s*\d+|remaster(?:ed)?.*|live.*|.*(?:remix|rework|dub|mix|edit|version|vip|bootleg|flip|refix|instru|instrumental|acapella|bonus.*))$/i.test(right);
-      if (!isRightDescriptor && left.length >= 2) {
+      if (!isRightDescriptor && !isLeftAlbumPhrase && left.length >= 2) {
         if (!artist || /^(various(\s+artists)?|unknown(\s+artist)?|—|-)$/i.test(artist)) {
           artist = left;
         } else if (leftNorm !== artistNorm) {
