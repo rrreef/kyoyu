@@ -292,7 +292,7 @@ function HashRedirector() {
 // Lives inside both providers so it always has access to both contexts.
 import { useLibrary } from './contexts/LibraryContext';
 import { syncProviderLike } from './lib/streaming';
-import { isItemInConnectedLikes } from './lib/useConnectedLibrary';
+import { isItemInConnectedLikes, getConnectedLibraryCache, saveFastConnectedCache } from './lib/useConnectedLibrary';
 import { openNativePlaylistFast } from './components/ui/AlbumSheet';
 
 function PlaylistBridge() {
@@ -523,18 +523,190 @@ function PlaylistBridge() {
     };
     window.addEventListener('kyoyu-native-like', handleFallbackNativeLike);
 
+    const normStr = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const normUrl = (u) => String(u || '').split('?')[0].replace(/\/+$/, '').toLowerCase().trim();
+
+    const isItemInBandcampCollection = (trackObj) => {
+      if (!trackObj) return false;
+      const bcCol = getConnectedLibraryCache()?.bandcamp?.collection || [];
+      if (!Array.isArray(bcCol) || bcCol.length === 0) return false;
+
+      const tid = cleanId(trackObj.id);
+      const tUrl = normUrl(trackObj.trackUrl || trackObj.url || trackObj.albumUrl || trackObj.providerUrl || '');
+      const tTitle = normStr(trackObj.title || trackObj.name || '');
+      const tAlbum = normStr(trackObj.album || trackObj.albumTitle || trackObj.releaseTitle || '');
+      const tArtist = normStr(trackObj.artist || trackObj.artistName || '');
+
+      for (const colItem of bcCol) {
+        if (!colItem) continue;
+        const cId = cleanId(colItem.id);
+        const cItemId = cleanId(colItem.itemId ? `bc-${colItem.itemId}` : '');
+        const cUrl = normUrl(colItem.trackUrl || colItem.url || '');
+        const cTitle = normStr(colItem.title || '');
+        const cArtist = normStr(colItem.artistName || colItem.artist || '');
+
+        if (tid && (cId === tid || cItemId === tid)) return true;
+        if (tUrl && cUrl && (tUrl === cUrl || tUrl.startsWith(cUrl) || cUrl.startsWith(tUrl))) return true;
+        if (tTitle && cTitle && tTitle === cTitle && (!tArtist || !cArtist || tArtist === cArtist || cArtist.includes(tArtist) || tArtist.includes(cArtist))) {
+          return true;
+        }
+        if (tAlbum && cTitle && tAlbum === cTitle && (!tArtist || !cArtist || tArtist === cArtist || cArtist.includes(tArtist) || tArtist.includes(cArtist))) {
+          return true;
+        }
+        if (Array.isArray(colItem.tracks)) {
+          for (const sub of colItem.tracks) {
+            const sId = cleanId(sub?.id);
+            const sUrl = normUrl(sub?.trackUrl || sub?.url || '');
+            const sTitle = normStr(sub?.title || '');
+            if (tid && sId && sId === tid) return true;
+            if (tUrl && sUrl && sUrl === tUrl) return true;
+            if (tTitle && sTitle && sTitle === tTitle && (!tArtist || !cArtist || tArtist === cArtist || cArtist.includes(tArtist) || tArtist.includes(cArtist))) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    const detectItemProvider = (item) => {
+      if (!item) return '';
+      const rawProv = String(item.provider || item.sourceProvider || '').toLowerCase().trim();
+      if (['bandcamp', 'soundcloud', 'youtube', 'spotify', 'applemusic', 'tidal'].includes(rawProv)) {
+        return rawProv;
+      }
+      const id = String(item.id || '').toLowerCase().trim();
+      const u = String(item.trackUrl || item.url || item.audioUrl || item.streamUrl || '').toLowerCase().trim();
+      if (id.startsWith('bc-') || id.startsWith('bcpl-') || u.includes('bandcamp.com') || u.includes('bcbits.com')) return 'bandcamp';
+      if (id.startsWith('sc-') || id.startsWith('scpl-') || id.startsWith('sc-pl-') || u.includes('soundcloud.com') || u.includes('sndcdn.com')) return 'soundcloud';
+      if (id.startsWith('yt-') || id.startsWith('youtube-') || u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
+      if (id.startsWith('sp-') || id.startsWith('spab-') || id.startsWith('sppl-') || id.startsWith('spotify:') || u.includes('spotify.com')) return 'spotify';
+      if (id.startsWith('am-') || id.startsWith('i.') || id.startsWith('l.') || u.includes('music.apple.com') || u.includes('itunes.apple.com')) return 'applemusic';
+      if (id.startsWith('td-') || id.startsWith('tdab-') || id.startsWith('tdpl-') || u.includes('tidal.com')) return 'tidal';
+      return '';
+    };
+
+    const resolvePlaylistTargetProvider = (trackId, tracksJsonOrB64) => {
+      const payloadTracks = decodeTracksPayload(tracksJsonOrB64);
+      const ids = String(trackId || '').split(',').map(cleanId).filter(Boolean);
+      const candidates = [];
+
+      if (payloadTracks.length > 0) {
+        for (const pt of payloadTracks) {
+          const resolved = resolveTrackForPlaylist(pt) || pt;
+          if (resolved) candidates.push(resolved);
+        }
+      }
+      if (ids.length > 0) {
+        for (const id of ids) {
+          const resolved = resolveTrackForPlaylist(id);
+          if (resolved) candidates.push(resolved);
+        }
+      }
+      if (candidates.length === 0) {
+        const fallback = resolveTrackForPlaylist(null);
+        if (fallback) candidates.push(fallback);
+      }
+      const curAlbum = window.__kyoyuCurrentNativeAlbum;
+      if (curAlbum && ids.length > 1) {
+        candidates.unshift(curAlbum);
+      }
+
+      let detectedProv = '';
+      for (const c of candidates) {
+        const p = detectItemProvider(c);
+        if (p) {
+          detectedProv = p;
+          break;
+        }
+      }
+
+      if (!detectedProv) return 'kyoyu';
+
+      if (detectedProv === 'bandcamp') {
+        // User requirement: Only show Bandcamp playlists when the title or album is part of the user's
+        // purchased collection on Bandcamp. For unpurchased Bandcamp titles/albums, show internal Kyoyu playlists!
+        const isPurchased = candidates.some(c => isItemInBandcampCollection(c))
+          || (curAlbum && isItemInBandcampCollection(curAlbum));
+        return isPurchased ? 'bandcamp' : 'kyoyu';
+      }
+
+      if (['spotify', 'applemusic', 'tidal', 'soundcloud', 'youtube'].includes(detectedProv)) {
+        const provPlaylists = getConnectedLibraryCache()?.[detectedProv]?.playlists;
+        if (Array.isArray(provPlaylists)) {
+          return detectedProv;
+        }
+      }
+
+      return 'kyoyu';
+    };
+
+    const providerForPlaylistId = (playlistId) => {
+      const pid = String(playlistId || '').trim();
+      if (!pid) return '';
+      if (pid.startsWith('bcpl-') || pid.startsWith('bc-pl-')) return 'bandcamp';
+      if (pid.startsWith('sc-pl-') || pid.startsWith('scpl-')) return 'soundcloud';
+      if (pid.startsWith('yt-pl-') || pid.startsWith('ytpl-')) return 'youtube';
+      if (pid.startsWith('sp-pl-') || pid.startsWith('sppl-')) return 'spotify';
+      if (pid.startsWith('am-pl-') || pid.startsWith('ampl-') || pid.startsWith('p.')) return 'applemusic';
+      if (pid.startsWith('td-pl-') || pid.startsWith('tdpl-')) return 'tidal';
+      const cacheObj = getConnectedLibraryCache() || {};
+      for (const prov of ['bandcamp', 'soundcloud', 'youtube', 'spotify', 'applemusic', 'tidal']) {
+        const list = cacheObj[prov]?.playlists;
+        if (Array.isArray(list) && list.some(p => String(p?.id) === pid)) {
+          return prov;
+        }
+      }
+      return '';
+    };
+
+    window.__kyoyuGetPlaylistTargetProvider = (trackId, tracksB64) => {
+      return resolvePlaylistTargetProvider(trackId, tracksB64);
+    };
+
     // Always-available playlist handlers
     window.__kyoyuIsTrackInAnyPlaylist = (trackId) => {
       const ids = String(trackId || '').split(',').map(cleanId).filter(Boolean);
       if (!ids.length) return false;
       const pls = getRef.current();
-      return pls.some(pl =>
-        ids.every(id => (pl.tracks || []).some(t => cleanId(t.id) === id))
-      );
+      if (pls.some(pl => ids.every(id => (pl.tracks || []).some(t => cleanId(t.id) === id)))) {
+        return true;
+      }
+      const cacheObj = getConnectedLibraryCache() || {};
+      for (const prov of ['bandcamp', 'soundcloud', 'youtube', 'spotify', 'applemusic', 'tidal']) {
+        const list = cacheObj[prov]?.playlists || [];
+        if (list.some(pl => ids.every(id => (pl.tracks || []).some(t => cleanId(t.id) === id) || (pl._addedTrackIds || []).includes(id)))) {
+          return true;
+        }
+      }
+      return false;
     };
 
-    window.__kyoyuGetPlaylists = (trackId) => {
+    window.__kyoyuGetPlaylists = (trackId, tracksB64) => {
       const ids = String(trackId || '').split(',').map(cleanId).filter(Boolean);
+      const targetProvider = resolvePlaylistTargetProvider(trackId, tracksB64);
+
+      if (targetProvider !== 'kyoyu') {
+        const provPlaylists = getConnectedLibraryCache()?.[targetProvider]?.playlists || [];
+        const mapped = provPlaylists.map(pl => {
+          const tracks = Array.isArray(pl.tracks) ? pl.tracks : [];
+          const addedIds = Array.isArray(pl._addedTrackIds) ? pl._addedTrackIds : [];
+          const containsTrack = ids.length > 0 && ids.every(id =>
+            addedIds.includes(id) || tracks.some(t => cleanId(t?.id) === id)
+          );
+          const count = typeof pl.trackCount === 'number'
+            ? Math.max(pl.trackCount, tracks.length)
+            : tracks.length;
+          return {
+            id: String(pl.id),
+            name: pl.title || pl.name || 'Untitled',
+            trackCount: count,
+            containsTrack,
+          };
+        });
+        return JSON.stringify(mapped);
+      }
+
       const pls = getRef.current().map(pl => {
         const tracks = pl.tracks || [];
         const containsTrack = ids.length > 0 && ids.every(id => tracks.some(t => cleanId(t.id) === id));
@@ -548,16 +720,79 @@ function PlaylistBridge() {
       return JSON.stringify(pls);
     };
 
+    const addResolvedTracksToProviderPlaylist = (prov, playlistId, resolvedTracks) => {
+      if (!prov || !playlistId || !resolvedTracks.length) return;
+      const cacheObj = getConnectedLibraryCache();
+      const list = cacheObj?.[prov]?.playlists;
+      if (Array.isArray(list)) {
+        const pl = list.find(p => String(p?.id) === String(playlistId));
+        if (pl) {
+          pl.tracks = Array.isArray(pl.tracks) ? [...pl.tracks] : [];
+          pl._addedTrackIds = Array.isArray(pl._addedTrackIds) ? [...pl._addedTrackIds] : [];
+          let addedCount = 0;
+          for (const tr of resolvedTracks) {
+            const tid = cleanId(tr.id);
+            if (tid && !pl._addedTrackIds.includes(tid)) {
+              pl._addedTrackIds.push(tid);
+            }
+            if (!pl.tracks.some(existing => cleanId(existing?.id) === tid)) {
+              pl.tracks.push({
+                id: tid || `tr-${Date.now()}`,
+                kind: 'track',
+                provider: prov,
+                title: tr.title || 'Unknown Track',
+                artist: tr.artist || tr.artistName || '',
+                artistName: tr.artist || tr.artistName || '',
+                artworkUrl: tr.cover || tr.artworkUrl || '',
+                cover: tr.cover || tr.artworkUrl || '',
+                trackUrl: tr.trackUrl || tr.url || '',
+                url: tr.url || tr.trackUrl || '',
+              });
+              addedCount += 1;
+            }
+          }
+          pl.trackCount = Math.max((Number(pl.trackCount) || 0) + addedCount, pl.tracks.length);
+          saveFastConnectedCache();
+        }
+      }
+      try {
+        window.webkit?.messageHandlers?.streaming?.postMessage({
+          id: Date.now(),
+          cmd: 'addTracksToProviderPlaylist',
+          service: prov,
+          playlistId: String(playlistId),
+          tracks: resolvedTracks.map(tr => ({
+            id: cleanId(tr.id),
+            title: tr.title || '',
+            artist: tr.artist || tr.artistName || '',
+            url: tr.trackUrl || tr.url || '',
+            artworkUrl: tr.cover || tr.artworkUrl || '',
+          })),
+        });
+      } catch (e) {}
+    };
+
     window.__kyoyuAddToPlaylist = (playlistId, trackId) => {
       const ids = String(trackId || '').split(',').map(cleanId).filter(Boolean);
+      const resolvedList = [];
       if (ids.length > 0) {
         for (const id of ids) {
           const trackObj = resolveTrackForPlaylist(id);
-          if (trackObj) addRef.current(playlistId, trackObj);
+          if (trackObj) resolvedList.push(trackObj);
         }
       } else {
         const trackObj = resolveTrackForPlaylist(null);
-        if (trackObj) addRef.current(playlistId, trackObj);
+        if (trackObj) resolvedList.push(trackObj);
+      }
+
+      const targetProv = providerForPlaylistId(playlistId);
+      if (targetProv) {
+        addResolvedTracksToProviderPlaylist(targetProv, playlistId, resolvedList);
+        return window.__kyoyuGetPlaylists(trackId);
+      }
+
+      for (const trackObj of resolvedList) {
+        addRef.current(playlistId, trackObj);
       }
       syncOpenNativePlaylistIfMatching(playlistId);
       return window.__kyoyuGetPlaylists(trackId);
@@ -567,13 +802,22 @@ function PlaylistBridge() {
       try {
         const tracks = decodeTracksPayload(tracksJsonOrB64);
         if (tracks.length > 0) {
+          const resolvedList = [];
           for (const t of tracks) {
             const resolved = resolveTrackForPlaylist(t);
-            if (resolved) addRef.current(playlistId, resolved);
+            if (resolved) resolvedList.push(resolved);
+          }
+          const checkIds = fallbackTrackId || tracks.map(t => cleanId(t?.id)).filter(Boolean).join(',');
+          const targetProv = providerForPlaylistId(playlistId);
+          if (targetProv) {
+            addResolvedTracksToProviderPlaylist(targetProv, playlistId, resolvedList);
+            return window.__kyoyuGetPlaylists(checkIds, tracksJsonOrB64);
+          }
+          for (const resolved of resolvedList) {
+            addRef.current(playlistId, resolved);
           }
           syncOpenNativePlaylistIfMatching(playlistId);
-          const checkIds = fallbackTrackId || tracks.map(t => cleanId(t?.id)).filter(Boolean).join(',');
-          return window.__kyoyuGetPlaylists(checkIds);
+          return window.__kyoyuGetPlaylists(checkIds, tracksJsonOrB64);
         }
       } catch (e) {
         console.error('[PlaylistBridge] __kyoyuAddTracksToPlaylist error:', e);

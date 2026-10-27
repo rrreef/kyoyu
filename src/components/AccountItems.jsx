@@ -370,15 +370,16 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
 });
 
 /** One cell of the icon view (same classes as the liked-tracks grid) */
-const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlaying }) {
+const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlaying }) {
   const isPlaylist = item.kind === 'playlist';
   const isProfile = item.kind === 'profile';
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
   const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
   const displayTitle = meta.title || item.title;
   const displayArtist = meta.artist || item.artistName;
+  const handleClick = onSelect ? () => onSelect(item) : undefined;
   return (
-    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={handleClick} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
       <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
           ? <img src={cleanSrc} alt={displayTitle} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
@@ -397,9 +398,17 @@ const GridCell = memo(function GridCell({ item, onClick, cols, isActive, isPlayi
   );
 });
 
-export default function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
+const AccountItemList = memo(function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
   const { setSearchQueue, playSearchItem, state } = usePlayer();
-  const [error, setError] = useState('');
+  const [error] = useState('');
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const onOpenPlaylistRef = useRef(onOpenPlaylist);
+  onOpenPlaylistRef.current = onOpenPlaylist;
+  const setSearchQueueRef = useRef(setSearchQueue);
+  setSearchQueueRef.current = setSearchQueue;
+  const playSearchItemRef = useRef(playSearchItem);
+  playSearchItemRef.current = playSearchItem;
 
   const isItemActive = (it) => {
     const cur = state?.currentTrack;
@@ -422,139 +431,142 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
     return it.kind === 'album';
   };
 
-  const playList = (list, item) => {
-    const queue = list.filter(x => x.kind === 'track' && !isAlbumItem(x)).map(toPlayable);
-    const playable = toPlayable(item);
-    const idx = queue.findIndex(q => q.id === item.id);
-    setSearchQueue(queue.length > 0 ? queue : [playable], idx >= 0 ? idx : 0);
-    playSearchItem(playable);
-  };
+  const handleSelect = React.useCallback(async (it) => {
+    if (!it || it.kind === 'profile') return;
+    const handlePlaylistClick = async (pl) => {
+      if (onOpenPlaylistRef.current) {
+        onOpenPlaylistRef.current(pl);
+        return;
+      }
+      // Fallback: post directly to native Swift playerBridge
+      const ts = Date.now();
+      window.__lastFastOpenTs = ts;
+      const isAlbum = pl.kind === 'album';
+      const rawCreator = pl.artistName || pl.artist || pl.creator || 'You';
+      const meta = splitCleanMetadata(pl.title, rawCreator, pl.label || pl.labelName || '');
+      let creator = meta.artist || rawCreator;
+      let cleanAlbumTitle = meta.title || pl.title;
+      let resolvedLabel = meta.label || pl.label || pl.labelName || null;
+      let resolvedYear = pl.year ? String(pl.year) : null;
+      const cover = pl.artworkUrl || pl.cover || null;
 
-  const handlePlaylistClick = async (pl) => {
-    if (onOpenPlaylist) {
-      onOpenPlaylist(pl);
+      const postSheet = (tracksList) => {
+        const mappedTracks = (tracksList || []).map(t => {
+          const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator || '', resolvedLabel || '');
+          return {
+            id: t.id || String(Date.now() + Math.random()),
+            title: tm.title || t.title || t.name || 'Unknown Track',
+            artist: tm.artist || t.artist || t.artistName || creator || '',
+            url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+            cover: t.artworkUrl || t.cover || cover || null,
+            provider: t.provider || pl.provider || null,
+          };
+        });
+        try {
+          if (isAlbum) {
+            window.webkit?.messageHandlers?.player?.postMessage({
+              albumOpen: true,
+              nativeAlbum: {
+                _ts: String(ts),
+                id: pl.id,
+                title: cleanAlbumTitle,
+                artist: creator,
+                cover,
+                genre: pl.genre || null,
+                year: resolvedYear,
+                label: resolvedLabel,
+                provider: pl.provider || null,
+                tracks: mappedTracks,
+              }
+            });
+          } else {
+            window.webkit?.messageHandlers?.player?.postMessage({
+              playlistOpen: true,
+              nativePlaylist: {
+                _ts: String(ts),
+                id: pl.id,
+                title: cleanAlbumTitle,
+                cover,
+                creator,
+                provider: pl.provider || null,
+                tracks: mappedTracks,
+              }
+            });
+          }
+        } catch(e) {}
+      };
+
+      const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
+      postSheet(initialTracks);
+
+      if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
+        try {
+          const r = await fetch('/api/bandcamp-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url }),
+          });
+          const data = r.ok ? await r.json() : { tracks: [] };
+          if (data.album) {
+            if (data.album.label && !resolvedLabel) resolvedLabel = data.album.label;
+            if (data.album.year && !resolvedYear) resolvedYear = String(data.album.year);
+            if (data.album.artistName) {
+              const m2 = splitCleanMetadata(data.album.title || cleanAlbumTitle, data.album.artistName, resolvedLabel || '');
+              creator = m2.artist || creator;
+              cleanAlbumTitle = m2.title || cleanAlbumTitle;
+              if (m2.label && !resolvedLabel) resolvedLabel = m2.label;
+            }
+          }
+          const now = Date.now();
+          const tracks = (data.tracks || []).map((t, i) => ({
+            id: `bc-${t.trackId || i}`,
+            kind: 'track',
+            provider: 'bandcamp',
+            title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
+            artist: t.artistName || creator,
+            artistName: t.artistName || creator,
+            label: resolvedLabel || undefined,
+            year: resolvedYear || undefined,
+            artworkUrl: t.artworkUrl || cover,
+            cover: t.artworkUrl || cover,
+            duration: t.duration || 0,
+            streamUrl: t.streamUrl || '',
+            audioUrl: t.streamUrl || '',
+            url: t.streamUrl || t.trackUrl || '',
+            trackUrl: t.trackUrl || '',
+            providerItemId: t.trackUrl || '',
+            streamFetchedAt: t.streamUrl ? now : undefined,
+          }));
+          if (tracks.length > 0) {
+            pl.tracks = tracks;
+            pl.label = resolvedLabel || pl.label;
+            pl.year = resolvedYear || pl.year;
+            if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
+              postSheet(tracks);
+            }
+          }
+        } catch {}
+      }
+    };
+
+    if (it.kind === 'playlist') {
+      await handlePlaylistClick(it);
       return;
     }
-    // Fallback: post directly to native Swift playerBridge
-    const ts = Date.now();
-    window.__lastFastOpenTs = ts;
-    const isAlbum = pl.kind === 'album';
-    const rawCreator = pl.artistName || pl.artist || pl.creator || 'You';
-    const meta = splitCleanMetadata(pl.title, rawCreator, pl.label || pl.labelName || '');
-    let creator = meta.artist || rawCreator;
-    let cleanAlbumTitle = meta.title || pl.title;
-    let resolvedLabel = meta.label || pl.label || pl.labelName || null;
-    let resolvedYear = pl.year ? String(pl.year) : null;
-    const cover = pl.artworkUrl || pl.cover || null;
-
-    const postSheet = (tracksList) => {
-      const mappedTracks = (tracksList || []).map(t => {
-        const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator || '', resolvedLabel || '');
-        return {
-          id: t.id || String(Date.now() + Math.random()),
-          title: tm.title || t.title || t.name || 'Unknown Track',
-          artist: tm.artist || t.artist || t.artistName || creator || '',
-          url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-          cover: t.artworkUrl || t.cover || cover || null,
-          provider: t.provider || pl.provider || null,
-        };
-      });
-      try {
-        if (isAlbum) {
-          window.webkit?.messageHandlers?.player?.postMessage({
-            albumOpen: true,
-            nativeAlbum: {
-              _ts: String(ts),
-              id: pl.id,
-              title: cleanAlbumTitle,
-              artist: creator,
-              cover,
-              genre: pl.genre || null,
-              year: resolvedYear,
-              label: resolvedLabel,
-              provider: pl.provider || null,
-              tracks: mappedTracks,
-            }
-          });
-        } else {
-          window.webkit?.messageHandlers?.player?.postMessage({
-            playlistOpen: true,
-            nativePlaylist: {
-              _ts: String(ts),
-              id: pl.id,
-              title: cleanAlbumTitle,
-              cover,
-              creator,
-              provider: pl.provider || null,
-              tracks: mappedTracks,
-            }
-          });
-        }
-      } catch(e) {}
-    };
-
-    const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
-    postSheet(initialTracks);
-
-    if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
-      try {
-        const r = await fetch('/api/bandcamp-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url }),
-        });
-        const data = r.ok ? await r.json() : { tracks: [] };
-        if (data.album) {
-          if (data.album.label && !resolvedLabel) resolvedLabel = data.album.label;
-          if (data.album.year && !resolvedYear) resolvedYear = String(data.album.year);
-          if (data.album.artistName) {
-            const m2 = splitCleanMetadata(data.album.title || cleanAlbumTitle, data.album.artistName, resolvedLabel || '');
-            creator = m2.artist || creator;
-            cleanAlbumTitle = m2.title || cleanAlbumTitle;
-            if (m2.label && !resolvedLabel) resolvedLabel = m2.label;
-          }
-        }
-        const now = Date.now();
-        const tracks = (data.tracks || []).map((t, i) => ({
-          id: `bc-${t.trackId || i}`,
-          kind: 'track',
-          provider: 'bandcamp',
-          title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
-          artist: t.artistName || creator,
-          artistName: t.artistName || creator,
-          label: resolvedLabel || undefined,
-          year: resolvedYear || undefined,
-          artworkUrl: t.artworkUrl || cover,
-          cover: t.artworkUrl || cover,
-          duration: t.duration || 0,
-          streamUrl: t.streamUrl || '',
-          audioUrl: t.streamUrl || '',
-          url: t.streamUrl || t.trackUrl || '',
-          trackUrl: t.trackUrl || '',
-          providerItemId: t.trackUrl || '',
-          streamFetchedAt: t.streamUrl ? now : undefined,
-        }));
-        if (tracks.length > 0) {
-          pl.tracks = tracks;
-          pl.label = resolvedLabel || pl.label;
-          pl.year = resolvedYear || pl.year;
-          if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
-            postSheet(tracks);
-          }
-        }
-      } catch {}
-    }
-  };
-
-  const onItemClick = (it) => {
-    if (it.kind === 'playlist') return () => handlePlaylistClick(it);
-    if (isAlbumItem(it)) return () => {
+    if (isAlbumItem(it)) {
       it.kind = 'album';
-      handlePlaylistClick(it);
-    };
-    if (it.kind === 'track') return () => playList(items, it);
-    return undefined;     // profiles: display only
-  };
+      await handlePlaylistClick(it);
+      return;
+    }
+    if (it.kind === 'track') {
+      const list = itemsRef.current || [];
+      const queue = list.filter(x => x.kind === 'track' && !isAlbumItem(x)).map(toPlayable);
+      const playable = toPlayable(it);
+      const idx = queue.findIndex(q => q.id === it.id);
+      setSearchQueueRef.current(queue.length > 0 ? queue : [playable], idx >= 0 ? idx : 0);
+      playSearchItemRef.current(playable);
+    }
+  }, []);
 
   const safeCols = Math.min(5, Math.max(1, cols));
 
@@ -571,7 +583,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
               cols={safeCols}
               isActive={isItemActive(it)}
               isPlaying={!!state?.isPlaying}
-              onClick={onItemClick(it)}
+              onSelect={it.kind === 'profile' ? undefined : handleSelect}
             />
           ))}
         </div>
@@ -583,7 +595,7 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
                 key={it.id}
                 item={it}
                 sub={`${it.artistName}${it.trackCount ? ` · ${it.trackCount} tracks` : ''}${it.owner === 'liked' ? ' · liked' : ''}${it.isPrivate ? ' · private' : ''}`}
-                onClick={onItemClick(it)}
+                onClick={() => handleSelect(it)}
                 right={<Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />}
               />
             );
@@ -596,11 +608,13 @@ export default function AccountItemList({ items = [], view = 'list', cols = 3, o
           return (
             <Row key={it.id} item={it}
                  sub={`${it.artistName}${it.kind === 'track' && it.duration ? ` · ${fmt(it.duration)}` : ''}`}
-                 onClick={onItemClick(it)}
+                 onClick={() => handleSelect(it)}
                  right={<Play size={20} color="var(--text-secondary)" fill="var(--text-secondary)" />} />
           );
         })
       )}
     </>
   );
-}
+});
+
+export default AccountItemList;

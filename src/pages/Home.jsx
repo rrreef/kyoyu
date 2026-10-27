@@ -720,20 +720,15 @@ export default function Home() {
     return () => window.removeEventListener('kyoyu-uploads-changed', loadUploads);
   }, [user?.id]);
 
-  const [playHistory, setPlayHistory] = useState([]);
-  
-  useEffect(() => {
-    function loadHistory() {
-      try {
-        const h = JSON.parse(localStorage.getItem('kyoyu-play-history') || '[]');
-        preloadImagesInMemory(h, 40);
-        setPlayHistory(h);
-      } catch (err) {}
+  const [playHistory, setPlayHistory] = useState(() => {
+    try {
+      const h = JSON.parse(localStorage.getItem('kyoyu-play-history') || '[]');
+      preloadImagesInMemory(h, 40);
+      return h;
+    } catch (err) {
+      return [];
     }
-    loadHistory();
-    window.addEventListener('kyoyu-play-history-changed', loadHistory);
-    return () => window.removeEventListener('kyoyu-play-history-changed', loadHistory);
-  }, []);
+  });
 
   // Shelf filter state
   const [shelfFilter, setShelfFilter]   = useState('all');

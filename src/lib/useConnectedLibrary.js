@@ -46,9 +46,18 @@ try {
   }
 } catch (_) {}
 
+if (typeof window !== 'undefined') {
+  window.__kyoyuConnectedCache = cache;
+}
+
+export function getConnectedLibraryCache() {
+  return cache;
+}
+
 let _saveTimer = null;
-function saveFastConnectedCache() {
+export function saveFastConnectedCache() {
   if (typeof window === 'undefined') return;
+  window.__kyoyuConnectedCache = cache;
   if (_saveTimer) clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
     try {
@@ -93,12 +102,19 @@ async function ensure(service, kind, force = false) {
   const k = `${service}:${kind}`;
   if (!force && cache[service]?.[kind] && fetchedAt[k] && Date.now() - (fetchedAt[k] || 0) < STALE_MS) return;
   if (inflight.has(k)) return inflight.get(k);
+  let didChange = false;
   const p = fetchAccountLibrary(service, kind)
     .then((items) => {
       if (!cache[service]) cache[service] = {};
       const existing = cache[service][kind];
       // Do not overwrite if background progressive stream already populated a larger set during this tick
       if (!Array.isArray(existing) || items.length >= existing.length || force) {
+        const prevLen = Array.isArray(existing) ? existing.length : -1;
+        const prevFirst = Array.isArray(existing) && existing[0] ? existing[0].id : null;
+        const nextFirst = Array.isArray(items) && items[0] ? items[0].id : null;
+        if (prevLen !== items.length || prevFirst !== nextFirst || force) {
+          didChange = true;
+        }
         cache[service][kind] = items;
       }
       preloadImagesInMemory(items, 90);
@@ -109,9 +125,15 @@ async function ensure(service, kind, force = false) {
     .catch((e) => {
       errors[k] = e?.message || 'Could not load';
       if (!cache[service]) cache[service] = {};
-      if (!cache[service][kind]) cache[service][kind] = [];
+      if (!cache[service][kind]) {
+        cache[service][kind] = [];
+        didChange = true;
+      }
     })
-    .finally(() => { inflight.delete(k); emit(); });
+    .finally(() => {
+      inflight.delete(k);
+      if (didChange) emit();
+    });
   inflight.set(k, p);
   return p;
 }
@@ -309,6 +331,7 @@ export function useConnectedLibrary() {
     return () => listeners.delete(fn);
   }, []);
 
+  const hasStatus = !!status;
   const bc = !!status?.bandcamp?.connected;
   const sc = !!status?.soundcloud?.connected;
   const sp = !!status?.spotify?.connected;
@@ -318,7 +341,7 @@ export function useConnectedLibrary() {
   const yt = !!status?.youtube?.connected;
 
   useEffect(() => {
-    if (!isStreamingAvailable() || !status) return;
+    if (!isStreamingAvailable() || !hasStatus) return;
     if (bc) {
       ensure('bandcamp', 'collection');
       ensure('bandcamp', 'wishlist');
@@ -344,7 +367,7 @@ export function useConnectedLibrary() {
     if (yt) {
       ensure('youtube', 'likes'); ensure('youtube', 'playlists'); ensure('youtube', 'albums'); ensure('youtube', 'following'); ensure('youtube', 'newStuff');
     } else if (Object.keys(cache.youtube || {}).length) { cache.youtube = {}; saveFastConnectedCache(); emit(); }
-  }, [bc, sc, sp, am, td, dg, yt, status]);
+  }, [hasStatus, bc, sc, sp, am, td, dg, yt]);
 
   const get = (service, kind) => (cache[service]?.[kind] || []);
   const bcFollowingCount = get('bandcamp', 'following').length;

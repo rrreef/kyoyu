@@ -1142,6 +1142,13 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
     openNativeArtistFast(initialArtist);
   }
 
+  const artistReqId = (typeof window !== 'undefined' && !isPreload)
+    ? (window.__kyoyuActiveArtistReqId = (window.__kyoyuActiveArtistReqId || 0) + 1)
+    : 0;
+  const isStaleArtistReq = () => (
+    !isPreload && typeof window !== 'undefined' && window.__kyoyuActiveArtistReqId !== artistReqId
+  );
+
   try {
     const artistId = (isObj && artistInput.provider === 'discogs' && /^\d+$/.test(String(artistInput.id || '')))
       ? artistInput.id
@@ -1169,8 +1176,10 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         body: JSON.stringify({ query: cleanName }),
       }).then(res => res.ok ? res.json() : null).catch(() => null),
     ]);
+    if (isStaleArtistReq()) return;
 
     let profile = (r && r.ok) ? await r.json().catch(() => null) : null;
+    if (isStaleArtistReq()) return;
     // If Discogs determined that this name is actually a Record Label (not an artist), switch to Label Sheet immediately!
     if (profile && profile.isLabel) {
       return openRichLabelSheet({
@@ -1386,6 +1395,7 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         }
       }
 
+      if (isStaleArtistReq()) return;
       openNativeArtistFast(enrichedArtist, { isUpdate: !isPreload, preload: isPreload });
     }
   } catch (err) {
@@ -1405,6 +1415,13 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     .trim();
   if (!cleanName || cleanName === '—') return;
 
+  const reqId = (typeof window !== 'undefined' && !isPreload)
+    ? (window.__kyoyuActiveLabelReqId = (window.__kyoyuActiveLabelReqId || 0) + 1)
+    : 0;
+  const isStaleLabelReq = () => (
+    !isPreload && typeof window !== 'undefined' && window.__kyoyuActiveLabelReqId !== reqId
+  );
+
   const isBandcampUrlMatchingLabel = (urlStr, targetLabelName) => {
     if (!urlStr || typeof urlStr !== 'string' || !urlStr.includes('bandcamp.com')) return false;
     try {
@@ -1418,8 +1435,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
         sub === `${targetSlug}recordings` ||
         sub === `${targetSlug}music` ||
         sub === `${targetSlug}label` ||
-        sub === `${targetSlug}tapes` ||
-        sub.startsWith(targetSlug)
+        sub === `${targetSlug}tapes`
       )) {
         return true;
       }
@@ -1431,29 +1447,37 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     }
   };
 
-  // Check if the currently playing track is on a Bandcamp label domain while cleanName temporarily fell back to the artist name
+  // Check if the currently playing track is on a Bandcamp label domain while cleanName temporarily fell back to the artist name.
+  // Only consult curTrack URLs when preloading for the playing track OR when the requested label matches curTrack's label/artist!
   const curTrack = (typeof window !== 'undefined' && window.__kyoyuGetCurrentTrack) ? window.__kyoyuGetCurrentTrack() : null;
   const curArtist = String(curTrack?.artistName || curTrack?.artist || '').trim();
+  const matchesCurTrackContext = Boolean(
+    isPreload ||
+    (curArtist && _normStr(cleanName) === _normStr(curArtist)) ||
+    (curTrack?.label && _normStr(cleanName) === _normStr(curTrack.label))
+  );
   const explicitLabelUrl = [
     opts?.labelUrl,
     isObj ? labelInput.labelUrl : '',
-    curTrack?.labelUrl,
+    matchesCurTrackContext ? curTrack?.labelUrl : '',
   ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
   const curBcTrackUrl = [
     explicitLabelUrl,
     isObj ? labelInput.url : '',
-    curTrack?.albumUrl,
-    curTrack?.providerUrl,
-    curTrack?.trackUrl,
-    curTrack?.providerItemId,
-    curTrack?.replay?.url,
-    curTrack?.origin?.url,
+    ...(matchesCurTrackContext ? [
+      curTrack?.albumUrl,
+      curTrack?.providerUrl,
+      curTrack?.trackUrl,
+      curTrack?.providerItemId,
+      curTrack?.replay?.url,
+      curTrack?.origin?.url,
+    ] : []),
   ].find(u => typeof u === 'string' && /^https?:\/\/[^/]+\.bandcamp\.com/i.test(u)) || '';
   const curBcOrigin = (() => {
     try { return curBcTrackUrl ? new URL(curBcTrackUrl).origin : ''; } catch { return ''; }
   })();
   const isArtistFallbackForBandcampTrack = Boolean(
-    curBcOrigin && curArtist && _normStr(cleanName) === _normStr(curArtist)
+    isPreload && curBcOrigin && curArtist && _normStr(cleanName) === _normStr(curArtist)
   );
   if (curTrack?.label && isArtistFallbackForBandcampTrack && _normStr(curTrack.label) !== _normStr(curArtist)) {
     cleanName = String(curTrack.label).trim();
@@ -1558,6 +1582,11 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     : Promise.resolve(null);
 
   let [discogsData, bcSearchData] = await Promise.all([discogsPromise, bcSearchPromise]);
+  if (isStaleLabelReq()) return;
+
+  const hasValidDiscogsLabel = Boolean(
+    discogsData && !discogsData.error && (discogsData.id || (Array.isArray(discogsData.topReleases) && discogsData.topReleases.length > 0))
+  );
 
   // Discover Bandcamp URL from Discogs/MusicBrainz urls, cross-entity links, or Bandcamp search results
   if (discogsData) {
@@ -1585,10 +1614,17 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
     const targetNorm = _normStr(discogsData?.name || cleanName);
     const targetCore = _normLabelCore(discogsData?.name || cleanName);
     const bcHit = bcSearchData.results.find(item => {
-      if (item.type !== 'label' && item.type !== 'artist') return false;
+      if (hasValidDiscogsLabel) {
+        if (item.type !== 'label') return false;
+      } else {
+        if (item.type !== 'label' && item.type !== 'artist') return false;
+      }
       const itemNorm = _normStr(item.title || item.artistName || '');
       const itemCore = _normLabelCore(item.title || item.artistName || '');
       const itemUrl = item.trackUrl || item.url || '';
+      if (hasValidDiscogsLabel) {
+        return itemNorm === targetNorm && isBandcampUrlMatchingLabel(itemUrl, discogsData?.name || cleanName);
+      }
       return itemNorm === targetNorm || (targetCore.length >= 4 && itemCore === targetCore) || isBandcampUrlMatchingLabel(itemUrl, discogsData?.name || cleanName);
     });
     if (bcHit) {
@@ -1935,6 +1971,7 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
       }
     }
 
+    if (isStaleLabelReq()) return;
     openNativeLabelFast(currentLabel, { isUpdate: !isPreload, preload: isPreload });
   };
 
@@ -1950,21 +1987,32 @@ export async function openRichLabelSheet(labelInput, opts = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'label-releases', url: bcUrl }),
       });
+      if (isStaleLabelReq()) return;
       if (bcRes.ok) {
         const bcData = await bcRes.json();
-        // If cleanName was an artist fallback (e.g. "Cousin & Priori") and Bandcamp revealed the real label name (e.g. "NAFF"),
-        // fetch Discogs + MusicBrainz label profile for the real label name too!
-        if (bcData && bcData.name && (_normStr(bcData.name) !== _normStr(cleanName))) {
+        if (isStaleLabelReq()) return;
+        // ONLY re-fetch Discogs under bcData.name if cleanName was a temporary artist fallback for the playing Bandcamp track!
+        // Never overwrite an explicitly searched label (e.g., "Maurizio", founded in 1997) with a different Bandcamp page's name.
+        if (isArtistFallbackForBandcampTrack && bcData && bcData.name && (_normStr(bcData.name) !== _normStr(cleanName))) {
           const realDcRes = await fetch('/api/discogs-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'label-profile', labelName: bcData.name }),
           }).then(r => r.ok ? r.json() : null).catch(() => null);
+          if (isStaleLabelReq()) return;
           if (realDcRes && !realDcRes.error) {
             discogsData = realDcRes;
           }
+          mergeAndEmit(discogsData, bcData);
+        } else {
+          // Verify that bcData actually belongs to the same label before merging into an already-valid Discogs label
+          const bcCore = _normLabelCore(bcData?.name || '');
+          const cleanCore = _normLabelCore(discogsData?.name || cleanName);
+          const isSameLabel = !hasValidDiscogsLabel || !bcCore || bcCore === cleanCore || _normStr(bcData?.name || '') === _normStr(discogsData?.name || cleanName);
+          if (isSameLabel) {
+            mergeAndEmit(discogsData, bcData);
+          }
         }
-        mergeAndEmit(discogsData, bcData);
       }
     } catch (e) {}
   }
