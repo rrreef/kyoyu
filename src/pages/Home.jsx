@@ -1507,7 +1507,7 @@ export default function Home() {
                   if (yrA !== yrB) return yrB - yrA;
                   return 0;
                 });
-                const bcHeroItems = sortedBcReleases.slice(0, Math.max(sec.pageSize || 9, 15));
+                const bcHeroItems = sortedBcReleases.slice(0, sec.pageSize || 9);
                 return (
                   <section key={sec.key} className="home-section">
                     <div className="section-title">
@@ -1593,7 +1593,7 @@ export default function Home() {
                 pages.push(sec.items.slice(i, i + sec.pageSize));
               }
               return (
-                <section key={sec.key} className="home-section">
+                <section key={`${sec.key}-${sec.pageSize}`} className="home-section">
                   <div className="section-title">
                     <span onClick={() => toggleExpandSection(sec.key)} style={{ cursor: 'pointer' }}>{sec.title}</span>
                   </div>
@@ -1607,7 +1607,8 @@ export default function Home() {
                     )
                   ) : (
                     <CatalogSwipeRow
-                      sectionKey={sec.key}
+                      key={`${sec.key}-${sec.pageSize}`}
+                      sectionKey={`${sec.key}-${sec.pageSize}`}
                       pages={pages}
                       renderPage={(pageItems) =>
                         sec.type === 'uploads' ? (

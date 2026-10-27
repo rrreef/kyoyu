@@ -99,8 +99,9 @@ export function useProviderPriority() {
       }
     });
     const onWin = (e) => {
-      if (Array.isArray(e?.detail)) {
-        const next = normalizeProviderPriority(e.detail);
+      const rawOrder = Array.isArray(e?.detail) ? e.detail : (Array.isArray(e?.detail?.order) ? e.detail.order : null);
+      if (rawOrder) {
+        const next = normalizeProviderPriority(rawOrder);
         try {
           const json = JSON.stringify(next);
           localStorage.setItem(PRIORITY_KEY, json);
@@ -401,9 +402,31 @@ export const ALL_HOME_SECTION_KEYS = [
 ];
 
 export function normalizeHomeSectionRows(rawMap) {
+  const source = (rawMap && typeof rawMap === 'object' && rawMap.rows && typeof rawMap.rows === 'object')
+    ? rawMap.rows
+    : (rawMap && typeof rawMap === 'object' ? rawMap : {});
+  const legacyAliases = {
+    'bandcamp-new': ['bandcamp-daily'],
+    'bandcamp-col': ['bandcamp-collection'],
+    'bandcamp-wish': ['bandcamp-wishlist'],
+    'soundcloud-likes': ['sc-likes'],
+    'soundcloud-pl': ['sc-playlists'],
+    'soundcloud-new': ['sc-feed', 'sc-reposts'],
+    'discogs-col': ['discogs-collection'],
+    'discogs-wish': ['discogs-wantlist'],
+  };
   const out = {};
   for (const key of ALL_HOME_SECTION_KEYS) {
-    const val = rawMap && typeof rawMap === 'object' ? Number(rawMap[key]) : NaN;
+    let rawVal = source[key];
+    if (rawVal === undefined && legacyAliases[key]) {
+      for (const alias of legacyAliases[key]) {
+        if (source[alias] !== undefined) {
+          rawVal = source[alias];
+          break;
+        }
+      }
+    }
+    const val = Number(rawVal);
     out[key] = Number.isFinite(val) && val >= 0 ? Math.min(50, Math.round(val)) : DEFAULT_HOME_SECTION_ROWS;
   }
   return out;
@@ -438,16 +461,26 @@ export function setHomeSectionRows(nextMap) {
 export function useHomeSectionRows() {
   const [rowsMap, setRowsMap] = useState(() => getHomeSectionRows());
   useEffect(() => {
+    const applyAndPersist = (incoming) => {
+      const merged = { ...getHomeSectionRows(), ...(incoming?.rows && typeof incoming.rows === 'object' ? incoming.rows : incoming) };
+      const next = normalizeHomeSectionRows(merged);
+      try {
+        localStorage.setItem(HOME_ROWS_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
+      setRowsMap(next);
+    };
     const off = onStreamingEvent((evt) => {
       if (evt?.type === 'homeSectionRows' && evt.rows && typeof evt.rows === 'object') {
-        setRowsMap(normalizeHomeSectionRows(evt.rows));
+        applyAndPersist(evt.rows);
       } else if (evt?.type === 'status' && evt.status?.homeSectionRows && typeof evt.status.homeSectionRows === 'object') {
-        setRowsMap(normalizeHomeSectionRows(evt.status.homeSectionRows));
+        if (Object.keys(evt.status.homeSectionRows).length > 0) {
+          applyAndPersist(evt.status.homeSectionRows);
+        }
       }
     });
     const onWin = (e) => {
       if (e?.detail && typeof e.detail === 'object') {
-        setRowsMap(normalizeHomeSectionRows(e.detail));
+        applyAndPersist(e.detail);
       } else {
         setRowsMap(getHomeSectionRows());
       }

@@ -13,6 +13,108 @@ const FRESH_STREAM_MS = 10 * 60 * 1000;
  * - Everything else (Discogs "resolve:" tracks, saved Bandcamp/SoundCloud/YouTube items whose
  *   stream URL has expired) goes through playSaved, so it plays exactly like History / Likes.
  */
+const playNativeTrackHandler = async (albumId, trackObj, fallbackAlbum = null) => {
+  if (typeof window !== 'undefined' && fallbackAlbum && fallbackAlbum.id) {
+    window.__kyoyuNativeAlbumsById = window.__kyoyuNativeAlbumsById || {};
+    const existing = window.__kyoyuNativeAlbumsById[String(fallbackAlbum.id)];
+    if (!existing || (Array.isArray(fallbackAlbum.tracks) && fallbackAlbum.tracks.length >= (existing.tracks?.length || 0))) {
+      window.__kyoyuNativeAlbumsById[String(fallbackAlbum.id)] = fallbackAlbum;
+    }
+  }
+  const activeAlbum = (typeof window !== 'undefined' && albumId && window.__kyoyuNativeAlbumsById?.[String(albumId)])
+    || fallbackAlbum
+    || (typeof window !== 'undefined' ? window.__kyoyuCurrentNativeAlbum : null)
+    || { id: albumId || '', title: '', artist: '', tracks: trackObj ? [trackObj] : [] };
+  if (activeAlbum && activeAlbum.kind !== 'album') {
+    window.__kyoyuTouchPlaylistActivity?.(activeAlbum);
+  }
+  const isRadioAlbum = activeAlbum.provider === 'radio'
+    || String(activeAlbum.id || '').startsWith('radio-')
+    || activeAlbum.genre === 'Track Radio'
+    || /\s+radio$/i.test(String(activeAlbum.title || '').trim());
+  const sourceTracks = (Array.isArray(activeAlbum.tracks) && activeAlbum.tracks.length > 0)
+    ? activeAlbum.tracks
+    : (trackObj ? [trackObj] : []);
+  const queue = sourceTracks.map(t => {
+    const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
+    const resolvedCover = (t.cover && t.cover !== '/album1.png' ? t.cover : '')
+      || t.artworkUrl
+      || t.releaseCover
+      || (activeAlbum.cover && activeAlbum.cover !== '/album1.png' ? activeAlbum.cover : '')
+      || activeAlbum.artworkUrl
+      || t.cover
+      || activeAlbum.cover
+      || '';
+    const rawTrackAlbum = String(t.album || t.releaseTitle || t.albumTitle || (isRadioAlbum ? '' : activeAlbum.title) || '').trim();
+    const prelimAlbum = (/\s+radio$/i.test(rawTrackAlbum) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlbum))
+      ? ''
+      : rawTrackAlbum;
+    const rawArtist = t.artist || t.artistName || (isRadioAlbum ? '' : activeAlbum.artist) || '';
+    const rawLabel = t.label || t.labelName || (isRadioAlbum ? '' : activeAlbum.label) || '';
+    const cleaned = splitCleanMetadata(t.title || t.name || '', rawArtist, rawLabel, prelimAlbum);
+    const cleanTrackAlbum = cleanTrackOrReleaseTitle(cleaned.album || prelimAlbum, cleaned.artist || rawArtist);
+    return {
+      ...t,
+      id: t.id,
+      title: cleaned.title || t.title || t.name,
+      artist: cleaned.artist || rawArtist,
+      label: cleaned.label || rawLabel,
+      labelUrl: t.labelUrl || activeAlbum.labelUrl || '',
+      year: t.year || t.releaseYear || (isRadioAlbum ? '' : activeAlbum.year) || '',
+      albumUrl: t.albumUrl || activeAlbum.url || activeAlbum.trackUrl || '',
+      cover: resolvedCover,
+      artworkUrl: t.artworkUrl || resolvedCover,
+      releaseCover: resolvedCover,
+      album: cleanTrackAlbum,
+      releaseTitle: cleanTrackAlbum,
+      src, audioUrl: src, url: src,
+      trackUrl: t.trackUrl || t.url || undefined,
+      duration: t.duration || '',
+      provider: (t.provider || activeAlbum.provider) === 'discogs' || (t.provider || activeAlbum.provider) === 'radio' ? '' : (t.provider || activeAlbum.provider || null),
+      providerItemId: t.providerItemId || t.trackUrl || undefined,
+      scTrackId: t.scTrackId || undefined,
+      videoId: t.videoId || undefined,
+      spotifyId: t.spotifyId || undefined,
+      appleMusicId: t.appleMusicId || undefined,
+      tidalId: t.tidalId || undefined,
+      origin: t.origin || undefined,
+      replay: t.replay || undefined,
+      streamFetchedAt: t.streamFetchedAt || undefined,
+    };
+  });
+
+  const wantId = String(trackObj?.id || '').split('?ts=')[0];
+  let idx = wantId ? queue.findIndex(q => String(q.id).split('?ts=')[0] === wantId) : -1;
+  if (idx < 0 && trackObj?.title) {
+    const normTitle = (s) => cleanTrackOrReleaseTitle(String(s || ''), activeAlbum.artist || '')
+      .replace(/^(?:[A-Za-z]{1,2}\d{1,2}|\d{1,3})\s*[.\-):]\s*/, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '');
+    const wantTitle = normTitle(trackObj.title);
+    if (wantTitle) {
+      idx = queue.findIndex(q => normTitle(q.title) === wantTitle);
+    }
+  }
+  const target = idx >= 0 ? queue[idx] : queue[0];
+  if (!target) return;
+
+  const isResolve = String(target.src || '').startsWith('resolve:');
+  const fresh = target.streamFetchedAt && Date.now() - target.streamFetchedAt < FRESH_STREAM_MS;
+  const needsResolve = isResolve || !target.src || (!fresh && historyReplayInfo(target).provider !== 'native');
+  if (needsResolve && window.__kyoyuPlaySaved) {
+    const fallbackUrl = isResolve
+      ? target.src
+      : (target.trackUrl || target.url || `resolve:${target.artist || activeAlbum.artist || ''} ${target.title || ''}`);
+    window.__kyoyuPlaySaved({ ...target, src: '', audioUrl: '', url: fallbackUrl }, queue);
+    return;
+  }
+  if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
+};
+
+if (typeof window !== 'undefined') {
+  window.__kyoyuPlayNativeTrack = playNativeTrackHandler;
+}
+
 export function registerAlbumPlayback(album) {
   if (typeof window !== 'undefined') {
     window.__kyoyuCurrentNativeAlbum = album;
@@ -20,76 +122,8 @@ export function registerAlbumPlayback(album) {
     if (album && album.id) {
       window.__kyoyuNativeAlbumsById[String(album.id)] = album;
     }
+    window.__kyoyuPlayNativeTrack = playNativeTrackHandler;
   }
-  window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
-    const activeAlbum = (typeof window !== 'undefined' && albumId && window.__kyoyuNativeAlbumsById?.[String(albumId)]) || album;
-    if (activeAlbum && activeAlbum.kind !== 'album') {
-      window.__kyoyuTouchPlaylistActivity?.(activeAlbum);
-    }
-    const isRadioAlbum = activeAlbum.provider === 'radio'
-      || String(activeAlbum.id || '').startsWith('radio-')
-      || activeAlbum.genre === 'Track Radio'
-      || /\s+radio$/i.test(String(activeAlbum.title || '').trim());
-    const queue = (activeAlbum.tracks || []).map(t => {
-      const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
-      const resolvedCover = (t.cover && t.cover !== '/album1.png' ? t.cover : '')
-        || t.artworkUrl
-        || t.releaseCover
-        || (activeAlbum.cover && activeAlbum.cover !== '/album1.png' ? activeAlbum.cover : '')
-        || activeAlbum.artworkUrl
-        || t.cover
-        || activeAlbum.cover
-        || '';
-      const rawTrackAlbum = String(t.album || t.releaseTitle || t.albumTitle || (isRadioAlbum ? '' : activeAlbum.title) || '').trim();
-      const prelimAlbum = (/\s+radio$/i.test(rawTrackAlbum) || /^(unknown(\s+album|\s+release)?|radio|track\s+radio)$/i.test(rawTrackAlbum))
-        ? ''
-        : rawTrackAlbum;
-      const rawArtist = t.artist || t.artistName || (isRadioAlbum ? '' : activeAlbum.artist) || '';
-      const rawLabel = t.label || t.labelName || (isRadioAlbum ? '' : activeAlbum.label) || '';
-      const cleaned = splitCleanMetadata(t.title || t.name || '', rawArtist, rawLabel, prelimAlbum);
-      const cleanTrackAlbum = cleanTrackOrReleaseTitle(cleaned.album || prelimAlbum, cleaned.artist || rawArtist);
-      return {
-        ...t,
-        id: t.id,
-        title: cleaned.title || t.title || t.name,
-        artist: cleaned.artist || rawArtist,
-        label: cleaned.label || rawLabel,
-        labelUrl: t.labelUrl || activeAlbum.labelUrl || '',
-        year: t.year || t.releaseYear || (isRadioAlbum ? '' : activeAlbum.year) || '',
-        albumUrl: t.albumUrl || activeAlbum.url || activeAlbum.trackUrl || '',
-        cover: resolvedCover,
-        artworkUrl: t.artworkUrl || resolvedCover,
-        releaseCover: resolvedCover,
-        album: cleanTrackAlbum,
-        releaseTitle: cleanTrackAlbum,
-        src, audioUrl: src, url: src,
-        trackUrl: t.trackUrl || t.url || undefined,
-        duration: t.duration || '',
-        provider: (t.provider || activeAlbum.provider) === 'discogs' || (t.provider || activeAlbum.provider) === 'radio' ? '' : (t.provider || activeAlbum.provider || null),
-        providerItemId: t.providerItemId || t.trackUrl || undefined,
-        scTrackId: t.scTrackId || undefined,
-        videoId: t.videoId || undefined,
-        spotifyId: t.spotifyId || undefined,
-        appleMusicId: t.appleMusicId || undefined,
-        tidalId: t.tidalId || undefined,
-        origin: t.origin || undefined,
-        replay: t.replay || undefined,
-        streamFetchedAt: t.streamFetchedAt || undefined,
-      };
-    });
-    const idx = queue.findIndex(q => String(q.id).split('?ts=')[0] === String(trackObj.id).split('?ts=')[0]);
-    const target = queue[Math.max(idx, 0)];
-    if (!target) return;
-
-    const isResolve = target.src.startsWith('resolve:');
-    const fresh = target.streamFetchedAt && Date.now() - target.streamFetchedAt < FRESH_STREAM_MS;
-    const needsResolve = isResolve || !target.src || (!fresh && historyReplayInfo(target).provider !== 'native');
-    if (needsResolve && window.__kyoyuPlaySaved) {
-      window.__kyoyuPlaySaved({ ...target, src: '', audioUrl: '', url: isResolve ? target.src : (target.trackUrl || target.url) }, queue);
-      return;
-    }
-    if (window.__kyoyuGlobalPlayTrack) window.__kyoyuGlobalPlayTrack(target, queue);
-  };
 }
 
 export function openNativePlaylistFast(pl, opts = {}) {
@@ -240,7 +274,7 @@ if (typeof window !== 'undefined') {
     if (!cleanArtist && !cleanAlbumOrTitle) return;
 
     const cacheKey = `${cleanArtist.toLowerCase()}|${cleanAlbumOrTitle.toLowerCase()}`;
-    if (window.__kyoyuPreloadedAlbums[cacheKey]) {
+    if (window.__kyoyuPreloadedAlbums[cacheKey] && (window.__kyoyuPreloadedAlbums[cacheKey].tracks?.length || 0) > 1) {
       const cachedAlbum = window.__kyoyuPreloadedAlbums[cacheKey];
       if (!isPreload) {
         openNativeAlbumFast(cachedAlbum);
@@ -278,11 +312,22 @@ if (typeof window !== 'undefined') {
         const altKey = `${cleanArtist.toLowerCase()}|${String(albumObj.title).toLowerCase()}`;
         window.__kyoyuPreloadedAlbums[altKey] = albumObj;
       }
+      // If we resolved a real multi-track parent album for the currently playing track, update the player sheet's album title too
+      if (albumObj.title && Array.isArray(albumObj.tracks) && albumObj.tracks.length > 1) {
+        try {
+          if (curTrack) {
+            curTrack.album = albumObj.title;
+            curTrack.releaseTitle = albumObj.title;
+          }
+          window.webkit?.messageHandlers?.player?.postMessage({ album: albumObj.title });
+        } catch {}
+      }
       openNativeAlbumFast(albumObj, { preload: isPreload, isUpdate: !isPreload });
       return albumObj;
     };
 
     const searchTitle = cleanTrackOrReleaseTitle(cleanAlbumOrTitle.replace(/\s*\(Single\)\s*$/i, '').trim() || cleanAlbumOrTitle, cleanArtist);
+    const trackTitleClean = cleanTrackOrReleaseTitle(curTrack?.title || searchTitle, cleanArtist);
     const query = `${cleanArtist} ${searchTitle}`.trim();
     const bcTrackUrl = [
       opts.url,
@@ -297,8 +342,8 @@ if (typeof window !== 'undefined') {
       // First check if track-info is already in __kyoyuInfoCache or fetch it (in parallel with Bandcamp album-tracks if applicable)
       const infoKey = [cleanArtist, curTrack?.title || searchTitle, searchTitle].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
       let info = window.__kyoyuInfoCache?.[infoKey] || null;
-      const [fetchedInfo, bcAlbumData] = await Promise.all([
-        !info
+      const [fetchedInfo, initialBcAlbumData] = await Promise.all([
+        !info || !(info.tracklist?.length > 1)
           ? fetch('/api/discogs-search', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -313,29 +358,66 @@ if (typeof window !== 'undefined') {
             }).then(r => r.ok ? r.json() : null).catch(() => null)
           : Promise.resolve(null),
       ]);
-      if (fetchedInfo) info = fetchedInfo;
+      if (fetchedInfo && (!info || (fetchedInfo.tracklist?.length || 0) >= (info.tracklist?.length || 0))) {
+        info = fetchedInfo;
+      }
+      let bcAlbumData = initialBcAlbumData;
 
-      if (bcAlbumData && Array.isArray(bcAlbumData.tracks) && bcAlbumData.tracks.length > 0) {
-        const bcArtist = bcAlbumData.artist || info?.artist || cleanArtist || '';
-        const bcTitle = cleanTrackOrReleaseTitle(bcAlbumData.albumName || info?.album || searchTitle || '', bcArtist);
-        const bcLabel = bcAlbumData.label || info?.label || curTrack?.label || '';
-        const bcYear = bcAlbumData.year || info?.year || curTrack?.year || null;
-        return emitAndCacheAlbum({
+      // If bcAlbumData only has <= 1 track (or wasn't found yet), check if Bandcamp search has a multi-track /album/ release
+      if (!(bcAlbumData?.tracks?.length > 1)) {
+        const candidateAlbumName = cleanTrackOrReleaseTitle(
+          (info?.album && info.album.toLowerCase() !== trackTitleClean.toLowerCase() ? info.album : '')
+          || (bcAlbumData?.albumName && bcAlbumData.albumName.toLowerCase() !== trackTitleClean.toLowerCase() ? bcAlbumData.albumName : '')
+          || searchTitle,
+          cleanArtist
+        );
+        const bcSearchQuery = `${cleanArtist} ${candidateAlbumName}`.trim();
+        if (bcSearchQuery) {
+          try {
+            const bcsRes = await fetch(`/api/bandcamp-search?q=${encodeURIComponent(bcSearchQuery)}`);
+            if (bcsRes.ok) {
+              const bcsData = await bcsRes.json();
+              const albHit = (bcsData.results || []).find(r =>
+                (r.type === 'album' || /\/album\//i.test(r.url || r.albumUrl || '')) &&
+                /^https?:\/\/[^/]+\.bandcamp\.com\/album\//i.test(r.url || r.albumUrl || '')
+              );
+              const hitUrl = albHit?.url || albHit?.albumUrl || '';
+              if (hitUrl && hitUrl !== bcTrackUrl) {
+                const resolvedAlb = await fetch('/api/bandcamp-resolve', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'album-tracks', url: hitUrl }),
+                }).then(r => r.ok ? r.json() : null).catch(() => null);
+                if (resolvedAlb && Array.isArray(resolvedAlb.tracks) && resolvedAlb.tracks.length > (bcAlbumData?.tracks?.length || 0)) {
+                  bcAlbumData = resolvedAlb;
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      const buildBandcampAlbumPayload = (bcData) => {
+        const bcArtist = bcData.artist || info?.artist || cleanArtist || '';
+        const bcTitle = cleanTrackOrReleaseTitle(bcData.albumName || info?.album || searchTitle || '', bcArtist);
+        const bcLabel = bcData.label || info?.label || curTrack?.label || '';
+        const bcYear = bcData.year || info?.year || curTrack?.year || null;
+        return {
           id: tempId,
           title: bcTitle || searchTitle || '',
           artist: bcArtist,
-          cover: bcAlbumData.artworkUrl || info?.coverImage || info?.thumb || fallbackCover || '',
+          cover: bcData.artworkUrl || info?.coverImage || info?.thumb || fallbackCover || '',
           year: bcYear ? String(bcYear) : null,
           genre: info?.genre || curTrack?.genre || '',
           label: bcLabel,
-          labelUrl: bcAlbumData.labelUrl || '',
+          labelUrl: bcData.labelUrl || '',
           provider: 'bandcamp',
           description: [
             info?.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
             info?.country ? `Country: ${info.country}` : '',
             info?.description || '',
           ].filter(Boolean).join('\n'),
-          tracks: bcAlbumData.tracks.map((t, i) => ({
+          tracks: bcData.tracks.map((t, i) => ({
             id: `bc-alb-${i}-${Date.now()}`,
             title: cleanTrackOrReleaseTitle(t.title || `Track ${i + 1}`, t.artist || bcArtist),
             artist: t.artist || bcArtist,
@@ -344,13 +426,19 @@ if (typeof window !== 'undefined') {
             url: t.streamUrl || t.trackUrl || bcTrackUrl,
             trackUrl: t.trackUrl || bcTrackUrl,
             providerItemId: t.trackUrl || bcTrackUrl,
-            cover: t.artworkUrl || bcAlbumData.artworkUrl || fallbackCover || '',
+            cover: t.artworkUrl || bcData.artworkUrl || fallbackCover || '',
             provider: 'bandcamp',
           })),
-        });
+        };
+      };
+
+      // Prefer multi-track Bandcamp album immediately
+      if (bcAlbumData && Array.isArray(bcAlbumData.tracks) && bcAlbumData.tracks.length > 1) {
+        return emitAndCacheAlbum(buildBandcampAlbumPayload(bcAlbumData));
       }
 
-      if (info && info.tracklist && info.tracklist.length > 0) {
+      // Prefer multi-track Discogs release over a 1-track single
+      if (info && info.tracklist && info.tracklist.length > 1) {
         return emitAndCacheAlbum({
           id: info.discogsId ? `discogs-${info.discogsId}` : tempId,
           title: cleanTrackOrReleaseTitle(info.album || searchTitle || '', info.artist || cleanArtist),
@@ -378,16 +466,16 @@ if (typeof window !== 'undefined') {
         });
       }
 
-      // Fallback: search Discogs for the release
+      // Fallback: search Discogs for a multi-track release
       const sr = await fetch('/api/discogs-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, perPage: 5, page: 1 }),
+        body: JSON.stringify({ query, perPage: 6, page: 1 }),
       });
       if (sr.ok) {
         const sd = await sr.json();
-        const release = (sd.results || []).find(r => r.type === 'release' || r.type === 'master');
-        if (release) {
+        const releases = (sd.results || []).filter(r => r.type === 'release' || r.type === 'master');
+        for (const release of releases.slice(0, 3)) {
           const tr = await fetch('/api/discogs-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -398,7 +486,7 @@ if (typeof window !== 'undefined') {
             const parsed = (release.title || '').split(' - ');
             const releaseArtist = parsed.length >= 2 ? parsed[0].trim() : cleanArtist;
             const releaseTitle = parsed.length >= 2 ? parsed.slice(1).join(' - ').trim() : release.title;
-            if (tinfo.tracklist && tinfo.tracklist.length > 0) {
+            if (tinfo.tracklist && tinfo.tracklist.length > 1) {
               return emitAndCacheAlbum({
                 id: `discogs-${release.id || release.discogsId}`,
                 title: cleanTrackOrReleaseTitle(tinfo.album || releaseTitle || searchTitle || '', tinfo.artist || releaseArtist || cleanArtist),
@@ -420,6 +508,78 @@ if (typeof window !== 'undefined') {
             }
           }
         }
+      }
+
+      // Fallback: iTunes Song -> Parent Collection lookup for multi-track album
+      const songQuery = `${cleanArtist} ${trackTitleClean || searchTitle}`.trim();
+      if (songQuery) {
+        try {
+          const itSearch = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(songQuery)}&entity=song&limit=10`).then(r => r.ok ? r.json() : null).catch(() => null);
+          const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+          const wantT = norm(trackTitleClean || searchTitle);
+          const wantA = norm(cleanArtist);
+          const songHits = (itSearch?.results || []).filter(item => {
+            const tN = norm(item.trackName);
+            const aN = norm(item.artistName);
+            return (tN === wantT || tN.includes(wantT) || wantT.includes(tN)) && (!wantA || aN === wantA || aN.includes(wantA) || wantA.includes(aN));
+          });
+          const bestCol = songHits.find(item => (item.trackCount || 0) > 1 && item.collectionId && !/-\s*single$/i.test(item.collectionName || '') && norm(item.collectionName) !== wantT)
+            || songHits.find(item => (item.trackCount || 0) > 1 && item.collectionId);
+          if (bestCol?.collectionId) {
+            const colLookup = await fetch(`https://itunes.apple.com/lookup?id=${bestCol.collectionId}&entity=song`).then(r => r.ok ? r.json() : null).catch(() => null);
+            const colResults = colLookup?.results || [];
+            const colInfo = colResults.find(r => r.wrapperType === 'collection') || bestCol;
+            const colTracks = colResults.filter(r => r.wrapperType === 'track' && r.kind === 'song');
+            if (colTracks.length > 1) {
+              const colCover = String(colInfo.artworkUrl100 || bestCol.artworkUrl100 || fallbackCover || '').replace(/100x100bb/i, '600x600bb');
+              const colTitle = cleanTrackOrReleaseTitle(String(colInfo.collectionName || searchTitle).replace(/\s*-\s*Single$/i, ''), colInfo.artistName || cleanArtist);
+              const colYear = colInfo.releaseDate ? String(colInfo.releaseDate).slice(0, 4) : null;
+              return emitAndCacheAlbum({
+                id: `itunes-${bestCol.collectionId}`,
+                title: colTitle || searchTitle,
+                artist: colInfo.artistName || cleanArtist,
+                cover: colCover,
+                year: colYear,
+                genre: colInfo.primaryGenreName || info?.genre || curTrack?.genre || '',
+                label: info?.label || curTrack?.label || '',
+                provider: 'discogs',
+                tracks: colTracks.map((t, i) => ({
+                  id: `itunes-track-${t.trackId || i}`,
+                  title: cleanTrackOrReleaseTitle(t.trackName || `Track ${i + 1}`, t.artistName || colInfo.artistName || cleanArtist),
+                  artist: t.artistName || colInfo.artistName || cleanArtist,
+                  url: `resolve:${t.artistName || colInfo.artistName || cleanArtist} ${t.trackName || ''}`,
+                  cover: colCover,
+                  provider: '',
+                })),
+              });
+            }
+          }
+        } catch {}
+      }
+
+      if (bcAlbumData && Array.isArray(bcAlbumData.tracks) && bcAlbumData.tracks.length > 0) {
+        return emitAndCacheAlbum(buildBandcampAlbumPayload(bcAlbumData));
+      }
+
+      if (info && info.tracklist && info.tracklist.length > 0) {
+        return emitAndCacheAlbum({
+          id: info.discogsId ? `discogs-${info.discogsId}` : tempId,
+          title: cleanTrackOrReleaseTitle(info.album || searchTitle || '', info.artist || cleanArtist),
+          artist: info.artist || cleanArtist || '',
+          cover: info.coverImage || info.thumb || fallbackCover || '',
+          year: info.year || null,
+          genre: info.genre || '',
+          label: info.label || bcAlbumData?.label || '',
+          provider: 'discogs',
+          tracks: (info.tracklist || []).map((t, i) => ({
+            id: `discogs-track-${i}`,
+            title: `${t.position ? t.position + '. ' : ''}${cleanTrackOrReleaseTitle(t.title || '', t.artists?.join(', ') || info.artist || cleanArtist)}`,
+            artist: t.artists?.join(', ') || info.artist || cleanArtist || '',
+            url: `resolve:${t.artists?.join(', ') || info.artist || cleanArtist} ${t.title || ''}`,
+            cover: info.coverImage || info.thumb || fallbackCover || '',
+            provider: '',
+          })),
+        });
       }
 
       // Guaranteed Single/Release fallback when not on Discogs
