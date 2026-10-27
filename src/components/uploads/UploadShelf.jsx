@@ -333,14 +333,6 @@ const UploadGridCellItem = memo(function UploadGridCellItem({ t, isActive, isPla
             </div>
           </div>
         )}
-        <button
-          className={`upl-grid-heart${liked ? ' liked' : ''}`}
-          onClick={e => { e.stopPropagation(); onToggleLike(t); }}
-          aria-label={liked ? 'Unlike' : 'Like'}
-          data-kyoyu-injected="1"
-        >
-          <Heart size={safeCols >= 4 ? 9 : 12} fill={liked ? '#ffffff' : 'none'} color={liked ? '#ffffff' : 'currentColor'} strokeWidth={2}/>
-        </button>
       </div>
       <div className="upl-grid-title">{t.title || 'Untitled'}</div>
       {safeCols <= 3 && <div className="upl-grid-artist">{t.artist || ''}</div>}
@@ -445,7 +437,7 @@ export function UploadGridView({ uploads, cols = 2 }) {
   const safeCols = Math.min(5, Math.max(1, cols));
 
   return (
-    <div className={`upl-grid upl-grid-${safeCols}`}>
+    <div className={`upl-grid upl-grid-${safeCols}`} style={{ gridTemplateColumns: `repeat(${safeCols}, minmax(0, 1fr))` }}>
       {sorted.map(t => (
         <UploadGridCellItem
           key={t.id}

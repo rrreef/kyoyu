@@ -23,6 +23,9 @@ export function registerAlbumPlayback(album) {
   }
   window.__kyoyuPlayNativeTrack = async (albumId, trackObj) => {
     const activeAlbum = (typeof window !== 'undefined' && albumId && window.__kyoyuNativeAlbumsById?.[String(albumId)]) || album;
+    if (activeAlbum && activeAlbum.kind !== 'album') {
+      window.__kyoyuTouchPlaylistActivity?.(activeAlbum);
+    }
     const isRadioAlbum = activeAlbum.provider === 'radio'
       || String(activeAlbum.id || '').startsWith('radio-')
       || activeAlbum.genre === 'Track Radio'
@@ -91,6 +94,7 @@ export function registerAlbumPlayback(album) {
 
 export function openNativePlaylistFast(pl, opts = {}) {
   if (!pl) return null;
+  window.__kyoyuTouchPlaylistActivity?.(pl);
   const ts = Date.now();
   const plCreator = pl.artist || pl.artistName || pl.creator || 'You';
   const albumForm = {
@@ -1280,13 +1284,18 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
         const cleanTitle = cleanTrackOrReleaseTitle(rel.title, relArtist);
         const k = _normStr(cleanTitle);
         if (!k) return;
+        const rawUrl = String(rel.trackUrl || rel.url || '');
+        const isTrack = rel.type === 'track'
+          || rel.entityType === 'track'
+          || (rawUrl.includes('/track/') && !rawUrl.includes('/album/'));
+        const mapKey = `${isTrack ? 'track' : 'release'}|${k}`;
         const rawLbl = Array.isArray(rel.labels) ? rel.labels[0] : (rel.label || '');
         const cleanLbl = String(rawLbl || '').replace(/\s*\(\d+\)\s*$/, '').trim();
         const validLbl = (cleanLbl && !/^(not on label.*|self[- ]?released.*|no label|none|unknown.*)$/i.test(cleanLbl))
           ? cleanLbl
           : '';
-        if (relMap.has(k)) {
-          const existing = relMap.get(k);
+        if (relMap.has(mapKey)) {
+          const existing = relMap.get(mapKey);
           if (validLbl && (!existing.label || _normStr(existing.label) === _normStr(cleanName))) {
             existing.label = validLbl;
           }
@@ -1299,9 +1308,9 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
           }
           return;
         }
-        relMap.set(k, {
+        relMap.set(mapKey, {
           ...rel,
-          id: String(rel.id || `discogs-a-${rel.discogsId || Math.random()}`),
+          id: String(rel.id || `discogs-a-${isTrack ? 'trk' : 'rel'}-${rel.discogsId || Math.random()}`),
           discogsId: rel.discogsId ? String(rel.discogsId) : null,
           title: cleanTitle || rel.title || 'Unknown',
           artist: relArtist,
@@ -1310,26 +1319,57 @@ export async function openRichArtistSheet(artistInput, opts = {}) {
           thumb: rel.thumb || rel.coverImage || rel.artworkUrl || null,
           coverImage: rel.coverImage || rel.thumb || rel.artworkUrl || null,
           trackUrl: rel.trackUrl || rel.url || null,
-          type: rel.type || 'release',
+          type: isTrack ? 'track' : (rel.type === 'master' ? 'master' : 'release'),
           provider: rel.provider || 'discogs',
         });
       };
-      bcItems.forEach(item => pushRel({
-        id: `bc-a-${_normStr(item.title)}`,
-        title: item.title,
-        artist: item.artistName || cleanName,
-        label: item.label || null,
-        year: item.year || null,
-        artworkUrl: item.artworkUrl ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : null,
-        trackUrl: item.trackUrl,
-        provider: 'bandcamp',
-        type: item.type || 'release',
-      }));
+      bcItems.forEach(item => {
+        const itemUrl = String(item.trackUrl || item.url || '');
+        const isBcTrack = item.type === 'track' || (itemUrl.includes('/track/') && !itemUrl.includes('/album/'));
+        pushRel({
+          id: `bc-a-${isBcTrack ? 'trk' : 'rel'}-${_normStr(item.title)}`,
+          title: item.title,
+          artist: item.artistName || cleanName,
+          label: item.label || null,
+          year: item.year || null,
+          artworkUrl: item.artworkUrl ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : null,
+          trackUrl: item.trackUrl,
+          provider: 'bandcamp',
+          type: isBcTrack ? 'track' : 'release',
+        });
+        if (isBcTrack && item.albumName && item.albumUrl) {
+          pushRel({
+            id: `bc-a-rel-${_normStr(item.albumName)}`,
+            title: item.albumName,
+            artist: item.artistName || cleanName,
+            label: item.label || null,
+            year: item.year || null,
+            artworkUrl: item.artworkUrl ? item.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : null,
+            trackUrl: item.albumUrl,
+            provider: 'bandcamp',
+            type: 'release',
+          });
+        }
+      });
       (pObj.topReleases || []).forEach(pushRel);
       (initialArtist.topReleases || []).forEach(pushRel);
-      memberProfiles.forEach(mp => (mp.topReleases || []).slice(0, 10).forEach(pushRel));
+      memberProfiles.forEach(mp => (mp.topReleases || []).slice(0, 14).forEach(pushRel));
 
-      const mergedReleases = Array.from(relMap.values());
+      // Remove any "release" item that is actually a single track title from one of the artist's albums on Discogs
+      const knownTrackKeys = new Set();
+      for (const [mk, val] of relMap.entries()) {
+        if (mk.startsWith('track|') && val.releaseName && _normStr(val.releaseName) !== _normStr(val.title)) {
+          knownTrackKeys.add(_normStr(val.title));
+        }
+      }
+      const mergedReleases = Array.from(relMap.values()).filter(item => {
+        if (item.type !== 'track') {
+          const itemUrl = String(item.trackUrl || '');
+          if (itemUrl.includes('/track/') && !itemUrl.includes('/album/')) return false;
+          if (!item.discogsId && knownTrackKeys.has(_normStr(item.title))) return false;
+        }
+        return true;
+      });
       const combinedBio = pObj.profile
         || memberProfiles.map(mp => mp.profile ? `${mp.name}: ${mp.profile}` : '').filter(Boolean).join('\n\n')
         || initialArtist.profile;
@@ -2031,6 +2071,22 @@ export async function openReleaseFromSheet(releaseObj) {
   const discogsId = releaseObj.discogsId || (String(releaseObj.id || '').match(/^discogs-[a-z]-([a-z]+)-(\d+)$/)?.[2]) || '';
   const discogsType = releaseObj.type || (String(releaseObj.id || '').match(/^discogs-[a-z]-([a-z]+)-(\d+)$/)?.[1]) || 'release';
 
+  // If this item is an individual track ("Titles" mode in Artist Sheet), play it directly
+  if (discogsType === 'track') {
+    if (window.__kyoyuPlayGenreTrack) {
+      window.__kyoyuPlayGenreTrack({
+        id: releaseObj.id || `artist-track-${Date.now()}`,
+        title,
+        artist,
+        label,
+        year,
+        trackUrl: trackUrl || `resolve:${artist} ${title}`.trim(),
+        coverImage: cover,
+      });
+      return;
+    }
+  }
+
   // 1. Open native album sheet immediately with skeleton/known metadata so transition is instant
   const tempAlbumId = releaseObj.id || `sheet-rel-${Date.now()}`;
   openNativeAlbumFast({
@@ -2087,6 +2143,7 @@ export async function openReleaseFromSheet(releaseObj) {
       }
 
       const info = dcInfoRes || {};
+      const mergedFormats = Array.from(new Set([...(bcRes?.album?.formats || []), ...(info.formats || [])]));
       openNativeAlbumFast({
         id: tempAlbumId,
         title: cleanTrackOrReleaseTitle(bcRes?.albumName || info.album || title, bcArtist),
@@ -2097,6 +2154,7 @@ export async function openReleaseFromSheet(releaseObj) {
         label: info.label || bcLabel,
         labelUrl: bcRes?.labelUrl || '',
         provider: 'bandcamp',
+        formats: mergedFormats,
         description: info.description || '',
         tracks: tracks.length > 0 ? tracks : [
           {

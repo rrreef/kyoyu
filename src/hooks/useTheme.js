@@ -95,14 +95,25 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   if (mode === 'custom') {
     root.setAttribute('data-custom-bg', 'true');
     root.style.setProperty('--custom-bg-color', activeCustomBg);
+    root.style.setProperty('--bg-deep', activeCustomBg);
+    root.style.setProperty('--bg-primary', activeCustomBg);
   } else {
     root.removeAttribute('data-custom-bg');
     root.style.removeProperty('--custom-bg-color');
+    root.style.removeProperty('--bg-deep');
+    root.style.removeProperty('--bg-primary');
   }
+
+  root.style.backgroundColor = finalBg;
+  root.style.color = finalFg;
 
   if (document.body) {
     document.body.style.backgroundColor = finalBg;
     document.body.style.color = finalFg;
+  }
+  const appRoot = document.getElementById('root');
+  if (appRoot) {
+    appRoot.style.backgroundColor = finalBg;
   }
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
@@ -116,6 +127,17 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
     root.removeAttribute('data-glass-tint');
     root.style.removeProperty('--glass-tint-color');
   }
+
+  try {
+    if (typeof window.__kyoyuApplyAppearanceDOM === 'function') {
+      window.__kyoyuApplyAppearanceDOM(
+        effectiveTheme,
+        mode,
+        mode === 'custom' ? activeCustomBg : '',
+        activeTint
+      );
+    }
+  } catch (_) {}
 
   if (notifyNative) {
     try {
@@ -139,10 +161,21 @@ export function useTheme() {
     setState(current);
 
     const onSync = () => {
-      setState(readStoredAppearance());
+      const latest = readStoredAppearance();
+      applyAppearanceToDOMAndNative(latest, false);
+      setState(latest);
+    };
+    const onStorage = (e) => {
+      if (!e.key || [LS_THEME_KEY, LS_MODE_KEY, LS_BASE_KEY, LS_CUSTOM_BG_KEY, LS_TINT_KEY].includes(e.key)) {
+        onSync();
+      }
     };
     window.addEventListener('kyoyu-appearance-change', onSync);
-    return () => window.removeEventListener('kyoyu-appearance-change', onSync);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('kyoyu-appearance-change', onSync);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const broadcast = useCallback((next) => {

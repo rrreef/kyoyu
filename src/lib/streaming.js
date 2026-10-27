@@ -44,8 +44,14 @@ export function normalizeProviderPriority(list) {
 
 export function getProviderPriority() {
   try {
-    const raw = localStorage.getItem(PRIORITY_KEY) || localStorage.getItem('kyoyu-provider-priority');
-    if (raw) return normalizeProviderPriority(JSON.parse(raw));
+    const raw = localStorage.getItem('kyoyu-provider-priority') || localStorage.getItem(PRIORITY_KEY);
+    if (raw) {
+      const parsed = normalizeProviderPriority(JSON.parse(raw));
+      try {
+        localStorage.setItem(PRIORITY_KEY, JSON.stringify(parsed));
+      } catch {}
+      return parsed;
+    }
   } catch { /* ignore */ }
   return [...DEFAULT_PROVIDER_PRIORITY];
 }
@@ -62,6 +68,7 @@ export function setProviderPriority(order) {
   });
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('kyoyu-provider-priority', { detail: normalized }));
+    window.dispatchEvent(new CustomEvent('kyoyu-provider-priority-change', { detail: normalized }));
   }
   if (isStreamingAvailable()) {
     callStreaming('setProviderPriority', { order: normalized }).catch(() => {});
@@ -74,13 +81,35 @@ export function useProviderPriority() {
   useEffect(() => {
     const off = onStreamingEvent((evt) => {
       if (evt?.type === 'providerPriority' && Array.isArray(evt.order)) {
-        setPriorityState(normalizeProviderPriority(evt.order));
+        const next = normalizeProviderPriority(evt.order);
+        try {
+          const json = JSON.stringify(next);
+          localStorage.setItem(PRIORITY_KEY, json);
+          localStorage.setItem('kyoyu-provider-priority', json);
+        } catch {}
+        setPriorityState(next);
       } else if (evt?.type === 'status' && Array.isArray(evt.status?.providerPriority)) {
-        setPriorityState(normalizeProviderPriority(evt.status.providerPriority));
+        const next = normalizeProviderPriority(evt.status.providerPriority);
+        try {
+          const json = JSON.stringify(next);
+          localStorage.setItem(PRIORITY_KEY, json);
+          localStorage.setItem('kyoyu-provider-priority', json);
+        } catch {}
+        setPriorityState(next);
       }
     });
     const onWin = (e) => {
-      if (Array.isArray(e?.detail)) setPriorityState(normalizeProviderPriority(e.detail));
+      if (Array.isArray(e?.detail)) {
+        const next = normalizeProviderPriority(e.detail);
+        try {
+          const json = JSON.stringify(next);
+          localStorage.setItem(PRIORITY_KEY, json);
+          localStorage.setItem('kyoyu-provider-priority', json);
+        } catch {}
+        setPriorityState(next);
+      } else {
+        setPriorityState(getProviderPriority());
+      }
     };
     const onStorage = (e) => {
       if (!e || !e.key || e.key === PRIORITY_KEY || e.key === 'kyoyu-provider-priority') {
@@ -91,12 +120,14 @@ export function useProviderPriority() {
       setPriorityState(getProviderPriority());
     };
     window.addEventListener('kyoyu-provider-priority', onWin);
+    window.addEventListener('kyoyu-provider-priority-change', onWin);
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', onFocusOrVisible);
     document.addEventListener('visibilitychange', onFocusOrVisible);
     return () => {
       off();
       window.removeEventListener('kyoyu-provider-priority', onWin);
+      window.removeEventListener('kyoyu-provider-priority-change', onWin);
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('focus', onFocusOrVisible);
       document.removeEventListener('visibilitychange', onFocusOrVisible);
@@ -362,9 +393,12 @@ export const HOME_PROVIDER_SECTIONS = {
   ],
 };
 
-export const ALL_HOME_SECTION_KEYS = Object.values(HOME_PROVIDER_SECTIONS)
-  .flat()
-  .map((s) => s.key);
+export const ALL_HOME_SECTION_KEYS = [
+  'home-playlists',
+  ...Object.values(HOME_PROVIDER_SECTIONS)
+    .flat()
+    .map((s) => s.key),
+];
 
 export function normalizeHomeSectionRows(rawMap) {
   const out = {};
@@ -393,6 +427,7 @@ export function setHomeSectionRows(nextMap) {
   });
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('kyoyu-home-section-rows', { detail: normalized }));
+    window.dispatchEvent(new CustomEvent('kyoyu-home-section-rows-change', { detail: normalized }));
   }
   if (isStreamingAvailable()) {
     callStreaming('setHomeSectionRows', { rows: normalized }).catch(() => {});
@@ -413,6 +448,8 @@ export function useHomeSectionRows() {
     const onWin = (e) => {
       if (e?.detail && typeof e.detail === 'object') {
         setRowsMap(normalizeHomeSectionRows(e.detail));
+      } else {
+        setRowsMap(getHomeSectionRows());
       }
     };
     const onStorage = (e) => {
@@ -424,12 +461,14 @@ export function useHomeSectionRows() {
       setRowsMap(getHomeSectionRows());
     };
     window.addEventListener('kyoyu-home-section-rows', onWin);
+    window.addEventListener('kyoyu-home-section-rows-change', onWin);
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', onFocusOrVisible);
     document.addEventListener('visibilitychange', onFocusOrVisible);
     return () => {
       off();
       window.removeEventListener('kyoyu-home-section-rows', onWin);
+      window.removeEventListener('kyoyu-home-section-rows-change', onWin);
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('focus', onFocusOrVisible);
       document.removeEventListener('visibilitychange', onFocusOrVisible);

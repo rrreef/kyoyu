@@ -1,21 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-/* Eliminate 300ms tap delay in WKWebView / mobile Safari & hide all scrollbars */
-*, *::before, *::after {
+/* Eliminate 300ms tap delay in WKWebView / mobile Safari, prevent long-press text selection & hide all scrollbars */
+*, *::before, *::after, html, body {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
-input, textarea, select {
+/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) and allow text selection inside editable fields */
+input, textarea, select, [contenteditable="true"] {
   font-size: 16px !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }
 
 /* ===== KYO — iOS 26 Liquid Glass Design System ===== */
@@ -1009,7 +1014,10 @@ html[data-custom-bg="true"] {
 }
 html[data-custom-bg="true"],
 html[data-custom-bg="true"] body,
-html[data-custom-bg="true"] #root {
+html[data-custom-bg="true"] #root,
+html[data-custom-bg="true"] .app-layout,
+html[data-custom-bg="true"] .main-content,
+html[data-custom-bg="true"] .page {
   background: var(--custom-bg-color) !important;
   background-color: var(--custom-bg-color) !important;
 }

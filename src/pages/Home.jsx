@@ -159,7 +159,7 @@ if (typeof window !== 'undefined') {
   preloadHomeContent();
 }
 
-const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v4';
+const HERO_META_CACHE_KEY = 'kyoyu-hero-card-meta-v6';
 
 function cleanHeroLabel(rawLabel, rawArtist = '') {
   const clean = String(rawLabel || '')
@@ -182,7 +182,7 @@ function cleanHeroLabel(rawLabel, rawArtist = '') {
 function normalizeHeroFormats(rawFormats, defaultDigital = true) {
   const list = Array.isArray(rawFormats)
     ? rawFormats
-    : (typeof rawFormats === 'string' && rawFormats.trim() ? rawFormats.split(/[,/·•]+/) : []);
+    : (typeof rawFormats === 'string' && rawFormats.trim() ? [rawFormats] : []);
   const seen = new Set();
   const ordered = [];
   const addFmt = (f) => {
@@ -197,29 +197,54 @@ function normalizeHeroFormats(rawFormats, defaultDigital = true) {
     const s = String(raw || '').trim();
     if (!s) continue;
     if (/\b(t-?shirt|shirt|hoodie|sweater|sweatshirt|tote|bag|poster|print|sticker|hat|cap|beanie|patch|pin|mug|slipmat|ticket)\b/i.test(s)) continue;
-    if (/lathe/i.test(s)) { addFmt('Lathe Cut'); continue; }
-    if (/flexi/i.test(s)) { addFmt('Flexi-disc'); continue; }
-    if (/shellac/i.test(s)) { addFmt('Shellac'); continue; }
-    if (/reel-to-reel|reel to reel/i.test(s)) { addFmt('Reel-To-Reel'); continue; }
-    if (/8-track/i.test(s)) { addFmt('8-Track'); continue; }
-    if (/minidisc/i.test(s)) { addFmt('MiniDisc'); continue; }
-    if (/vinyl|\blp\b|\b12"|\b7"|\b10"|test pressing/i.test(s)) { addFmt('Vinyl'); continue; }
-    if (/cassette|tape/i.test(s)) { addFmt('Cassette'); continue; }
-    if (/compact disc|\bcd\b|cd-r|cd-rom|digipak/i.test(s)) { addFmt('CD'); continue; }
-    if (/\busb\b|memory stick/i.test(s)) { addFmt('USB'); continue; }
-    if (/\bvhs\b/i.test(s)) { addFmt('VHS'); continue; }
-    if (/\bdvd\b|blu-?ray/i.test(s)) { addFmt('DVD'); continue; }
-    if (/box\s*set/i.test(s)) { addFmt('Box Set'); continue; }
-    if (/file|digital|mp3|flac|wav|aiff|alac|aac|ogg/i.test(s)) { addFmt('Digital'); continue; }
-    const firstPart = s.split(',')[0].replace(/^\d+x\s*/i, '').trim();
-    if (firstPart && !/^(album|ep|single|mini-album|compilation|reissue|remastered|limited edition|numbered|stereo|mono|\d+\s*rpm|33\s*⅓\s*rpm|45\s*rpm)$/i.test(firstPart)) {
-      addFmt(firstPart);
+    if (/^artist$/i.test(s)) { addFmt('Artist'); continue; }
+    if (/^label$/i.test(s)) { addFmt('Label'); continue; }
+    let matchedVinylSize = false;
+    if (/\b12\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s)) {
+      addFmt('Vinyl 12"');
+      matchedVinylSize = true;
     }
+    if (/\b10\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s)) {
+      addFmt('Vinyl 10"');
+      matchedVinylSize = true;
+    }
+    if (/\b7\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s)) {
+      addFmt('Vinyl 7"');
+      matchedVinylSize = true;
+    }
+    if (/\b(?:2\s*x\s*lp|2\s*x\s*vinyl|double\s+(?:vinyl|lp)|2lp)\b/i.test(s)) {
+      if (!matchedVinylSize) addFmt('Vinyl 2xLP');
+      matchedVinylSize = true;
+    } else if (!matchedVinylSize && /\b(?:vinyl\s+lp|lp\s+vinyl|\blp\b|180\s*g(?:ram)?\s+lp)\b/i.test(s)) {
+      addFmt('Vinyl LP');
+      matchedVinylSize = true;
+    }
+    if (/lathe/i.test(s)) {
+      addFmt('Lathe Cut');
+    } else if (!matchedVinylSize && /vinyl|test pressing|\bwax\b/i.test(s)) {
+      addFmt('Vinyl');
+    }
+    if (/flexi/i.test(s)) addFmt('Flexi-disc');
+    if (/shellac/i.test(s)) addFmt('Shellac');
+    if (/reel-to-reel|reel to reel/i.test(s)) addFmt('Reel-To-Reel');
+    if (/8-track/i.test(s)) addFmt('8-Track');
+    if (/minidisc/i.test(s)) addFmt('MiniDisc');
+    if (/cassette|\btape\b/i.test(s)) addFmt('Cassette');
+    if (/compact disc|\bcd\b|cd-r|cd-rom|digipak/i.test(s)) addFmt('CD');
+    if (/\busb\b|memory stick/i.test(s)) addFmt('USB');
+    if (/\bvhs\b/i.test(s)) addFmt('VHS');
+    if (/\bdvd\b|blu-?ray/i.test(s)) addFmt('DVD');
+    if (/box\s*set/i.test(s)) addFmt('Box Set');
+    if (/file|digital|mp3|flac|wav|aiff|alac|aac|ogg/i.test(s)) addFmt('Digital');
   }
-  if (defaultDigital && !seen.has('digital')) {
-    addFmt('Digital');
+  const hasSpecificVinyl = seen.has('vinyl 12"') || seen.has('vinyl 10"') || seen.has('vinyl 7"') || seen.has('vinyl 2xlp') || seen.has('vinyl lp');
+  const filtered = hasSpecificVinyl
+    ? ordered.filter(f => f.toLowerCase() !== 'vinyl')
+    : ordered;
+  if (defaultDigital && !seen.has('digital') && !seen.has('artist') && !seen.has('label')) {
+    filtered.push('Digital');
   }
-  return ordered;
+  return filtered;
 }
 
 function formatHeroReleaseDate(rawDate, fallbackTs = 0) {
@@ -287,7 +312,7 @@ function groupByAlbum(tracks) {
 export default function Home() {
   const { playRelease, playTrack, playFromHistory, setSearchQueue, playSearchItem } = usePlayer();
   const { user } = useAuth();
-  const { getLikedUploads, playlists } = useLibrary();
+  const { getLikedUploads, playlists, playlistActivity, touchPlaylistActivity } = useLibrary();
   const acct = useConnectedLibrary();
   const [providerPriority] = useProviderPriority();
   const [homeSectionRows] = useHomeSectionRows();
@@ -298,6 +323,9 @@ export default function Home() {
   const [selectedEventIndex, setSelectedEventIndex] = useState(null);
 
   async function openPlaylistSheet(pl) {
+    if (pl && pl.kind !== 'album') {
+      touchPlaylistActivity?.(pl);
+    }
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
@@ -504,9 +532,11 @@ export default function Home() {
   // Featured = albums with cover art (will be admin-curated via is_featured flag later)
   const featuredAlbums = useMemo(() => publicAlbums.filter(a => a.cover), [publicAlbums]);
 
-  // Featured carousel state
+  // Featured, Community & Bandcamp carousel state
   const featuredRef = useRef(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const communityHeroRef = useRef(null);
+  const [activeCommunitySlide, setActiveCommunitySlide] = useState(0);
   const bandcampHeroRef = useRef(null);
   const [activeBcSlide, setActiveBcSlide] = useState(0);
   const [brokenCovers, setBrokenCovers] = useState({});
@@ -514,6 +544,63 @@ export default function Home() {
     if (!url) return;
     setBrokenCovers(prev => (prev[url] ? prev : { ...prev, [url]: true }));
   }, []);
+
+  const [communityPosts, setCommunityPosts] = useState(() => {
+    try {
+      const raw = localStorage.getItem('kyoyu-community-posts-v1');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const syncCommunity = () => {
+      try {
+        const raw = localStorage.getItem('kyoyu-community-posts-v1');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) setCommunityPosts(parsed);
+      } catch {}
+    };
+    window.__kyoyuPublishCommunityPost = (post) => {
+      if (!post) return;
+      try {
+        const displayName =
+          localStorage.getItem('kyoyu-profile-display-name') ||
+          user?.displayName ||
+          user?.user_metadata?.display_name ||
+          user?.user_metadata?.username ||
+          (user?.email ? user.email.split('@')[0] : '') ||
+          post.sharedByName ||
+          'You';
+        const enrichedPost = {
+          ...post,
+          sharedByName: (!post.sharedByName || post.sharedByName === 'You') ? displayName : post.sharedByName,
+          createdAt: post.createdAt || Date.now(),
+        };
+        const raw = localStorage.getItem('kyoyu-community-posts-v1');
+        let list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) list = [];
+        list = list.filter(x => !(
+          String(x.entityType || '') === String(enrichedPost.entityType || '') &&
+          String(x.title || '').toLowerCase() === String(enrichedPost.title || '').toLowerCase() &&
+          String(x.artist || '').toLowerCase() === String(enrichedPost.artist || '').toLowerCase()
+        ));
+        list.unshift(enrichedPost);
+        if (list.length > 60) list = list.slice(0, 60);
+        localStorage.setItem('kyoyu-community-posts-v1', JSON.stringify(list));
+        setCommunityPosts(list);
+      } catch {}
+    };
+    window.addEventListener('kyoyu-community-posts-change', syncCommunity);
+    window.addEventListener('storage', syncCommunity);
+    return () => {
+      window.removeEventListener('kyoyu-community-posts-change', syncCommunity);
+      window.removeEventListener('storage', syncCommunity);
+    };
+  }, [user]);
+
   const [heroMetaMap, setHeroMetaMap] = useState(() => {
     try {
       const raw = localStorage.getItem(HERO_META_CACHE_KEY);
@@ -524,11 +611,12 @@ export default function Home() {
   });
   const pendingHeroLookupsRef = useRef(new Set());
 
-  // Enrich Featured and New on Bandcamp cards with cover, title, artist, label, releaseDate, location, and formats
+  // Enrich Featured, Community, and New on Bandcamp cards with cover, title, artist, label, releaseDate, location, and 100% complete formats
   useEffect(() => {
     let cancelled = false;
     const bcNewItems = (acct.bandcamp?.newStuff || []).slice(0, 18);
     const featItems = featuredAlbums.slice(0, 15);
+    const commItems = (communityPosts || []).slice(0, 18);
     const candidates = [
       ...featItems.map(alb => ({
         key: String(alb.id || `${alb.artist || ''}|${alb.title || ''}`),
@@ -540,7 +628,26 @@ export default function Home() {
         formats: alb.formats || [],
         cover: sanitizeArtworkUrl(alb.cover || '', alb.id, false),
         url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
+        entityType: 'album',
       })),
+      ...commItems.map((post, idx) => {
+        const displayRawTitle = post.album || post.title || '';
+        const meta = splitCleanMetadata(displayRawTitle, post.artist || '', post.label || '');
+        const url = post.albumUrl || post.url || '';
+        return {
+          key: String(post.postId || post.id || url || `comm-${idx}`),
+          altUrlKey: url || '',
+          title: meta.title || displayRawTitle,
+          artist: meta.artist || post.artist || '',
+          label: meta.label || post.label || '',
+          releaseDate: post.releaseDate || '',
+          location: post.location || '',
+          formats: post.formats || [],
+          cover: sanitizeArtworkUrl(post.cover || '', post.id, false),
+          url,
+          entityType: post.entityType || 'album',
+        };
+      }),
       ...bcNewItems.map((it, idx) => {
         const displayRawTitle = it.album || it.releaseTitle || it.title || '';
         const meta = splitCleanMetadata(displayRawTitle, it.artistName || it.artist || '', it.label || it.labelName || '');
@@ -556,6 +663,7 @@ export default function Home() {
           formats: it.formats || [],
           cover: sanitizeArtworkUrl(it.artworkUrl || it.cover || '', it.id, false),
           url,
+          entityType: 'album',
         };
       }),
     ];
@@ -565,105 +673,112 @@ export default function Home() {
       const existing = heroMetaMap[c.key];
       if (existing && existing._complete) return false;
       return Boolean(c.title || c.url);
-    }).slice(0, 15);
+    });
 
     if (toFetch.length === 0) return;
 
     (async () => {
-      const updates = {};
-      await Promise.all(toFetch.map(async (item) => {
-        pendingHeroLookupsRef.current.add(item.key);
-        let label = cleanHeroLabel(item.label, item.artist);
-        let releaseDate = item.releaseDate || '';
-        let location = item.location || '';
-        let cover = item.cover || '';
-        let cleanTitle = item.title || '';
-        let cleanArtist = item.artist || '';
-        let formatsList = Array.isArray(item.formats) ? [...item.formats] : [];
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+        if (cancelled) break;
+        const batch = toFetch.slice(i, i + BATCH_SIZE);
+        const updates = {};
+        await Promise.all(batch.map(async (item) => {
+          pendingHeroLookupsRef.current.add(item.key);
+          let label = cleanHeroLabel(item.label, item.artist);
+          let releaseDate = item.releaseDate || '';
+          let location = item.location || '';
+          let cover = item.cover || '';
+          let cleanTitle = item.title || '';
+          let cleanArtist = item.artist || '';
+          const isArtistOrLabel = item.entityType === 'artist' || item.entityType === 'label';
+          let formatsList = Array.isArray(item.formats) ? [...item.formats] : [];
 
-        try {
-          if (item.url && item.url.includes('bandcamp.com')) {
-            const bcRes = await fetch('/api/bandcamp-search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'fetch-album', albumUrl: item.url }),
-            }).then(r => r.ok ? r.json() : null).catch(() => null);
-            if (bcRes?.album) {
-              if (bcRes.album.artworkUrl) {
-                cover = sanitizeArtworkUrl(bcRes.album.artworkUrl, item.key, false) || cover;
-              }
-              if (bcRes.album.title || bcRes.album.artistName) {
-                const bcMeta = splitCleanMetadata(
-                  bcRes.album.title || cleanTitle,
-                  bcRes.album.artistName || cleanArtist,
-                  bcRes.album.label || label
-                );
-                if (bcMeta.title) cleanTitle = bcMeta.title;
-                if (bcMeta.artist) cleanArtist = bcMeta.artist;
-              }
-              if (!label && bcRes.album.label) label = cleanHeroLabel(bcRes.album.label, cleanArtist);
-              if (bcRes.album.releaseDate) releaseDate = bcRes.album.releaseDate;
-              if (!location && bcRes.album.location) location = bcRes.album.location;
-              if (Array.isArray(bcRes.album.formats) && bcRes.album.formats.length) {
-                formatsList.push(...bcRes.album.formats);
-              }
-            }
-          }
-
-          if ((!label || !location || !releaseDate || !cover || formatsList.length <= 1) && (cleanTitle || cleanArtist)) {
-            const dcRes = await fetch('/api/discogs-search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'track-info',
-                title: cleanTitle,
-                artist: cleanArtist,
-                album: cleanTitle,
-              }),
-            }).then(r => r.ok ? r.json() : null).catch(() => null);
-            if (dcRes) {
-              if (!cover && (dcRes.coverImage || dcRes.thumb)) {
-                cover = sanitizeArtworkUrl(dcRes.coverImage || dcRes.thumb, item.key, false);
-              }
-              if (!label) label = cleanHeroLabel(dcRes.labelName || dcRes.label || '', cleanArtist);
-              if (!releaseDate && (dcRes.releaseDate || dcRes.year)) releaseDate = String(dcRes.releaseDate || dcRes.year);
-              if (!location && (dcRes.country || dcRes.artistOrigin || dcRes.labelCountry)) {
-                location = String(dcRes.country || dcRes.artistOrigin || dcRes.labelCountry).trim();
-              }
-              if (Array.isArray(dcRes.formats) && dcRes.formats.length) {
-                formatsList.push(...dcRes.formats);
-              }
-            }
-          }
-        } catch (_) {}
-
-        const entry = {
-          title: cleanTitle,
-          artist: cleanArtist,
-          cover,
-          label,
-          releaseDate,
-          location,
-          formats: normalizeHeroFormats(formatsList, true),
-          _complete: true,
-        };
-        updates[item.key] = entry;
-        if (item.altUrlKey) updates[item.altUrlKey] = entry;
-      }));
-
-      if (!cancelled && Object.keys(updates).length > 0) {
-        setHeroMetaMap(prev => {
-          const next = { ...prev, ...updates };
           try {
-            localStorage.setItem(HERO_META_CACHE_KEY, JSON.stringify(next));
+            if (!isArtistOrLabel && item.url && item.url.includes('bandcamp.com')) {
+              const bcRes = await fetch('/api/bandcamp-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'fetch-album', albumUrl: item.url }),
+              }).then(r => r.ok ? r.json() : null).catch(() => null);
+              if (bcRes?.album) {
+                if (bcRes.album.artworkUrl) {
+                  cover = sanitizeArtworkUrl(bcRes.album.artworkUrl, item.key, false) || cover;
+                }
+                if (bcRes.album.title || bcRes.album.artistName) {
+                  const bcMeta = splitCleanMetadata(
+                    bcRes.album.title || cleanTitle,
+                    bcRes.album.artistName || cleanArtist,
+                    bcRes.album.label || label
+                  );
+                  if (bcMeta.title) cleanTitle = bcMeta.title;
+                  if (bcMeta.artist) cleanArtist = bcMeta.artist;
+                }
+                if (!label && bcRes.album.label) label = cleanHeroLabel(bcRes.album.label, cleanArtist);
+                if (bcRes.album.releaseDate) releaseDate = bcRes.album.releaseDate;
+                if (!location && bcRes.album.location) location = bcRes.album.location;
+                if (Array.isArray(bcRes.album.formats) && bcRes.album.formats.length) {
+                  formatsList.push(...bcRes.album.formats);
+                }
+              }
+            }
+
+            const hasSpecificVinylSize = formatsList.some(f => /\b(?:12|10|7)\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)|\b2xLP\b|\bVinyl LP\b/i.test(String(f || '')));
+            if (!isArtistOrLabel && (!label || !location || !releaseDate || !cover || !hasSpecificVinylSize) && (cleanTitle || cleanArtist)) {
+              const dcRes = await fetch('/api/discogs-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'track-info',
+                  title: cleanTitle,
+                  artist: cleanArtist,
+                  album: cleanTitle,
+                }),
+              }).then(r => r.ok ? r.json() : null).catch(() => null);
+              if (dcRes) {
+                if (!cover && (dcRes.coverImage || dcRes.thumb)) {
+                  cover = sanitizeArtworkUrl(dcRes.coverImage || dcRes.thumb, item.key, false);
+                }
+                if (!label) label = cleanHeroLabel(dcRes.labelName || dcRes.label || '', cleanArtist);
+                if (!releaseDate && (dcRes.releaseDate || dcRes.year)) releaseDate = String(dcRes.releaseDate || dcRes.year);
+                if (!location && (dcRes.country || dcRes.artistOrigin || dcRes.labelCountry)) {
+                  location = String(dcRes.country || dcRes.artistOrigin || dcRes.labelCountry).trim();
+                }
+                if (Array.isArray(dcRes.formats) && dcRes.formats.length) {
+                  formatsList.push(...dcRes.formats);
+                }
+              }
+            }
           } catch (_) {}
-          return next;
-        });
+
+          const entry = {
+            title: cleanTitle,
+            artist: cleanArtist,
+            cover,
+            label,
+            releaseDate,
+            location,
+            formats: normalizeHeroFormats(formatsList, !isArtistOrLabel),
+            _complete: true,
+          };
+          updates[item.key] = entry;
+          if (item.altUrlKey) updates[item.altUrlKey] = entry;
+        }));
+
+        if (!cancelled && Object.keys(updates).length > 0) {
+          setHeroMetaMap(prev => {
+            const next = { ...prev, ...updates };
+            try {
+              localStorage.setItem(HERO_META_CACHE_KEY, JSON.stringify(next));
+            } catch (_) {}
+            return next;
+          });
+        }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [featuredAlbums, acct.bandcamp?.newStuff]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [featuredAlbums, communityPosts, acct.bandcamp?.newStuff]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track active slide on scroll
   const handleFeaturedScroll = useCallback(() => {
@@ -674,6 +789,16 @@ export default function Home() {
     const gap = 14;
     const idx = Math.round(scrollLeft / (cardWidth + gap));
     setActiveSlide(idx);
+  }, []);
+
+  const handleCommunityHeroScroll = useCallback(() => {
+    const el = communityHeroRef.current;
+    if (!el) return;
+    const scrollLeft = el.scrollLeft;
+    const cardWidth = el.firstChild?.offsetWidth || 1;
+    const gap = 14;
+    const idx = Math.round(scrollLeft / (cardWidth + gap));
+    setActiveCommunitySlide(idx);
   }, []);
 
   const handleBcHeroScroll = useCallback(() => {
@@ -945,11 +1070,324 @@ export default function Home() {
         </section>
       )}
 
+      {/* ═══ 1.1 — PLAYLISTS (3 PER ROW ICON VIEW, ORDERED MOST RECENT VIEWED / EDITED / PLAYED FIRST) ═══ */}
+      {showFeatured && (!expandedSectionKey || expandedSectionKey === 'home-playlists') && (() => {
+        const localMapped = (playlists || []).map(p => {
+          const trackList = Array.isArray(p.tracks) ? p.tracks : [];
+          const coverUrl = (p.cover && p.cover !== '/album1.png')
+            ? p.cover
+            : (trackList[0]?.cover || trackList[0]?.artworkUrl || trackList[0]?.releaseCover || '');
+          const prov = p.provider || (Array.isArray(p.providers) && p.providers[0]) || '';
+          return {
+            ...p,
+            id: p.id,
+            kind: 'playlist',
+            provider: prov,
+            title: p.title || p.name || 'Untitled',
+            artworkUrl: coverUrl,
+            cover: coverUrl,
+            artistName: `${trackList.length} ${trackList.length === 1 ? 'track' : 'tracks'}`,
+            trackCount: trackList.length,
+            tracks: trackList,
+          };
+        });
+
+        const seenIds = new Set(localMapped.map(p => String(p.id)));
+        const seenProvTitle = new Set(
+          localMapped.map(p => `${String(p.provider || '').toLowerCase()}::${String(p.title || '').trim().toLowerCase()}`)
+        );
+        const remoteMapped = [];
+        const provOrder = Array.isArray(providerPriority) && providerPriority.length
+          ? providerPriority
+          : ['bandcamp', 'soundcloud', 'youtube', 'spotify', 'applemusic', 'tidal'];
+
+        for (const provKey of provOrder) {
+          const provList = acct?.[provKey]?.playlists;
+          if (!Array.isArray(provList)) continue;
+          for (const r of provList) {
+            if (!r) continue;
+            const rid = String(r.id || r.playlistId || '');
+            const rTitleKey = `${provKey}::${String(r.title || r.name || '').trim().toLowerCase()}`;
+            if ((rid && seenIds.has(rid)) || ((r.title || r.name) && seenProvTitle.has(rTitleKey))) continue;
+            if (rid) seenIds.add(rid);
+            seenProvTitle.add(rTitleKey);
+            const tCount = typeof r.trackCount === 'number'
+              ? r.trackCount
+              : (Array.isArray(r.tracks) ? r.tracks.length : 0);
+            const artUrl = r.artworkUrl || r.cover || (r.tracks?.[0]?.artworkUrl || r.tracks?.[0]?.cover || '');
+            remoteMapped.push({
+              ...r,
+              id: rid || `${provKey}-pl-${remoteMapped.length}`,
+              kind: 'playlist',
+              provider: r.provider || provKey,
+              title: r.title || r.name || 'Untitled',
+              artworkUrl: artUrl,
+              cover: artUrl,
+              artistName: r.artistName || `${tCount} ${tCount === 1 ? 'track' : 'tracks'}`,
+              trackCount: tCount,
+            });
+          }
+        }
+
+        const act = playlistActivity || {};
+        const getPlaylistRecency = (pl) => {
+          const pid = String(pl.id || pl.playlistId || '').trim();
+          const ptitle = String(pl.title || pl.name || '').trim().toLowerCase();
+          const purl = String(pl.url || pl.trackUrl || '').trim();
+          const idMatch = pid.match(/^pl-(\d{10,15})$/);
+          const createdFromId = idMatch ? Number(idMatch[1]) : 0;
+          return Math.max(
+            Number(pid && act[pid]) || 0,
+            Number(ptitle && act[`title::${ptitle}`]) || 0,
+            Number(purl && act[`url::${purl}`]) || 0,
+            Number(pl.updatedAt) || 0,
+            Number(pl.lastModified) || 0,
+            Number(pl.playedAt) || 0,
+            Number(pl.viewedAt) || 0,
+            Number(pl.createdAt) || 0,
+            createdFromId
+          );
+        };
+
+        const allPlaylists = [...localMapped, ...remoteMapped].sort((a, b) => {
+          const diff = getPlaylistRecency(b) - getPlaylistRecency(a);
+          return diff !== 0 ? diff : 0;
+        });
+
+        const plCols = homeLayout.cols || HOME_TITLES_PER_ROW;
+        const plViewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
+        const plRows = homeSectionRows?.['home-playlists'] ?? DEFAULT_HOME_SECTION_ROWS;
+        const plPageSize = Math.max(0, Number(plRows) || 0) * (plViewMode === 'list' ? HOME_TITLES_PER_ROW : plCols);
+        if (allPlaylists.length === 0 || plPageSize <= 0) return null;
+
+        if (expandedSectionKey === 'home-playlists') {
+          const visibleItems = allPlaylists.slice(0, expandedVisibleCount);
+          return (
+            <section className="home-section">
+              <div className="section-title">
+                <span onClick={() => toggleExpandSection('home-playlists')} style={{ cursor: 'pointer' }}>
+                  ← Playlists
+                </span>
+                <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>
+                  {allPlaylists.length}
+                </span>
+              </div>
+              <AccountItemList items={visibleItems} view={plViewMode} cols={plCols} onOpenPlaylist={openPlaylistSheet} />
+              {expandedVisibleCount < allPlaylists.length && (
+                <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+              )}
+            </section>
+          );
+        }
+
+        const plPages = [];
+        for (let i = 0; i < allPlaylists.length; i += plPageSize) {
+          plPages.push(allPlaylists.slice(i, i + plPageSize));
+        }
+
+        return (
+          <section className="home-section">
+            <div className="section-title">
+              <span onClick={() => toggleExpandSection('home-playlists')} style={{ cursor: 'pointer' }}>Playlists</span>
+            </div>
+            {plPages.length <= 1 ? (
+              <AccountItemList items={plPages[0] || []} view={plViewMode} cols={plCols} onOpenPlaylist={openPlaylistSheet} />
+            ) : (
+              <CatalogSwipeRow
+                sectionKey="home-playlists"
+                pages={plPages}
+                renderPage={(pageItems) => (
+                  <AccountItemList items={pageItems} view={plViewMode} cols={plCols} onOpenPlaylist={openPlaylistSheet} />
+                )}
+              />
+            )}
+          </section>
+        );
+      })()}
+
+      {/* ═══ 1.15 — COMMUNITY (FAN-TO-FAN SHARES: ALBUMS, TITLES, ARTISTS & LABELS — UNDER PLAYLISTS, ABOVE NEW ON BANDCAMP) ═══ */}
+      {showFeatured && (!expandedSectionKey || expandedSectionKey === 'home-community') && (() => {
+        const currentUserName =
+          localStorage.getItem('kyoyu-profile-display-name') ||
+          user?.displayName ||
+          user?.user_metadata?.display_name ||
+          user?.user_metadata?.username ||
+          (user?.email ? user.email.split('@')[0] : '') ||
+          'You';
+
+        const seededFromFeed = (featuredAlbums || []).slice(0, 6).map((alb, idx) => {
+          const fallbackSharers = ['Aoi', 'Kaito', 'Sora', 'Ren', 'Mika', 'Haru'];
+          const uploaderName = alb.tracks?.[0]?.uploaderName || alb.uploaderName || fallbackSharers[idx % fallbackSharers.length];
+          return {
+            postId: `seed-comm-${alb.id || idx}`,
+            id: alb.id,
+            entityType: 'album',
+            title: alb.title,
+            artist: alb.artist,
+            album: alb.title,
+            label: alb.label || '',
+            releaseDate: alb.releaseDate || alb.year || '',
+            location: alb.location || alb.country || '',
+            formats: alb.formats || [],
+            cover: alb.cover,
+            url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
+            tracks: alb.tracks || [],
+            sharedByName: uploaderName,
+          };
+        });
+
+        const userPosts = (communityPosts || []).map(p => ({
+          ...p,
+          sharedByName: (!p.sharedByName || p.sharedByName === 'You') ? currentUserName : p.sharedByName,
+        }));
+
+        const seenCommKeys = new Set();
+        const allCommunityItems = [];
+        for (const item of [...userPosts, ...seededFromFeed]) {
+          const k = `${String(item.entityType || 'album').toLowerCase()}|${String(item.title || '').toLowerCase()}|${String(item.artist || '').toLowerCase()}`;
+          if (seenCommKeys.has(k)) continue;
+          seenCommKeys.add(k);
+          allCommunityItems.push(item);
+        }
+
+        if (allCommunityItems.length === 0) return null;
+
+        return (
+          <section className="home-section featured-hero-section">
+            <div className="section-title">
+              <span onClick={() => toggleExpandSection('home-community')} style={{ cursor: 'pointer' }}>
+                {expandedSectionKey === 'home-community' ? '← Community' : 'Community'}
+              </span>
+            </div>
+            <div
+              className="featured-hero-row"
+              ref={communityHeroRef}
+              onScroll={handleCommunityHeroScroll}
+            >
+              {allCommunityItems.slice(0, 18).map((post, idx) => {
+                const entityType = String(post.entityType || 'album').toLowerCase();
+                const releaseUrl = post.albumUrl || post.url || '';
+                const lookupKey = String(post.postId || post.id || releaseUrl || `comm-${idx}`);
+                const rich = heroMetaMap[lookupKey] || (releaseUrl ? heroMetaMap[releaseUrl] : null) || {};
+                const displayRawTitle = post.album || post.title || '';
+                const meta = splitCleanMetadata(
+                  rich.title || displayRawTitle,
+                  rich.artist || post.artist || '',
+                  rich.label || post.label || ''
+                );
+                const displayTitle = entityType === 'artist' || entityType === 'label'
+                  ? (post.title || post.artist || post.label || 'Untitled')
+                  : (meta.title || rich.title || displayRawTitle || 'Untitled');
+                const displayArtist = entityType === 'artist'
+                  ? 'Artist'
+                  : entityType === 'label'
+                    ? 'Label'
+                    : (meta.artist || rich.artist || post.artist || '');
+                const rawCover = post.cover || rich.cover || '';
+                const cleanCover = rawCover ? pinImageInMemory(rawCover, lookupKey) : '';
+                const richCover = rich.cover ? pinImageInMemory(rich.cover, `${lookupKey}-rich`) : '';
+                const showCover = (cleanCover && !brokenCovers[cleanCover])
+                  ? cleanCover
+                  : ((richCover && !brokenCovers[richCover]) ? richCover : '');
+                const showLabel = entityType === 'artist' || entityType === 'label'
+                  ? cleanHeroLabel(post.label || '', '', '')
+                  : cleanHeroLabel(meta.label || rich.label || post.label || '', displayArtist, displayTitle);
+                const releaseDateStr = formatHeroReleaseDate(post.releaseDate || rich.releaseDate || '', post.createdAt);
+                const locationStr = String(post.location || rich.location || '').trim();
+                const rawFormats = (Array.isArray(rich.formats) && rich.formats.length > 0)
+                  ? rich.formats
+                  : (post.formats || (entityType === 'artist' ? ['Artist'] : entityType === 'label' ? ['Label'] : []));
+                const formatsList = normalizeHeroFormats(rawFormats, entityType !== 'artist' && entityType !== 'label');
+                const formatsText = Array.isArray(formatsList) ? formatsList.join(', ') : String(formatsList || 'Digital');
+                const sharerName = post.sharedByName || currentUserName;
+
+                return (
+                  <button
+                    key={lookupKey}
+                    className="featured-hero-card"
+                    onClick={() => {
+                      if (entityType === 'artist') {
+                        const aName = post.artist || post.title || '';
+                        if (window.__kyoyuOpenArtist) {
+                          window.__kyoyuOpenArtist(aName);
+                        } else {
+                          try {
+                            window.webkit?.messageHandlers?.player?.postMessage({
+                              openArtist: true,
+                              artistName: aName,
+                            });
+                          } catch {}
+                        }
+                      } else if (entityType === 'label') {
+                        const lName = post.label || post.title || '';
+                        if (window.__kyoyuOpenLabel) {
+                          window.__kyoyuOpenLabel(lName);
+                        } else {
+                          try {
+                            window.webkit?.messageHandlers?.player?.postMessage({
+                              openLabel: true,
+                              labelName: lName,
+                            });
+                          } catch {}
+                        }
+                      } else if (Array.isArray(post.tracks) && post.tracks.length > 0 && !releaseUrl.includes('bandcamp.com')) {
+                        setSelectedAlbum(openNativeAlbumFast({
+                          ...post,
+                          id: post.id || lookupKey,
+                          title: displayTitle,
+                          artist: displayArtist,
+                          cover: showCover || post.cover,
+                          label: showLabel || post.label,
+                          releaseDate: releaseDateStr || post.releaseDate,
+                          location: locationStr || post.location,
+                          formats: formatsList,
+                        }));
+                      } else {
+                        openPlaylistSheet({
+                          ...post,
+                          kind: 'album',
+                          title: displayTitle,
+                          artistName: displayArtist,
+                          artworkUrl: showCover || post.cover,
+                          cover: showCover || post.cover,
+                          label: showLabel || post.label,
+                          releaseDate: releaseDateStr || post.releaseDate,
+                          location: locationStr || post.location,
+                          formats: formatsList,
+                          url: releaseUrl,
+                          trackUrl: releaseUrl,
+                        });
+                      }
+                    }}
+                  >
+                    <div className="featured-hero-art">
+                      {showCover
+                        ? <img src={showCover} alt={displayTitle} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
+                        : <div className="featured-hero-art-ph"><Music2 size={36} strokeWidth={1.2} /></div>}
+                    </div>
+                    <div className="featured-hero-info">
+                      <HeroMarqueeRow className="featured-hero-title">{displayTitle}</HeroMarqueeRow>
+                      {displayArtist && <HeroMarqueeRow className="featured-hero-artist">{displayArtist}</HeroMarqueeRow>}
+                      {showLabel && entityType !== 'label' && <HeroMarqueeRow className="featured-hero-label">{showLabel}</HeroMarqueeRow>}
+                      {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
+                      {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
+                      <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
+                      <HeroMarqueeRow className="featured-hero-sharer">Shared by {sharerName}</HeroMarqueeRow>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
+
       {/* ═══ 1.2 — LIBRARY PER PROVIDER: NEW STUFF, COLLECTION / LIKES, WISHLIST & PLAYLISTS (SWIPEABLE PAGES OF N ROWS × 3 TITLES) ═══ */}
       {showFeatured && (() => {
+        const activeHomeCols = homeLayout.mode === 'list' ? HOME_TITLES_PER_ROW : (homeLayout.cols || HOME_TITLES_PER_ROW);
         const limitFor = (sectionKey) => {
           const rows = homeSectionRows?.[sectionKey] ?? DEFAULT_HOME_SECTION_ROWS;
-          return Math.max(0, Number(rows) || 0) * HOME_TITLES_PER_ROW;
+          return Math.max(0, Number(rows) || 0) * activeHomeCols;
         };
 
         const likedUploads = getLikedUploads(user?.id) || [];
@@ -1021,6 +1459,7 @@ export default function Home() {
         if (orderedSections.length === 0) return null;
 
         const viewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
+        const gridCols = homeLayout.cols || 3;
 
         return (
           <>
@@ -1041,9 +1480,9 @@ export default function Home() {
                     {sec.type === 'uploads' ? (
                       viewMode === 'list'
                         ? <UploadExpandedList uploads={visibleItems} />
-                        : <UploadGridView uploads={visibleItems} cols={3} />
+                        : <UploadGridView uploads={visibleItems} cols={gridCols} />
                     ) : (
-                      <AccountItemList items={visibleItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                      <AccountItemList items={visibleItems} view={viewMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
                     )}
                     {expandedVisibleCount < sec.items.length && (
                       <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
@@ -1162,9 +1601,9 @@ export default function Home() {
                     sec.type === 'uploads' ? (
                       viewMode === 'list'
                         ? <UploadExpandedList uploads={pages[0] || []} />
-                        : <UploadGridView uploads={pages[0] || []} cols={3} />
+                        : <UploadGridView uploads={pages[0] || []} cols={gridCols} />
                     ) : (
-                      <AccountItemList items={pages[0] || []} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                      <AccountItemList items={pages[0] || []} view={viewMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
                     )
                   ) : (
                     <CatalogSwipeRow
@@ -1174,9 +1613,9 @@ export default function Home() {
                         sec.type === 'uploads' ? (
                           viewMode === 'list'
                             ? <UploadExpandedList uploads={pageItems} />
-                            : <UploadGridView uploads={pageItems} cols={3} />
+                            : <UploadGridView uploads={pageItems} cols={gridCols} />
                         ) : (
-                          <AccountItemList items={pageItems} view={viewMode} cols={3} onOpenPlaylist={openPlaylistSheet} />
+                          <AccountItemList items={pageItems} view={viewMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
                         )
                       }
                     />
@@ -1201,7 +1640,7 @@ export default function Home() {
           </div>
           {expandedSectionKey === 'history' ? (
             <>
-              <div className="upl-grid upl-grid-3">
+              <div className={`upl-grid upl-grid-${homeLayout.cols || 3}`}>
                 {playHistory.slice(0, expandedVisibleCount).map(item => {
                   const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
                   const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
@@ -1307,13 +1746,13 @@ export default function Home() {
       {/* ═══ 3 — RELEASES ═══ */}
       {showReleases && (!expandedSectionKey || expandedSectionKey === 'releases') && (() => {
         const isExpanded = expandedSectionKey === 'releases';
-        const releasePageSize = 6;
+        const releasePageSize = Math.max(3, (homeLayout.cols || 3) * 2);
         const releasePages = [];
         for (let i = 0; i < publicAlbums.length; i += releasePageSize) {
           releasePages.push(publicAlbums.slice(i, i + releasePageSize));
         }
         const renderReleaseGrid = (albumsSlice) => (
-          <div className="upl-grid upl-grid-3">
+          <div className={`upl-grid upl-grid-${homeLayout.cols || 3}`}>
             {albumsSlice.map(album => {
               const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
               return (

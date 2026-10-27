@@ -177,8 +177,28 @@ export default function Library() {
       if (d.category) setFilter(d.category);
       if (d.view) setNativeView(d.view);
     };
+    const onLayoutOrCols = (e) => {
+      if (e?.type === 'kyoyu-grid-cols-change' && e?.detail?.page === 'library') {
+        const c = parseInt(e.detail.cols, 10);
+        if (Number.isFinite(c) && c >= 0) {
+          const nextMode = c === 0 ? 'list' : 'grid';
+          window.__kyoyuLibraryView = nextMode;
+          setNativeView(nextMode);
+        }
+      } else if (e?.type === 'kyoyu-layout-changed' && e?.detail?.key === 'kyoyu-display-library') {
+        const nextMode = e.detail?.value?.mode === 'list' ? 'list' : 'grid';
+        window.__kyoyuLibraryView = nextMode;
+        setNativeView(nextMode);
+      }
+    };
     document.addEventListener('kyoyu-library-state', onState);
-    return () => document.removeEventListener('kyoyu-library-state', onState);
+    window.addEventListener('kyoyu-grid-cols-change', onLayoutOrCols);
+    window.addEventListener('kyoyu-layout-changed', onLayoutOrCols);
+    return () => {
+      document.removeEventListener('kyoyu-library-state', onState);
+      window.removeEventListener('kyoyu-grid-cols-change', onLayoutOrCols);
+      window.removeEventListener('kyoyu-layout-changed', onLayoutOrCols);
+    };
   }, []);
   const [likesSub,     setLikesSub]  = useState('releases');
   const [sortDesc,     setSort]      = useState(true);
@@ -229,6 +249,72 @@ export default function Library() {
   // SoundCloud / Bandcamp / Spotify / Apple Music / TIDAL / YouTube Music accounts connected in Settings → their library shows up here automatically
   const acct = useConnectedLibrary();
   const [providerPriority] = useProviderPriority();
+  const [bandcampBaskets, setBandcampBaskets] = useState(() => {
+    try {
+      const raw = localStorage.getItem('kyoyu-bandcamp-baskets-v1');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    const syncBaskets = (e) => {
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setBandcampBaskets(e.detail);
+          return;
+        }
+        const raw = localStorage.getItem('kyoyu-bandcamp-baskets-v1');
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) setBandcampBaskets(parsed);
+      } catch {}
+    };
+    syncBaskets();
+    window.addEventListener('kyoyu-bandcamp-baskets-sync', syncBaskets);
+    window.addEventListener('storage', syncBaskets);
+    window.addEventListener('focus', syncBaskets);
+    document.addEventListener('visibilitychange', syncBaskets);
+    return () => {
+      window.removeEventListener('kyoyu-bandcamp-baskets-sync', syncBaskets);
+      window.removeEventListener('storage', syncBaskets);
+      window.removeEventListener('focus', syncBaskets);
+      document.removeEventListener('visibilitychange', syncBaskets);
+    };
+  }, [activeFilter, libProvider]);
+  const bcBasketPlaylists = useMemo(() => {
+    return (bandcampBaskets || []).map(b => {
+      const items = Array.isArray(b.items) ? b.items : [];
+      const firstCover = items[0]?.cover || items[0]?.artworkUrl || '';
+      const rawId = String(b.id || '');
+      const playlistId = rawId.startsWith('bc-basket-') ? rawId : `bc-basket-${rawId}`;
+      return {
+        id: playlistId,
+        basketId: rawId,
+        kind: 'playlist',
+        provider: 'bandcamp',
+        isBandcampBasket: true,
+        title: b.name || 'Bandcamp Basket',
+        name: b.name || 'Bandcamp Basket',
+        cover: firstCover,
+        artworkUrl: firstCover,
+        artistName: `${items.length} ${items.length === 1 ? 'item' : 'items'}`,
+        trackCount: items.length,
+        tracks: items.map((it, idx) => ({
+          id: it.id || `bcb-item-${idx}`,
+          title: it.title || it.album || 'Untitled',
+          artist: it.artist || '',
+          artistName: it.artist || '',
+          album: it.album || it.title || '',
+          cover: it.cover || it.artworkUrl || firstCover,
+          artworkUrl: it.cover || it.artworkUrl || firstCover,
+          url: it.url || '',
+          trackUrl: it.url || '',
+          provider: 'bandcamp',
+        })),
+      };
+    });
+  }, [bandcampBaskets]);
   const mergeProviderPlaylists = (remoteList, provKey) => {
     const base = Array.isArray(remoteList) ? remoteList : [];
     const localMatching = (playlists || [])
@@ -247,7 +333,8 @@ export default function Library() {
   const bcPurchaseAlbums = acct.bandcamp.collection.filter(i => i.kind === 'album');
   const bcWishTracks     = acct.bandcamp.wishlist.filter(i => i.kind === 'track');
   const bcWishAlbums     = acct.bandcamp.wishlist.filter(i => i.kind === 'album');
-  const bcPlaylists      = mergeProviderPlaylists(acct.bandcamp?.playlists, 'bandcamp');
+  const bcWishlistCombined = [...bcBasketPlaylists, ...(acct.bandcamp.wishlist || [])];
+  const bcPlaylists      = [...bcBasketPlaylists, ...mergeProviderPlaylists(acct.bandcamp?.playlists, 'bandcamp')];
   const bcFollows        = acct.bandcamp?.following || [];
   const scLikes          = acct.soundcloud.likes;
   const scPlaylists      = mergeProviderPlaylists(acct.soundcloud.playlists, 'soundcloud');
@@ -347,6 +434,9 @@ export default function Library() {
   async function openPlaylistSheet(incomingPl) {
     if (!incomingPl) return;
     const pl = playlists.find(p => String(p.id) === String(incomingPl.id)) || incomingPl;
+    if (pl.kind !== 'album') {
+      window.__kyoyuTouchPlaylistActivity?.(pl);
+    }
     const ts = Date.now();
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
@@ -500,9 +590,9 @@ export default function Library() {
     }
   }
 
-  // List / icon view chosen in the native filter bar (website: the display setting)
-  const layoutMode = nativeView || libraryLayout.mode;     // 'list' | 'grid'
-  const gridCols = libraryLayout.cols;
+  // List / icon view chosen in Settings or the native filter bar
+  const layoutMode = libraryLayout.mode || nativeView || 'grid';     // 'list' | 'grid'
+  const gridCols = libraryLayout.cols || 3;
 
   const isNative = typeof window !== 'undefined' && !!(window.webkit?.messageHandlers?.player || window.webkit?.messageHandlers?.streaming);
   // Spacing so first content sits under the 2nd filter row with exact same gap as between top buttons and 1st row
@@ -523,19 +613,50 @@ export default function Library() {
 
     if (libProvider === 'bandcamp') {
       const cat = ['purchases', 'wishlist', 'follows', 'playlists'].includes(activeFilter) ? activeFilter : 'purchases';
-      if (!acct.bandcamp.connected) {
-        body = empty('Connect Bandcamp in Settings › Streaming Services to see your purchases and wishlist.');
+      if (cat === 'wishlist') {
+        if (bcWishlistCombined.length > 0) {
+          body = (
+            <div>
+              {bcBasketPlaylists.length > 0 && (
+                <AcctSection
+                  first
+                  title={acct.bandcamp.wishlist.length > 0 ? 'Baskets' : undefined}
+                  items={bcBasketPlaylists}
+                  view={layoutMode}
+                  cols={gridCols}
+                  onOpenPlaylist={openPlaylistSheet}
+                />
+              )}
+              {acct.bandcamp.wishlist.length > 0 && (
+                <AcctSection
+                  first={bcBasketPlaylists.length === 0}
+                  title={bcBasketPlaylists.length > 0 ? 'Wishlist Items' : undefined}
+                  items={acct.bandcamp.wishlist}
+                  view={layoutMode}
+                  cols={gridCols}
+                  onOpenPlaylist={openPlaylistSheet}
+                />
+              )}
+            </div>
+          );
+        } else if (!acct.bandcamp.connected) {
+          body = empty('Connect Bandcamp in Settings › Streaming Services or add items to a Bandcamp basket to see your wishlist.');
+        } else {
+          body = empty(acct.loading ? 'Loading…' : 'Your wishlist is empty.');
+        }
       } else if (cat === 'playlists') {
         const bcPl = bcPlaylists;
         const err = acct.errors['bandcamp:playlists'];
         body = bcPl.length > 0
           ? <AcctSection items={bcPl} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
           : empty(acct.loading ? 'Loading…' : (err || 'No playlists in your Bandcamp account yet.'));
+      } else if (!acct.bandcamp.connected) {
+        body = empty('Connect Bandcamp in Settings › Streaming Services to see your purchases and wishlist.');
       } else {
-        const list = cat === 'wishlist' ? acct.bandcamp.wishlist : cat === 'follows' ? acct.bandcamp.following : acct.bandcamp.collection;
+        const list = cat === 'follows' ? acct.bandcamp.following : acct.bandcamp.collection;
         body = list.length > 0
           ? <AcctSection items={list} view={layoutMode} cols={gridCols} onOpenPlaylist={openPlaylistSheet} />
-          : empty(acct.loading ? 'Loading…' : cat === 'wishlist' ? 'Your wishlist is empty.' : cat === 'follows' ? 'You don’t follow anyone on Bandcamp yet.' : 'Nothing in your collection yet.');
+          : empty(acct.loading ? 'Loading…' : cat === 'follows' ? 'You don’t follow anyone on Bandcamp yet.' : 'Nothing in your collection yet.');
       }
     } else if (libProvider === 'soundcloud') {
       if (!acct.soundcloud.connected) {
@@ -931,10 +1052,10 @@ export default function Library() {
       {/* Wishlist */}
       {activeFilter === 'wishlist' && (
         <>
-          {(bcWishAlbums.length > 0 || bcWishTracks.length > 0 || dgWishlist.length > 0) ? (() => {
+          {(bcWishlistCombined.length > 0 || bcWishAlbums.length > 0 || bcWishTracks.length > 0 || dgWishlist.length > 0) ? (() => {
             const wishSectionsByProvider = {
               discogs:  [{ key: 'dg-wish-w', title: 'Discogs · Wishlist',  items: dgWishlist }],
-              bandcamp: [{ key: 'bc-wish-w', title: 'Bandcamp · Wishlist', items: acct.bandcamp.wishlist }],
+              bandcamp: [{ key: 'bc-wish-w', title: 'Bandcamp · Wishlist', items: bcWishlistCombined }],
             };
             const orderedWishSections = providerPriority
               .flatMap(p => wishSectionsByProvider[p] || [])

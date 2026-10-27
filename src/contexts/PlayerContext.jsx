@@ -1462,7 +1462,7 @@ export function PlayerProvider({ children }) {
         const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key) return;
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 15) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 18) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return;
         }
@@ -1509,7 +1509,7 @@ export function PlayerProvider({ children }) {
         const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 15) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 18) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }

@@ -256,33 +256,67 @@ export default async function handler(req, res) {
       };
       const resolvedLabel = [backToLabelName, bandPageName, publisherLdName].find(isDistinctFromArtist) || '';
 
-      // Extract available formats (Vinyl, Cassette, CD, Digital, etc.)
+      // Extract available formats (Vinyl 12", Vinyl 10", Vinyl 7", Vinyl 2xLP, Vinyl LP, Vinyl, Cassette, CD, Digital, etc.)
       const formatSet = new Set();
-      const normalizeFormatName = (rawFmt) => {
+      const addFormatsFromText = (rawFmt, typeId = null) => {
         const s = String(rawFmt || '').trim();
-        if (!s) return '';
-        if (/\b(t-?shirt|shirt|hoodie|sweater|sweatshirt|tote|bag|poster|print|sticker|hat|cap|beanie|patch|pin|mug|slipmat|ticket)\b/i.test(s)) return '';
-        if (/vinyl|lp|\b12"|\b7"|\b10"|test pressing|lathe/i.test(s)) return /lathe/i.test(s) ? 'Lathe Cut' : 'Vinyl';
-        if (/cassette|tape/i.test(s)) return 'Cassette';
-        if (/compact disc|\bcd\b|cd-r|digipak/i.test(s)) return 'CD';
-        if (/minidisc/i.test(s)) return 'MiniDisc';
-        if (/usb/i.test(s)) return 'USB';
-        if (/vhs/i.test(s)) return 'VHS';
-        if (/dvd|blu-?ray/i.test(s)) return 'DVD';
-        if (/flexi/i.test(s)) return 'Flexi-disc';
-        if (/digital|mp3|flac|wav|aiff|alac/i.test(s)) return 'Digital';
-        return s;
+        if (!s && typeId == null) return;
+        if (/\b(t-?shirt|shirt|hoodie|sweater|sweatshirt|tote|bag|poster|print|sticker|hat|cap|beanie|patch|pin|mug|slipmat|ticket)\b/i.test(s)) return;
+        let matchedSpecificVinyl = false;
+        if (/\b12\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s)) {
+          formatSet.add('Vinyl 12"');
+          matchedSpecificVinyl = true;
+        }
+        if (/\b10\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s)) {
+          formatSet.add('Vinyl 10"');
+          matchedSpecificVinyl = true;
+        }
+        if (/\b7\s*(?:"|''|”|″|in(?:ch(?:es)?)?|-inch)\b/i.test(s) || typeId === 16) {
+          formatSet.add('Vinyl 7"');
+          matchedSpecificVinyl = true;
+        }
+        if (/\b(?:2\s*x\s*lp|double\s+(?:vinyl|lp)|2lp)\b/i.test(s) || typeId === 15) {
+          formatSet.add('Vinyl 2xLP');
+          matchedSpecificVinyl = true;
+        } else if (!matchedSpecificVinyl && (/\b(?:vinyl\s+lp|lp\s+vinyl|\blp\b|180\s*g(?:ram)?\s+lp)\b/i.test(s) || typeId === 2)) {
+          formatSet.add('Vinyl LP');
+          matchedSpecificVinyl = true;
+        }
+        if (/lathe/i.test(s)) {
+          formatSet.add('Lathe Cut');
+        } else if (!matchedSpecificVinyl && (/vinyl|test pressing|\bwax\b/i.test(s) || typeId === 1)) {
+          formatSet.add('Vinyl');
+        }
+        if (/cassette|\btape\b/i.test(s) || typeId === 3) formatSet.add('Cassette');
+        if (/compact disc|\bcd\b|cd-r|digipak/i.test(s) || typeId === 1) {
+          if (/compact disc|\bcd\b|cd-r|digipak/i.test(s)) formatSet.add('CD');
+        }
+        if (/minidisc/i.test(s)) formatSet.add('MiniDisc');
+        if (/\busb\b/i.test(s)) formatSet.add('USB');
+        if (/\bvhs\b/i.test(s)) formatSet.add('VHS');
+        if (/dvd|blu-?ray/i.test(s)) formatSet.add('DVD');
+        if (/flexi/i.test(s)) formatSet.add('Flexi-disc');
+        if (/digital|mp3|flac|wav|aiff|alac/i.test(s)) formatSet.add('Digital');
       };
       if (Array.isArray(tralbum?.packages)) {
         for (const pkg of tralbum.packages) {
-          const fmt = normalizeFormatName(pkg?.type_name || pkg?.title || '');
-          if (fmt) formatSet.add(fmt);
+          const combinedPkgText = [
+            pkg?.type_name,
+            pkg?.title,
+            pkg?.description,
+            pkg?.desc_pt1,
+            pkg?.desc_pt2,
+          ].filter(Boolean).join(' ');
+          addFormatsFromText(combinedPkgText, pkg?.type_id);
         }
       }
-      const merchMatches = html.matchAll(/<span[^>]*class="[^"]*merchtype[^"]*"[^>]*>([\s\S]*?)<\/span>/gi);
+      const merchMatches = html.matchAll(/<(?:span|h4|div)[^>]*class="[^"]*(?:merchtype|buyItemPackageTitle)[^"]*"[^>]*>([\s\S]*?)<\/(?:span|h4|div)>/gi);
       for (const m of merchMatches) {
-        const fmt = normalizeFormatName(decodeEntities(m[1].replace(/<[^>]+>/g, '')));
-        if (fmt) formatSet.add(fmt);
+        addFormatsFromText(decodeEntities(m[1].replace(/<[^>]+>/g, '')));
+      }
+      // If generic 'Vinyl' was added alongside a more specific vinyl format (e.g. 'Vinyl 12"'), keep the specific one
+      if (formatSet.has('Vinyl') && (formatSet.has('Vinyl 12"') || formatSet.has('Vinyl 10"') || formatSet.has('Vinyl 7"') || formatSet.has('Vinyl 2xLP') || formatSet.has('Vinyl LP'))) {
+        formatSet.delete('Vinyl');
       }
       formatSet.add('Digital');
       const formats = Array.from(formatSet);

@@ -31,6 +31,53 @@ export function LibraryProvider({ children }) {
   const playlistsRef = useRef(playlists);
   playlistsRef.current = playlists;
 
+  const [playlistActivity, setPlaylistActivity] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('kyoyu-playlist-activity-v1') || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  const playlistActivityRef = useRef(playlistActivity);
+  playlistActivityRef.current = playlistActivity;
+
+  function touchPlaylistActivity(playlistOrId) {
+    if (!playlistOrId) return;
+    const now = Date.now();
+    const keys = [];
+    if (typeof playlistOrId === 'string' || typeof playlistOrId === 'number') {
+      const pid = String(playlistOrId).trim();
+      if (pid) {
+        keys.push(pid);
+        const matched = (playlistsRef.current || []).find(p => String(p?.id) === pid);
+        if (matched && (matched.title || matched.name)) {
+          keys.push(`title::${String(matched.title || matched.name).trim().toLowerCase()}`);
+        }
+      }
+    } else if (typeof playlistOrId === 'object') {
+      const pid = String(playlistOrId.id || playlistOrId.playlistId || '').trim();
+      if (pid) keys.push(pid);
+      const ptitle = String(playlistOrId.title || playlistOrId.name || '').trim().toLowerCase();
+      if (ptitle) keys.push(`title::${ptitle}`);
+      const purl = String(playlistOrId.url || playlistOrId.trackUrl || '').trim();
+      if (purl) keys.push(`url::${purl}`);
+    }
+    if (keys.length === 0) return;
+    const next = { ...(playlistActivityRef.current || {}) };
+    for (const k of keys) {
+      next[k] = now;
+    }
+    playlistActivityRef.current = next;
+    try { localStorage.setItem('kyoyu-playlist-activity-v1', JSON.stringify(next)); } catch {}
+    setPlaylistActivity(next);
+    try { window.dispatchEvent(new CustomEvent('kyoyu-playlist-activity-sync')); } catch {}
+  }
+
+  useEffect(() => {
+    window.__kyoyuTouchPlaylistActivity = touchPlaylistActivity;
+  });
+
   function updatePlaylists(updater) {
     const next = typeof updater === 'function' ? updater(playlistsRef.current || []) : updater;
     playlistsRef.current = next;
@@ -64,6 +111,13 @@ export function LibraryProvider({ children }) {
           setPlaylists(next);
         }
       } catch (err) {}
+      try {
+        const nextAct = JSON.parse(localStorage.getItem('kyoyu-playlist-activity-v1') || '{}');
+        if (nextAct && typeof nextAct === 'object') {
+          playlistActivityRef.current = nextAct;
+          setPlaylistActivity(nextAct);
+        }
+      } catch (err) {}
     };
     const handleStorage = (e) => {
       try {
@@ -77,14 +131,23 @@ export function LibraryProvider({ children }) {
           playlistsRef.current = next;
           setPlaylists(next);
         }
+        if (e.key === 'kyoyu-playlist-activity-v1') {
+          const nextAct = JSON.parse(e.newValue || '{}');
+          if (nextAct && typeof nextAct === 'object') {
+            playlistActivityRef.current = nextAct;
+            setPlaylistActivity(nextAct);
+          }
+        }
       } catch (err) {}
     };
     window.addEventListener('storage', handleStorage);
     window.addEventListener('kyoyu-playlists-sync', reloadPlaylistsFromStorage);
+    window.addEventListener('kyoyu-playlist-activity-sync', reloadPlaylistsFromStorage);
     window.addEventListener('focus', reloadPlaylistsFromStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('kyoyu-playlists-sync', reloadPlaylistsFromStorage);
+      window.removeEventListener('kyoyu-playlist-activity-sync', reloadPlaylistsFromStorage);
       window.removeEventListener('focus', reloadPlaylistsFromStorage);
     };
   }, []);
@@ -205,8 +268,10 @@ export function LibraryProvider({ children }) {
 
   function createPlaylist(name, providers = []) {
     const cleanProviders = Array.isArray(providers) ? providers.filter(Boolean) : [];
-    const newPl = { id: `pl-${Date.now()}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false, isPublic: false, providers: cleanProviders };
+    const now = Date.now();
+    const newPl = { id: `pl-${now}`, title: name, tracks: [], cover: '/album1.png', creator: 'You', isAI: false, isPublic: false, providers: cleanProviders, updatedAt: now };
     updatePlaylists(prev => [...prev, newPl]);
+    touchPlaylistActivity(newPl);
     return newPl;
   }
   function addToPlaylist(playlistId, track) {
@@ -224,6 +289,7 @@ export function LibraryProvider({ children }) {
       audioUrl: track.audioUrl || track.src || track.streamUrl || track.url || '',
       trackUrl: track.trackUrl || track.url || '',
     };
+    const now = Date.now();
     updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
       const existingTracks = pl.tracks || [];
@@ -232,8 +298,9 @@ export function LibraryProvider({ children }) {
       const nextCover = ((!pl.cover || pl.cover === '/album1.png') && normalizedTrack.cover && normalizedTrack.cover !== '/album1.png')
         ? normalizedTrack.cover
         : (pl.cover || '/album1.png');
-      return { ...pl, cover: nextCover, tracks: nextTracks };
+      return { ...pl, cover: nextCover, tracks: nextTracks, updatedAt: now };
     }));
+    touchPlaylistActivity(playlistId);
   }
   function getPlaylists() {
     return (playlistsRef.current || []).map(pl => ({
@@ -246,43 +313,53 @@ export function LibraryProvider({ children }) {
       creator: pl.creator || 'You',
       isPublic: !!pl.isPublic,
       providers: Array.isArray(pl.providers) ? pl.providers : [],
+      updatedAt: pl.updatedAt || 0,
     }));
   }
   function updatePlaylistCover(playlistId, coverUrl) {
-    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, cover: coverUrl } : pl));
+    const now = Date.now();
+    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, cover: coverUrl, updatedAt: now } : pl));
+    touchPlaylistActivity(playlistId);
   }
   function deletePlaylist(playlistId) {
     updatePlaylists(prev => prev.filter(pl => pl.id !== playlistId));
   }
   function removeFromPlaylist(playlistId, trackId) {
     const cleanId = String(trackId || '').split('?ts=')[0];
+    const now = Date.now();
     updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
-      return { ...pl, tracks: (pl.tracks || []).filter(t => String(t.id || '').split('?ts=')[0] !== cleanId) };
+      return { ...pl, tracks: (pl.tracks || []).filter(t => String(t.id || '').split('?ts=')[0] !== cleanId), updatedAt: now };
     }));
+    touchPlaylistActivity(playlistId);
   }
   function reorderPlaylist(playlistId, fromIndex, toIndex) {
+    const now = Date.now();
     updatePlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
       const tracks = [...(pl.tracks || [])];
       if (fromIndex < 0 || fromIndex >= tracks.length || toIndex < 0 || toIndex >= tracks.length) return pl;
       const [moved] = tracks.splice(fromIndex, 1);
       tracks.splice(toIndex, 0, moved);
-      return { ...pl, tracks };
+      return { ...pl, tracks, updatedAt: now };
     }));
+    touchPlaylistActivity(playlistId);
   }
   function togglePlaylistPublic(playlistId) {
-    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, isPublic: !pl.isPublic } : pl));
+    const now = Date.now();
+    updatePlaylists(prev => prev.map(pl => pl.id === playlistId ? { ...pl, isPublic: !pl.isPublic, updatedAt: now } : pl));
+    touchPlaylistActivity(playlistId);
   }
 
   return (
     <LibraryContext.Provider value={{
-      likedTracks, likedUploads, savedReleases, playlists, downloads, followedArtists,
+      likedTracks, likedUploads, savedReleases, playlists, playlistActivity, downloads, followedArtists,
       toggleLike, isLiked, toggleLikeUpload, isLikedUpload, getLikedUploads,
       toggleSave, isSaved, toggleFollow, isFollowing,
       addDownload, createPlaylist,
       toggleDownload, isDownloaded, addToPlaylist, getPlaylists, updatePlaylistCover,
       deletePlaylist, removeFromPlaylist, reorderPlaylist, togglePlaylistPublic,
+      touchPlaylistActivity,
     }}>
       {children}
     </LibraryContext.Provider>

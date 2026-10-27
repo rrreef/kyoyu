@@ -33,7 +33,7 @@
   overflow: visible;
   aspect-ratio: 16 / 9;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.18s ease, opacity 0.15s ease;
+  transition: none !important;
 }
 .featured-hero-card::before {
   display: none !important;
@@ -46,9 +46,13 @@
 [data-theme="white"] .featured-hero-card::before {
   display: none !important;
 }
-.featured-hero-card:active {
-  transform: scale(0.985);
-  opacity: 0.9;
+.featured-hero-card:active,
+button.featured-hero-card:active:not(:disabled),
+.featured-hero-card:focus,
+.featured-hero-card:focus-visible {
+  transform: none !important;
+  opacity: 1 !important;
+  transition: none !important;
 }
 
 /* Cover art — left side */
@@ -147,6 +151,15 @@
   margin-bottom: -1px;
   white-space: nowrap;
   overflow: hidden;
+}
+.featured-hero-sharer {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0.9;
 }
 
 .featured-hero-marquee-track {

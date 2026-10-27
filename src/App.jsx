@@ -753,8 +753,10 @@ function PlaylistBridge() {
           }
           pl.trackCount = Math.max((Number(pl.trackCount) || 0) + addedCount, pl.tracks.length);
           saveFastConnectedCache();
+          window.__kyoyuTouchPlaylistActivity?.(pl);
         }
       }
+      window.__kyoyuTouchPlaylistActivity?.(playlistId);
       try {
         window.webkit?.messageHandlers?.streaming?.postMessage({
           id: Date.now(),
