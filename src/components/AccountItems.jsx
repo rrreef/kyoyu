@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Play, Music2 } from 'lucide-react';
 import { usePlayer } from '../contexts/PlayerContext';
 import { cleanTrackOrReleaseTitle, splitCleanMetadata } from '../lib/streaming';
@@ -431,7 +431,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
     return it.kind === 'album';
   };
 
-  const handleSelect = React.useCallback(async (it) => {
+  const handleSelect = useCallback(async (it) => {
     if (!it || it.kind === 'profile') return;
     const handlePlaylistClick = async (pl) => {
       if (onOpenPlaylistRef.current) {
