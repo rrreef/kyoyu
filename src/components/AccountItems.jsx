@@ -336,15 +336,184 @@ export function toPlayable(it) {
   };
 }
 
+export function isBandcampPlaylistItem(item) {
+  if (!item) return false;
+  const id = String(item.id || item.playlistId || '');
+  if (id.startsWith('bandcamp-pl') || id.startsWith('bc-basket-') || id.startsWith('bcbasket-')) return true;
+  if (item.isBandcampBasket) return true;
+  return item.kind === 'playlist' && String(item.provider || '').toLowerCase() === 'bandcamp';
+}
+
+let _lastLongPressActionTs = 0;
+
+export function openContentActionCard(rawItem) {
+  if (!rawItem) return;
+  _lastLongPressActionTs = Date.now();
+  const title = String(rawItem.title || rawItem.album || rawItem.name || 'Untitled').trim();
+  const artist = String(rawItem.artistName || rawItem.artist || rawItem.sub || '').trim();
+  const artwork = sanitizeArtworkUrl(rawItem.artworkUrl || rawItem.cover || rawItem.avatar || '', rawItem.id, false);
+  const provider = String(rawItem.provider || 'kyoyu').toLowerCase();
+  const type = String(rawItem.kind || rawItem.entityType || rawItem.type || 'album').toLowerCase();
+  const url = String(rawItem.url || rawItem.trackUrl || rawItem.albumUrl || rawItem.permalinkUrl || '').trim();
+  const id = String(rawItem.id || rawItem.postId || rawItem.trackId || rawItem.playlistId || `${artist}|${title}`).trim();
+  const itemPayload = { id, title, artist, artwork, provider, type, url };
+  try {
+    window.webkit?.messageHandlers?.player?.postMessage({
+      cmd: 'open_content_action_card',
+      item: itemPayload,
+    });
+  } catch {}
+}
+
+export function useLongPressContentAction(item) {
+  const timerRef = useRef(null);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const triggeredRef = useRef(false);
+  const itemRef = useRef(item);
+  itemRef.current = item;
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearTimer, [clearTimer]);
+
+  const onTouchStart = useCallback((e) => {
+    triggeredRef.current = false;
+    const t = e.touches?.[0];
+    if (!t) return;
+    startPosRef.current = { x: t.clientX, y: t.clientY };
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      triggeredRef.current = true;
+      openContentActionCard(itemRef.current);
+    }, 460);
+  }, [clearTimer]);
+
+  const onTouchMove = useCallback((e) => {
+    if (!timerRef.current) return;
+    const t = e.touches?.[0];
+    if (!t) return;
+    const dx = Math.abs(t.clientX - startPosRef.current.x);
+    const dy = Math.abs(t.clientY - startPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimer();
+    }
+  }, [clearTimer]);
+
+  const onTouchEnd = useCallback((e) => {
+    clearTimer();
+    if (triggeredRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [clearTimer]);
+
+  const onContextMenu = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearTimer();
+    triggeredRef.current = true;
+    openContentActionCard(itemRef.current);
+  }, [clearTimer]);
+
+  const wrapClick = useCallback((fn) => {
+    if (!fn) return undefined;
+    return (e) => {
+      if (triggeredRef.current || Date.now() - _lastLongPressActionTs < 650) {
+        triggeredRef.current = false;
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+        return;
+      }
+      fn(e);
+    };
+  }, []);
+
+  return {
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel: clearTimer,
+    onContextMenu,
+    wrapClick,
+  };
+}
+
+export function usePinnedAndHiddenContent() {
+  const readList = (key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const [pinnedItems, setPinnedItems] = useState(() => readList('kyoyu-pinned-content-v1'));
+  const [hiddenItems, setHiddenItems] = useState(() => readList('kyoyu-hidden-content-v1'));
+
+  useEffect(() => {
+    const sync = () => {
+      setPinnedItems(readList('kyoyu-pinned-content-v1'));
+      setHiddenItems(readList('kyoyu-hidden-content-v1'));
+    };
+    window.addEventListener('kyoyu-pinned-hidden-changed', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('kyoyu-pinned-hidden-changed', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const hiddenKeys = useRef(new Set());
+  const nextSet = new Set();
+  for (const h of hiddenItems) {
+    if (!h) continue;
+    if (h.id) nextSet.add(`id::${String(h.id).toLowerCase()}`);
+    const t = String(h.title || '').trim().toLowerCase();
+    const a = String(h.artist || '').trim().toLowerCase();
+    if (t) nextSet.add(`ta::${a}|${t}`);
+  }
+  hiddenKeys.current = nextSet;
+
+  const isItemHidden = useCallback((it) => {
+    if (!it || hiddenKeys.current.size === 0) return false;
+    const id = String(it.id || it.postId || it.trackId || it.playlistId || '').toLowerCase();
+    if (id && hiddenKeys.current.has(`id::${id}`)) return true;
+    const t = String(it.title || it.album || it.name || '').trim().toLowerCase();
+    const a = String(it.artistName || it.artist || '').trim().toLowerCase();
+    if (t && hiddenKeys.current.has(`ta::${a}|${t}`)) return true;
+    return false;
+  }, [hiddenItems]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { pinnedItems, hiddenItems, isItemHidden };
+}
+
 const Art = memo(function Art({ item, src, round }) {
   const { src: resolvedSrc, onError } = useResolvedArtwork(item || { artworkUrl: src });
+  const isBcPl = isBandcampPlaylistItem(item);
   return (
     <div style={{
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
       background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      position: 'relative',
     }}>
-      {resolvedSrc ? <img src={resolvedSrc} alt="" onError={onError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="eager" decoding="sync" />
-           : <Music2 size={22} color="var(--text-dim)" />}
+      {resolvedSrc ? (
+        <img
+          src={resolvedSrc}
+          alt=""
+          onError={onError}
+          style={isBcPl
+            ? { width: '125%', maxWidth: 'none', height: '100%', objectFit: 'cover', objectPosition: 'left center', alignSelf: 'flex-start' }
+            : { width: '100%', height: '100%', objectFit: 'cover' }}
+          loading="eager"
+          decoding="sync"
+        />
+      ) : <Music2 size={22} color="var(--text-dim)" />}
     </div>
   );
 });
@@ -354,9 +523,15 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
   const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
   const displayTitle = meta.title || item.title;
   const displayArtist = sub ?? (meta.artist || item.artistName);
+  const lp = useLongPressContentAction({ ...item, title: displayTitle, artistName: displayArtist });
   return (
     <div
-      onClick={onClick}
+      onClick={lp.wrapClick(onClick)}
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
       style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', cursor: onClick ? 'pointer' : 'default' }}
     >
       <Art item={item} src={item.artworkUrl} round={round} isPlaylist={item.kind === 'playlist'} />
@@ -372,17 +547,41 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
 /** One cell of the icon view (same classes as the liked-tracks grid) */
 const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlaying }) {
   const isPlaylist = item.kind === 'playlist';
+  const isBcPl = isBandcampPlaylistItem(item);
   const isProfile = item.kind === 'profile';
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
   const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
   const displayTitle = meta.title || item.title;
   const displayArtist = meta.artist || item.artistName;
-  const handleClick = onSelect ? () => onSelect(item) : undefined;
+  const lp = useLongPressContentAction({ ...item, title: displayTitle, artistName: displayArtist });
+  const handleClick = onSelect ? lp.wrapClick(() => onSelect(item)) : undefined;
   return (
-    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={handleClick} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
-      <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
+    <div
+      className={`upl-grid-cell${isActive ? ' active' : ''}`}
+      onClick={handleClick}
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
+      style={{ cursor: onSelect ? 'pointer' : 'default' }}
+    >
+      <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : isBcPl ? { aspectRatio: '1/1', overflow: 'hidden' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
         {cleanSrc
-          ? <img src={cleanSrc} alt={displayTitle} onError={onError} loading="eager" decoding="sync" style={isPlaylist ? { objectFit: 'cover' } : undefined} />
+          ? (
+            <img
+              src={cleanSrc}
+              alt={displayTitle}
+              onError={onError}
+              loading="eager"
+              decoding="sync"
+              style={isBcPl
+                ? { width: '125%', maxWidth: 'none', height: '100%', objectFit: 'cover', objectPosition: 'left center' }
+                : isPlaylist
+                  ? { objectFit: 'cover' }
+                  : undefined}
+            />
+          )
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
         {isActive && (
           <div className="upl-grid-playing">
@@ -400,9 +599,11 @@ const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlay
 
 const AccountItemList = memo(function AccountItemList({ items = [], view = 'list', cols = 3, onOpenPlaylist }) {
   const { setSearchQueue, playSearchItem, state } = usePlayer();
+  const { isItemHidden } = usePinnedAndHiddenContent();
+  const visibleItems = items.filter(it => !isItemHidden(it));
   const [error] = useState('');
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
+  const itemsRef = useRef(visibleItems);
+  itemsRef.current = visibleItems;
   const onOpenPlaylistRef = useRef(onOpenPlaylist);
   onOpenPlaylistRef.current = onOpenPlaylist;
   const setSearchQueueRef = useRef(setSearchQueue);
@@ -576,7 +777,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
 
       {view === 'grid' ? (
         <div className={`upl-grid upl-grid-${safeCols}`}>
-          {items.map(it => (
+          {visibleItems.map(it => (
             <GridCell
               key={it.id}
               item={it}
@@ -588,7 +789,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
           ))}
         </div>
       ) : (
-        items.map(it => {
+        visibleItems.map(it => {
           if (it.kind === 'playlist') {
             return (
               <Row

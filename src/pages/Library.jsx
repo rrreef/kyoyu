@@ -11,7 +11,7 @@ import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../compo
 import EventSheet from '../components/ui/EventSheet';
 import { berghainEvents } from '../data/berghainEvents';
 import { BerghainEventCard } from '../components/ui/Cards';
-import AccountItemList, { pinImageInMemory } from '../components/AccountItems';
+import AccountItemList, { pinImageInMemory, useLongPressContentAction, usePinnedAndHiddenContent } from '../components/AccountItems';
 import { useConnectedLibrary } from '../lib/useConnectedLibrary';
 import { isStreamingAvailable, useProviderPriority } from '../lib/streaming';
 import './Library.css';
@@ -97,10 +97,18 @@ function groupByAlbum(tracks) {
 
 
 /* ── Shelf card — identical to Home ───────────────────────── */
-function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback }) {
+function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback, item }) {
   const cleanCover = cover ? pinImageInMemory(cover) : '';
+  const lp = useLongPressContentAction(item || { title, artist: sub, cover: cleanCover, kind: 'playlist' });
   return (
-    <div className="shelf-card">
+    <div
+      className="shelf-card"
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
+    >
       <div className="shelf-card-art">
         {cleanCover
           ? <img src={cleanCover} alt={title} loading="eager" decoding="sync"/>
@@ -116,11 +124,17 @@ function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback })
   );
 }
 
-function LibRow({ cover, title, sub, onClick, round = false, showPlay = true }) {
+function LibRow({ cover, title, sub, onClick, round = false, showPlay = true, item }) {
   const cleanSrc = cover ? pinImageInMemory(cover) : '';
+  const lp = useLongPressContentAction(item || { title, artist: sub, cover: cleanSrc, kind: 'album' });
   return (
     <div
-      onClick={onClick}
+      onClick={lp.wrapClick(onClick)}
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
       style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', cursor: onClick ? 'pointer' : 'default' }}
     >
       <div style={{
@@ -176,6 +190,7 @@ export default function Library() {
       if (d.provider) setLibProvider(d.provider);
       if (d.category) setFilter(d.category);
       if (d.view) setNativeView(d.view);
+      setSelectedAlbum(null);
     };
     const onLayoutOrCols = (e) => {
       if (e?.type === 'kyoyu-grid-cols-change' && e?.detail?.page === 'library') {
@@ -426,6 +441,7 @@ export default function Library() {
   }
 
   function handleFilterClick(key) {
+    setSelectedAlbum(null);
     setFilter(key);
     if (key !== 'likes') setLikesSub('releases'); // reset sub when leaving Likes
   }
@@ -454,7 +470,9 @@ export default function Library() {
         tracks: currentTracks,
         _ts: ts,
       };
-      setSelectedAlbum(albumObj);
+      if (!window.webkit?.messageHandlers?.player) {
+        setSelectedAlbum(albumObj);
+      }
       // Tapping a playlist track in the native sheet plays it like History / Likes
       registerAlbumPlayback(albumObj);
       const mappedTracks = currentTracks.map(t => ({
@@ -821,7 +839,7 @@ export default function Library() {
           </div>
         )}
         {body}
-        {selectedAlbum && <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />}
+        {!isNative && selectedAlbum && <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />}
       </div>
     );
   }
@@ -1262,7 +1280,7 @@ export default function Library() {
       )}
 
       {/* Album sheet */}
-      {selectedAlbum && (
+      {!isNative && selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
 

@@ -202,9 +202,11 @@ button.featured-hero-card:active:not(:disabled),
   flex-shrink: 0;
   width: 130px;
   cursor: pointer;
-  transition: var(--transition-fast);
+  transform: none !important;
+  transition: none !important;
 }
-.shelf-card:hover { opacity: 0.85; }
+.shelf-card:hover,
+.shelf-card:active { opacity: 1 !important; transform: none !important; }
 
 .shelf-card-art {
   position: relative;
@@ -214,15 +216,18 @@ button.featured-hero-card:active:not(:disabled),
   overflow: hidden;
   background: var(--grey-900);
   margin-bottom: var(--sp-2);
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 .shelf-card-art img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.35s ease;
+  transform: none !important;
+  transition: none !important;
 }
-.shelf-card:hover .shelf-card-art img { transform: scale(1.04); }
+.shelf-card:hover .shelf-card-art img { transform: none !important; }
 
 .shelf-card-badge {
   position: absolute;

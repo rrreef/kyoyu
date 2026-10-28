@@ -4,7 +4,7 @@ import { Play, Pause, Shuffle, Music2, MoreHorizontal, Check, Heart } from 'luci
 import { usePlayer, historyReplayInfo } from '../../contexts/PlayerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { sanitizeArtworkUrl, pinImageInMemory } from '../AccountItems';
+import { sanitizeArtworkUrl, pinImageInMemory, useLongPressContentAction, usePinnedAndHiddenContent } from '../AccountItems';
 import './UploadShelf.css';
 
 /* ── group by album ───────────────────────────────────────── */
@@ -300,8 +300,17 @@ function useUploadArtwork(t) {
 
 const UploadExpRow = memo(function UploadExpRow({ t, isActive, onPlay }) {
   const { cleanSrc, onError } = useUploadArtwork(t);
+  const lp = useLongPressContentAction({ ...t, kind: 'track' });
   return (
-    <div className={`upl-exp-row${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
+    <div
+      className={`upl-exp-row${isActive ? ' active' : ''}`}
+      onClick={lp.wrapClick(() => onPlay(t))}
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
+    >
       {cleanSrc
         ? <img src={cleanSrc} alt="" onError={onError} className="upl-exp-art" loading="eager" decoding="sync"/>
         : <div className="upl-exp-art upl-exp-art-ph"><Music2 size={22} color="rgba(255,255,255,.3)"/></div>
@@ -319,8 +328,17 @@ const UploadExpRow = memo(function UploadExpRow({ t, isActive, onPlay }) {
 
 const UploadGridCellItem = memo(function UploadGridCellItem({ t, isActive, isPlaying, liked, safeCols, onPlay, onToggleLike }) {
   const { cleanSrc, onError } = useUploadArtwork(t);
+  const lp = useLongPressContentAction({ ...t, kind: 'track' });
   return (
-    <div className={`upl-grid-cell${isActive ? ' active' : ''}`} onClick={() => onPlay(t)}>
+    <div
+      className={`upl-grid-cell${isActive ? ' active' : ''}`}
+      onClick={lp.wrapClick(() => onPlay(t))}
+      onTouchStart={lp.onTouchStart}
+      onTouchMove={lp.onTouchMove}
+      onTouchEnd={lp.onTouchEnd}
+      onTouchCancel={lp.onTouchCancel}
+      onContextMenu={lp.onContextMenu}
+    >
       <div className="upl-grid-art">
         {cleanSrc
           ? <img src={cleanSrc} alt={t.title} onError={onError} loading="eager" decoding="sync"/>
@@ -345,10 +363,11 @@ export function UploadExpandedList({ uploads }) {
   const { playTrack, playSaved } = usePlayer();
   const { user } = useAuth();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
+  const { isItemHidden } = usePinnedAndHiddenContent();
   const [activeId,     setActiveId]     = useState(null);
   const [editingTrack, setEditingTrack] = useState(null);
   const [editMeta,     setEditMeta]     = useState({});
-  const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  const sorted = [...uploads].filter(t => !isItemHidden(t)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
     // Liked tracks from Bandcamp / SoundCloud / YouTube / Discogs play exactly like History
@@ -418,7 +437,8 @@ export function UploadExpandedList({ uploads }) {
 export function UploadGridView({ uploads, cols = 2 }) {
   const { playTrack, playSaved, state } = usePlayer();
   const { toggleLikeUpload, isLikedUpload } = useLibrary();
-  const sorted = [...uploads].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  const { isItemHidden } = usePinnedAndHiddenContent();
+  const sorted = [...uploads].filter(t => !isItemHidden(t)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 
   function play(t) {
     // Liked tracks from Bandcamp / SoundCloud / YouTube / Discogs play exactly like History

@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory, toPlayable } from '../components/AccountItems';
+import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory, toPlayable, openContentActionCard, usePinnedAndHiddenContent } from '../components/AccountItems';
 import { useConnectedLibrary, preloadConnectedLibrary } from '../lib/useConnectedLibrary';
 import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
@@ -526,11 +526,71 @@ export default function Home() {
     }
   }
 
+  const { pinnedItems, isItemHidden } = usePinnedAndHiddenContent();
+  const visiblePinnedItems = useMemo(() => (pinnedItems || []).filter(it => !isItemHidden(it)), [pinnedItems, isItemHidden]);
+
+  const lpTimerRef = useRef(null);
+  const lpStartRef = useRef({ x: 0, y: 0 });
+  const lpFiredRef = useRef(false);
+  const clearLp = useCallback(() => {
+    if (lpTimerRef.current) {
+      clearTimeout(lpTimerRef.current);
+      lpTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearLp, [clearLp]);
+
+  const bindLongPress = useCallback((itemPayload, onClickFn) => ({
+    onTouchStart: (e) => {
+      lpFiredRef.current = false;
+      const t = e.touches?.[0];
+      if (!t) return;
+      lpStartRef.current = { x: t.clientX, y: t.clientY };
+      clearLp();
+      lpTimerRef.current = setTimeout(() => {
+        lpFiredRef.current = true;
+        openContentActionCard(itemPayload);
+      }, 460);
+    },
+    onTouchMove: (e) => {
+      if (!lpTimerRef.current) return;
+      const t = e.touches?.[0];
+      if (!t) return;
+      if (Math.abs(t.clientX - lpStartRef.current.x) > 10 || Math.abs(t.clientY - lpStartRef.current.y) > 10) {
+        clearLp();
+      }
+    },
+    onTouchEnd: (e) => {
+      clearLp();
+      if (lpFiredRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    onTouchCancel: clearLp,
+    onContextMenu: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearLp();
+      lpFiredRef.current = true;
+      openContentActionCard(itemPayload);
+    },
+    onClick: (e) => {
+      if (lpFiredRef.current) {
+        lpFiredRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      onClickFn?.(e);
+    },
+  }), [clearLp]);
+
   // Group flat tracks into albums
-  const publicAlbums = useMemo(() => groupByAlbum(publicReleases), [publicReleases]);
+  const publicAlbums = useMemo(() => groupByAlbum(publicReleases).filter(a => !isItemHidden(a)), [publicReleases, isItemHidden]);
 
   // Featured = albums with cover art (will be admin-curated via is_featured flag later)
-  const featuredAlbums = useMemo(() => publicAlbums.filter(a => a.cover), [publicAlbums]);
+  const featuredAlbums = useMemo(() => publicAlbums.filter(a => a.cover && !isItemHidden(a)), [publicAlbums, isItemHidden]);
 
   // Featured, Community & Bandcamp carousel state
   const featuredRef = useRef(null);
@@ -980,13 +1040,21 @@ export default function Home() {
                       key={album.id}
                       className="upl-grid-cell"
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                      onClick={() => {
+                      {...bindLongPress({
+                        id: album.id,
+                        title: album.title,
+                        artist: album.artist,
+                        artworkUrl: showCover || album.cover,
+                        provider: 'kyoyu',
+                        kind: 'album',
+                        url: album.url || album.trackUrl || '',
+                      }, () => {
                         if (album.id.startsWith('single::') && album.tracks?.length === 1) {
                           playTrack(album.tracks[0]);
                         } else {
                           setSelectedAlbum(openNativeAlbumFast(album));
                         }
-                      }}
+                      })}
                     >
                       <div className="upl-grid-art">
                         {showCover
@@ -1030,7 +1098,15 @@ export default function Home() {
                     <button
                       key={album.id}
                       className="featured-hero-card"
-                      onClick={() => {
+                      {...bindLongPress({
+                        id: album.id,
+                        title: album.title,
+                        artist: album.artist,
+                        artworkUrl: showCover || album.cover,
+                        provider: 'kyoyu',
+                        kind: 'album',
+                        url: album.url || album.trackUrl || '',
+                      }, () => {
                         if (album.id.startsWith('single::') && album.tracks?.length === 1) {
                           playTrack(album.tracks[0]);
                         } else {
@@ -1043,7 +1119,7 @@ export default function Home() {
                             formats: formatsList,
                           }));
                         }
-                      }}
+                      })}
                     >
                       {/* Cover art */}
                       <div className="featured-hero-art">
@@ -1069,6 +1145,42 @@ export default function Home() {
           )}
         </section>
       )}
+
+      {/* ═══ 1.05 — PINNED CONTENT (UNDER FEATURED) ═══ */}
+      {showFeatured && visiblePinnedItems.length > 0 && (!expandedSectionKey || expandedSectionKey === 'home-pinned') && (() => {
+        const mappedPinned = visiblePinnedItems.map(p => ({
+          id: p.id,
+          kind: p.type === 'playlist' ? 'playlist' : p.type === 'track' ? 'track' : 'album',
+          provider: p.provider || 'bandcamp',
+          title: p.title || 'Untitled',
+          artistName: p.artist || '',
+          artist: p.artist || '',
+          artworkUrl: p.artwork || '',
+          cover: p.artwork || '',
+          url: p.url || '',
+          trackUrl: p.url || '',
+        }));
+        const pinCols = homeLayout.cols || HOME_TITLES_PER_ROW;
+        const pinViewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
+        return (
+          <section className="home-section">
+            <div className="section-title">
+              <span onClick={() => toggleExpandSection('home-pinned')} style={{ cursor: 'pointer' }}>
+                {expandedSectionKey === 'home-pinned' ? '← Pinned' : 'Pinned'}
+              </span>
+              {expandedSectionKey === 'home-pinned' && (
+                <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{mappedPinned.length}</span>
+              )}
+            </div>
+            <AccountItemList
+              items={expandedSectionKey === 'home-pinned' ? mappedPinned.slice(0, expandedVisibleCount) : mappedPinned}
+              view={pinViewMode}
+              cols={pinCols}
+              onOpenPlaylist={openPlaylistSheet}
+            />
+          </section>
+        );
+      })()}
 
       {/* ═══ 1.1 — PLAYLISTS (3 PER ROW ICON VIEW, ORDERED MOST RECENT VIEWED / EDITED / PLAYED FIRST) ═══ */}
       {showFeatured && (!expandedSectionKey || expandedSectionKey === 'home-playlists') && (() => {
@@ -1305,7 +1417,15 @@ export default function Home() {
                   <button
                     key={lookupKey}
                     className="featured-hero-card"
-                    onClick={() => {
+                    {...bindLongPress({
+                      id: post.id || lookupKey,
+                      title: displayTitle,
+                      artist: displayArtist,
+                      artworkUrl: showCover || post.cover,
+                      provider: post.provider || 'bandcamp',
+                      kind: entityType,
+                      url: releaseUrl,
+                    }, () => {
                       if (entityType === 'artist') {
                         const aName = post.artist || post.title || '';
                         if (window.__kyoyuOpenArtist) {
@@ -1358,7 +1478,7 @@ export default function Home() {
                           trackUrl: releaseUrl,
                         });
                       }
-                    }}
+                    })}
                   >
                     <div className="featured-hero-art">
                       {showCover
@@ -1493,7 +1613,7 @@ export default function Home() {
 
               // Render "New on Bandcamp" using the Featured hero carousel layout (featuring new releases/albums from followings)
               if (sec.key === 'bandcamp-new') {
-                const sortedBcReleases = [...(sec.items || [])].sort((a, b) => {
+                const sortedBcReleases = [...(sec.items || [])].filter(it => !isItemHidden(it)).sort((a, b) => {
                   const ua = String(a.albumUrl || a.trackUrl || a.url || '');
                   const ub = String(b.albumUrl || b.trackUrl || b.url || '');
                   const isAlbA = a.kind === 'album' || ua.includes('/album/') ? 1 : 0;
@@ -1549,7 +1669,15 @@ export default function Home() {
                           <button
                             key={it.id || `bc-new-${idx}`}
                             className="featured-hero-card"
-                            onClick={() => {
+                            {...bindLongPress({
+                              id: it.id || `bc-new-${idx}`,
+                              title: albumTitle,
+                              artist: artistDisplay,
+                              artworkUrl: showCover || cleanCover || it.artworkUrl,
+                              provider: 'bandcamp',
+                              kind: 'album',
+                              url: releaseUrl,
+                            }, () => {
                               openPlaylistSheet({
                                 ...it,
                                 kind: 'album',
@@ -1564,7 +1692,7 @@ export default function Home() {
                                 url: releaseUrl,
                                 trackUrl: releaseUrl,
                               });
-                            }}
+                            })}
                           >
                             <div className="featured-hero-art">
                               {showCover
@@ -1629,20 +1757,20 @@ export default function Home() {
       })()}
 
       {/* ═══ 1.5 — HISTORY ═══ */}
-      {showFeatured && playHistory.length > 0 && (!expandedSectionKey || expandedSectionKey === 'history') && (
+      {showFeatured && playHistory.filter(it => !isItemHidden(it)).length > 0 && (!expandedSectionKey || expandedSectionKey === 'history') && (
         <section className="home-section">
           <div className="section-title">
             <span onClick={() => toggleExpandSection('history')} style={{ cursor: 'pointer' }}>
               {expandedSectionKey === 'history' ? '← History' : 'History'}
             </span>
             {expandedSectionKey === 'history' && (
-              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{playHistory.length}</span>
+              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{playHistory.filter(it => !isItemHidden(it)).length}</span>
             )}
           </div>
           {expandedSectionKey === 'history' ? (
             <>
               <div className={`upl-grid upl-grid-${homeLayout.cols || 3}`}>
-                {playHistory.slice(0, expandedVisibleCount).map(item => {
+                {playHistory.filter(it => !isItemHidden(it)).slice(0, expandedVisibleCount).map(item => {
                   const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
                   const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
                   return (
@@ -1650,7 +1778,15 @@ export default function Home() {
                       key={item._hkey || item.id}
                       className="upl-grid-cell"
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                      onClick={() => playFromHistory(item)}
+                      {...bindLongPress({
+                        id: item.id,
+                        title: item.title,
+                        artist: item.artist,
+                        artworkUrl: showCover || item.cover || item.artworkUrl,
+                        provider: item.provider || 'bandcamp',
+                        kind: 'track',
+                        url: item.url || item.trackUrl || '',
+                      }, () => playFromHistory(item))}
                     >
                       <div className="upl-grid-art">
                         {showCover ? (
@@ -1665,13 +1801,13 @@ export default function Home() {
                   );
                 })}
               </div>
-              {expandedVisibleCount < playHistory.length && (
+              {expandedVisibleCount < playHistory.filter(it => !isItemHidden(it)).length && (
                 <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
               )}
             </>
           ) : (
             <div className="scroll-row">
-              {playHistory.slice(0, 30).map(item => {
+              {playHistory.filter(it => !isItemHidden(it)).slice(0, 30).map(item => {
                 const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
                 const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
                 return (
@@ -1679,7 +1815,15 @@ export default function Home() {
                     key={item._hkey || item.id} 
                     className="shelf-card" 
                     style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                    onClick={() => playFromHistory(item)}
+                    {...bindLongPress({
+                      id: item.id,
+                      title: item.title,
+                      artist: item.artist,
+                      artworkUrl: showCover || item.cover || item.artworkUrl,
+                      provider: item.provider || 'bandcamp',
+                      kind: 'track',
+                      url: item.url || item.trackUrl || '',
+                    }, () => playFromHistory(item))}
                   >
                     <div className="shelf-card-art">
                       {showCover ? (
@@ -1761,14 +1905,22 @@ export default function Home() {
                   key={album.id}
                   className="upl-grid-cell"
                   style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => {
+                  {...bindLongPress({
+                    id: album.id,
+                    title: album.title,
+                    artist: album.artist,
+                    artworkUrl: cleanCover || album.cover,
+                    provider: 'kyoyu',
+                    kind: 'album',
+                    url: album.url || album.trackUrl || '',
+                  }, () => {
                     const isSingle = String(album.id || '').startsWith('single::') && album.tracks?.length === 1;
                     if (isSingle) {
                       playTrack(album.tracks[0]);
                     } else {
                       setSelectedAlbum(openNativeAlbumFast(album));
                     }
-                  }}
+                  })}
                 >
                   <div className="upl-grid-art">
                     {cleanCover
@@ -1815,7 +1967,7 @@ export default function Home() {
       })()}
 
       {/* Album detail sheet */}
-      {selectedAlbum && (
+      {!window.webkit?.messageHandlers?.player && selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       )}
 

@@ -319,7 +319,7 @@ if (typeof window !== 'undefined') {
             curTrack.album = albumObj.title;
             curTrack.releaseTitle = albumObj.title;
           }
-          window.webkit?.messageHandlers?.player?.postMessage({ album: albumObj.title });
+          window.webkit?.messageHandlers?.player?.postMessage({ album: albumObj.title, albumName: albumObj.title });
         } catch {}
       }
       openNativeAlbumFast(albumObj, { preload: isPreload, isUpdate: !isPreload });
@@ -3499,6 +3499,158 @@ export async function startTrackRadio(seedInput = null) {
   }
 }
 
+export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') {
+  let seedTracks = [];
+  try {
+    const json = decodeURIComponent(escape(atob(tracksB64)));
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) seedTracks = parsed;
+  } catch {
+    try {
+      const parsed = JSON.parse(atob(tracksB64));
+      if (Array.isArray(parsed)) seedTracks = parsed;
+    } catch {}
+  }
+
+  const validSeeds = seedTracks
+    .map(t => ({
+      title: String(t.title || t.name || '').trim(),
+      artist: String(t.artist || t.artistName || '').trim(),
+      album: String(t.album || t.releaseTitle || '').trim(),
+      cover: String(t.cover || t.coverImage || t.artworkUrl || '').trim(),
+      provider: String(t.provider || 'bandcamp').toLowerCase(),
+      url: String(t.url || t.trackUrl || '').trim(),
+    }))
+    .filter(t => t.title || t.artist);
+
+  if (validSeeds.length === 0) {
+    return startTrackRadio(playlistTitle, 'Bandcamp', '', '', 'bandcamp');
+  }
+
+  const firstSeed = validSeeds[0];
+  const uniqueArtists = Array.from(new Set(validSeeds.map(s => s.artist).filter(Boolean)));
+  const radioId = `radio-pl-${Date.now()}`;
+  const cleanPlTitle = String(playlistTitle || 'Playlist').trim();
+  const radioTitle = cleanPlTitle.toLowerCase().endsWith('radio') ? cleanPlTitle : `${cleanPlTitle} Radio`;
+  const seedSubtitle = uniqueArtists.slice(0, 3).join(', ') || firstSeed.artist || 'Bandcamp';
+
+  const seenTrackKeys = new Set();
+  for (const s of validSeeds) {
+    if (s.artist && s.title) {
+      seenTrackKeys.add(`${s.artist.toLowerCase()}|${s.title.toLowerCase()}`);
+    }
+  }
+
+  const initialTracks = validSeeds.slice(0, 12).map((s, idx) => ({
+    id: `pl-seed-${idx}-${Date.now()}`,
+    title: s.title,
+    artist: s.artist,
+    album: s.album || cleanPlTitle,
+    duration: '0:00',
+    trackUrl: s.url || `resolve:${s.artist} ${s.title}`.trim(),
+    cover: s.cover || firstSeed.cover || '',
+    provider: s.provider || 'bandcamp',
+  }));
+
+  const initialRadioAlbum = {
+    id: radioId,
+    title: radioTitle,
+    artist: `Seeded by ${cleanPlTitle} (${validSeeds.length} tracks)`,
+    label: seedSubtitle,
+    genre: 'Track Radio',
+    year: 'Building station…',
+    cover: firstSeed.cover || '',
+    provider: 'radio',
+    tracks: initialTracks,
+  };
+
+  if (typeof window !== 'undefined') {
+    window.__kyoyuActiveRadioId = radioId;
+  }
+  openNativeAlbumFast(initialRadioAlbum);
+
+  try {
+    const sampleSeeds = validSeeds.slice(0, 8);
+    const searchPromises = [];
+    for (const seed of sampleSeeds) {
+      const q = `${seed.artist} ${seed.title}`.trim();
+      if (q) {
+        searchPromises.push(
+          fetch('/api/bandcamp-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: seed.artist || q }),
+          }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+        );
+        searchPromises.push(
+          fetch(`/api/soundcloud-search?q=${encodeURIComponent(q)}&limit=10`)
+            .then(r => (r.ok ? r.json() : null)).catch(() => null)
+        );
+      }
+    }
+    for (const artistName of uniqueArtists.slice(0, 5)) {
+      searchPromises.push(
+        fetch('/api/discogs-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'artist-releases', artist: artistName }),
+        }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      );
+    }
+
+    const results = await Promise.allSettled(searchPromises);
+    const pool = [];
+    const addCandidate = (item) => {
+      if (!item || !item.title) return;
+      const tClean = String(item.title || '').trim();
+      const aClean = String(item.artist || item.artistName || '').trim();
+      if (!tClean) return;
+      const key = `${aClean.toLowerCase()}|${tClean.toLowerCase()}`;
+      if (seenTrackKeys.has(key)) return;
+      seenTrackKeys.add(key);
+      pool.push({
+        id: item.id || `pl-radio-${pool.length}-${Date.now()}`,
+        title: tClean,
+        artist: aClean || firstSeed.artist || 'Unknown Artist',
+        album: item.album || item.releaseTitle || tClean,
+        duration: item.duration || '0:00',
+        trackUrl: item.trackUrl || item.url || `resolve:${aClean} ${tClean}`.trim(),
+        cover: item.cover || item.artworkUrl || item.coverImage || firstSeed.cover || '',
+        provider: item.provider || 'bandcamp',
+      });
+    };
+
+    for (const res of results) {
+      if (res.status !== 'fulfilled' || !res.value) continue;
+      const val = res.value;
+      const items = val.results || val.releases || val.collection || (Array.isArray(val) ? val : []);
+      for (const it of items) {
+        if (!it) continue;
+        addCandidate({
+          id: it.id ? `radio-${it.id}` : undefined,
+          title: it.title || it.name || '',
+          artist: it.artist || it.artistName || it.user?.username || '',
+          album: it.album || it.releaseTitle || it.title || '',
+          trackUrl: it.url || it.permalink_url || it.trackUrl || '',
+          cover: it.artworkUrl || it.cover || it.thumb || it.artwork_url || '',
+          provider: it.permalink_url?.includes('soundcloud.com') ? 'soundcloud' : 'bandcamp',
+        });
+      }
+    }
+
+    const finalTracks = [...pool, ...initialTracks].slice(0, 60);
+    if (typeof window !== 'undefined' && (window.__kyoyuCurrentNativeAlbum?.id === radioId || window.__kyoyuActiveRadioId === radioId)) {
+      openNativeAlbumFast({
+        ...initialRadioAlbum,
+        year: 'Playlist Radio',
+        tracks: finalTracks.length >= 5 ? finalTracks : initialTracks,
+      }, { isUpdate: true });
+    }
+  } catch (err) {
+    console.warn('[startPlaylistRadio] error:', err);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.__kyoyuOpenArtist = openRichArtistSheet;
   window.__kyoyuOpenLabel = openRichLabelSheet;
@@ -3509,6 +3661,7 @@ if (typeof window !== 'undefined') {
   window.__kyoyuOpenReleaseFromSheet = openReleaseFromSheet;
   window.__kyoyuPreloadPlayingEntities = preloadPlayingEntities;
   window.__kyoyuStartTrackRadio = startTrackRadio;
+  window.__kyoyuStartPlaylistRadio = startPlaylistRadio;
 }
 
 

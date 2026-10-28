@@ -1004,25 +1004,84 @@ img {
   filter: invert(1) brightness(0.15);
 }
 
-/* ── Customized Background Main Color (Customized Appearance) ── */
-html[data-custom-bg="true"] {
+/* ── Custom Background Main Color & Image (Custom Appearance) ── */
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) {
   --bg-deep:      var(--custom-bg-color) !important;
   --bg-primary:   var(--custom-bg-color) !important;
   --bg-secondary: color-mix(in srgb, var(--custom-bg-color) 92%, #000000) !important;
   --bg-tertiary:  color-mix(in srgb, var(--custom-bg-color) 84%, #000000) !important;
   --bg-card:      color-mix(in srgb, var(--custom-bg-color) 88%, #000000) !important;
 }
-html[data-custom-bg="true"],
-html[data-custom-bg="true"] body,
-html[data-custom-bg="true"] #root,
-html[data-custom-bg="true"] .app-layout,
-html[data-custom-bg="true"] .main-content,
-html[data-custom-bg="true"] .page {
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]),
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) body,
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) #root,
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .app-layout,
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .main-content,
+html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .page {
   background: var(--custom-bg-color) !important;
   background-color: var(--custom-bg-color) !important;
 }
+html[data-custom-bg-img="true"],
+html[data-custom-bg-img="true"] body,
+html[data-custom-bg-img="true"] #root,
+html[data-custom-bg-img="true"] .app-layout,
+html[data-custom-bg-img="true"] .main-content,
+html[data-custom-bg-img="true"] .page {
+  background: transparent !important;
+  background-color: transparent !important;
+}
 
-/* ── Discreet Glass Lens UI Tint (Customized Appearance) ── */
+/* ── Prevent artwork cards in Home & Library from changing size, moving, or losing rounded corners on touch/hold ── */
+.shelf-card,
+.shelf-card:hover,
+.shelf-card:active,
+button.shelf-card:active:not(:disabled),
+.shelf-card-art,
+.shelf-card-art img,
+.shelf-card:hover .shelf-card-art img,
+.shelf-card:active .shelf-card-art img,
+.upl-grid-cell,
+.upl-grid-cell:hover,
+.upl-grid-cell:active,
+button.upl-grid-cell:active:not(:disabled),
+.upl-grid-art,
+.upl-grid-art img,
+.upl-grid-cell:hover .upl-grid-art img,
+.upl-grid-cell:active .upl-grid-art img,
+.featured-hero-card,
+.featured-hero-card:hover,
+.featured-hero-card:active,
+button.featured-hero-card:active:not(:disabled),
+.featured-hero-art img,
+.release-card,
+.release-card:hover,
+.release-card:active,
+.card-cover-wrap,
+.card-cover,
+.release-card:hover .card-cover,
+.release-card:active .card-cover,
+.artist-card-photo img,
+.artist-card:hover .artist-card-photo img {
+  transform: none !important;
+  transition: none !important;
+  -webkit-user-drag: none !important;
+  -webkit-touch-callout: none !important;
+}
+.shelf-card:hover,
+.shelf-card:active,
+button.shelf-card:active:not(:disabled) {
+  opacity: 1 !important;
+}
+.shelf-card-art,
+.upl-grid-art,
+.featured-hero-art,
+.card-cover-wrap {
+  overflow: hidden !important;
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+/* ── Discreet Glass Lens UI Tint (Custom Appearance) ── */
 html[data-theme="white"][data-glass-tint="true"] {
   --glass-bg:          color-mix(in srgb, var(--glass-tint-color) 16%, rgba(255, 255, 255, 0.72));
   --glass-bg-hover:    color-mix(in srgb, var(--glass-tint-color) 22%, rgba(255, 255, 255, 0.86));

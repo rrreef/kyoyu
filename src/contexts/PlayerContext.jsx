@@ -1265,6 +1265,42 @@ export function PlayerProvider({ children }) {
       }
     };
 
+    window.__kyoyuMoveQueueItem = (fromIndex, toIndex) => {
+      const f = Number(fromIndex);
+      const t = Number(toIndex);
+      if (!Number.isFinite(f) || !Number.isFinite(t) || f === t || f < 0 || t < 0) return false;
+      const reorderList = (arr) => {
+        if (!Array.isArray(arr) || f >= arr.length || t >= arr.length) return null;
+        const copy = [...arr];
+        const [moved] = copy.splice(f, 1);
+        copy.splice(t, 0, moved);
+        return copy;
+      };
+      const q = (stateRef.current?.queue?.length ? stateRef.current.queue : state.queue) || [];
+      if (q.length > 0) {
+        const nextQ = reorderList(q);
+        if (nextQ) {
+          dispatch({ type: 'SET_QUEUE', queue: nextQ });
+          return true;
+        }
+      }
+      if (Array.isArray(searchQueueRef.current) && searchQueueRef.current.length > 0) {
+        const nextSq = reorderList(searchQueueRef.current);
+        if (nextSq) {
+          searchQueueRef.current = nextSq;
+          return true;
+        }
+      }
+      if (typeof window !== 'undefined' && Array.isArray(window.__kyoyuCurrentNativeAlbum?.tracks)) {
+        const nextTracks = reorderList(window.__kyoyuCurrentNativeAlbum.tracks);
+        if (nextTracks) {
+          window.__kyoyuCurrentNativeAlbum.tracks = nextTracks;
+          return true;
+        }
+      }
+      return false;
+    };
+
     // ── Comments bridge (Supabase) ──
     window.__kyoyuGetComments = async (trackId) => {
       try {
