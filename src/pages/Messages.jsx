@@ -587,7 +587,17 @@ export default function Messages() {
   });
 
   return (
-    <div className="page messages-page animate-in">
+    <div
+      className="page messages-page animate-in"
+      onClick={(e) => {
+        const tag = e.target?.tagName?.toLowerCase();
+        if (tag !== 'input' && tag !== 'textarea' && tag !== 'button') {
+          if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+          }
+        }
+      }}
+    >
       <div className="msg-fullscreen-layout">
         {/* ── FULL-SCREEN DISCUSSION PANE ── */}
         <section className="msg-thread-pane" aria-label="Selected Conversation">
