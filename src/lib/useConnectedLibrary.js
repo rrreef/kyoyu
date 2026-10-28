@@ -320,6 +320,82 @@ if (typeof window !== 'undefined') {
       }, 700);
     }
   });
+
+  window.__kyoyuRemoveBandcampPlaylist = (rawId, rawTitle) => {
+    const targetId = String(rawId || '').trim().toLowerCase();
+    const cleanId = targetId.replace(/^bcpl-/, '').replace(/^bc-basket-/, '').replace(/^bcbasket-/, '');
+    const targetTitle = String(rawTitle || '').trim().toLowerCase();
+
+    const matchesPl = (pl) => {
+      if (!pl) return false;
+      const pid = String(pl.id || '').trim().toLowerCase();
+      const rawPid = String(pl.playlistId || '').trim().toLowerCase();
+      const pTitle = String(pl.title || pl.name || '').trim().toLowerCase();
+      if (targetId && (pid === targetId || rawPid === targetId)) return true;
+      if (cleanId && (pid === cleanId || rawPid === cleanId || pid === `bcpl-${cleanId}`)) return true;
+      if (targetTitle && pTitle === targetTitle) return true;
+      return false;
+    };
+
+    if (cache.bandcamp && Array.isArray(cache.bandcamp.playlists)) {
+      cache.bandcamp.playlists = cache.bandcamp.playlists.filter((pl) => !matchesPl(pl));
+    }
+
+    try {
+      const rawV2 = localStorage.getItem(FAST_CACHE_KEY);
+      if (rawV2) {
+        const parsed = JSON.parse(rawV2);
+        if (parsed?.bandcamp && Array.isArray(parsed.bandcamp.playlists)) {
+          parsed.bandcamp.playlists = parsed.bandcamp.playlists.filter((pl) => !matchesPl(pl));
+          localStorage.setItem(FAST_CACHE_KEY, JSON.stringify(parsed));
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const rawPin = localStorage.getItem('kyoyu-pinned-items-v1');
+      if (rawPin) {
+        const pinned = JSON.parse(rawPin);
+        if (Array.isArray(pinned)) {
+          const nextPinned = pinned.filter((it) => !matchesPl(it));
+          if (nextPinned.length !== pinned.length) {
+            localStorage.setItem('kyoyu-pinned-items-v1', JSON.stringify(nextPinned));
+            window.dispatchEvent(new CustomEvent('kyoyu-pinned-hidden-updated'));
+          }
+        }
+      }
+    } catch (_) {}
+
+    saveFastConnectedCache();
+    emit();
+  };
+
+  window.__kyoyuRenameBandcampPlaylist = (rawId, oldTitle, newTitle) => {
+    const trimmed = String(newTitle || '').trim();
+    if (!trimmed) return;
+    const targetId = String(rawId || '').trim().toLowerCase();
+    const cleanId = targetId.replace(/^bcpl-/, '').replace(/^bc-basket-/, '').replace(/^bcbasket-/, '');
+    const targetOldTitle = String(oldTitle || '').trim().toLowerCase();
+
+    const matchesPl = (pl) => {
+      if (!pl) return false;
+      const pid = String(pl.id || '').trim().toLowerCase();
+      const rawPid = String(pl.playlistId || '').trim().toLowerCase();
+      const pTitle = String(pl.title || pl.name || '').trim().toLowerCase();
+      if (targetId && (pid === targetId || rawPid === targetId)) return true;
+      if (cleanId && (pid === cleanId || rawPid === cleanId || pid === `bcpl-${cleanId}`)) return true;
+      if (targetOldTitle && pTitle === targetOldTitle) return true;
+      return false;
+    };
+
+    if (cache.bandcamp && Array.isArray(cache.bandcamp.playlists)) {
+      cache.bandcamp.playlists = cache.bandcamp.playlists.map((pl) =>
+        matchesPl(pl) ? { ...pl, title: trimmed, name: trimmed } : pl
+      );
+    }
+    saveFastConnectedCache();
+    emit();
+  };
 }
 
 export function useConnectedLibrary() {

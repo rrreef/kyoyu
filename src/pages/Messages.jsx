@@ -592,11 +592,116 @@ export default function Messages() {
         {/* ── FULL-SCREEN DISCUSSION PANE ── */}
         <section className="msg-thread-pane" aria-label="Selected Conversation">
           {activeConversation ? (
-            <>
-              <header className="msg-thread-header">
-                <div className={`msg-conv-avatar msg-conv-avatar--${activeConversation.type} msg-conv-avatar--sm`}>
+            <div className="msg-thread-messages">
+              {displayedMessages.map((msg) => {
+                const isOwn =
+                  msg.isOwn ||
+                  (msg.sender &&
+                    msg.sender.toLowerCase() === currentUserName.toLowerCase() &&
+                    msg.sender !== 'DIGI');
+                return (
+                  <div
+                    key={msg.id}
+                    className={`msg-bubble-row${isOwn ? ' msg-bubble-row--own' : ''}`}
+                  >
+                    <div className={`msg-bubble${isOwn ? ' msg-bubble--own' : ''}`}>
+                      <div className="msg-bubble-header">
+                        <span className="msg-bubble-sender">
+                          {isOwn ? `${currentUserName} (You)` : msg.sender}
+                        </span>
+                        <span className="msg-bubble-time">{formatTimeShort(msg.timestamp)}</span>
+                      </div>
+                      {msg.text && <div className="msg-bubble-text">{msg.text}</div>}
+
+                      {/* Shared item card (in Community chat or direct shares) */}
+                      {msg.shareItem && (
+                        <div
+                          className="msg-shared-card"
+                          onClick={() => handleOpenSharedItem(msg.shareItem)}
+                        >
+                          <div className="msg-shared-art">
+                            {msg.shareItem.cover ? (
+                              <img src={msg.shareItem.cover} alt={msg.shareItem.title} />
+                            ) : (
+                              <Disc size={20} />
+                            )}
+                          </div>
+                          <div className="msg-shared-info">
+                            <div className="msg-shared-title">{msg.shareItem.title}</div>
+                            {msg.shareItem.artist && (
+                              <div className="msg-shared-artist">{msg.shareItem.artist}</div>
+                            )}
+                            {msg.shareItem.label && (
+                              <div className="msg-shared-label">{msg.shareItem.label}</div>
+                            )}
+                          </div>
+                          <div className="msg-shared-action">
+                            <ArrowUpRight size={16} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* DIGI AI Search Cards */}
+                      {Array.isArray(msg.cards) && msg.cards.length > 0 && (
+                        <div className="msg-digi-cards">
+                          {msg.cards.map((card) => (
+                            <div
+                              key={card.id}
+                              className="msg-shared-card"
+                              onClick={() => handleOpenSharedItem(card)}
+                            >
+                              <div className="msg-shared-art">
+                                {card.cover ? (
+                                  <img src={card.cover} alt={card.title} />
+                                ) : (
+                                  <Disc size={18} />
+                                )}
+                              </div>
+                              <div className="msg-shared-info">
+                                <div className="msg-shared-title">{card.title}</div>
+                                <div className="msg-shared-artist">{card.artist}</div>
+                              </div>
+                              <div className="msg-shared-action">
+                                <Play size={14} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {digiTyping && activeConversation.id === 'digi' && (
+                <div className="msg-bubble-row">
+                  <div className="msg-bubble">
+                    <div className="msg-bubble-text" style={{ opacity: 0.6 }}>
+                      DIGI is searching…
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          ) : (
+            <div className="msg-empty">No conversations match your search.</div>
+          )}
+        </section>
+
+        {/* ── FLOATING LEFT AVATAR BUTTONS (Active Expanded on Top, Unselected 44x44 Scrollable Below) ── */}
+        <aside className="msg-floating-avatars" aria-label="Conversations">
+          {activeConversation && (
+            <button
+              type="button"
+              className="msg-floating-avatar-btn msg-floating-avatar-btn--expanded"
+              title={activeConversation.username}
+              aria-label={activeConversation.username}
+            >
+              <div className="msg-floating-avatar-circle">
+                <div className="msg-floating-avatar-inner">
                   {activeConversation.type === 'ai' ? (
-                    <Sparkles size={14} strokeWidth={2} />
+                    <Sparkles size={15} strokeWidth={2} />
                   ) : activeConversation.type === 'community' ? (
                     <Users size={14} strokeWidth={2} />
                   ) : activeConversation.avatar ? (
@@ -605,139 +710,36 @@ export default function Messages() {
                     <span>{activeConversation.username.slice(0, 2).toUpperCase()}</span>
                   )}
                 </div>
-                <div className="msg-thread-header-info">
-                  <div className="msg-thread-title">{activeConversation.username}</div>
-                  {activeConversation.subtitle && (
-                    <div className="msg-thread-subtitle">{activeConversation.subtitle}</div>
-                  )}
-                </div>
-              </header>
-
-              <div className="msg-thread-messages">
-                {displayedMessages.map((msg) => {
-                  const isOwn =
-                    msg.isOwn ||
-                    (msg.sender &&
-                      msg.sender.toLowerCase() === currentUserName.toLowerCase() &&
-                      msg.sender !== 'DIGI');
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`msg-bubble-row${isOwn ? ' msg-bubble-row--own' : ''}`}
-                    >
-                      <div className={`msg-bubble${isOwn ? ' msg-bubble--own' : ''}`}>
-                        <div className="msg-bubble-header">
-                          <span className="msg-bubble-sender">
-                            {isOwn ? `${currentUserName} (You)` : msg.sender}
-                          </span>
-                          <span className="msg-bubble-time">{formatTimeShort(msg.timestamp)}</span>
-                        </div>
-                        {msg.text && <div className="msg-bubble-text">{msg.text}</div>}
-
-                        {/* Shared item card (in Community chat or direct shares) */}
-                        {msg.shareItem && (
-                          <div
-                            className="msg-shared-card"
-                            onClick={() => handleOpenSharedItem(msg.shareItem)}
-                          >
-                            <div className="msg-shared-art">
-                              {msg.shareItem.cover ? (
-                                <img src={msg.shareItem.cover} alt={msg.shareItem.title} />
-                              ) : (
-                                <Disc size={20} />
-                              )}
-                            </div>
-                            <div className="msg-shared-info">
-                              <div className="msg-shared-title">{msg.shareItem.title}</div>
-                              {msg.shareItem.artist && (
-                                <div className="msg-shared-artist">{msg.shareItem.artist}</div>
-                              )}
-                              {msg.shareItem.label && (
-                                <div className="msg-shared-label">{msg.shareItem.label}</div>
-                              )}
-                            </div>
-                            <div className="msg-shared-action">
-                              <ArrowUpRight size={16} />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* DIGI AI Search Cards */}
-                        {Array.isArray(msg.cards) && msg.cards.length > 0 && (
-                          <div className="msg-digi-cards">
-                            {msg.cards.map((card) => (
-                              <div
-                                key={card.id}
-                                className="msg-shared-card"
-                                onClick={() => handleOpenSharedItem(card)}
-                              >
-                                <div className="msg-shared-art">
-                                  {card.cover ? (
-                                    <img src={card.cover} alt={card.title} />
-                                  ) : (
-                                    <Disc size={18} />
-                                  )}
-                                </div>
-                                <div className="msg-shared-info">
-                                  <div className="msg-shared-title">{card.title}</div>
-                                  <div className="msg-shared-artist">{card.artist}</div>
-                                </div>
-                                <div className="msg-shared-action">
-                                  <Play size={14} />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {digiTyping && activeConversation.id === 'digi' && (
-                  <div className="msg-bubble-row">
-                    <div className="msg-bubble">
-                      <div className="msg-bubble-text" style={{ opacity: 0.6 }}>
-                        DIGI is searching…
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
               </div>
-            </>
-          ) : (
-            <div className="msg-empty">No conversations match your search.</div>
+              <span className="msg-floating-avatar-name">{activeConversation.username}</span>
+            </button>
           )}
-        </section>
-
-        {/* ── FLOATING LEFT AVATAR BUTTONS (Profile-Button Style, Scrollable) ── */}
-        <aside className="msg-floating-avatars" aria-label="Conversations">
-          {allConversations.map((conv) => {
-            const isSelected = activeConversation?.id === conv.id;
-            return (
-              <button
-                key={conv.id}
-                type="button"
-                className={`msg-floating-avatar-btn${isSelected ? ' active' : ''}`}
-                onClick={() => setSelectedChatId(conv.id)}
-                title={conv.username}
-                aria-label={conv.username}
-              >
-                <div className="msg-floating-avatar-inner">
-                  {conv.type === 'ai' ? (
-                    <Sparkles size={15} strokeWidth={2} />
-                  ) : conv.type === 'community' ? (
-                    <Users size={14} strokeWidth={2} />
-                  ) : conv.avatar ? (
-                    <img src={conv.avatar} alt={conv.username} />
-                  ) : (
-                    <span>{conv.username.slice(0, 2).toUpperCase()}</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+          <div className="msg-floating-avatars-scroll">
+            {allConversations
+              .filter((conv) => conv.id !== activeConversation?.id)
+              .map((conv) => (
+                <button
+                  key={conv.id}
+                  type="button"
+                  className="msg-floating-avatar-btn"
+                  onClick={() => setSelectedChatId(conv.id)}
+                  title={conv.username}
+                  aria-label={conv.username}
+                >
+                  <div className="msg-floating-avatar-inner">
+                    {conv.type === 'ai' ? (
+                      <Sparkles size={15} strokeWidth={2} />
+                    ) : conv.type === 'community' ? (
+                      <Users size={14} strokeWidth={2} />
+                    ) : conv.avatar ? (
+                      <img src={conv.avatar} alt={conv.username} />
+                    ) : (
+                      <span>{conv.username.slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+          </div>
         </aside>
       </div>
     </div>
