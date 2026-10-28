@@ -94,8 +94,8 @@
   flex-shrink: 0;
 }
 .s-toggle.on {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: #34c759;
+  border-color: #34c759;
 }
 .s-toggle.disabled { opacity: 0.35; cursor: not-allowed; }
 .s-toggle-thumb {
@@ -110,7 +110,7 @@
 }
 .s-toggle.on .s-toggle-thumb {
   transform: translateX(18px);
-  background: #0f0f12;
+  background: #ffffff;
 }
 
 /* ── Pill group ─────────────────────────────────────────── */
@@ -590,9 +590,12 @@
   box-shadow: 0 6px 22px var(--btn-primary-glow) !important;
 }
 .s-toggle.on {
-  background: var(--accent-interactive) !important;
-  border-color: transparent !important;
-  box-shadow: 0 0 10px var(--accent-interactive-glow) !important;
+  background: #34c759 !important;
+  border-color: #34c759 !important;
+  box-shadow: none !important;
+}
+.s-toggle.on .s-toggle-thumb {
+  background: #ffffff !important;
 }
 .s-pill.active {
   background: var(--accent-interactive-dim) !important;

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export const THEMES = [
-  { id: 'white',  label: 'Light'      },
-  { id: 'dark',   label: 'Dark'       },
-  { id: 'custom', label: 'Customized' },
+  { id: 'white',  label: 'Light'  },
+  { id: 'dark',   label: 'Dark'   },
+  { id: 'custom', label: 'Custom' },
 ];
 
 export const CUSTOM_BASE_THEMES = [
@@ -89,15 +89,22 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   root.setAttribute('data-theme', effectiveTheme);
 
   const colors = THEME_BG_MAP[effectiveTheme] || THEME_BG_MAP.white;
-  const finalBg = mode === 'custom' ? activeCustomBg : colors.bg;
+  const hasCustomBgImage = mode === 'custom' && !!(localStorage.getItem('kyoyu-custom-bg-image') || '').trim();
+  const finalBg = hasCustomBgImage ? 'transparent' : (mode === 'custom' ? activeCustomBg : colors.bg);
   const finalFg = mode === 'custom' ? (isLightHex(activeCustomBg) ? '#0f0f0f' : '#ffffff') : colors.fg;
 
   if (mode === 'custom') {
     root.setAttribute('data-custom-bg', 'true');
-    root.style.setProperty('--custom-bg-color', activeCustomBg);
-    root.style.setProperty('--bg-deep', activeCustomBg);
-    root.style.setProperty('--bg-primary', activeCustomBg);
+    if (hasCustomBgImage) {
+      root.setAttribute('data-custom-bg-image', 'true');
+    } else {
+      root.removeAttribute('data-custom-bg-image');
+      root.style.setProperty('--custom-bg-color', activeCustomBg);
+      root.style.setProperty('--bg-deep', activeCustomBg);
+      root.style.setProperty('--bg-primary', activeCustomBg);
+    }
   } else {
+    root.removeAttribute('data-custom-bg-image');
     root.removeAttribute('data-custom-bg');
     root.style.removeProperty('--custom-bg-color');
     root.style.removeProperty('--bg-deep');
@@ -117,7 +124,7 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   }
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
-    metaTheme.setAttribute('content', finalBg);
+    metaTheme.setAttribute('content', hasCustomBgImage ? activeCustomBg : finalBg);
   }
 
   if (activeTint) {
@@ -128,18 +135,19 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
     root.style.removeProperty('--glass-tint-color');
   }
 
-  try {
-    if (typeof window.__kyoyuApplyAppearanceDOM === 'function') {
-      window.__kyoyuApplyAppearanceDOM(
-        effectiveTheme,
-        mode,
-        mode === 'custom' ? activeCustomBg : '',
-        activeTint
-      );
-    }
-  } catch (_) {}
-
   if (notifyNative) {
+    try {
+      if (typeof window.__kyoyuApplyAppearanceDOM === 'function') {
+        window.__kyoyuApplyAppearanceDOM(
+          mode,
+          effectiveTheme,
+          activeTint,
+          mode === 'custom' ? activeCustomBg : '',
+          true
+        );
+      }
+    } catch (_) {}
+
     try {
       window.webkit?.messageHandlers?.player?.postMessage({
         appearanceUpdate: true,
@@ -157,7 +165,7 @@ export function useTheme() {
 
   useEffect(() => {
     const current = readStoredAppearance();
-    applyAppearanceToDOMAndNative(current, true);
+    applyAppearanceToDOMAndNative(current, false);
     setState(current);
 
     const onSync = () => {

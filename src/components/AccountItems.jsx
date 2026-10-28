@@ -495,7 +495,7 @@ export function usePinnedAndHiddenContent() {
 
 const Art = memo(function Art({ item, src, round }) {
   const { src: resolvedSrc, onError } = useResolvedArtwork(item || { artworkUrl: src });
-  const isBcPl = isBandcampPlaylistItem(item);
+  const isBcPl = item?.kind === 'playlist' && (item?.provider === 'bandcamp' || String(item?.id || '').startsWith('bcpl-'));
   return (
     <div style={{
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
@@ -508,8 +508,8 @@ const Art = memo(function Art({ item, src, round }) {
           alt=""
           onError={onError}
           style={isBcPl
-            ? { width: '125%', maxWidth: 'none', height: '100%', objectFit: 'cover', objectPosition: 'left center', alignSelf: 'flex-start' }
-            : { width: '100%', height: '100%', objectFit: 'cover' }}
+            ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', maxWidth: 'none', display: 'block' }
+            : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
           loading="eager"
           decoding="sync"
         />
@@ -546,9 +546,8 @@ const Row = memo(function Row({ item, onClick, right, sub, round }) {
 
 /** One cell of the icon view (same classes as the liked-tracks grid) */
 const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlaying }) {
-  const isPlaylist = item.kind === 'playlist';
-  const isBcPl = isBandcampPlaylistItem(item);
   const isProfile = item.kind === 'profile';
+  const isBcPl = item?.kind === 'playlist' && (item?.provider === 'bandcamp' || String(item?.id || '').startsWith('bcpl-'));
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
   const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
   const displayTitle = meta.title || item.title;
@@ -566,7 +565,7 @@ const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlay
       onContextMenu={lp.onContextMenu}
       style={{ cursor: onSelect ? 'pointer' : 'default' }}
     >
-      <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : isBcPl ? { aspectRatio: '1/1', overflow: 'hidden' } : isPlaylist ? { aspectRatio: '4/3' } : undefined}>
+      <div className="upl-grid-art" style={isProfile ? { borderRadius: '50%' } : { aspectRatio: '1/1', overflow: 'hidden', position: 'relative' }}>
         {cleanSrc
           ? (
             <img
@@ -576,10 +575,8 @@ const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlay
               loading="eager"
               decoding="sync"
               style={isBcPl
-                ? { width: '125%', maxWidth: 'none', height: '100%', objectFit: 'cover', objectPosition: 'left center' }
-                : isPlaylist
-                  ? { objectFit: 'cover' }
-                  : undefined}
+                ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', maxWidth: 'none', display: 'block' }
+                : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
             />
           )
           : <div className="upl-grid-art-ph"><Music2 size={cols >= 4 ? 12 : 22} strokeWidth={1.2} /></div>}
