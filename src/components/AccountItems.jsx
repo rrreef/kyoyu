@@ -496,6 +496,7 @@ export function usePinnedAndHiddenContent() {
 const Art = memo(function Art({ item, src, round }) {
   const { src: resolvedSrc, onError } = useResolvedArtwork(item || { artworkUrl: src });
   const isBcPl = item?.kind === 'playlist' && (item?.provider === 'bandcamp' || String(item?.id || '').startsWith('bcpl-'));
+  const isCustomCover = Boolean(item?.hasCustomCover || String(resolvedSrc || '').startsWith('data:'));
   return (
     <div style={{
       width: 64, height: 64, borderRadius: round ? 32 : 8, overflow: 'hidden', flexShrink: 0,
@@ -507,8 +508,8 @@ const Art = memo(function Art({ item, src, round }) {
           src={resolvedSrc}
           alt=""
           onError={onError}
-          style={isBcPl
-            ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', maxWidth: 'none', display: 'block' }
+          style={(isBcPl && !isCustomCover)
+            ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', minWidth: '100%', maxWidth: 'none', objectFit: 'cover', objectPosition: 'left center', display: 'block' }
             : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
           loading="eager"
           decoding="sync"
@@ -549,6 +550,7 @@ const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlay
   const isProfile = item.kind === 'profile';
   const isBcPl = item?.kind === 'playlist' && (item?.provider === 'bandcamp' || String(item?.id || '').startsWith('bcpl-'));
   const { src: cleanSrc, onError } = useResolvedArtwork(item);
+  const isCustomCover = Boolean(item?.hasCustomCover || String(cleanSrc || '').startsWith('data:'));
   const meta = isProfile ? { title: item.title, artist: item.artistName } : splitCleanMetadata(item.title, item.artistName || item.artist || '', item.label || item.labelName || '');
   const displayTitle = meta.title || item.title;
   const displayArtist = meta.artist || item.artistName;
@@ -574,8 +576,8 @@ const GridCell = memo(function GridCell({ item, onSelect, cols, isActive, isPlay
               onError={onError}
               loading="eager"
               decoding="sync"
-              style={isBcPl
-                ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', maxWidth: 'none', display: 'block' }
+              style={(isBcPl && !isCustomCover)
+                ? { position: 'absolute', top: 0, left: 0, height: '100%', width: 'auto', minWidth: '100%', maxWidth: 'none', objectFit: 'cover', objectPosition: 'left center', display: 'block' }
                 : { width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center' }}
             />
           )
@@ -651,13 +653,17 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
       const postSheet = (tracksList) => {
         const mappedTracks = (tracksList || []).map(t => {
           const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator || '', resolvedLabel || '');
+          const isPlayable = t.playable !== false && !t.unplayable && t.isPlayable !== false;
           return {
             id: t.id || String(Date.now() + Math.random()),
             title: tm.title || t.title || t.name || 'Unknown Track',
             artist: tm.artist || t.artist || t.artistName || creator || '',
             url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+            streamUrl: t.streamUrl || t.audioUrl || '',
             cover: t.artworkUrl || t.cover || cover || null,
             provider: t.provider || pl.provider || null,
+            playable: isPlayable,
+            unplayable: !isPlayable,
           };
         });
         try {
@@ -674,6 +680,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
                 year: resolvedYear,
                 label: resolvedLabel,
                 provider: pl.provider || null,
+                isPreorder: Boolean(pl.isPreorder),
                 tracks: mappedTracks,
               }
             });
@@ -716,29 +723,35 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
             }
           }
           const now = Date.now();
-          const tracks = (data.tracks || []).map((t, i) => ({
-            id: `bc-${t.trackId || i}`,
-            kind: 'track',
-            provider: 'bandcamp',
-            title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
-            artist: t.artistName || creator,
-            artistName: t.artistName || creator,
-            label: resolvedLabel || undefined,
-            year: resolvedYear || undefined,
-            artworkUrl: t.artworkUrl || cover,
-            cover: t.artworkUrl || cover,
-            duration: t.duration || 0,
-            streamUrl: t.streamUrl || '',
-            audioUrl: t.streamUrl || '',
-            url: t.streamUrl || t.trackUrl || '',
-            trackUrl: t.trackUrl || '',
-            providerItemId: t.trackUrl || '',
-            streamFetchedAt: t.streamUrl ? now : undefined,
-          }));
+          const tracks = (data.tracks || []).map((t, i) => {
+            const isPlayable = t.playable !== false && !t.unplayable;
+            return {
+              id: `bc-${t.trackId || i}`,
+              kind: 'track',
+              provider: 'bandcamp',
+              title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
+              artist: t.artistName || creator,
+              artistName: t.artistName || creator,
+              label: resolvedLabel || undefined,
+              year: resolvedYear || undefined,
+              artworkUrl: t.artworkUrl || cover,
+              cover: t.artworkUrl || cover,
+              duration: t.duration || 0,
+              streamUrl: t.streamUrl || '',
+              audioUrl: t.streamUrl || '',
+              url: t.streamUrl || t.trackUrl || '',
+              trackUrl: t.trackUrl || '',
+              providerItemId: t.trackUrl || '',
+              streamFetchedAt: t.streamUrl ? now : undefined,
+              playable: isPlayable,
+              unplayable: !isPlayable,
+            };
+          });
           if (tracks.length > 0) {
             pl.tracks = tracks;
             pl.label = resolvedLabel || pl.label;
             pl.year = resolvedYear || pl.year;
+            pl.isPreorder = Boolean(data.isPreorder || data.album?.isPreorder || tracks.some(t => !t.playable));
             if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
               postSheet(tracks);
             }

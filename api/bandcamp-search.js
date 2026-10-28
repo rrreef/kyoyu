@@ -325,6 +325,7 @@ export default async function handler(req, res) {
         for (const t of tralbum.trackinfo) {
           const file = t.file;
           const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || '') : '';
+          const isPlayable = Boolean(streamUrl) && t.streaming !== 0 && t.streaming !== false;
           let trackArtist = decodeEntities(t.artist || albumArtist || '');
           let rawTrackTitle = decodeEntities(t.title || '');
           for (const sep of [' — ', ' – ', ' - ']) {
@@ -348,7 +349,9 @@ export default async function handler(req, res) {
             trackId: t.track_id || t.id,
             title: cleanTrackTitle,
             duration: Math.round((t.duration || 0)),
-            streamUrl,
+            streamUrl: isPlayable ? streamUrl : '',
+            playable: isPlayable,
+            unplayable: !isPlayable,
             // Track page URL (stable) — stream URLs expire, so clients need this to re-resolve later
             trackUrl: (() => { try { return t.title_link ? new URL(t.title_link, effectiveUrl).href : effectiveUrl; } catch (e) { return effectiveUrl; } })(),
             artworkUrl: albumArt,
@@ -396,9 +399,18 @@ export default async function handler(req, res) {
           } catch (e) { /* parse error */ }
         }
       }
+
+      const isPreorder = Boolean(
+        tralbum?.album_is_preorder ||
+        tralbum?.is_preorder ||
+        tralbum?.current?.is_preorder ||
+        /album[-_]?is[-_]?preorder|is_preorder["']?\s*:\s*true|available\s+as\s+pre-?order|pre-?order\s+now/i.test(html) ||
+        (tracks.length > 0 && tracks.some(t => t.playable === false))
+      );
       
       return res.status(200).json({
         tracks,
+        isPreorder,
         album: {
           title: cleanAlbumTitle,
           artistName: albumArtist,
@@ -409,6 +421,7 @@ export default async function handler(req, res) {
           location: bandLocation,
           formats,
           artworkUrl: albumArt,
+          isPreorder,
         }
       });
     } catch (err) {

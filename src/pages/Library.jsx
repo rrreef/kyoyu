@@ -475,14 +475,20 @@ export default function Library() {
       }
       // Tapping a playlist track in the native sheet plays it like History / Likes
       registerAlbumPlayback(albumObj);
-      const mappedTracks = currentTracks.map(t => ({
-        id: t.id || String(Date.now() + Math.random()),
-        title: t.title || t.name || 'Unknown Track',
-        artist: t.artist || t.artistName || '',
-        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || t.src || '',
-        cover: t.cover || t.artworkUrl || t.releaseCover || null,
-        provider: t.provider || pl.provider || null,
-      }));
+      const mappedTracks = currentTracks.map(t => {
+        const isPlayable = t.playable !== false && !t.unplayable && t.isPlayable !== false;
+        return {
+          id: t.id || String(Date.now() + Math.random()),
+          title: t.title || t.name || 'Unknown Track',
+          artist: t.artist || t.artistName || '',
+          url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || t.src || '',
+          streamUrl: t.streamUrl || t.audioUrl || '',
+          cover: t.cover || t.artworkUrl || t.releaseCover || null,
+          provider: t.provider || pl.provider || null,
+          playable: isPlayable,
+          unplayable: !isPlayable,
+        };
+      });
       try {
         if (pl.kind === 'album') {
           window.webkit?.messageHandlers?.player?.postMessage({
@@ -497,6 +503,7 @@ export default function Library() {
               year: pl.year ? String(pl.year) : null,
               label: pl.label || null,
               provider: pl.provider || null,
+              isPreorder: Boolean(pl.isPreorder),
               tracks: mappedTracks,
             }
           });
@@ -531,23 +538,29 @@ export default function Library() {
         });
         const data = r.ok ? await r.json() : { tracks: [] };
         const now = Date.now();
-        let fetched = (data.tracks || []).map((t, i) => ({
-          id: `bc-${t.trackId || i}`,
-          kind: 'track',
-          provider: 'bandcamp',
-          title: t.title,
-          artist: t.artistName || creator,
-          artistName: t.artistName || creator,
-          artworkUrl: t.artworkUrl || cover,
-          cover: t.artworkUrl || cover,
-          duration: t.duration || 0,
-          streamUrl: t.streamUrl || '',
-          audioUrl: t.streamUrl || '',
-          url: t.streamUrl || t.trackUrl || '',
-          trackUrl: t.trackUrl || albumUrl,
-          providerItemId: t.trackUrl || albumUrl,
-          streamFetchedAt: t.streamUrl ? now : undefined,
-        }));
+        let resolvedPreorder = Boolean(data.isPreorder || data.album?.isPreorder);
+        let fetched = (data.tracks || []).map((t, i) => {
+          const isPlayable = t.playable !== false && !t.unplayable;
+          return {
+            id: `bc-${t.trackId || i}`,
+            kind: 'track',
+            provider: 'bandcamp',
+            title: t.title,
+            artist: t.artistName || creator,
+            artistName: t.artistName || creator,
+            artworkUrl: t.artworkUrl || cover,
+            cover: t.artworkUrl || cover,
+            duration: t.duration || 0,
+            streamUrl: t.streamUrl || '',
+            audioUrl: t.streamUrl || '',
+            url: t.streamUrl || t.trackUrl || '',
+            trackUrl: t.trackUrl || albumUrl,
+            providerItemId: t.trackUrl || albumUrl,
+            streamFetchedAt: t.streamUrl ? now : undefined,
+            playable: isPlayable,
+            unplayable: !isPlayable,
+          };
+        });
         if (!fetched.length) {
           const r2 = await fetch('/api/bandcamp-resolve', {
             method: 'POST',
@@ -555,29 +568,36 @@ export default function Library() {
             body: JSON.stringify({ action: 'album-tracks', url: albumUrl }),
           }).catch(() => null);
           const data2 = r2 && r2.ok ? await r2.json() : { tracks: [] };
-          fetched = (data2.tracks || []).map((t, i) => ({
-            id: `bc-${t.trackId || t.trackNum || i}`,
-            kind: 'track',
-            provider: 'bandcamp',
-            title: t.title,
-            artist: t.artist || t.artistName || creator,
-            artistName: t.artist || t.artistName || creator,
-            artworkUrl: t.artworkUrl || cover,
-            cover: t.artworkUrl || cover,
-            duration: t.duration || 0,
-            streamUrl: t.streamUrl || '',
-            audioUrl: t.streamUrl || '',
-            url: t.streamUrl || t.url || albumUrl,
-            trackUrl: t.url || albumUrl,
-            providerItemId: t.url || albumUrl,
-            streamFetchedAt: t.streamUrl ? now : undefined,
-          }));
+          if (data2.isPreorder) resolvedPreorder = true;
+          fetched = (data2.tracks || []).map((t, i) => {
+            const isPlayable = t.playable !== false && !t.unplayable;
+            return {
+              id: `bc-${t.trackId || t.trackNum || i}`,
+              kind: 'track',
+              provider: 'bandcamp',
+              title: t.title,
+              artist: t.artist || t.artistName || creator,
+              artistName: t.artist || t.artistName || creator,
+              artworkUrl: t.artworkUrl || cover,
+              cover: t.artworkUrl || cover,
+              duration: t.duration || 0,
+              streamUrl: t.streamUrl || '',
+              audioUrl: t.streamUrl || '',
+              url: t.streamUrl || t.url || albumUrl,
+              trackUrl: t.url || albumUrl,
+              providerItemId: t.url || albumUrl,
+              streamFetchedAt: t.streamUrl ? now : undefined,
+              playable: isPlayable,
+              unplayable: !isPlayable,
+            };
+          });
         }
         if (!fetched.length) {
           fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
+          pl.isPreorder = Boolean(resolvedPreorder || fetched.some(t => t.playable === false || t.unplayable));
           if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
             pushToSheet(fetched);
           }

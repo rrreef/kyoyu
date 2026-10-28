@@ -24,9 +24,10 @@ export function historyReplayInfo(t) {
   if (isStreamingProvider(t.provider) && (t.providerItemId || t.spotifyId || t.tidalId)) {
     return { provider: t.provider, itemId: String(t.providerItemId || t.spotifyId || t.tidalId).replace(/^(am|sp|td)-/, '') };
   }
-  if (t.provider === 'soundcloud' || /^sc-\d+/.test(id)) {
-    const scId = t.scTrackId || (id.match(/^sc-(\d+)/) || [])[1];
-    if (scId) return { provider: 'soundcloud', scTrackId: String(scId), url: t.providerUrl || t.providerItemId || '' };
+  if (t.provider === 'soundcloud' || /^sc-\d+/.test(id) || /^https?:\/\/[^/]*soundcloud\.com\//i.test(t.providerUrl || t.providerItemId || t.trackUrl || t.url || '')) {
+    const scId = t.scTrackId || t.trackId || (id.match(/^sc-(\d+)/) || [])[1] || '';
+    const scUrl = [t.providerUrl, t.providerItemId, t.permalinkUrl, t.trackUrl, t.url].find(u => typeof u === 'string' && /^https?:\/\/[^/]*soundcloud\.com\//i.test(u)) || '';
+    if (scId || scUrl) return { provider: 'soundcloud', scTrackId: scId ? String(scId).replace(/^sc-/, '') : '', url: scUrl };
   }
   if (t.provider === 'bandcamp' && /^https?:\/\//.test(t.providerItemId || t.providerUrl || t.trackUrl || '')) {
     return { provider: 'bandcamp', url: t.providerItemId || t.providerUrl || t.trackUrl };
@@ -89,6 +90,23 @@ const initialState = {
   providerUrl: null,        // Original source URL for "Open on..." link
 };
 
+function parseDurationSeconds(val) {
+  if (typeof val === 'number' && isFinite(val) && val > 0) {
+    return val > 36000 ? Math.round(val / 1000) : val;
+  }
+  if (typeof val === 'string' && val.trim()) {
+    const s = val.trim();
+    if (/^\d+(\.\d+)?$/.test(s)) {
+      const n = Number(s);
+      return n > 36000 ? Math.round(n / 1000) : n;
+    }
+    const parts = s.split(':').map(Number);
+    if (parts.length === 2 && isFinite(parts[0]) && isFinite(parts[1])) return parts[0] * 60 + parts[1];
+    if (parts.length === 3 && isFinite(parts[0]) && isFinite(parts[1]) && isFinite(parts[2])) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+
 // Actions that must NOT clear a restored (paused, not-yet-loaded) session
 const KEEP_RESTORED = new Set(['SET_PROGRESS', 'SET_DURATION', 'SET_VOLUME', 'SET_QUEUE', 'TOGGLE_SHUFFLE', 'CYCLE_REPEAT', 'RESTORE_SESSION', 'NATIVE_ERROR']);
 function playerReducer(state, action) {
@@ -110,11 +128,13 @@ function baseReducer(state, action) {
       return { ...state, currentTrack: null, isPlaying: false, progress: 0, duration: 0, queue: [],
                provider: 'native', providerItemId: null, providerUrl: null };
     }
-    case 'PLAY_TRACK':
+    case 'PLAY_TRACK': {
       // We ALWAYS set provider to 'native' because PLAY_TRACK handles actual mp3 streams.
       // (YouTube has its own PLAY_YOUTUBE action).
-      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: 0,
+      const trackDur = parseDurationSeconds(action.track?.duration);
+      return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: trackDur > 0 ? trackDur : 0,
                provider: 'native', providerItemId: null, providerUrl: null };
+    }
     case 'PLAY_YOUTUBE': {
       // Pause native audio when switching to YouTube
       if (typeof window !== 'undefined' && window.__kyoyuAudioRef) {
@@ -549,6 +569,7 @@ export function PlayerProvider({ children }) {
     const rawLabel = track.label || track.labelName || track.releaseLabel || '';
     const rawAlbum = track.releaseTitle || track.albumTitle || track.album || '';
     const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum);
+    const normDur = parseDurationSeconds(track.duration);
     const normTrack = {
       ...track,
       title: cleaned.title || rawTitle,
@@ -557,8 +578,21 @@ export function PlayerProvider({ children }) {
       label: cleaned.label || rawLabel,
       releaseTitle: cleaned.album || rawAlbum,
       releaseCover: track.releaseCover || track.cover || '',
+      duration: normDur > 0 ? normDur : (track.duration || 0),
     };
-    dispatch({ type:'PLAY_TRACK', track: normTrack }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: normTrack.title || '', artist: normTrack.artistName || '', label: normTrack.label || '', albumName: normTrack.releaseTitle || '', artwork: normTrack.releaseCover || track.artworkUrl || '' }); } catch(e){} 
+    dispatch({ type:'PLAY_TRACK', track: normTrack });
+    try {
+      window.webkit.messageHandlers.player.postMessage({
+        visible: true,
+        playing: true,
+        title: normTrack.title || '',
+        artist: normTrack.artistName || '',
+        label: normTrack.label || '',
+        albumName: normTrack.releaseTitle || '',
+        artwork: normTrack.releaseCover || track.artworkUrl || '',
+        ...(normDur > 0 ? { dur: normDur } : {}),
+      });
+    } catch(e){} 
     const normQueue = queue.map(t => {
       const qArtist = t.artistName || t.artist || '';
       const qTitle = t.title || t.name || '';
@@ -646,81 +680,117 @@ export function PlayerProvider({ children }) {
     playSoundCloudCounterRef.current += 1;
     const myCounter = playSoundCloudCounterRef.current;
     // Extract numeric track ID from metadata or the item id (e.g. "sc-88335161")
-    let trackId = metadata.trackId;
+    let trackId = metadata.trackId || metadata.scTrackId || '';
+    if (trackId) {
+      trackId = String(trackId).replace(/^sc-/, '').trim();
+    }
     if (!trackId && metadata.id) {
-      const m = String(metadata.id).match(/^sc-(\d+)$/);
+      const m = String(metadata.id).match(/^sc-(\d+)/);
       if (m) trackId = m[1];
     }
-    if (!trackId && metadata.scTrackId) trackId = metadata.scTrackId;
+    const cleanTrackUrl = (typeof trackUrl === 'string' && trackUrl.includes('soundcloud.com'))
+      ? trackUrl
+      : ([metadata.permalinkUrl, metadata.providerUrl, metadata.url].find(u => typeof u === 'string' && u.includes('soundcloud.com')) || '');
 
-    if (!trackId) {
-      console.warn('[Player] SoundCloud: no trackId available, cannot resolve stream');
+    if (!trackId && !cleanTrackUrl) {
+      console.warn('[Player] SoundCloud: no trackId or trackUrl available, cannot resolve stream');
       return;
     }
 
     const initClean = splitCleanMetadata(metadata.title || 'SoundCloud Track', metadata.artistName || metadata.artist || '', metadata.label || '');
-    // Show the track in the player UI immediately while resolving. This is a plain native placeholder
-    // (provider stays 'native', src ''), exactly like Bandcamp: mounting the SoundCloud widget iframe here
-    // flashed a white full-screen window behind the sheet and is not needed (we play the stream via AVPlayer).
+    const initDur = parseDurationSeconds(metadata.duration);
+    const placeholderId = trackId ? `sc-${trackId}` : `sc-${Date.now()}`;
     const placeholderTrack = {
-      id: `sc-${trackId}`,
+      id: placeholderId,
       title: initClean.title || metadata.title || 'SoundCloud Track',
       artistName: initClean.artist || metadata.artistName || metadata.artist || '',
       label: initClean.label || metadata.label || '',
-      releaseCover: metadata.artworkUrl || '',
-      duration: metadata.duration || 0,
+      releaseCover: metadata.artworkUrl || metadata.cover || metadata.releaseCover || '',
+      duration: initDur,
       src: '',
       provider: 'soundcloud',
-      providerUrl: trackUrl,
-      providerItemId: trackUrl,
-      scTrackId: String(trackId),
-      origin: { provider: 'soundcloud', scTrackId: String(trackId), url: trackUrl || '' },
+      providerUrl: cleanTrackUrl,
+      providerItemId: cleanTrackUrl || (trackId ? String(trackId) : ''),
+      scTrackId: trackId ? String(trackId) : '',
+      origin: { provider: 'soundcloud', scTrackId: trackId ? String(trackId) : '', url: cleanTrackUrl || '' },
     };
     showPlaceholder(placeholderTrack);
 
-    // Resolve the actual stream URL from our serverless API
     try {
-      const res = await fetch('/api/soundcloud-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resolveTrackId: trackId }),
-      });
+      let data = null;
 
-      if (!res.ok) {
-        console.warn('[Player] SoundCloud stream resolve failed:', res.status);
-        dispatch({ type: 'SET_PLAYING', value: false });
-        return;
+      // 1. iOS app: resolve directly on-device via StreamingBridge ('scResolve') so CloudFront
+      // stream URLs are signed for the user's device IP and filtered for MP3/AAC (never Ogg/Opus).
+      if (isStreamingAvailable()) {
+        try {
+          const nativeRes = await callStreaming('scResolve', {
+            trackId: trackId ? String(trackId) : '',
+            trackUrl: cleanTrackUrl || '',
+          }, 12000);
+          if (nativeRes && (nativeRes.streamUrl || nativeRes.url)) {
+            data = {
+              streamUrl: nativeRes.streamUrl || nativeRes.url,
+              trackId: nativeRes.trackId || trackId,
+              title: nativeRes.title || '',
+              artistName: nativeRes.artistName || '',
+              artworkUrl: nativeRes.artworkUrl || '',
+              duration: parseDurationSeconds(nativeRes.duration),
+            };
+          }
+        } catch (nativeErr) {
+          console.warn('[Player] Native scResolve failed, falling back to /api/soundcloud-search:', nativeErr?.message || nativeErr);
+        }
       }
 
-      const data = await res.json();
+      // 2. Fallback: resolve via serverless API
+      if (!data || !data.streamUrl) {
+        const res = await fetch('/api/soundcloud-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resolveTrackId: trackId || undefined,
+            resolveUrl: cleanTrackUrl || undefined,
+          }),
+        });
+
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && apiData.streamUrl) {
+            data = apiData;
+          }
+        } else {
+          console.warn('[Player] SoundCloud stream resolve failed:', res.status);
+        }
+      }
+
       if (myCounter !== playSoundCloudCounterRef.current) return;
-      if (!data.streamUrl) {
+      if (!data || !data.streamUrl) {
         console.warn('[Player] SoundCloud: no stream URL returned');
         dispatch({ type: 'SET_PLAYING', value: false });
         return;
       }
 
+      const finalTrackId = String(data.trackId || trackId || '').replace(/^sc-/, '');
       const resClean = splitCleanMetadata(
         data.title || metadata.title || 'SoundCloud Track',
         data.artistName || metadata.artistName || metadata.artist || '',
         initClean.label || metadata.label || ''
       );
-      // Play the resolved stream as a native track — dispatches PLAY_TRACK
-      // which changes provider to 'native' and triggers the audio useEffect
+      const resolvedDur = parseDurationSeconds(data.duration) || initDur || 0;
       const resolvedTrack = {
-        id: `sc-${trackId}`,
+        id: finalTrackId ? `sc-${finalTrackId}` : placeholderId,
         _restart: Date.now(), // re-fires the audio useEffect (same id as the placeholder)
-        scTrackId: String(trackId),
+        scTrackId: finalTrackId,
         provider: 'soundcloud',
-        providerItemId: trackUrl,
-        origin: { provider: 'soundcloud', scTrackId: String(trackId), url: trackUrl || '' },
+        providerItemId: cleanTrackUrl || finalTrackId,
+        origin: { provider: 'soundcloud', scTrackId: finalTrackId, url: cleanTrackUrl || '' },
         title: resClean.title || data.title || metadata.title || 'SoundCloud Track',
         artistName: resClean.artist || data.artistName || metadata.artistName || metadata.artist || '',
         label: resClean.label || '',
-        releaseCover: data.artworkUrl || metadata.artworkUrl || '',
-        duration: data.duration || metadata.duration || 0,
+        releaseCover: data.artworkUrl || metadata.artworkUrl || metadata.cover || '',
+        duration: resolvedDur,
         src: data.streamUrl,
-        providerUrl: trackUrl,
+        providerUrl: cleanTrackUrl,
       };
       playTrack(resolvedTrack);
     } catch (err) {
@@ -880,6 +950,7 @@ export function PlayerProvider({ children }) {
   /** Show a track in the player immediately (no stream yet). */
   function showPlaceholder(meta) {
     const cleaned = splitCleanMetadata(meta.title || 'Loading...', meta.artistName || meta.artist || '', meta.label || '', meta.releaseTitle || '');
+    const phDur = parseDurationSeconds(meta.duration);
     const track = {
       ...meta,
       src: '',
@@ -887,9 +958,21 @@ export function PlayerProvider({ children }) {
       artistName: cleaned.artist || meta.artistName || meta.artist || '',
       label: cleaned.label || meta.label || '',
       releaseTitle: cleaned.album || meta.releaseTitle || '',
+      duration: phDur > 0 ? phDur : (meta.duration || 0),
     };
     dispatch({ type: 'PLAY_TRACK', track });
-    try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artist: track.artistName || '', label: track.label || '', albumName: track.releaseTitle || '', artwork: track.releaseCover || '' }); } catch(e){}
+    try {
+      window.webkit.messageHandlers.player.postMessage({
+        visible: true,
+        playing: true,
+        title: track.title,
+        artist: track.artistName || '',
+        label: track.label || '',
+        albumName: track.releaseTitle || '',
+        artwork: track.releaseCover || '',
+        ...(phDur > 0 ? { dur: phDur } : {}),
+      });
+    } catch(e){}
     // Keep the ref in sync right away: a cached resolve can finish before React re-renders
     stateRef.current = { ...stateRef.current, currentTrack: track };
   }

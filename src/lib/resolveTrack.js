@@ -7,7 +7,7 @@
  */
 import { cleanText, parseEntity, isSameTitle, stripTrackPosition, tokens } from './musicMatch';
 import { resolveBandcamp } from './unifiedSearch';
-import { getProviderPriority } from './streaming';
+import { getProviderPriority, callStreaming, isStreamingAvailable } from './streaming';
 
 const RESOLVED_PROVIDERS_KEY = 'kyoyu-resolved-track-providers-v1';
 const _resolvedProviderMap = new Map();
@@ -215,6 +215,25 @@ export async function resolveBandcampStream(trackUrl, title) {
   return data ? { streamUrl: data.streamUrl, duration: data.duration } : null;
 }
 
+export async function resolveSoundCloudStream(trackId, trackUrl = '') {
+  const cleanId = trackId ? String(trackId).replace(/^sc-/, '').trim() : '';
+  if (isStreamingAvailable()) {
+    try {
+      const nativeRes = await callStreaming('scResolve', { trackId: cleanId, trackUrl: trackUrl || '' }, 12000);
+      if (nativeRes && (nativeRes.streamUrl || nativeRes.url)) {
+        return {
+          streamUrl: nativeRes.streamUrl || nativeRes.url,
+          duration: Number(nativeRes.duration) || 0,
+        };
+      }
+    } catch (_) {}
+  }
+  return await postJson('/api/soundcloud-search', {
+    resolveTrackId: cleanId || undefined,
+    resolveUrl: trackUrl || undefined,
+  });
+}
+
 /**
  * Find a playable source for artist + title.
  * First checks if this title was already played & remembered on a specific provider (e.g. Bandcamp),
@@ -247,7 +266,7 @@ export async function findTrackSource({ id, artist, title }, isCurrent = () => t
           };
         }
       } else if (remembered.provider === 'soundcloud' && remembered.scTrackId) {
-        const scStream = await postJson('/api/soundcloud-search', { resolveTrackId: remembered.scTrackId });
+        const scStream = await resolveSoundCloudStream(remembered.scTrackId, remembered.providerItemId || '');
         if (!isCurrent()) return null;
         if (scStream?.streamUrl) {
           return {
@@ -298,7 +317,7 @@ export async function findTrackSource({ id, artist, title }, isCurrent = () => t
         if (!isCurrent()) return null;
         const scTrack = (sc?.results || []).find(r => isSameTitle(parseEntity(r.title, r.artistName), want));
         if (scTrack) {
-          const scStream = await postJson('/api/soundcloud-search', { resolveTrackId: scTrack.trackId });
+          const scStream = await resolveSoundCloudStream(scTrack.trackId, scTrack.permalinkUrl || '');
           if (!isCurrent()) return null;
           if (scStream?.streamUrl) {
             const out = { provider: 'soundcloud', providerItemId: scTrack.permalinkUrl, scTrackId: String(scTrack.trackId), src: scStream.streamUrl, duration: scTrack.duration };

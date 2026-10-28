@@ -26,24 +26,24 @@ let webClientIdExpiresAt = Date.now() + 3600000; // treat seed as valid for 1h
  * This is the same client_id the website uses with api-v2.
  * Cached for 1 hour.
  */
-async function getWebClientId() {
+async function getWebClientId(forceRefresh = false) {
   const now = Date.now();
-  if (cachedWebClientId && now < webClientIdExpiresAt) {
+  if (!forceRefresh && cachedWebClientId && now < webClientIdExpiresAt) {
     return cachedWebClientId;
   }
   try {
     const pageRes = await fetch('https://soundcloud.com', {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' }
     });
-    if (!pageRes.ok) return null;
+    if (!pageRes.ok) return cachedWebClientId;
     const html = await pageRes.text();
     const scriptUrls = [...html.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
     // client_id is in one of the last JS bundles
-    for (const url of scriptUrls.slice(-5)) {
+    for (const url of scriptUrls.slice(-6).reverse()) {
       const jsRes = await fetch(url);
       if (!jsRes.ok) continue;
       const js = await jsRes.text();
-      const cidMatch = js.match(/client_id:"([a-zA-Z0-9]+)"/);
+      const cidMatch = js.match(/client_id\s*:\s*"([a-zA-Z0-9]{28,40})"/) || js.match(/client_id="([a-zA-Z0-9]{28,40})"/);
       if (cidMatch) {
         cachedWebClientId = cidMatch[1];
         webClientIdExpiresAt = now + 3600000; // 1 hour
@@ -53,7 +53,35 @@ async function getWebClientId() {
   } catch (e) {
     console.warn('Failed to extract SC web client_id:', e.message);
   }
-  return null;
+  return cachedWebClientId;
+}
+
+/**
+ * Pick best iOS/WebKit-compatible transcodings (never Ogg/Opus).
+ * Prefers progressive MP3 first, then HLS MP3/AAC.
+ */
+function pickCompatibleTranscodings(transcodings = []) {
+  if (!Array.isArray(transcodings)) return [];
+  const valid = transcodings.filter(t => {
+    if (!t || !t.url || t.snipped) return false;
+    const mime = String(t.format?.mime_type || '').toLowerCase();
+    const preset = String(t.preset || '').toLowerCase();
+    if (mime.includes('ogg') || mime.includes('opus') || preset.includes('opus')) return false;
+    return true;
+  });
+  const score = (t) => {
+    const proto = String(t.format?.protocol || '').toLowerCase();
+    const mime = String(t.format?.mime_type || '').toLowerCase();
+    const preset = String(t.preset || '').toLowerCase();
+    const isMp3OrAac = mime.includes('mpeg') || mime.includes('mp4') || mime.includes('aac') || preset.includes('mp3') || preset.includes('aac') || preset.includes('abr');
+    if (proto === 'progressive' && isMp3OrAac) return 100;
+    if (proto === 'progressive') return 90;
+    if (proto === 'hls' && (mime.includes('mp4') || mime.includes('aac') || preset.includes('aac') || preset.includes('abr'))) return 85;
+    if (proto === 'hls' && (mime.includes('mpeg') || preset.includes('mp3'))) return 80;
+    if (proto === 'hls') return 60;
+    return 10;
+  };
+  return valid.sort((a, b) => score(b) - score(a));
 }
 
 /**
@@ -124,128 +152,174 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
   }
 
-  // Check credentials exist
-  if (!process.env.SOUNDCLOUD_CLIENT_ID || !process.env.SOUNDCLOUD_CLIENT_SECRET) {
-    console.warn('SoundCloud credentials not configured');
-    return res.status(200).json({ results: [] });
-  }
-
   // ── Mode 1: Resolve stream URL for a single track ──
-  const resolveTrackId = body?.resolveTrackId;
-  if (resolveTrackId) {
+  const rawResolveId = body?.resolveTrackId;
+  const resolveUrl = body?.resolveUrl || body?.trackUrl || '';
+  const cleanResolveId = rawResolveId ? String(rawResolveId).replace(/^sc-/, '').trim() : '';
+  if (cleanResolveId || resolveUrl) {
     try {
-      const token = await getAccessToken();
-
-      // Fetch full track data to get transcodings
-      const trackRes = await fetch(`https://api.soundcloud.com/tracks/${resolveTrackId}?representation=full`, {
-        headers: {
-          'Accept': 'application/json; charset=utf-8',
-          'Authorization': `OAuth ${token}`,
-        },
-      });
-
-      if (!trackRes.ok) {
-        console.error('SoundCloud track fetch error:', trackRes.status);
-        return res.status(404).json({ error: 'Track not found' });
-      }
-
-      const track = await trackRes.json();
-
+      let track = null;
       let streamUrl = null;
+      let webClientId = await getWebClientId(false);
 
-      // Method 1: Use the dedicated /streams endpoint (preferred — returns pre-resolved URLs)
-      const streamsRes = await fetch(
-        `https://api.soundcloud.com/tracks/${resolveTrackId}/streams`,
-        {
-          headers: {
-            'Accept': 'application/json; charset=utf-8',
-            'Authorization': `OAuth ${token}`,
-          },
+      const fetchV2Track = async (cid) => {
+        if (!cid) return null;
+        if (cleanResolveId && /^\d+$/.test(cleanResolveId)) {
+          const r = await fetch(`https://api-v2.soundcloud.com/tracks/${cleanResolveId}?client_id=${encodeURIComponent(cid)}`, {
+            headers: {
+              'Accept': 'application/json; charset=utf-8',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            },
+          });
+          if (r.ok) return await r.json();
+          if (r.status === 401 || r.status === 403) return { _authFailed: true };
         }
-      );
+        if (resolveUrl && resolveUrl.includes('soundcloud.com')) {
+          const r = await fetch(`https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(resolveUrl)}&client_id=${encodeURIComponent(cid)}`, {
+            headers: {
+              'Accept': 'application/json; charset=utf-8',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            },
+          });
+          if (r.ok) return await r.json();
+          if (r.status === 401 || r.status === 403) return { _authFailed: true };
+        }
+        return null;
+      };
 
-      if (streamsRes.ok) {
-        const streams = await streamsRes.json();
-        // Prefer high-quality AAC HLS, fall back to lower quality, then any available
-        let candidateUrl = streams.hls_aac_160_url
-          || streams.hls_aac_96_url
-          || streams.hls_mp3_128_url
-          || streams.http_mp3_128_url
-          || null;
-
-        // If none of the expected keys worked, try the first URL value we find
-        if (!candidateUrl) {
-          const keys = Object.keys(streams);
-          for (const key of keys) {
-            if (typeof streams[key] === 'string' && streams[key].startsWith('http')) {
-              candidateUrl = streams[key];
-              break;
+      // Step 1: Resolve via api-v2.soundcloud.com using web client_id
+      let v2Result = await fetchV2Track(webClientId);
+      if (v2Result && v2Result._authFailed) {
+        webClientId = await getWebClientId(true);
+        v2Result = await fetchV2Track(webClientId);
+      }
+      if (v2Result && !v2Result._authFailed && v2Result.id) {
+        track = v2Result;
+        const candidates = pickCompatibleTranscodings(track.media?.transcodings || []);
+        const trackAuth = track.track_authorization || '';
+        for (const trans of candidates) {
+          try {
+            const sep = trans.url.includes('?') ? '&' : '?';
+            let resolveEndpoint = `${trans.url}${sep}client_id=${encodeURIComponent(webClientId)}`;
+            if (trackAuth && !resolveEndpoint.includes('track_authorization=')) {
+              resolveEndpoint += `&track_authorization=${encodeURIComponent(trackAuth)}`;
             }
-          }
-        }
-
-        if (candidateUrl) {
-          // If it's an API URL, follow the redirect to get the actual CDN URL
-          if (candidateUrl.includes('api.soundcloud.com')) {
-            try {
-              const cdnRes = await fetch(candidateUrl, {
-                headers: { 'Authorization': `OAuth ${token}` },
-                redirect: 'follow',
-              });
-              if (cdnRes.ok) {
-                // Check if the response is a redirect URL or the actual stream content
-                const contentType = cdnRes.headers.get('content-type') || '';
-                if (contentType.includes('json')) {
-                  const cdnData = await cdnRes.json();
-                  streamUrl = cdnData.url || cdnRes.url;
-                } else {
-                  // The fetch followed the redirect — the final URL is the CDN URL
-                  streamUrl = cdnRes.url;
-                }
+            const transRes = await fetch(resolveEndpoint, {
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+              },
+            });
+            if (transRes.ok) {
+              const transData = await transRes.json();
+              if (transData?.url) {
+                streamUrl = transData.url;
+                break;
               }
-            } catch (e) {
-              console.error('SC CDN resolve error:', e);
             }
-          } else {
-            // It's already a CDN URL
-            streamUrl = candidateUrl;
+          } catch (e) {
+            console.warn('SC v2 transcoding resolve error:', e.message);
           }
         }
       }
 
-      // Method 2: Resolve from transcodings (fallback)
-      if (!streamUrl && track.media && track.media.transcodings && track.media.transcodings.length > 0) {
-        // Only look for HLS (progressive was removed by SoundCloud in late 2025)
-        const hls = track.media.transcodings.find(
-          t => t.format && t.format.protocol === 'hls'
-        );
+      // Step 2: Official API v1 fallback if env credentials exist and v2 did not yield streamUrl
+      if (!streamUrl && process.env.SOUNDCLOUD_CLIENT_ID && process.env.SOUNDCLOUD_CLIENT_SECRET && cleanResolveId) {
+        try {
+          const token = await getAccessToken();
+          if (!track) {
+            const trackRes = await fetch(`https://api.soundcloud.com/tracks/${cleanResolveId}?representation=full`, {
+              headers: {
+                'Accept': 'application/json; charset=utf-8',
+                'Authorization': `OAuth ${token}`,
+              },
+            });
+            if (trackRes.ok) {
+              track = await trackRes.json();
+            }
+          }
 
-        if (hls && hls.url) {
-          // Use only OAuth header for transcoding URL resolution
-          const transRes = await fetch(hls.url, {
+          const streamsRes = await fetch(`https://api.soundcloud.com/tracks/${cleanResolveId}/streams`, {
             headers: {
-              'Accept': 'application/json',
+              'Accept': 'application/json; charset=utf-8',
               'Authorization': `OAuth ${token}`,
             },
-            redirect: 'follow',
           });
-          if (transRes.ok) {
-            const transData = await transRes.json();
-            streamUrl = transData.url;
+          if (streamsRes.ok) {
+            const streams = await streamsRes.json();
+            // Prefer progressive HTTP MP3 first, then AAC/MP3 HLS (never opus/ogg)
+            let candidateUrl = streams.http_mp3_128_url
+              || streams.hls_aac_160_url
+              || streams.hls_aac_96_url
+              || streams.hls_mp3_128_url
+              || null;
+            if (!candidateUrl) {
+              for (const key of Object.keys(streams)) {
+                if (!/opus|ogg/i.test(key) && typeof streams[key] === 'string' && streams[key].startsWith('http')) {
+                  candidateUrl = streams[key];
+                  break;
+                }
+              }
+            }
+            if (candidateUrl) {
+              if (candidateUrl.includes('api.soundcloud.com')) {
+                const cdnRes = await fetch(candidateUrl, {
+                  headers: { 'Authorization': `OAuth ${token}` },
+                  redirect: 'follow',
+                });
+                if (cdnRes.ok) {
+                  const contentType = cdnRes.headers.get('content-type') || '';
+                  if (contentType.includes('json')) {
+                    const cdnData = await cdnRes.json();
+                    streamUrl = cdnData.url || cdnRes.url;
+                  } else {
+                    streamUrl = cdnRes.url;
+                  }
+                }
+              } else {
+                streamUrl = candidateUrl;
+              }
+            }
           }
+
+          if (!streamUrl && track?.media?.transcodings?.length) {
+            const candidates = pickCompatibleTranscodings(track.media.transcodings);
+            for (const cand of candidates) {
+              const transRes = await fetch(cand.url, {
+                headers: {
+                  'Accept': 'application/json',
+                  'Authorization': `OAuth ${token}`,
+                },
+                redirect: 'follow',
+              });
+              if (transRes.ok) {
+                const transData = await transRes.json();
+                if (transData?.url) {
+                  streamUrl = transData.url;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (v1Err) {
+          console.warn('SC v1 fallback resolve error:', v1Err.message);
         }
       }
 
-      if (!streamUrl) {
+      if (!streamUrl || !track) {
         return res.status(404).json({ error: 'No playable stream found' });
       }
 
+      const rawDur = Number(track.duration || track.full_duration || 0);
+      const durationSec = rawDur > 1000 ? Math.round(rawDur / 1000) : Math.round(rawDur);
+
       return res.status(200).json({
         streamUrl,
+        trackId: String(track.id || cleanResolveId),
         title: track.title || '',
         artistName: track.user?.username || '',
         artworkUrl: (track.artwork_url || track.user?.avatar_url || '').replace('-large', '-t500x500'),
-        duration: Math.round((track.duration || 0) / 1000),
+        duration: durationSec,
       });
     } catch (err) {
       console.error('SoundCloud resolve error:', err);
@@ -263,26 +337,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const token = await getAccessToken();
-    const clientId = process.env.SOUNDCLOUD_CLIENT_ID;
-
-    // Strategy: try v2 first, fall back to website scraping, then v1
+    // Strategy: try v2 first, fall back to v1 if env credentials exist
     let collection = [];
 
     // ── Attempt 1: v2 search with web client_id (broadest results) ──
     try {
-      const webClientId = await getWebClientId();
+      let webClientId = await getWebClientId(false);
       if (webClientId) {
-        const v2Params = new URLSearchParams({
-          q: query,
-          limit: limit.toString(),
-          offset: offset.toString(),
-          linked_partitioning: '1',
-          client_id: webClientId,
-        });
-        const v2Res = await fetch(`https://api-v2.soundcloud.com/search/tracks?${v2Params.toString()}`, {
-          headers: { 'Accept': 'application/json; charset=utf-8' },
-        });
+        const fetchSearchV2 = async (cid) => {
+          const v2Params = new URLSearchParams({
+            q: query,
+            limit: limit.toString(),
+            offset: offset.toString(),
+            linked_partitioning: '1',
+            client_id: cid,
+          });
+          return await fetch(`https://api-v2.soundcloud.com/search/tracks?${v2Params.toString()}`, {
+            headers: { 'Accept': 'application/json; charset=utf-8' },
+          });
+        };
+        let v2Res = await fetchSearchV2(webClientId);
+        if (v2Res.status === 401 || v2Res.status === 403) {
+          webClientId = await getWebClientId(true);
+          if (webClientId) v2Res = await fetchSearchV2(webClientId);
+        }
         if (v2Res.ok) {
           const v2Data = await v2Res.json();
           collection = Array.isArray(v2Data) ? v2Data : (v2Data.collection || []);
@@ -295,7 +373,8 @@ export default async function handler(req, res) {
     }
 
     // ── Attempt 2: v1 /tracks (title-only, last resort) ──
-    if (collection.length === 0) {
+    if (collection.length === 0 && process.env.SOUNDCLOUD_CLIENT_ID && process.env.SOUNDCLOUD_CLIENT_SECRET) {
+      const token = await getAccessToken();
       const v1Params = new URLSearchParams({
         q: query,
         limit: limit.toString(),

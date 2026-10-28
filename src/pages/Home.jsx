@@ -366,14 +366,20 @@ export default function Home() {
       };
       setSelectedAlbum(albumObj);
       registerAlbumPlayback(albumObj);
-      const mappedTracks = cleanedTracks.map(t => ({
-        id: t.id || String(Date.now() + Math.random()),
-        title: t.title || t.name || 'Unknown Track',
-        artist: t.artist || t.artistName || '',
-        url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
-        cover: t.artworkUrl || t.cover || null,
-        provider: t.provider || pl.provider || null,
-      }));
+      const mappedTracks = cleanedTracks.map(t => {
+        const isPlayable = t.playable !== false && !t.unplayable && t.isPlayable !== false;
+        return {
+          id: t.id || String(Date.now() + Math.random()),
+          title: t.title || t.name || 'Unknown Track',
+          artist: t.artist || t.artistName || '',
+          url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
+          streamUrl: t.streamUrl || t.audioUrl || '',
+          cover: t.artworkUrl || t.cover || null,
+          provider: t.provider || pl.provider || null,
+          playable: isPlayable,
+          unplayable: !isPlayable,
+        };
+      });
       try {
         if (pl.kind === 'album') {
           window.webkit?.messageHandlers?.player?.postMessage({
@@ -388,6 +394,7 @@ export default function Home() {
               year: resolvedYear,
               label: resolvedLabel,
               provider: pl.provider || null,
+              isPreorder: Boolean(pl.isPreorder),
               tracks: mappedTracks,
             }
           });
@@ -430,50 +437,16 @@ export default function Home() {
           }
         }
         const now = Date.now();
-        let fetched = (data.tracks || []).map((t, i) => ({
-          id: `bc-${t.trackId || i}`,
-          kind: 'track',
-          provider: 'bandcamp',
-          title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
-          artist: t.artistName || creator,
-          artistName: t.artistName || creator,
-          label: resolvedLabel || undefined,
-          year: resolvedYear || undefined,
-          album: cleanAlbumTitle,
-          releaseTitle: cleanAlbumTitle,
-          artworkUrl: t.artworkUrl || cover,
-          cover: t.artworkUrl || cover,
-          duration: t.duration || 0,
-          streamUrl: t.streamUrl || '',
-          audioUrl: t.streamUrl || '',
-          url: t.streamUrl || t.trackUrl || '',
-          trackUrl: t.trackUrl || albumUrl,
-          albumUrl,
-          providerItemId: t.trackUrl || albumUrl,
-          streamFetchedAt: t.streamUrl ? now : undefined,
-        }));
-        if (!fetched.length) {
-          const r2 = await fetch('/api/bandcamp-resolve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'album-tracks', url: albumUrl }),
-          }).catch(() => null);
-          const data2 = r2 && r2.ok ? await r2.json() : { tracks: [] };
-          if (data2.label && !resolvedLabel) resolvedLabel = data2.label;
-          if (data2.year && !resolvedYear) resolvedYear = String(data2.year);
-          if (data2.artist) {
-            const m3 = splitCleanMetadata(data2.albumTitle || cleanAlbumTitle, data2.artist, resolvedLabel || '');
-            creator = m3.artist || creator;
-            cleanAlbumTitle = m3.title || cleanAlbumTitle;
-            if (m3.label && !resolvedLabel) resolvedLabel = m3.label;
-          }
-          fetched = (data2.tracks || []).map((t, i) => ({
-            id: `bc-${t.trackId || t.trackNum || i}`,
+        let resolvedPreorder = Boolean(data.isPreorder || data.album?.isPreorder);
+        let fetched = (data.tracks || []).map((t, i) => {
+          const isPlayable = t.playable !== false && !t.unplayable;
+          return {
+            id: `bc-${t.trackId || i}`,
             kind: 'track',
             provider: 'bandcamp',
-            title: cleanTrackOrReleaseTitle(t.title, t.artist || t.artistName || creator),
-            artist: t.artist || t.artistName || creator,
-            artistName: t.artist || t.artistName || creator,
+            title: cleanTrackOrReleaseTitle(t.title, t.artistName || creator),
+            artist: t.artistName || creator,
+            artistName: t.artistName || creator,
             label: resolvedLabel || undefined,
             year: resolvedYear || undefined,
             album: cleanAlbumTitle,
@@ -483,12 +456,58 @@ export default function Home() {
             duration: t.duration || 0,
             streamUrl: t.streamUrl || '',
             audioUrl: t.streamUrl || '',
-            url: t.streamUrl || t.url || albumUrl,
-            trackUrl: t.url || albumUrl,
+            url: t.streamUrl || t.trackUrl || '',
+            trackUrl: t.trackUrl || albumUrl,
             albumUrl,
-            providerItemId: t.url || albumUrl,
+            providerItemId: t.trackUrl || albumUrl,
             streamFetchedAt: t.streamUrl ? now : undefined,
-          }));
+            playable: isPlayable,
+            unplayable: !isPlayable,
+          };
+        });
+        if (!fetched.length) {
+          const r2 = await fetch('/api/bandcamp-resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'album-tracks', url: albumUrl }),
+          }).catch(() => null);
+          const data2 = r2 && r2.ok ? await r2.json() : { tracks: [] };
+          if (data2.label && !resolvedLabel) resolvedLabel = data2.label;
+          if (data2.year && !resolvedYear) resolvedYear = String(data2.year);
+          if (data2.isPreorder) resolvedPreorder = true;
+          if (data2.artist) {
+            const m3 = splitCleanMetadata(data2.albumTitle || cleanAlbumTitle, data2.artist, resolvedLabel || '');
+            creator = m3.artist || creator;
+            cleanAlbumTitle = m3.title || cleanAlbumTitle;
+            if (m3.label && !resolvedLabel) resolvedLabel = m3.label;
+          }
+          fetched = (data2.tracks || []).map((t, i) => {
+            const isPlayable = t.playable !== false && !t.unplayable;
+            return {
+              id: `bc-${t.trackId || t.trackNum || i}`,
+              kind: 'track',
+              provider: 'bandcamp',
+              title: cleanTrackOrReleaseTitle(t.title, t.artist || t.artistName || creator),
+              artist: t.artist || t.artistName || creator,
+              artistName: t.artist || t.artistName || creator,
+              label: resolvedLabel || undefined,
+              year: resolvedYear || undefined,
+              album: cleanAlbumTitle,
+              releaseTitle: cleanAlbumTitle,
+              artworkUrl: t.artworkUrl || cover,
+              cover: t.artworkUrl || cover,
+              duration: t.duration || 0,
+              streamUrl: t.streamUrl || '',
+              audioUrl: t.streamUrl || '',
+              url: t.streamUrl || t.url || albumUrl,
+              trackUrl: t.url || albumUrl,
+              albumUrl,
+              providerItemId: t.url || albumUrl,
+              streamFetchedAt: t.streamUrl ? now : undefined,
+              playable: isPlayable,
+              unplayable: !isPlayable,
+            };
+          });
         }
         if (!fetched.length) {
           fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
@@ -497,6 +516,7 @@ export default function Home() {
           pl.tracks = fetched;
           pl.label = resolvedLabel || pl.label;
           pl.year = resolvedYear || pl.year;
+          pl.isPreorder = Boolean(resolvedPreorder || fetched.some(t => t.playable === false || t.unplayable));
           if (!window.__lastFastOpenTs || String(window.__lastFastOpenTs) === String(ts)) {
             pushToSheet(fetched);
           }

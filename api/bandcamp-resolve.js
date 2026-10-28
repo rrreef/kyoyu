@@ -266,6 +266,7 @@ export default async function handler(req, res) {
       const tracks = tralbumData.trackinfo.map((t, i) => {
         const file = t.file;
         const streamUrl = file ? (file['mp3-128'] || Object.values(file)[0] || null) : null;
+        const isPlayable = Boolean(streamUrl) && t.streaming !== 0 && t.streaming !== false;
         let trackArtist = unescapeEntity(t.artist || artist || '');
         let rawTrackTitle = unescapeEntity(t.title || `Track ${i + 1}`);
         const cleanTitle = stripArtistPrefix(rawTrackTitle, trackArtist);
@@ -278,13 +279,23 @@ export default async function handler(req, res) {
           labelUrl: originUrl,
           year,
           duration: t.duration ? Math.round(t.duration) : 0,
-          streamUrl,
+          streamUrl: isPlayable ? streamUrl : null,
+          playable: isPlayable,
+          unplayable: !isPlayable,
           trackNum: t.track_num || i + 1,
           url: t.title_link ? new URL(t.title_link, url).toString() : url,
         };
       });
 
-      const result = { tracks, albumName, artist, label, labelUrl: originUrl, year, artworkUrl };
+      const isPreorder = Boolean(
+        tralbumData?.album_is_preorder ||
+        tralbumData?.is_preorder ||
+        tralbumData?.current?.is_preorder ||
+        /album[-_]?is[-_]?preorder|is_preorder["']?\s*:\s*true|available\s+as\s+pre-?order|pre-?order\s+now/i.test(effectiveHtml) ||
+        (tracks.length > 0 && tracks.some(t => t.playable === false))
+      );
+
+      const result = { tracks, albumName, artist, label, labelUrl: originUrl, year, artworkUrl, isPreorder };
       resolveCache.set(cacheKey, { data: result, timestamp: now });
       return res.status(200).json(result);
     } catch (err) {

@@ -245,6 +245,32 @@ export function isItemInConnectedLikes(idOrItem) {
 }
 
 if (typeof window !== 'undefined') {
+  const applyBcPlaylistOverrides = (list) => {
+    if (!Array.isArray(list) || !list.length) return list;
+    try {
+      const raw = localStorage.getItem('kyoyu-bc-playlist-overrides-v1');
+      if (!raw) return list;
+      const overrides = JSON.parse(raw);
+      if (!overrides || typeof overrides !== 'object') return list;
+      return list.map((pl) => {
+        if (!pl) return pl;
+        const pid = String(pl.id || '').trim().toLowerCase();
+        const rawPid = String(pl.playlistId || '').trim().toLowerCase();
+        const cleanPid = pid.replace(/^bcpl-/, '').replace(/^bc-basket-/, '').replace(/^bcbasket-/, '');
+        const pTitle = String(pl.title || pl.name || '').trim().toLowerCase();
+        const ov = overrides[pid] || overrides[rawPid] || overrides[cleanPid] || overrides[`bcpl-${cleanPid}`] || (pTitle ? overrides[`title::${pTitle}`] : null);
+        if (!ov) return pl;
+        return {
+          ...pl,
+          ...(ov.title ? { title: ov.title, name: ov.title } : {}),
+          ...(ov.cover ? { artworkUrl: ov.cover, cover: ov.cover, hasCustomCover: true } : {}),
+        };
+      });
+    } catch (_) {
+      return list;
+    }
+  };
+
   onStreamingEvent((evt) => {
     if (!evt) return;
     if (evt.type === 'status' && evt.status) {
@@ -253,8 +279,9 @@ if (typeof window !== 'undefined') {
       const s = evt.service;
       const k = evt.kind;
       if (!cache[s]) cache[s] = {};
-      cache[s][k] = evt.items;
-      preloadImagesInMemory(evt.items, 90);
+      const items = (s === 'bandcamp' && k === 'playlists') ? applyBcPlaylistOverrides(evt.items) : evt.items;
+      cache[s][k] = items;
+      preloadImagesInMemory(items, 90);
       fetchedAt[`${s}:${k}`] = Date.now();
       saveFastConnectedCache();
       emit();
@@ -370,12 +397,28 @@ if (typeof window !== 'undefined') {
     emit();
   };
 
-  window.__kyoyuRenameBandcampPlaylist = (rawId, oldTitle, newTitle) => {
+  const updateBandcampPlaylistInWeb = (rawId, oldTitle, newTitle, newCover) => {
     const trimmed = String(newTitle || '').trim();
-    if (!trimmed) return;
+    const coverStr = String(newCover || '').trim();
+    if (!trimmed && !coverStr) return;
     const targetId = String(rawId || '').trim().toLowerCase();
     const cleanId = targetId.replace(/^bcpl-/, '').replace(/^bc-basket-/, '').replace(/^bcbasket-/, '');
     const targetOldTitle = String(oldTitle || '').trim().toLowerCase();
+
+    try {
+      const rawOv = localStorage.getItem('kyoyu-bc-playlist-overrides-v1');
+      const overrides = rawOv ? JSON.parse(rawOv) : {};
+      const keys = [targetId, cleanId, cleanId ? `bcpl-${cleanId}` : '', targetOldTitle ? `title::${targetOldTitle}` : '', trimmed ? `title::${trimmed.toLowerCase()}` : ''].filter(Boolean);
+      for (const k of keys) {
+        const prev = overrides[k] || {};
+        overrides[k] = {
+          ...prev,
+          ...(trimmed ? { title: trimmed } : {}),
+          ...(coverStr ? { cover: coverStr } : {}),
+        };
+      }
+      localStorage.setItem('kyoyu-bc-playlist-overrides-v1', JSON.stringify(overrides));
+    } catch (_) {}
 
     const matchesPl = (pl) => {
       if (!pl) return false;
@@ -390,12 +433,21 @@ if (typeof window !== 'undefined') {
 
     if (cache.bandcamp && Array.isArray(cache.bandcamp.playlists)) {
       cache.bandcamp.playlists = cache.bandcamp.playlists.map((pl) =>
-        matchesPl(pl) ? { ...pl, title: trimmed, name: trimmed } : pl
+        matchesPl(pl)
+          ? {
+              ...pl,
+              ...(trimmed ? { title: trimmed, name: trimmed } : {}),
+              ...(coverStr ? { artworkUrl: coverStr, cover: coverStr, hasCustomCover: true } : {}),
+            }
+          : pl
       );
     }
     saveFastConnectedCache();
     emit();
   };
+
+  window.__kyoyuRenameBandcampPlaylist = updateBandcampPlaylistInWeb;
+  window.__kyoyuUpdateBandcampPlaylist = updateBandcampPlaylistInWeb;
 }
 
 export function useConnectedLibrary() {

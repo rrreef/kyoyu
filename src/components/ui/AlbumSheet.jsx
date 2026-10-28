@@ -32,9 +32,21 @@ const playNativeTrackHandler = async (albumId, trackObj, fallbackAlbum = null) =
     || String(activeAlbum.id || '').startsWith('radio-')
     || activeAlbum.genre === 'Track Radio'
     || /\s+radio$/i.test(String(activeAlbum.title || '').trim());
-  const sourceTracks = (Array.isArray(activeAlbum.tracks) && activeAlbum.tracks.length > 0)
+  if (trackObj && (trackObj.unplayable === true || trackObj.playable === false || trackObj.isPlayable === false)) {
+    return;
+  }
+  const rawSourceTracks = (Array.isArray(activeAlbum.tracks) && activeAlbum.tracks.length > 0)
     ? activeAlbum.tracks
     : (trackObj ? [trackObj] : []);
+  const wantRawId = String(trackObj?.id || '').split('?ts=')[0];
+  if (wantRawId) {
+    const matchedRaw = rawSourceTracks.find(t => String(t?.id || '').split('?ts=')[0] === wantRawId);
+    if (matchedRaw && (matchedRaw.unplayable === true || matchedRaw.playable === false || matchedRaw.isPlayable === false)) {
+      return;
+    }
+  }
+  const sourceTracks = rawSourceTracks.filter(t => !(t?.unplayable === true || t?.playable === false || t?.isPlayable === false));
+  if (!sourceTracks.length) return;
   const queue = sourceTracks.map(t => {
     const src = t.url || t.streamUrl || t.audioUrl || t.src || '';
     const resolvedCover = (t.cover && t.cover !== '/album1.png' ? t.cover : '')
@@ -232,13 +244,17 @@ export function openNativeAlbumFast(album, opts = {}) {
     label: album.label || null,
     provider: album.provider || null,
     description: album.description || null,
+    isPreorder: Boolean(album.isPreorder),
     tracks: (album.tracks || []).map(t => ({
       id: t.id || String(Date.now() + Math.random()),
       title: t.title || t.name || 'Unknown Track',
       artist: t.artist || '',
       url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
+      streamUrl: t.streamUrl || '',
       cover: t.cover || null,
-      provider: t.provider || album.provider || null
+      provider: t.provider || album.provider || null,
+      playable: t.playable !== false && !t.unplayable && t.isPlayable !== false,
+      unplayable: Boolean(t.unplayable || t.playable === false || t.isPlayable === false),
     }))
   };
 
@@ -412,6 +428,7 @@ if (typeof window !== 'undefined') {
           label: bcLabel,
           labelUrl: bcData.labelUrl || '',
           provider: 'bandcamp',
+          isPreorder: Boolean(bcData.isPreorder || (Array.isArray(bcData.tracks) && bcData.tracks.some(t => t.playable === false || t.unplayable))),
           description: [
             info?.formats?.length ? `Format: ${info.formats.join(' / ')}` : '',
             info?.country ? `Country: ${info.country}` : '',
@@ -423,11 +440,14 @@ if (typeof window !== 'undefined') {
             artist: t.artist || bcArtist,
             label: bcLabel,
             year: bcYear ? String(bcYear) : '',
-            url: t.streamUrl || t.trackUrl || bcTrackUrl,
-            trackUrl: t.trackUrl || bcTrackUrl,
-            providerItemId: t.trackUrl || bcTrackUrl,
+            url: t.streamUrl || t.trackUrl || t.url || bcTrackUrl,
+            streamUrl: t.streamUrl || '',
+            trackUrl: t.trackUrl || t.url || bcTrackUrl,
+            providerItemId: t.trackUrl || t.url || bcTrackUrl,
             cover: t.artworkUrl || bcData.artworkUrl || fallbackCover || '',
             provider: 'bandcamp',
+            playable: t.playable !== false && !t.unplayable,
+            unplayable: Boolean(t.unplayable || t.playable === false),
           })),
         };
       };
@@ -686,13 +706,17 @@ export default function AlbumSheet({ album, onClose }) {
             year: album.year ? String(album.year) : null,
             label: album.label || null,
             provider: album.provider || null,
+            isPreorder: Boolean(album.isPreorder),
             tracks: (album.tracks || []).map(t => ({
               id: t.id || String(Date.now() + Math.random()),
               title: t.title || t.name || 'Unknown Track',
               artist: t.artist || '',
               url: t.trackUrl || t.url || t.streamUrl || t.audioUrl || '',
+              streamUrl: t.streamUrl || '',
               cover: t.artworkUrl || t.cover || null,
-              provider: t.provider || album.provider || null
+              provider: t.provider || album.provider || null,
+              playable: t.playable !== false && !t.unplayable && t.isPlayable !== false,
+              unplayable: Boolean(t.unplayable || t.playable === false || t.isPlayable === false),
             }))
           }
         });
