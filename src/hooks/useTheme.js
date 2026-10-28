@@ -97,14 +97,20 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
     root.setAttribute('data-custom-bg', 'true');
     if (hasCustomBgImage) {
       root.setAttribute('data-custom-bg-image', 'true');
+      root.setAttribute('data-custom-bg-img', 'true');
+      root.style.removeProperty('--custom-bg-color');
+      root.style.removeProperty('--bg-deep');
+      root.style.removeProperty('--bg-primary');
     } else {
       root.removeAttribute('data-custom-bg-image');
+      root.removeAttribute('data-custom-bg-img');
       root.style.setProperty('--custom-bg-color', activeCustomBg);
       root.style.setProperty('--bg-deep', activeCustomBg);
       root.style.setProperty('--bg-primary', activeCustomBg);
     }
   } else {
     root.removeAttribute('data-custom-bg-image');
+    root.removeAttribute('data-custom-bg-img');
     root.removeAttribute('data-custom-bg');
     root.style.removeProperty('--custom-bg-color');
     root.style.removeProperty('--bg-deep');
@@ -117,10 +123,18 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   if (document.body) {
     document.body.style.backgroundColor = finalBg;
     document.body.style.color = finalFg;
+    if (hasCustomBgImage) {
+      document.body.style.setProperty('background', 'transparent', 'important');
+      document.body.style.setProperty('background-color', 'transparent', 'important');
+    }
   }
   const appRoot = document.getElementById('root');
   if (appRoot) {
     appRoot.style.backgroundColor = finalBg;
+    if (hasCustomBgImage) {
+      appRoot.style.setProperty('background', 'transparent', 'important');
+      appRoot.style.setProperty('background-color', 'transparent', 'important');
+    }
   }
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
@@ -174,7 +188,7 @@ export function useTheme() {
       setState(latest);
     };
     const onStorage = (e) => {
-      if (!e.key || [LS_THEME_KEY, LS_MODE_KEY, LS_BASE_KEY, LS_CUSTOM_BG_KEY, LS_TINT_KEY].includes(e.key)) {
+      if (!e.key || [LS_THEME_KEY, LS_MODE_KEY, LS_BASE_KEY, LS_CUSTOM_BG_KEY, LS_TINT_KEY, 'kyoyu-custom-bg-image'].includes(e.key)) {
         onSync();
       }
     };

@@ -1005,22 +1005,33 @@ img {
 }
 
 /* ── Custom Background Main Color & Image (Custom Appearance) ── */
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) {
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) {
   --bg-deep:      var(--custom-bg-color) !important;
   --bg-primary:   var(--custom-bg-color) !important;
   --bg-secondary: color-mix(in srgb, var(--custom-bg-color) 92%, #000000) !important;
   --bg-tertiary:  color-mix(in srgb, var(--custom-bg-color) 84%, #000000) !important;
   --bg-card:      color-mix(in srgb, var(--custom-bg-color) 88%, #000000) !important;
 }
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]),
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) body,
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) #root,
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .app-layout,
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .main-content,
-html[data-custom-bg="true"]:not([data-custom-bg-img="true"]) .page {
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]),
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) body,
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) #root,
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) .app-layout,
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) .main-content,
+html[data-custom-bg="true"]:not([data-custom-bg-image="true"]):not([data-custom-bg-img="true"]) .page {
   background: var(--custom-bg-color) !important;
   background-color: var(--custom-bg-color) !important;
 }
+html[data-custom-bg-image="true"],
+html[data-custom-bg-image="true"] body,
+html[data-custom-bg-image="true"] #root,
+html[data-custom-bg-image="true"] .app-layout,
+html[data-custom-bg-image="true"] .main-content,
+html[data-custom-bg-image="true"] .page,
+html[data-custom-bg-image="true"] .home-page,
+html[data-custom-bg-image="true"] .library-page,
+html[data-custom-bg-image="true"] .search-page,
+html[data-custom-bg-image="true"] .uu-page,
+html[data-custom-bg-image="true"] .messages-page,
 html[data-custom-bg-img="true"],
 html[data-custom-bg-img="true"] body,
 html[data-custom-bg-img="true"] #root,

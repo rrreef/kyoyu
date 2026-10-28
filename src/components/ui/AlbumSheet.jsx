@@ -3213,12 +3213,96 @@ export async function startTrackRadio(seedInput = null) {
     ].map(_normStr).filter(Boolean)
   );
 
+  // Anti-clumping shuffle & interleaving: shuffles within quality bands and enforces spacing
+  // so tracks from the same artist, same album, or same label never appear in a row.
+  const _interleaveAndDeClumpRadioTracks = (items, seedArtNorm = '', seedLblNorm = '') => {
+    if (!Array.isArray(items) || items.length <= 2) return items || [];
+
+    // 1. Add controlled random jitter within quality bands so each Radio open feels fresh
+    // while keeping high-affinity discoveries near the top.
+    const jittered = items.map((item, idx) => {
+      const bandBonus = idx < 18 ? 18 : idx < 38 ? 9 : 0;
+      const randomJitter = (Math.random() * 14) - 7;
+      // Slightly deprioritize the seed artist/label for the very first opening slots
+      const seedPenalty = (
+        (seedArtNorm && item._aNorm === seedArtNorm) ||
+        (seedLblNorm && item._lNorm && item._lNorm === seedLblNorm)
+      ) ? -6 : 0;
+      return {
+        ...item,
+        _rankScore: (item._score || 50) + bandBonus + randomJitter + seedPenalty,
+      };
+    });
+    jittered.sort((a, b) => b._rankScore - a._rankScore);
+
+    // 2. Greedy anti-clumping pass: never place same artist, same album, or same label consecutively
+    const remaining = [...jittered];
+    const result = [];
+
+    while (remaining.length > 0) {
+      let bestIdx = 0;
+      let bestVal = -Infinity;
+      const pos = result.length;
+
+      const prev1 = pos >= 1 ? result[pos - 1] : null;
+      const prev2 = pos >= 2 ? result[pos - 2] : null;
+      const prev3 = pos >= 3 ? result[pos - 3] : null;
+      const prev4 = pos >= 4 ? result[pos - 4] : null;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const cand = remaining[i];
+        let val = cand._rankScore - (i * 0.35);
+
+        const a = cand._aNorm || '';
+        const alb = cand._albNorm || '';
+        const lbl = cand._lNorm || '';
+
+        // Avoid opening the first 2 rows with the exact seed artist
+        if (pos < 2 && seedArtNorm && a === seedArtNorm) {
+          val -= 180;
+        }
+
+        // Strict artist spacing (no consecutive or near-consecutive tracks by the same artist)
+        if (a) {
+          if (prev1 && prev1._aNorm === a) val -= 2000;
+          else if (prev2 && prev2._aNorm === a) val -= 900;
+          else if (prev3 && prev3._aNorm === a) val -= 450;
+          else if (prev4 && prev4._aNorm === a) val -= 200;
+        }
+
+        // Strict album spacing (no consecutive tracks from the same album/release)
+        if (alb) {
+          if (prev1 && prev1._albNorm === alb) val -= 1800;
+          else if (prev2 && prev2._albNorm === alb) val -= 800;
+          else if (prev3 && prev3._albNorm === alb) val -= 350;
+        }
+
+        // Label spacing (avoid runs of tracks from the same label)
+        if (lbl) {
+          if (prev1 && prev1._lNorm === lbl) val -= 600;
+          else if (prev2 && prev2._lNorm === lbl) val -= 240;
+        }
+
+        if (val > bestVal) {
+          bestVal = val;
+          bestIdx = i;
+        }
+      }
+
+      result.push(remaining.splice(bestIdx, 1)[0]);
+    }
+
+    return result;
+  };
+
   // Build candidate pool from Primary Genre + Related Sibling Genres + Platform Playlists
   const buildRadioTrackList = (rawCandidates = []) => {
     const deduped = [];
     const seenTrackKey = new Set();
-    // Exclude the exact seed track itself from the suggestions (or keep it at index 0 if desired; user asked to suggest 33-66 titles matching the playing title)
+    // Exclude the exact seed track itself from the suggestions
     seenTrackKey.add(`${seedArtistNorm}|${seedTitleNorm}`);
+
+    const seedAlbumNorm = _normStr(cleanAlbumTitle || '');
 
     for (let i = 0; i < rawCandidates.length; i++) {
       const c = rawCandidates[i];
@@ -3228,46 +3312,92 @@ export async function startTrackRadio(seedInput = null) {
       if (!tClean || !aClean) continue;
       const tNorm = _normStr(tClean);
       const aNorm = _normStr(aClean);
+      if (!tNorm || !aNorm) continue;
+
+      // Skip exact seed title or direct remix/edit of the seed title by the seed artist
+      if (aNorm === seedArtistNorm && seedTitleNorm && (tNorm === seedTitleNorm || (seedTitleNorm.length >= 4 && tNorm.includes(seedTitleNorm)))) {
+        continue;
+      }
+
       const pairKey = `${aNorm}|${tNorm}`;
       if (seenTrackKey.has(pairKey)) continue;
       seenTrackKey.add(pairKey);
 
-      // Spotify-Style Multi-Factor Affinity Score
+      const rawAlb = String(c.album || c.albumTitle || c.releaseTitle || '').replace(/\s*\(single\)\s*$/i, '').trim();
+      const albNorm = _normStr(rawAlb);
+      const lNorm = _normStr(c.label || '');
+
+      // Multi-Factor Affinity Score — prioritizes taste-adjacent artists, sister labels, and scene co-occurrence
+      // rather than over-indexing on the seed artist or seed label.
       let score = 50;
       const tier = c._radioTier || 'primary';
-      if (tier === 'direct') score += 38;
+      if (tier === 'cooccurrence') score += 34;
+      else if (tier === 'direct') score += 31;
       else if (tier === 'primary') score += 30;
-      else if (tier === 'cooccurrence') score += 28;
-      else if (tier === 'sibling1') score += 22;
-      else score += 16;
+      else if (tier === 'sibling1') score += 25;
+      else score += 19;
 
-      const lNorm = _normStr(c.label || '');
-      if (seedArtistNorm && aNorm === seedArtistNorm) score += 26;
-      else if (collaboratorSet.has(aNorm)) score += 20;
-      if (seedLabelNorm && lNorm && (lNorm === seedLabelNorm || lNorm.includes(seedLabelNorm))) score += 25;
-      else if (lNorm && sisterLabelSet.has(lNorm)) score += 16;
+      if (collaboratorSet.has(aNorm) && aNorm !== seedArtistNorm) score += 22;
+      else if (seedArtistNorm && aNorm === seedArtistNorm) score += 8;
+
+      if (lNorm && sisterLabelSet.has(lNorm) && lNorm !== seedLabelNorm) score += 19;
+      else if (seedLabelNorm && lNorm && (lNorm === seedLabelNorm || lNorm.includes(seedLabelNorm))) score += 7;
+
       if (c.fromPlaylist) score += 18;
       if (c.coverImage && /^https?:\/\//i.test(c.coverImage) && !String(c.coverImage).includes('spacer.gif')) score += 10;
+
+      // Preferred provider bonus (subtle score boost instead of hard post-sort grouping)
+      const prov = String(c.provider || '').toLowerCase();
+      const pIdx = providerPriority.indexOf(prov);
+      if (pIdx === 0) score += 5;
+      else if (pIdx === 1) score += 3;
 
       deduped.push({
         ...c,
         title: tClean,
         artist: aClean,
         _aNorm: aNorm,
+        _albNorm: (albNorm && albNorm !== tNorm && albNorm !== _normStr(primaryNode.name)) ? albNorm : '',
+        _lNorm: (lNorm && lNorm !== _normStr(primaryNode.name)) ? lNorm : '',
         _score: score + ((i % 7) * 0.4),
       });
     }
 
     deduped.sort((a, b) => b._score - a._score);
 
-    // Pass 1: Enforce Spotify Artist Diversity Cap (max 2 tracks per artist) so radio feels organic
+    // Pass 1: Strict Diversity Caps
+    // - Max 1 track from the seed artist (so the radio discovers other artists!)
+    // - Max 1 track from the seed album
+    // - Max 1 track per album overall in Pass 1 (no two tracks from the same album)
+    // - Max 2 tracks per artist overall (max 1 for seed artist)
+    // - Max 5 tracks from the seed label & max 4 tracks from any other single label
     const selected = [];
     const overflow = [];
     const artistCounts = new Map();
+    const albumCounts = new Map();
+    const labelCounts = new Map();
+
     for (const item of deduped) {
-      const count = artistCounts.get(item._aNorm) || 0;
-      if (count < 2) {
-        artistCounts.set(item._aNorm, count + 1);
+      const aNorm = item._aNorm;
+      const albNorm = item._albNorm;
+      const lNorm = item._lNorm;
+
+      const aCount = artistCounts.get(aNorm) || 0;
+      const albCount = albNorm ? (albumCounts.get(albNorm) || 0) : 0;
+      const lCount = lNorm ? (labelCounts.get(lNorm) || 0) : 0;
+
+      const isSeedArtist = Boolean(seedArtistNorm && aNorm === seedArtistNorm);
+      const isSeedAlbum = Boolean(seedAlbumNorm && albNorm && albNorm === seedAlbumNorm);
+      const isSeedLabel = Boolean(seedLabelNorm && lNorm && (lNorm === seedLabelNorm || lNorm.includes(seedLabelNorm)));
+
+      const maxForArtist = isSeedArtist ? 1 : 2;
+      const maxForAlbum = isSeedAlbum ? 0 : 1;
+      const maxForLabel = isSeedLabel ? 5 : 4;
+
+      if (aCount < maxForArtist && albCount <= maxForAlbum && (albNorm ? albCount < 1 : true) && lCount < maxForLabel) {
+        artistCounts.set(aNorm, aCount + 1);
+        if (albNorm) albumCounts.set(albNorm, albCount + 1);
+        if (lNorm) labelCounts.set(lNorm, lCount + 1);
         selected.push(item);
       } else {
         overflow.push(item);
@@ -3275,17 +3405,23 @@ export async function startTrackRadio(seedInput = null) {
       if (selected.length >= 60) break;
     }
 
-    // Pass 2: If fewer than 42 tracks after strict cap, relax cap to 3 per artist or pull from overflow to guarantee >= 36 tracks (within 33..66)
+    // Pass 2: Guarantee at least 42 tracks (within 33..66) while still avoiding seed-artist flooding
     if (selected.length < 42) {
       for (const item of overflow) {
+        const aNorm = item._aNorm;
+        const aCount = artistCounts.get(aNorm) || 0;
+        const isSeedArtist = Boolean(seedArtistNorm && aNorm === seedArtistNorm);
+        if (isSeedArtist && aCount >= 2) continue;
+        if (aCount >= 3) continue;
+        artistCounts.set(aNorm, aCount + 1);
         selected.push(item);
         if (selected.length >= 48) break;
       }
     }
 
-    // Clamp strictly to [33, 66]
+    // Clamp strictly to [33, 66] and run anti-clumping shuffle so same artist/album/label never appear in a row
     const finalSlice = selected.slice(0, 66);
-    const ordered = orderTracksByProviderPriority(finalSlice, providerPriority);
+    const ordered = _interleaveAndDeClumpRadioTracks(finalSlice, seedArtistNorm, seedLabelNorm);
 
     return ordered.map((t, idx) => {
       const coverUrl = t.coverImage || t.cover || t.thumb || seedCover || '';
@@ -3329,6 +3465,11 @@ export async function startTrackRadio(seedInput = null) {
   _collectPlatformPlaylistTracksForGenre(primaryNode).forEach(t => {
     initialPool.push({ ...t, _radioTier: 'cooccurrence' });
   });
+  relatedNodes.slice(0, 2).forEach((rNode) => {
+    _collectPlatformPlaylistTracksForGenre(rNode).forEach(t => {
+      initialPool.push({ ...t, _radioTier: 'cooccurrence' });
+    });
+  });
 
   const initialRadioTracks = buildRadioTrackList(initialPool);
   const radioId = `radio-${_normStr(seedArtist)}-${_normStr(seedTitle)}`.replace(/\s+/g, '-');
@@ -3363,24 +3504,38 @@ export async function startTrackRadio(seedInput = null) {
   // 1. Open Radio Sheet immediately (0ms latency, guaranteed >= 33 and <= 66 tracks)
   openNativeAlbumFast(initialRadioAlbum);
 
-  // 2. Live Multi-Provider Enrichment (Bandcamp, SoundCloud tracks + playlists, Discogs genre/label graph)
+  // 2. Live Multi-Provider Enrichment across Peer Artists, Sister Labels, Co-occurrence Playlists, and Genre Graph
   try {
     const searchGenre = primaryNode.name.split(/[\/&]/)[0].trim();
-    const labelHint = seedLabel || primaryNode.classicLabels?.[0] || '';
-    const [bcArtistRes, bcGenreRes, scRes, scPlRes, dcRes] = await Promise.all([
+    const peerArtists = [
+      ...(primaryNode.pioneerArtists || []),
+      ...relatedNodes.flatMap(n => n.pioneerArtists || []),
+    ].filter(a => _normStr(a) && _normStr(a) !== seedArtistNorm);
+    const sisterLabels = [
+      ...(primaryNode.classicLabels || []),
+      ...relatedNodes.flatMap(n => n.classicLabels || []),
+    ].filter(l => _normStr(l) && _normStr(l) !== seedLabelNorm);
+
+    const randOffset = Math.floor(Math.random() * Math.max(1, peerArtists.length));
+    const peerArtist1 = peerArtists[randOffset % Math.max(1, peerArtists.length)] || '';
+    const peerArtist2 = peerArtists[(randOffset + 2) % Math.max(1, peerArtists.length)] || '';
+    const sisterLabel1 = sisterLabels[randOffset % Math.max(1, sisterLabels.length)] || primaryNode.classicLabels?.[0] || '';
+    const sisterLabel2 = sisterLabels[(randOffset + 1) % Math.max(1, sisterLabels.length)] || relatedGenreNames[0] || '';
+
+    const [bcPeerRes, bcGenreRes, scRes, scPlRes, dcRes] = await Promise.all([
       fetch('/api/bandcamp-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: `${seedArtist} ${labelHint}`.trim() }),
+        body: JSON.stringify({ query: `${peerArtist1 || searchGenre} ${sisterLabel1}`.trim() }),
       }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/bandcamp-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: `${searchGenre} ${labelHint}`.trim() }),
+        body: JSON.stringify({ query: `${searchGenre} ${sisterLabel2}`.trim() }),
       }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${seedArtist} ${searchGenre}`.trim())}&limit=30`)
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${peerArtist2 || sisterLabel1}`.trim())}&limit=30`)
         .then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${labelHint}`.trim())}&type=playlists&limit=5`)
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${seedArtist || sisterLabel1}`.trim())}&type=playlists&limit=6`)
         .then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/discogs-search', {
         method: 'POST',
@@ -3389,7 +3544,7 @@ export async function startTrackRadio(seedInput = null) {
           action: 'genre-explore',
           genre: searchGenre,
           styles: [primaryNode.name, ...relatedGenreNames.slice(0, 2)],
-          artist: seedArtist,
+          artist: peerArtist1 || seedArtist,
         }),
       }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
@@ -3412,7 +3567,7 @@ export async function startTrackRadio(seedInput = null) {
       liveCandidates.push({ ...item, _radioTier: tier });
     };
 
-    [...(bcArtistRes?.results || []), ...(bcGenreRes?.results || [])]
+    [...(bcPeerRes?.results || []), ...(bcGenreRes?.results || [])]
       .filter(r => r && (r.type === 'track' || r.type === 'album'))
       .forEach((r, idx) => {
         const cleanCover = r.artworkUrl ? r.artworkUrl.replace(/_[0-9]+\.jpg/, '_10.jpg') : '';
@@ -3421,7 +3576,7 @@ export async function startTrackRadio(seedInput = null) {
           title: r.title || '',
           artist: r.artistName || r.artist || '',
           album: r.albumTitle || (r.type === 'album' ? r.title : '') || '',
-          label: r.labelName || r.albumTitle || seedLabel || primaryNode.name,
+          label: r.labelName || sisterLabel1 || primaryNode.name,
           trackUrl: r.trackUrl || r.url || '',
           coverImage: cleanCover,
           provider: 'bandcamp',
@@ -3443,7 +3598,7 @@ export async function startTrackRadio(seedInput = null) {
     });
 
     (scPlRes?.playlists || []).forEach((pl) => {
-      (pl.tracks || []).slice(0, 10).forEach((tr, idx) => {
+      (pl.tracks || []).slice(0, 12).forEach((tr, idx) => {
         registerItem({
           id: tr.id || `sc-pl-radio-${idx}-${Date.now()}`,
           scTrackId: tr.scTrackId ? String(tr.scTrackId) : '',
@@ -3529,6 +3684,7 @@ export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') 
 
   const firstSeed = validSeeds[0];
   const uniqueArtists = Array.from(new Set(validSeeds.map(s => s.artist).filter(Boolean)));
+  const seedArtistSet = new Set(uniqueArtists.map(_normStr).filter(Boolean));
   const radioId = `radio-pl-${Date.now()}`;
   const cleanPlTitle = String(playlistTitle || 'Playlist').trim();
   const radioTitle = cleanPlTitle.toLowerCase().endsWith('radio') ? cleanPlTitle : `${cleanPlTitle} Radio`;
@@ -3537,29 +3693,121 @@ export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') 
   const seenTrackKeys = new Set();
   for (const s of validSeeds) {
     if (s.artist && s.title) {
-      seenTrackKeys.add(`${s.artist.toLowerCase()}|${s.title.toLowerCase()}`);
+      seenTrackKeys.add(`${_normStr(s.artist)}|${_normStr(s.title)}`);
     }
   }
 
-  const initialTracks = validSeeds.slice(0, 12).map((s, idx) => ({
-    id: `pl-seed-${idx}-${Date.now()}`,
-    title: s.title,
-    artist: s.artist,
-    album: s.album || cleanPlTitle,
-    duration: '0:00',
-    trackUrl: s.url || `resolve:${s.artist} ${s.title}`.trim(),
-    cover: s.cover || firstSeed.cover || '',
-    provider: s.provider || 'bandcamp',
-  }));
+  // Seed ontology pool from the playlist's musical neighborhood so even initial 0ms tracks are diverse
+  const providerPriority = getStoredProviderPriority();
+  const primaryNode = resolveGenreNode('', firstSeed.artist, firstSeed.title, '');
+  const relatedNodes = (primaryNode.relatedGenres || [])
+    .slice(0, 3)
+    .map(gName => resolveGenreNode(gName, '', '', ''))
+    .filter(n => n && n.name !== primaryNode.name);
+
+  const ontologyPool = [];
+  const pSec = selectGenreThreeSections(primaryNode, {}, { artist: firstSeed.artist, label: '', title: firstSeed.title }, 0, providerPriority);
+  [...pSec.recommendations, ...pSec.essentialClassics, ...pSec.nicheCuts].forEach((t, idx) => {
+    ontologyPool.push({
+      id: `pl-ont-${idx}-${Date.now()}`,
+      title: t.title,
+      artist: t.artist,
+      album: t.album || t.releaseTitle || '',
+      duration: '0:00',
+      trackUrl: t.trackUrl || `resolve:${t.artist} ${t.title}`.trim(),
+      cover: t.coverImage || t.cover || firstSeed.cover || '',
+      provider: t.provider || providerPriority[0] || 'bandcamp',
+    });
+  });
+  relatedNodes.forEach((rNode, rIdx) => {
+    const rSec = selectGenreThreeSections(rNode, {}, { artist: firstSeed.artist, label: '', title: firstSeed.title }, rIdx, providerPriority);
+    [...rSec.recommendations, ...rSec.essentialClassics, ...rSec.nicheCuts].forEach((t, idx) => {
+      ontologyPool.push({
+        id: `pl-rel-${rIdx}-${idx}-${Date.now()}`,
+        title: t.title,
+        artist: t.artist,
+        album: t.album || t.releaseTitle || '',
+        duration: '0:00',
+        trackUrl: t.trackUrl || `resolve:${t.artist} ${t.title}`.trim(),
+        cover: t.coverImage || t.cover || firstSeed.cover || '',
+        provider: t.provider || providerPriority[0] || 'bandcamp',
+      });
+    });
+  });
+
+  // De-clump & diversify helper for playlist radio
+  const diversifyAndShufflePlaylistRadio = (candidates) => {
+    const deduped = [];
+    const localSeen = new Set(seenTrackKeys);
+    for (const c of candidates) {
+      if (!c || !c.title || !c.artist) continue;
+      const tNorm = _normStr(c.title);
+      const aNorm = _normStr(c.artist);
+      if (!tNorm || !aNorm) continue;
+      const k = `${aNorm}|${tNorm}`;
+      if (localSeen.has(k)) continue;
+      localSeen.add(k);
+      const albNorm = _normStr(c.album || '');
+      deduped.push({
+        ...c,
+        _aNorm: aNorm,
+        _albNorm: (albNorm && albNorm !== tNorm) ? albNorm : '',
+        _score: (seedArtistSet.has(aNorm) ? 48 : 56) + (Math.random() * 14),
+      });
+    }
+    deduped.sort((a, b) => b._score - a._score);
+
+    const picked = [];
+    const artCounts = new Map();
+    const albCounts = new Map();
+    for (const item of deduped) {
+      const ac = artCounts.get(item._aNorm) || 0;
+      const albc = item._albNorm ? (albCounts.get(item._albNorm) || 0) : 0;
+      const maxArt = seedArtistSet.has(item._aNorm) ? 1 : 2;
+      if (ac < maxArt && albc < 1) {
+        artCounts.set(item._aNorm, ac + 1);
+        if (item._albNorm) albCounts.set(item._albNorm, albc + 1);
+        picked.push(item);
+      }
+      if (picked.length >= 60) break;
+    }
+
+    // Greedy anti-clumping pass so same artist or album never appear back-to-back
+    const rem = [...picked];
+    const ordered = [];
+    while (rem.length > 0) {
+      let bestI = 0;
+      let bestScore = -Infinity;
+      const p1 = ordered[ordered.length - 1];
+      const p2 = ordered[ordered.length - 2];
+      const p3 = ordered[ordered.length - 3];
+      for (let i = 0; i < rem.length; i++) {
+        const cand = rem[i];
+        let s = cand._score - (i * 0.3);
+        if (p1 && p1._aNorm === cand._aNorm) s -= 2000;
+        else if (p2 && p2._aNorm === cand._aNorm) s -= 800;
+        else if (p3 && p3._aNorm === cand._aNorm) s -= 350;
+        if (cand._albNorm && p1 && p1._albNorm === cand._albNorm) s -= 1500;
+        if (s > bestScore) {
+          bestScore = s;
+          bestI = i;
+        }
+      }
+      ordered.push(rem.splice(bestI, 1)[0]);
+    }
+    return ordered.slice(0, 60);
+  };
+
+  const initialTracks = diversifyAndShufflePlaylistRadio(ontologyPool);
 
   const initialRadioAlbum = {
     id: radioId,
     title: radioTitle,
     artist: `Seeded by ${cleanPlTitle} (${validSeeds.length} tracks)`,
     label: seedSubtitle,
-    genre: 'Track Radio',
-    year: 'Building station…',
-    cover: firstSeed.cover || '',
+    genre: primaryNode.name || 'Track Radio',
+    year: 'Playlist Radio',
+    cover: firstSeed.cover || initialTracks[0]?.cover || '',
     provider: 'radio',
     tracks: initialTracks,
   };
@@ -3570,49 +3818,55 @@ export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') 
   openNativeAlbumFast(initialRadioAlbum);
 
   try {
-    const sampleSeeds = validSeeds.slice(0, 8);
+    const searchGenre = primaryNode.name.split(/[\/&]/)[0].trim();
+    const peerArtists = [
+      ...(primaryNode.pioneerArtists || []),
+      ...relatedNodes.flatMap(n => n.pioneerArtists || []),
+    ].filter(a => _normStr(a) && !seedArtistSet.has(_normStr(a)));
+    const sisterLabels = [
+      ...(primaryNode.classicLabels || []),
+      ...relatedNodes.flatMap(n => n.classicLabels || []),
+    ];
+
     const searchPromises = [];
-    for (const seed of sampleSeeds) {
-      const q = `${seed.artist} ${seed.title}`.trim();
-      if (q) {
-        searchPromises.push(
-          fetch('/api/bandcamp-search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: seed.artist || q }),
-          }).then(r => (r.ok ? r.json() : null)).catch(() => null)
-        );
-        searchPromises.push(
-          fetch(`/api/soundcloud-search?q=${encodeURIComponent(q)}&limit=10`)
-            .then(r => (r.ok ? r.json() : null)).catch(() => null)
-        );
-      }
-    }
-    for (const artistName of uniqueArtists.slice(0, 5)) {
+    for (const peer of peerArtists.slice(0, 4)) {
       searchPromises.push(
-        fetch('/api/discogs-search', {
+        fetch('/api/bandcamp-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'artist-releases', artist: artistName }),
+          body: JSON.stringify({ query: `${peer} ${sisterLabels[0] || searchGenre}`.trim() }),
         }).then(r => (r.ok ? r.json() : null)).catch(() => null)
       );
     }
+    searchPromises.push(
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${uniqueArtists[0] || ''}`.trim())}&type=playlists&limit=5`)
+        .then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/soundcloud-search?q=${encodeURIComponent(`${searchGenre} ${peerArtists[0] || ''}`.trim())}&limit=24`)
+        .then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/discogs-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'genre-explore',
+          genre: searchGenre,
+          styles: [primaryNode.name, ...relatedNodes.map(n => n.name).slice(0, 2)],
+          artist: peerArtists[0] || firstSeed.artist,
+        }),
+      }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+    );
 
     const results = await Promise.allSettled(searchPromises);
     const pool = [];
     const addCandidate = (item) => {
       if (!item || !item.title) return;
       const tClean = String(item.title || '').trim();
-      const aClean = String(item.artist || item.artistName || '').trim();
-      if (!tClean) return;
-      const key = `${aClean.toLowerCase()}|${tClean.toLowerCase()}`;
-      if (seenTrackKeys.has(key)) return;
-      seenTrackKeys.add(key);
+      const aClean = String(item.artist || item.artistName || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+      if (!tClean || !aClean) return;
       pool.push({
         id: item.id || `pl-radio-${pool.length}-${Date.now()}`,
         title: tClean,
-        artist: aClean || firstSeed.artist || 'Unknown Artist',
-        album: item.album || item.releaseTitle || tClean,
+        artist: aClean,
+        album: item.album || item.releaseTitle || '',
         duration: item.duration || '0:00',
         trackUrl: item.trackUrl || item.url || `resolve:${aClean} ${tClean}`.trim(),
         cover: item.cover || item.artworkUrl || item.coverImage || firstSeed.cover || '',
@@ -3623,27 +3877,49 @@ export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') 
     for (const res of results) {
       if (res.status !== 'fulfilled' || !res.value) continue;
       const val = res.value;
-      const items = val.results || val.releases || val.collection || (Array.isArray(val) ? val : []);
+      if (Array.isArray(val.playlists)) {
+        for (const pl of val.playlists) {
+          for (const tr of (pl.tracks || []).slice(0, 10)) {
+            addCandidate({
+              id: tr.id,
+              title: tr.title,
+              artist: tr.artistName || tr.artist || pl.artistName,
+              album: tr.albumTitle || tr.releaseTitle || '',
+              trackUrl: tr.trackUrl,
+              cover: tr.artworkUrl || pl.artworkUrl,
+              provider: 'soundcloud',
+            });
+          }
+        }
+      }
+      const items = [
+        ...(val.results || []),
+        ...(val.classics || []),
+        ...(val.niche || []),
+        ...(val.releases || []),
+        ...(val.collection || []),
+        ...(Array.isArray(val) ? val : []),
+      ];
       for (const it of items) {
         if (!it) continue;
         addCandidate({
           id: it.id ? `radio-${it.id}` : undefined,
           title: it.title || it.name || '',
           artist: it.artist || it.artistName || it.user?.username || '',
-          album: it.album || it.releaseTitle || it.title || '',
+          album: it.album || it.albumTitle || it.releaseTitle || '',
           trackUrl: it.url || it.permalink_url || it.trackUrl || '',
-          cover: it.artworkUrl || it.cover || it.thumb || it.artwork_url || '',
+          cover: (it.artworkUrl ? String(it.artworkUrl).replace(/_[0-9]+\.jpg/, '_10.jpg') : '') || it.coverImage || it.cover || it.thumb || it.artwork_url || '',
           provider: it.permalink_url?.includes('soundcloud.com') ? 'soundcloud' : 'bandcamp',
         });
       }
     }
 
-    const finalTracks = [...pool, ...initialTracks].slice(0, 60);
+    const finalTracks = diversifyAndShufflePlaylistRadio([...pool, ...ontologyPool]);
     if (typeof window !== 'undefined' && (window.__kyoyuCurrentNativeAlbum?.id === radioId || window.__kyoyuActiveRadioId === radioId)) {
       openNativeAlbumFast({
         ...initialRadioAlbum,
         year: 'Playlist Radio',
-        tracks: finalTracks.length >= 5 ? finalTracks : initialTracks,
+        tracks: finalTracks.length >= 15 ? finalTracks : initialTracks,
       }, { isUpdate: true });
     }
   } catch (err) {
