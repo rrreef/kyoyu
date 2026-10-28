@@ -502,11 +502,9 @@ export default function Messages() {
     }
   };
 
-  const handleSendMessage = (e) => {
-    e?.preventDefault();
-    const text = draft.trim();
+  const sendMessageText = (rawText) => {
+    const text = (rawText || '').trim();
     if (!text || !activeConversation) return;
-    setDraft('');
 
     const now = Date.now();
     if (activeConversation.id === 'digi') {
@@ -570,65 +568,37 @@ export default function Messages() {
     }
   };
 
+  useEffect(() => {
+    const handleChatSend = (e) => {
+      const text =
+        typeof e?.detail?.text === 'string'
+          ? e.detail.text
+          : typeof e?.detail === 'string'
+            ? e.detail
+            : '';
+      if (text.trim()) {
+        sendMessageText(text);
+      }
+    };
+    window.addEventListener('kyoyu-chat-send', handleChatSend);
+    return () => {
+      window.removeEventListener('kyoyu-chat-send', handleChatSend);
+    };
+  });
+
   return (
     <div className="page messages-page animate-in">
-      {searchQuery.trim() && (
-        <div className="msg-active-search-banner">
-          <span>Searching chats for "{searchQuery}"</span>
-          <button
-            type="button"
-            onClick={() => {
-              window.__kyoyuChatSearchQuery = '';
-              setSearchQuery('');
-            }}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      <div className="msg-split-layout">
-        {/* ── LEFT COLUMN: Conversations List (Avatar + Username) ── */}
-        <aside className="msg-sidebar" aria-label="Conversations">
-          {allConversations.map((conv) => {
-            const isSelected = activeConversation?.id === conv.id;
-            return (
-              <button
-                key={conv.id}
-                type="button"
-                className={`msg-conv-item${isSelected ? ' active' : ''}`}
-                onClick={() => setSelectedChatId(conv.id)}
-              >
-                <div className={`msg-conv-avatar msg-conv-avatar--${conv.type}`}>
-                  {conv.type === 'ai' ? (
-                    <Sparkles size={18} strokeWidth={2} />
-                  ) : conv.type === 'community' ? (
-                    <Users size={18} strokeWidth={2} />
-                  ) : conv.avatar ? (
-                    <img src={conv.avatar} alt={conv.username} />
-                  ) : (
-                    <span>{conv.username.slice(0, 2).toUpperCase()}</span>
-                  )}
-                </div>
-                <div className="msg-conv-meta">
-                  <span className="msg-conv-username">{conv.username}</span>
-                  <span className="msg-conv-preview">{conv.lastMessage}</span>
-                </div>
-              </button>
-            );
-          })}
-        </aside>
-
-        {/* ── RIGHT COLUMN: Active Conversation Thread ── */}
+      <div className="msg-fullscreen-layout">
+        {/* ── FULL-SCREEN DISCUSSION PANE ── */}
         <section className="msg-thread-pane" aria-label="Selected Conversation">
           {activeConversation ? (
             <>
               <header className="msg-thread-header">
                 <div className={`msg-conv-avatar msg-conv-avatar--${activeConversation.type} msg-conv-avatar--sm`}>
                   {activeConversation.type === 'ai' ? (
-                    <Sparkles size={15} strokeWidth={2} />
+                    <Sparkles size={14} strokeWidth={2} />
                   ) : activeConversation.type === 'community' ? (
-                    <Users size={15} strokeWidth={2} />
+                    <Users size={14} strokeWidth={2} />
                   ) : activeConversation.avatar ? (
                     <img src={activeConversation.avatar} alt={activeConversation.username} />
                   ) : (
@@ -735,30 +705,40 @@ export default function Messages() {
                 )}
                 <div ref={messagesEndRef} />
               </div>
-
-              <form className="msg-composer" onSubmit={handleSendMessage}>
-                <input
-                  type="text"
-                  className="msg-composer-input"
-                  placeholder={
-                    activeConversation.id === 'digi'
-                      ? 'Ask DIGI about Kyoyu, artists, releases…'
-                      : activeConversation.id === 'community'
-                        ? 'Post a note to Community…'
-                        : `Message ${activeConversation.username}…`
-                  }
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-                <button type="submit" className="msg-composer-send" aria-label="Send">
-                  <Send size={15} />
-                </button>
-              </form>
             </>
           ) : (
             <div className="msg-empty">No conversations match your search.</div>
           )}
         </section>
+
+        {/* ── FLOATING LEFT AVATAR BUTTONS (Profile-Button Style, Scrollable) ── */}
+        <aside className="msg-floating-avatars" aria-label="Conversations">
+          {allConversations.map((conv) => {
+            const isSelected = activeConversation?.id === conv.id;
+            return (
+              <button
+                key={conv.id}
+                type="button"
+                className={`msg-floating-avatar-btn${isSelected ? ' active' : ''}`}
+                onClick={() => setSelectedChatId(conv.id)}
+                title={conv.username}
+                aria-label={conv.username}
+              >
+                <div className="msg-floating-avatar-inner">
+                  {conv.type === 'ai' ? (
+                    <Sparkles size={15} strokeWidth={2} />
+                  ) : conv.type === 'community' ? (
+                    <Users size={14} strokeWidth={2} />
+                  ) : conv.avatar ? (
+                    <img src={conv.avatar} alt={conv.username} />
+                  ) : (
+                    <span>{conv.username.slice(0, 2).toUpperCase()}</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </aside>
       </div>
     </div>
   );
