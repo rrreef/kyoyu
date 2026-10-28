@@ -89,7 +89,8 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   root.setAttribute('data-theme', effectiveTheme);
 
   const colors = THEME_BG_MAP[effectiveTheme] || THEME_BG_MAP.white;
-  const hasCustomBgImage = mode === 'custom' && !!(localStorage.getItem('kyoyu-custom-bg-image') || '').trim();
+  const isNativeWebView = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.player);
+  const hasCustomBgImage = mode === 'custom' && (Boolean((localStorage.getItem('kyoyu-custom-bg-image') || '').trim()) || isNativeWebView);
   const finalBg = hasCustomBgImage ? 'transparent' : (mode === 'custom' ? activeCustomBg : colors.bg);
   const finalFg = mode === 'custom' ? (isLightHex(activeCustomBg) ? '#0f0f0f' : '#ffffff') : colors.fg;
 
@@ -119,6 +120,10 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
 
   root.style.backgroundColor = finalBg;
   root.style.color = finalFg;
+  if (hasCustomBgImage) {
+    root.style.setProperty('background', 'transparent', 'important');
+    root.style.setProperty('background-color', 'transparent', 'important');
+  }
 
   if (document.body) {
     document.body.style.backgroundColor = finalBg;

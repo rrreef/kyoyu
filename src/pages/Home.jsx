@@ -1347,35 +1347,16 @@ export default function Home() {
           (user?.email ? user.email.split('@')[0] : '') ||
           'You';
 
-        const seededFromFeed = (featuredAlbums || []).slice(0, 6).map((alb, idx) => {
-          const fallbackSharers = ['Aoi', 'Kaito', 'Sora', 'Ren', 'Mika', 'Haru'];
-          const uploaderName = alb.tracks?.[0]?.uploaderName || alb.uploaderName || fallbackSharers[idx % fallbackSharers.length];
-          return {
-            postId: `seed-comm-${alb.id || idx}`,
-            id: alb.id,
-            entityType: 'album',
-            title: alb.title,
-            artist: alb.artist,
-            album: alb.title,
-            label: alb.label || '',
-            releaseDate: alb.releaseDate || alb.year || '',
-            location: alb.location || alb.country || '',
-            formats: alb.formats || [],
-            cover: alb.cover,
-            url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
-            tracks: alb.tracks || [],
-            sharedByName: uploaderName,
-          };
-        });
-
-        const userPosts = (communityPosts || []).map(p => ({
-          ...p,
-          sharedByName: (!p.sharedByName || p.sharedByName === 'You') ? currentUserName : p.sharedByName,
-        }));
+        const userPosts = (communityPosts || [])
+          .filter(p => p && !p.isNativeUpload && !String(p.postId || '').startsWith('seed-comm-'))
+          .map(p => ({
+            ...p,
+            sharedByName: (!p.sharedByName || p.sharedByName === 'You') ? currentUserName : p.sharedByName,
+          }));
 
         const seenCommKeys = new Set();
         const allCommunityItems = [];
-        for (const item of [...userPosts, ...seededFromFeed]) {
+        for (const item of userPosts) {
           const k = `${String(item.entityType || 'album').toLowerCase()}|${String(item.title || '').toLowerCase()}|${String(item.artist || '').toLowerCase()}`;
           if (seenCommKeys.has(k)) continue;
           seenCommKeys.add(k);

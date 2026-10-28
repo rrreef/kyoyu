@@ -202,67 +202,46 @@ export default function Messages() {
 
   // Build unified Community conversation messages (user shares + followed users' shares)
   const communityMessages = useMemo(() => {
-    const fallbackSharers = ['Aoi', 'Kaito', 'Sora', 'Ren', 'Mika', 'Haru'];
-    const seededFromFeed = (catalogReleases || []).slice(0, 6).map((alb, idx) => {
-      const sharer = alb.tracks?.[0]?.uploaderName || alb.uploaderName || fallbackSharers[idx % fallbackSharers.length];
-      return {
-        id: `comm-seed-${alb.id || idx}`,
-        sender: sharer,
-        isOwn: false,
-        timestamp: Date.now() - (idx + 1) * 3600 * 1000 * 5,
-        text: `Shared ${alb.title || 'a release'} by ${alb.artist || 'Unknown Artist'}`,
-        shareItem: {
-          id: alb.id,
-          entityType: 'album',
-          title: alb.title || 'Untitled',
-          artist: alb.artist || '',
-          label: alb.label || '',
-          cover: alb.cover || '',
-          url: alb.url || alb.trackUrl || alb.tracks?.[0]?.trackUrl || '',
-          formats: alb.formats || [],
-          tracks: alb.tracks || [],
-        },
-      };
-    });
-
-    const userShareMsgs = (communityPosts || []).map((post, idx) => {
-      const rawSharer = post.sharedByName || 'You';
-      const isOwn =
-        rawSharer === 'You' ||
-        rawSharer.toLowerCase() === currentUserName.toLowerCase();
-      const senderName = isOwn ? currentUserName : rawSharer;
-      const eType = String(post.entityType || 'album').toLowerCase();
-      const title = post.album || post.title || 'Untitled';
-      const artist = post.artist || '';
-      return {
-        id: post.postId || post.id || `comm-user-${idx}`,
-        sender: senderName,
-        isOwn,
-        timestamp: post.createdAt || Date.now(),
-        text: post.messageText || (
-          eType === 'artist'
-            ? `Shared artist ${title}`
-            : eType === 'label'
-              ? `Shared label ${title}`
-              : `Shared ${title}${artist ? ' by ' + artist : ''}`
-        ),
-        shareItem: post.messageOnly ? null : {
-          id: post.id || post.postId || `share-${idx}`,
-          entityType: eType,
-          title,
-          artist,
-          label: post.label || '',
-          cover: post.cover || post.artworkUrl || '',
-          url: post.albumUrl || post.url || '',
-          formats: post.formats || [],
-          tracks: post.tracks || [],
-        },
-      };
-    });
+    const userShareMsgs = (communityPosts || [])
+      .filter((post) => post && !post.isNativeUpload && !String(post.postId || '').startsWith('seed-comm-'))
+      .map((post, idx) => {
+        const rawSharer = post.sharedByName || 'You';
+        const isOwn =
+          rawSharer === 'You' ||
+          rawSharer.toLowerCase() === currentUserName.toLowerCase();
+        const senderName = isOwn ? currentUserName : rawSharer;
+        const eType = String(post.entityType || 'album').toLowerCase();
+        const title = post.album || post.title || 'Untitled';
+        const artist = post.artist || '';
+        return {
+          id: post.postId || post.id || `comm-user-${idx}`,
+          sender: senderName,
+          isOwn,
+          timestamp: post.createdAt || Date.now(),
+          text: post.messageText || (
+            eType === 'artist'
+              ? `Shared artist ${title}`
+              : eType === 'label'
+                ? `Shared label ${title}`
+                : `Shared ${title}${artist ? ' by ' + artist : ''}`
+          ),
+          shareItem: post.messageOnly ? null : {
+            id: post.id || post.postId || `share-${idx}`,
+            entityType: eType,
+            title,
+            artist,
+            label: post.label || '',
+            cover: post.cover || post.artworkUrl || '',
+            url: post.albumUrl || post.url || '',
+            formats: post.formats || [],
+            tracks: post.tracks || [],
+          },
+        };
+      });
 
     const seen = new Set();
     const combined = [];
-    for (const m of [...userShareMsgs, ...seededFromFeed]) {
+    for (const m of userShareMsgs) {
       const key = m.shareItem
         ? `${m.shareItem.entityType}|${m.shareItem.title.toLowerCase()}|${m.shareItem.artist.toLowerCase()}|${m.sender}`
         : m.id;
@@ -271,7 +250,7 @@ export default function Messages() {
       combined.push(m);
     }
     return combined.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-  }, [communityPosts, catalogReleases, currentUserName]);
+  }, [communityPosts, currentUserName]);
 
   // Build full conversation list for left sidebar
   const allConversations = useMemo(() => {
@@ -599,8 +578,43 @@ export default function Messages() {
       }}
     >
       <div className="msg-fullscreen-layout">
-        {/* ── FULL-SCREEN DISCUSSION PANE ── */}
-        <section className="msg-thread-pane" aria-label="Selected Conversation">
+        {/* ── LEFT AVATAR BUTTONS COLUMN (Non-overlapping, one button per discussion) ── */}
+        <aside className="msg-floating-avatars" aria-label="Conversations">
+          <div className="msg-floating-avatars-scroll">
+            {allConversations.map((conv) => {
+              const isSelected = conv.id === activeConversation?.id;
+              return (
+                <button
+                  key={conv.id}
+                  type="button"
+                  className={`msg-floating-avatar-btn${isSelected ? ' msg-floating-avatar-btn--active' : ''}`}
+                  onClick={() => setSelectedChatId(conv.id)}
+                  title={conv.username}
+                  aria-label={conv.username}
+                >
+                  <div className="msg-floating-avatar-inner">
+                    {conv.type === 'ai' ? (
+                      <Sparkles size={15} strokeWidth={2} />
+                    ) : conv.type === 'community' ? (
+                      <Users size={14} strokeWidth={2} />
+                    ) : conv.avatar ? (
+                      <img src={conv.avatar} alt={conv.username} />
+                    ) : (
+                      <span>{conv.username.slice(0, 2).toUpperCase()}</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        {/* ── SINGLE ACTIVE DISCUSSION PANE ── */}
+        <section
+          key={activeConversation?.id || 'empty'}
+          className="msg-thread-pane"
+          aria-label="Selected Conversation"
+        >
           {activeConversation ? (
             <div className="msg-thread-messages">
               {displayedMessages.map((msg) => {
@@ -698,59 +712,6 @@ export default function Messages() {
             <div className="msg-empty">No conversations match your search.</div>
           )}
         </section>
-
-        {/* ── FLOATING LEFT AVATAR BUTTONS (Active Expanded on Top, Unselected 44x44 Scrollable Below) ── */}
-        <aside className="msg-floating-avatars" aria-label="Conversations">
-          {activeConversation && (
-            <button
-              type="button"
-              className="msg-floating-avatar-btn msg-floating-avatar-btn--expanded"
-              title={activeConversation.username}
-              aria-label={activeConversation.username}
-            >
-              <div className="msg-floating-avatar-circle">
-                <div className="msg-floating-avatar-inner">
-                  {activeConversation.type === 'ai' ? (
-                    <Sparkles size={15} strokeWidth={2} />
-                  ) : activeConversation.type === 'community' ? (
-                    <Users size={14} strokeWidth={2} />
-                  ) : activeConversation.avatar ? (
-                    <img src={activeConversation.avatar} alt={activeConversation.username} />
-                  ) : (
-                    <span>{activeConversation.username.slice(0, 2).toUpperCase()}</span>
-                  )}
-                </div>
-              </div>
-              <span className="msg-floating-avatar-name">{activeConversation.username}</span>
-            </button>
-          )}
-          <div className="msg-floating-avatars-scroll">
-            {allConversations
-              .filter((conv) => conv.id !== activeConversation?.id)
-              .map((conv) => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  className="msg-floating-avatar-btn"
-                  onClick={() => setSelectedChatId(conv.id)}
-                  title={conv.username}
-                  aria-label={conv.username}
-                >
-                  <div className="msg-floating-avatar-inner">
-                    {conv.type === 'ai' ? (
-                      <Sparkles size={15} strokeWidth={2} />
-                    ) : conv.type === 'community' ? (
-                      <Users size={14} strokeWidth={2} />
-                    ) : conv.avatar ? (
-                      <img src={conv.avatar} alt={conv.username} />
-                    ) : (
-                      <span>{conv.username.slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </div>
-                </button>
-              ))}
-          </div>
-        </aside>
       </div>
     </div>
   );
