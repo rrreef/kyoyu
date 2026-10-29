@@ -1823,14 +1823,6 @@ export default function Search() {
       {/* #0 First Search Results Category: Library (ALWAYS shown first whatever filter is selected) */}
       {!isQueryEmpty && hasLibraryMatches && (
         <div className="search-results-list" style={{ marginBottom: 18 }}>
-          {/* Thin full-width horizontal line above the Library title */}
-          <div style={{
-            height: 1,
-            background: 'var(--glass-border, rgba(128, 128, 128, 0.25))',
-            marginLeft: -20,
-            marginRight: -20,
-            marginBottom: 12,
-          }} />
           <div className="search-section">
             <div className="search-section-title">Library</div>
             {libraryMatches.map(item => {
@@ -1876,14 +1868,6 @@ export default function Search() {
               );
             })}
           </div>
-          {/* Thin full-width horizontal line below the last result of the Library section */}
-          <div style={{
-            height: 1,
-            background: 'var(--glass-border, rgba(128, 128, 128, 0.25))',
-            marginLeft: -20,
-            marginRight: -20,
-            marginTop: 10,
-          }} />
         </div>
       )}
 
@@ -1999,13 +1983,6 @@ export default function Search() {
               </div>
             ))}
           </div>
-          <div style={{
-            height: 1,
-            background: 'var(--glass-border, rgba(128, 128, 128, 0.25))',
-            marginLeft: -20,
-            marginRight: -20,
-            marginTop: 10,
-          }} />
         </div>
       )}
 
@@ -2022,7 +1999,7 @@ export default function Search() {
         <div className="search-empty">No results found</div>
       )}
 
-      {/* ── Results (Grouped into Artist, Release, Title, Label with separation lines when activeFilter === 'all') ── */}
+      {/* ── Results (Grouped into Artist, Release, Title, Label when activeFilter === 'all') ── */}
       {!isQueryEmpty && (hasResults || rankedAll.length > 0) && (() => {
         const renderExternalRow = (item) => {
           const isPlaylist = item.entityType === 'playlist';
@@ -2372,32 +2349,14 @@ export default function Search() {
             },
           ].filter(s => s.hasItems);
 
-          const hadTopDivider = hasLibraryMatches || Boolean(matchedGenreSearch);
-
           return (
             <div className="search-results-list search-external-section">
-              {sections.map((sec, idx) => (
+              {sections.map((sec) => (
                 <div key={sec.key} style={{ marginBottom: 18 }}>
-                  {idx === 0 && !hadTopDivider && (
-                    <div style={{
-                      height: 1,
-                      background: 'var(--glass-border, rgba(128, 128, 128, 0.25))',
-                      marginLeft: -20,
-                      marginRight: -20,
-                      marginBottom: 12,
-                    }} />
-                  )}
                   <div className="search-section">
                     <div className="search-section-title">{sec.title}</div>
                     {sec.content}
                   </div>
-                  <div style={{
-                    height: 1,
-                    background: 'var(--glass-border, rgba(128, 128, 128, 0.25))',
-                    marginLeft: -20,
-                    marginRight: -20,
-                    marginTop: 10,
-                  }} />
                 </div>
               ))}
             </div>

@@ -779,7 +779,7 @@ img {
 }
 :root:not([data-theme="dark"]):not([data-theme="grey"]) .search-history-item,
 [data-theme="white"] .search-history-item {
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+  border-bottom: none;
 }
 :root:not([data-theme="dark"]):not([data-theme="grey"]) .search-action-btn:hover,
 [data-theme="white"] .search-action-btn:hover,
@@ -790,7 +790,7 @@ img {
 }
 :root:not([data-theme="dark"]):not([data-theme="grey"]) .search-section-title,
 [data-theme="white"] .search-section-title {
-  border-bottom-color: rgba(0, 0, 0, 0.08);
+  border-bottom: none;
 }
 :root:not([data-theme="dark"]):not([data-theme="grey"]) .search-follow-btn,
 [data-theme="white"] .search-follow-btn {

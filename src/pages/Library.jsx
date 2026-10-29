@@ -1257,7 +1257,7 @@ export default function Library() {
       {/* Events */}
       {activeFilter === 'events' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="shelf-row-label" style={{display: 'flex', gap: '8px', paddingBottom: '8px', borderBottom: '1px solid var(--glass-border)'}}>
+          <div className="shelf-row-label" style={{display: 'flex', gap: '8px', paddingBottom: '8px'}}>
             {['All', 'This Week', 'This Month'].map(f => (
               <button 
                 key={f}
