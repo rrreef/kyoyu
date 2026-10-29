@@ -76,6 +76,8 @@ export default function AppSettings() {
   const [playerStyle, setPlayerStyle] = useState(() => localStorage.getItem('kyoyu-player-style') || 'sheet');
   // Key notation: 'standard' (C Major / A Minor) or 'camelot' (8B / 8A)
   const [keyNotation, setKeyNotation] = useState(() => localStorage.getItem('kyoyu-key-notation') || 'standard');
+  // BPM fader range: '0-300', '50-250', or '100-150'
+  const [bpmFaderRange, setBpmFaderRange] = useState(() => localStorage.getItem('kyoyu-bpm-fader-range') || '50-250');
 
   function changePlayerStyle(style) {
     setPlayerStyle(style);
@@ -91,6 +93,15 @@ export default function AppSettings() {
     localStorage.setItem('kyoyu-key-notation', notation);
     try {
       window.webkit?.messageHandlers?.player?.postMessage({ keyNotation: notation });
+    } catch(e) {}
+  }
+
+  function changeBpmFaderRange(range) {
+    setBpmFaderRange(range);
+    localStorage.setItem('kyoyu-bpm-fader-range', range);
+    window.dispatchEvent(new CustomEvent('kyoyu-bpm-fader-range-change', { detail: range }));
+    try {
+      window.webkit?.messageHandlers?.player?.postMessage({ bpmFaderRange: range });
     } catch(e) {}
   }
 
@@ -122,7 +133,7 @@ export default function AppSettings() {
         </div>
       </div>
 
-      {/* Player Style & Key Notation */}
+      {/* Player Style, Key Notation & BPM Fader Range */}
       <div className="appsettings-section">
         <div className="appsettings-label">Player</div>
         <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
@@ -171,6 +182,43 @@ export default function AppSettings() {
                 <button
                   key={id}
                   onClick={() => changeKeyNotation(id)}
+                  style={{
+                    flex: 1, border: 'none', cursor: 'pointer', padding: '10px 0',
+                    borderRadius: 10,
+                    background: active ? 'var(--glass-bg-active)' : 'var(--glass-bg)',
+                    outline: active ? '1.5px solid var(--glass-border-light)' : '1px solid var(--glass-border)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    transition: 'all .15s',
+                  }}
+                >
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    {active && <Check size={9} strokeWidth={3} />}{label}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', fontWeight: 500, color: active ? 'var(--text-secondary)' : 'var(--text-muted)', opacity: active ? 0.9 : 0.65 }}>
+                    {sub}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="appsettings-row glass" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12, marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Music size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="appsettings-row-title">BPM Fader Range</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+            {[
+              { id: '0-300', label: '0 to 300', sub: 'BPM' },
+              { id: '50-250', label: '50 to 250', sub: 'BPM' },
+              { id: '100-150', label: '100 to 150', sub: 'BPM' },
+            ].map(({ id, label, sub }) => {
+              const active = bpmFaderRange === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => changeBpmFaderRange(id)}
                   style={{
                     flex: 1, border: 'none', cursor: 'pointer', padding: '10px 0',
                     borderRadius: 10,

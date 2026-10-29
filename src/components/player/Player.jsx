@@ -186,18 +186,46 @@ const PlayerControls = memo(function PlayerControls({
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
   const liveBpmNumber = (activeBpm > 0 && baseBpm > 0) ? activeBpm : (parseFloat(String(bpm || '').replace(/[^0-9.]/g, '')) || 0);
-  const isPitched = baseBpm > 0 && activeBpm > 0 && Math.abs(activeBpm - baseBpm) >= 0.05;
-  const formattedBpm = isPitched
-    ? `${activeBpm.toFixed(1)} BPM`
-    : (bpm ? (/bpm/i.test(bpm) ? bpm : `${bpm} BPM`) : '');
+  const isPitched = baseBpm > 0 && activeBpm >= 0 && Math.abs(activeBpm - baseBpm) >= 0.05;
+  // Original BPM under timeline never changes when speed is adjusted
+  const formattedBpm = bpm ? (/bpm/i.test(bpm) ? bpm : `${bpm} BPM`) : '';
   const holdTimerRef = useRef(null);
   const holdFiredRef = useRef(false);
+  const faderCardHoldTimerRef = useRef(null);
+  const faderCardStartPosRef = useRef(null);
+  const isDraggingFaderRef = useRef(false);
+
+  const [bpmFaderRange, setBpmFaderRange] = useState(() => localStorage.getItem('kyoyu-bpm-fader-range') || '50-250');
+  const [isEditingBpm, setIsEditingBpm] = useState(false);
+  const [bpmInputValue, setBpmInputValue] = useState('');
+  const bpmInputRef = useRef(null);
+
+  useEffect(() => {
+    const onRangeChange = (e) => {
+      const next = e?.detail || localStorage.getItem('kyoyu-bpm-fader-range') || '50-250';
+      setBpmFaderRange(next);
+    };
+    window.addEventListener('kyoyu-bpm-fader-range-change', onRangeChange);
+    window.addEventListener('storage', onRangeChange);
+    return () => {
+      window.removeEventListener('kyoyu-bpm-fader-range-change', onRangeChange);
+      window.removeEventListener('storage', onRangeChange);
+    };
+  }, []);
 
   const clearHoldTimer = useCallback(() => {
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
+  }, []);
+
+  const clearFaderCardHoldTimer = useCallback(() => {
+    if (faderCardHoldTimerRef.current) {
+      clearTimeout(faderCardHoldTimerRef.current);
+      faderCardHoldTimerRef.current = null;
+    }
+    faderCardStartPosRef.current = null;
   }, []);
 
   const startHoldTimer = useCallback(() => {
@@ -210,11 +238,29 @@ const PlayerControls = memo(function PlayerControls({
     }, 2210);
   }, [clearHoldTimer, onReanalyze, isReanalyzing]);
 
-  useEffect(() => () => clearHoldTimer(), [clearHoldTimer]);
+  useEffect(() => () => {
+    clearHoldTimer();
+    clearFaderCardHoldTimer();
+  }, [clearHoldTimer, clearFaderCardHoldTimer]);
 
-  const minBpm = baseBpm > 0 ? Math.max(30, Number((baseBpm * 0.84).toFixed(1))) : 60;
-  const maxBpm = baseBpm > 0 ? Math.min(260, Number((baseBpm * 1.16).toFixed(1))) : 180;
-  const pctDiff = (baseBpm > 0 && activeBpm > 0) ? (((activeBpm - baseBpm) / baseBpm) * 100) : 0;
+  const [minBpm, maxBpm] = useMemo(() => {
+    if (bpmFaderRange === '0-300') return [0, 300];
+    if (bpmFaderRange === '100-150') return [100, 150];
+    return [50, 250];
+  }, [bpmFaderRange]);
+
+  const displayedFaderBpm = Math.max(minBpm, Math.min(maxBpm, (activeBpm > 0 || activeBpm === 0 && isPitched) ? activeBpm : baseBpm));
+  const pctDiff = baseBpm > 0 ? (((displayedFaderBpm - baseBpm) / baseBpm) * 100) : 0;
+
+  const commitBpmInput = useCallback(() => {
+    const cleaned = String(bpmInputValue || '').replace(',', '.').replace(/[^0-9.]/g, '').trim();
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      const clamped = Math.max(minBpm, Math.min(maxBpm, Number(parsed.toFixed(1))));
+      if (onChangeBpmSpeed) onChangeBpmSpeed(clamped);
+    }
+    setIsEditingBpm(false);
+  }, [bpmInputValue, minBpm, maxBpm, onChangeBpmSpeed]);
 
   return (
     <>
@@ -301,56 +347,140 @@ const PlayerControls = memo(function PlayerControls({
             backdropFilter: 'blur(28px) saturate(180%)',
             WebkitBackdropFilter: 'blur(28px) saturate(180%)',
             boxShadow: '0 10px 28px rgba(0,0,0,0.22)',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
           onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            if (isDraggingFaderRef.current) return;
+            clearFaderCardHoldTimer();
+            faderCardStartPosRef.current = { x: e.clientX, y: e.clientY };
+            faderCardHoldTimerRef.current = setTimeout(() => {
+              faderCardHoldTimerRef.current = null;
+              if (!isDraggingFaderRef.current && setShowBpmFader) {
+                setIsEditingBpm(false);
+                setShowBpmFader(false);
+              }
+            }, 2210);
+          }}
+          onPointerMove={(e) => {
+            if (!faderCardStartPosRef.current) return;
+            const dx = e.clientX - faderCardStartPosRef.current.x;
+            const dy = e.clientY - faderCardStartPosRef.current.y;
+            if (Math.hypot(dx, dy) > 18) {
+              clearFaderCardHoldTimer();
+            }
+          }}
+          onPointerUp={clearFaderCardHoldTimer}
+          onPointerLeave={clearFaderCardHoldTimer}
+          onPointerCancel={clearFaderCardHoldTimer}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {(activeBpm || baseBpm).toFixed(1)} BPM
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontVariantNumeric: 'tabular-nums' }}>
-                {pctDiff >= 0 ? `+${pctDiff.toFixed(1)}%` : `${pctDiff.toFixed(1)}%`}
-              </span>
+              {isEditingBpm ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    commitBpmInput();
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: 0 }}
+                >
+                  <input
+                    ref={bpmInputRef}
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    value={bpmInputValue}
+                    onChange={(e) => setBpmInputValue(e.target.value)}
+                    onBlur={commitBpmInput}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      width: 64,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      border: '1px solid rgba(255,255,255,0.28)',
+                      background: 'rgba(255,255,255,0.14)',
+                      color: 'inherit',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      fontVariantNumeric: 'tabular-nums',
+                      outline: 'none',
+                    }}
+                  />
+                  <span
+                    onClick={commitBpmInput}
+                    style={{ fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    BPM
+                  </span>
+                </form>
+              ) : (
+                <span
+                  onClick={() => {
+                    clearFaderCardHoldTimer();
+                    const cur = displayedFaderBpm;
+                    setBpmInputValue(Math.abs(cur - Math.round(cur)) < 0.05 ? String(Math.round(cur)) : cur.toFixed(1));
+                    setIsEditingBpm(true);
+                    setTimeout(() => bpmInputRef.current?.focus(), 30);
+                  }}
+                  style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', cursor: 'pointer', padding: '2px 4px', borderRadius: 8 }}
+                  title="Tap to enter specific BPM"
+                >
+                  {Math.abs(displayedFaderBpm - Math.round(displayedFaderBpm)) < 0.05 && !isPitched
+                    ? `${Math.round(displayedFaderBpm)} BPM`
+                    : `${displayedFaderBpm.toFixed(1)} BPM`}
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span
+                onClick={() => {
+                  if (isEditingBpm) {
+                    commitBpmInput();
+                  } else if (isPitched && onResetBpmSpeed) {
+                    onResetBpmSpeed();
+                  }
+                }}
+                style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontVariantNumeric: 'tabular-nums', cursor: isPitched ? 'pointer' : 'default' }}
+              >
+                {pctDiff >= 0 ? `+${pctDiff.toFixed(2)}%` : `${pctDiff.toFixed(2)}%`}
+              </span>
               {isPitched && (
                 <button
                   type="button"
-                  onClick={() => onResetBpmSpeed && onResetBpmSpeed()}
+                  onClick={() => {
+                    setIsEditingBpm(false);
+                    if (onResetBpmSpeed) onResetBpmSpeed();
+                  }}
                   style={{ border: 'none', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.16)', color: 'inherit', cursor: 'pointer' }}
                 >
                   Reset
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setShowBpmFader && setShowBpmFader(false)}
-                style={{ border: 'none', borderRadius: 999, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.14)', color: 'inherit', cursor: 'pointer' }}
-                aria-label="Close BPM Fader"
-              >
-                <X size={14} />
-              </button>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => onChangeBpmSpeed && onChangeBpmSpeed(Math.max(minBpm, Number(((activeBpm || baseBpm) - 0.1).toFixed(1))))}
-              style={{ border: 'none', borderRadius: 999, width: 28, height: 28, fontWeight: 700, background: 'rgba(255,255,255,0.12)', color: 'inherit', cursor: 'pointer' }}
-            >
-              −
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <input
               type="range"
               min={minBpm}
               max={maxBpm}
-              step={0.01}
-              value={activeBpm || baseBpm}
+              step={0.1}
+              value={displayedFaderBpm}
+              onPointerDown={() => {
+                isDraggingFaderRef.current = true;
+                clearFaderCardHoldTimer();
+              }}
+              onPointerUp={() => {
+                isDraggingFaderRef.current = false;
+              }}
+              onPointerCancel={() => {
+                isDraggingFaderRef.current = false;
+              }}
               onChange={(e) => {
+                clearFaderCardHoldTimer();
                 const nextVal = parseFloat(e.target.value);
                 if (!isNaN(nextVal) && onChangeBpmSpeed) {
-                  if (Math.abs(nextVal - baseBpm) < 0.08) {
+                  if (Math.abs(nextVal - baseBpm) < 0.35) {
                     onResetBpmSpeed && onResetBpmSpeed();
                   } else {
                     onChangeBpmSpeed(nextVal);
@@ -359,18 +489,6 @@ const PlayerControls = memo(function PlayerControls({
               }}
               style={{ flex: 1, accentColor: '#fff', cursor: 'pointer' }}
             />
-            <button
-              type="button"
-              onClick={() => onChangeBpmSpeed && onChangeBpmSpeed(Math.min(maxBpm, Number(((activeBpm || baseBpm) + 0.1).toFixed(1))))}
-              style={{ border: 'none', borderRadius: 999, width: 28, height: 28, fontWeight: 700, background: 'rgba(255,255,255,0.12)', color: 'inherit', cursor: 'pointer' }}
-            >
-              +
-            </button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, opacity: 0.55, fontWeight: 600 }}>
-            <span>-16%</span>
-            <span>{baseBpm.toFixed(1)} BPM (Original)</span>
-            <span>+16%</span>
           </div>
         </div>
       ) : (
@@ -1046,7 +1164,8 @@ export default function Player({ hideMini = false }) {
   const [activeBpm, setActiveBpm] = useState(0);
 
   const applyPlaybackRate = useCallback((rate) => {
-    const clampedRate = Math.max(0.5, Math.min(2.0, Number(rate) || 1.0));
+    const rawRate = Number(rate);
+    const clampedRate = isNaN(rawRate) ? 1.0 : (rawRate <= 0.01 ? 0.0 : Math.max(0.0625, Math.min(4.0, rawRate)));
     window.__kyoyuPlaybackRate = clampedRate;
     const audioEl = window.__kyoyuAudioRef;
     if (audioEl) {
@@ -1054,11 +1173,11 @@ export default function Player({ hideMini = false }) {
         if ('preservesPitch' in audioEl) audioEl.preservesPitch = false;
         if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = false;
         if ('mozPreservesPitch' in audioEl) audioEl.mozPreservesPitch = false;
-        audioEl.playbackRate = clampedRate;
+        audioEl.playbackRate = clampedRate <= 0.01 ? 0.0625 : clampedRate;
       } catch (e) {}
     }
     try {
-      ytHiddenRef.current?.setPlaybackRate?.(clampedRate);
+      ytHiddenRef.current?.setPlaybackRate?.(Math.max(0.25, Math.min(2.0, clampedRate || 0.25)));
     } catch (e) {}
     try {
       const mh = window.webkit?.messageHandlers?.audioFallback;
@@ -1068,9 +1187,8 @@ export default function Player({ hideMini = false }) {
 
   const handleChangeBpmSpeed = useCallback((targetBpm) => {
     if (!(baseBpm > 0)) return;
-    const minBpm = Math.max(30, baseBpm * 0.84);
-    const maxBpm = Math.min(260, baseBpm * 1.16);
-    const clampedBpm = Math.max(minBpm, Math.min(maxBpm, Number(targetBpm) || baseBpm));
+    const numTarget = Number(targetBpm);
+    const clampedBpm = isNaN(numTarget) ? baseBpm : Math.max(0, Math.min(300, numTarget));
     setActiveBpm(clampedBpm);
     const rate = clampedBpm / baseBpm;
     applyPlaybackRate(rate);
@@ -1217,7 +1335,8 @@ export default function Player({ hideMini = false }) {
         return;
       }
       if (cmd === 'setPlaybackRate') {
-        const rate = Math.max(0.5, Math.min(2.0, Number(val) || 1.0));
+        const rawRate = Number(val);
+        const rate = isNaN(rawRate) ? 1.0 : (rawRate <= 0.01 ? 0.0 : Math.max(0.0625, Math.min(4.0, rawRate)));
         window.__kyoyuPlaybackRate = rate;
         const audioEl = window.__kyoyuAudioRef;
         if (audioEl) {
@@ -1225,11 +1344,11 @@ export default function Player({ hideMini = false }) {
             if ('preservesPitch' in audioEl) audioEl.preservesPitch = false;
             if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = false;
             if ('mozPreservesPitch' in audioEl) audioEl.mozPreservesPitch = false;
-            audioEl.playbackRate = rate;
+            audioEl.playbackRate = rate <= 0.01 ? 0.0625 : rate;
           } catch (e) {}
         }
         try {
-          ytHiddenRef.current?.setPlaybackRate?.(rate);
+          ytHiddenRef.current?.setPlaybackRate?.(Math.max(0.25, Math.min(2.0, rate || 0.25)));
         } catch (e) {}
         return;
       }
