@@ -172,6 +172,15 @@ export default async function handler(req, res) {
             },
           });
           if (r.ok) return await r.json();
+          const wRes = await fetch(`https://api-widget.soundcloud.com/tracks/${cleanResolveId}?client_id=${encodeURIComponent(cid)}&format=json`, {
+            headers: {
+              'Accept': 'application/json; charset=utf-8',
+              'Origin': 'https://w.soundcloud.com',
+              'Referer': 'https://w.soundcloud.com/',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            },
+          }).catch(() => null);
+          if (wRes && wRes.ok) return await wRes.json();
           if (r.status === 401 || r.status === 403) return { _authFailed: true };
         }
         if (resolveUrl && resolveUrl.includes('soundcloud.com')) {
@@ -182,16 +191,57 @@ export default async function handler(req, res) {
             },
           });
           if (r.ok) return await r.json();
+          const wRes = await fetch(`https://api-widget.soundcloud.com/resolve?url=${encodeURIComponent(resolveUrl)}&client_id=${encodeURIComponent(cid)}&format=json`, {
+            headers: {
+              'Accept': 'application/json; charset=utf-8',
+              'Origin': 'https://w.soundcloud.com',
+              'Referer': 'https://w.soundcloud.com/',
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            },
+          }).catch(() => null);
+          if (wRes && wRes.ok) return await wRes.json();
           if (r.status === 401 || r.status === 403) return { _authFailed: true };
         }
         return null;
       };
 
-      // Step 1: Resolve via api-v2.soundcloud.com using web client_id
-      let v2Result = await fetchV2Track(webClientId);
-      if (v2Result && v2Result._authFailed) {
-        webClientId = await getWebClientId(true);
-        v2Result = await fetchV2Track(webClientId);
+      // Step 1: Resolve via api-v2 / api-widget using web client_id and fallback IDs
+      const candidateClientIds = Array.from(new Set([
+        webClientId,
+        'kR7dAfT5UXQgmgde1pLjfsRGiaoANLvT',
+        'iZIs9mchVcX5lhVRyQGGAYlNPVldzAoX',
+      ].filter(Boolean)));
+      let v2Result = null;
+      for (const cid of candidateClientIds) {
+        v2Result = await fetchV2Track(cid);
+        if (v2Result && !v2Result._authFailed && v2Result.id) {
+          webClientId = cid;
+          break;
+        }
+      }
+      if (!v2Result || v2Result._authFailed) {
+        const refreshedCid = await getWebClientId(true);
+        if (refreshedCid) {
+          webClientId = refreshedCid;
+          v2Result = await fetchV2Track(refreshedCid);
+        }
+      }
+      // Hydration fallback from track page if resolveUrl is present
+      if ((!v2Result || !v2Result.id) && resolveUrl && resolveUrl.includes('soundcloud.com')) {
+        try {
+          const pageRes = await fetch(resolveUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' },
+          });
+          if (pageRes.ok) {
+            const html = await pageRes.text();
+            const hydMatch = html.match(/window\.__sc_hydration\s*=\s*(\[\{.*?\}\]);/s);
+            if (hydMatch) {
+              const arr = JSON.parse(hydMatch[1]);
+              const soundEntry = Array.isArray(arr) ? arr.find(e => e?.hydratable === 'sound' && e?.data?.id) : null;
+              if (soundEntry?.data) v2Result = soundEntry.data;
+            }
+          }
+        } catch (_) {}
       }
       if (v2Result && !v2Result._authFailed && v2Result.id) {
         track = v2Result;
@@ -207,6 +257,8 @@ export default async function handler(req, res) {
             const transRes = await fetch(resolveEndpoint, {
               headers: {
                 'Accept': 'application/json',
+                'Origin': 'https://soundcloud.com',
+                'Referer': 'https://soundcloud.com/',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
               },
             });

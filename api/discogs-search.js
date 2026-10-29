@@ -292,11 +292,9 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
   const providerBpm = beatport?.bpm || deezer?.bpm || ab?.bpm || sc?.bpm || notesBpm || '';
   const providerKey = beatport?.key || ab?.key || sc?.key || notesKey || '';
 
-  const fallback = estimateGenreCalibratedBpmAndKey(title, artist, stylesAndGenres);
-
   return {
-    bpm: providerBpm || fallback.bpm,
-    key: providerKey || fallback.key,
+    bpm: providerBpm || '',
+    key: providerKey || '',
     bpmFromProvider: Boolean(providerBpm),
     keyFromProvider: Boolean(providerKey),
     isrc: beatport?.isrc || deezer?.isrc || sc?.isrc || '',

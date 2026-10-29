@@ -9,14 +9,14 @@ import { cleanText, parseEntity, isSameTitle, stripTrackPosition, tokens } from 
 import { resolveBandcamp } from './unifiedSearch';
 import { getProviderPriority, callStreaming, isStreamingAvailable } from './streaming';
 
-const RESOLVED_PROVIDERS_KEY = 'kyoyu-resolved-track-providers-v1';
+const RESOLVED_PROVIDERS_KEY = 'kyoyu-resolved-track-providers-v2';
 const _resolvedProviderMap = new Map();
 
 export function normalizeTrackTitleArtistKey(title, artist) {
   const t = cleanText(stripTrackPosition(title || ''));
   const a = cleanText(artist || '');
-  if (!t) return '';
-  return a ? `${a}|${t}` : `|${t}`;
+  if (!t || !a) return '';
+  return `${a}|${t}`;
 }
 
 function cleanTrackLookupId(id) {
@@ -161,12 +161,6 @@ export function getRememberedTrackProvider({ id, title, artist } = {}) {
   const taKey = normalizeTrackTitleArtistKey(title, artist);
   if (taKey && _resolvedProviderMap.has(taKey)) {
     return _resolvedProviderMap.get(taKey);
-  }
-  if (title) {
-    const titleOnlyKey = normalizeTrackTitleArtistKey(title, '');
-    if (titleOnlyKey && _resolvedProviderMap.has(titleOnlyKey)) {
-      return _resolvedProviderMap.get(titleOnlyKey);
-    }
   }
   return null;
 }
@@ -330,10 +324,16 @@ export async function findTrackSource({ id, artist, title }, isCurrent = () => t
         if (!isCurrent()) return null;
         const ytResults = yt?.results || [];
         const ytEnt = (r) => parseEntity(r.title, r.channelTitle);
+        const titleToks = [...tokens(want.title)];
+        const artistToks = [...tokens(want.artist)];
         const looseYt = (r) => {
+          if (titleToks.length === 0) return false;
           const all = tokens(`${r.title} ${r.channelTitle}`);
-          const need = [...tokens(want.title), ...tokens(want.artist)];
-          return need.length > 0 && need.every(w => all.has(w));
+          const hasTitle = titleToks.every(w => all.has(w));
+          const hasArtist = artistToks.length === 0 || artistToks.some(w => all.has(w));
+          const durSec = Number(r.duration) || 0;
+          const isTooLongMix = durSec > 1500 && !/mix|set|live/i.test(want.title);
+          return hasTitle && hasArtist && !isTooLongMix;
         };
         const ytTrack = ytResults.find(r => isSameTitle(ytEnt(r), want)) || ytResults.find(looseYt);
         if (ytTrack?.videoId) {

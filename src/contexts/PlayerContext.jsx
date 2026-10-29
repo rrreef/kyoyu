@@ -108,7 +108,7 @@ function parseDurationSeconds(val) {
 }
 
 // Actions that must NOT clear a restored (paused, not-yet-loaded) session
-const KEEP_RESTORED = new Set(['SET_PROGRESS', 'SET_DURATION', 'SET_VOLUME', 'SET_QUEUE', 'TOGGLE_SHUFFLE', 'CYCLE_REPEAT', 'RESTORE_SESSION', 'NATIVE_ERROR']);
+const KEEP_RESTORED = new Set(['SET_PROGRESS', 'SET_DURATION', 'SET_VOLUME', 'SET_QUEUE', 'TOGGLE_SHUFFLE', 'CYCLE_REPEAT', 'RESTORE_SESSION', 'NATIVE_ERROR', 'UPDATE_CURRENT_TRACK']);
 function playerReducer(state, action) {
   const next = baseReducer(state, action);
   if (!state.restoredPending || next === state || next.restoredPending === false) return next;
@@ -161,6 +161,17 @@ function baseReducer(state, action) {
       }
       return { ...state, currentTrack: action.track, isPlaying: true, progress: 0, duration: action.track.duration || 0,
                provider: action.service, providerItemId: action.itemId, providerUrl: action.url || null };
+    }
+    case 'UPDATE_CURRENT_TRACK': {
+      if (!state.currentTrack) return state;
+      const updatedTrack = { ...state.currentTrack, ...(action.patch || {}) };
+      const nextDur = parseDurationSeconds(action.patch?.duration);
+      return {
+        ...state,
+        currentTrack: updatedTrack,
+        ...(action.itemId ? { providerItemId: action.itemId } : {}),
+        ...(nextDur > 0 ? { duration: nextDur } : {}),
+      };
     }
     case 'NATIVE_ERROR':
       return { ...state, nativeErrorCount: (state.nativeErrorCount || 0) + 1 };
@@ -218,6 +229,7 @@ export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState);
   const audioRef = useRef(null);
   const playIdRef = useRef(0); // increments on each track change to cancel stale plays
+  const masterPlaySeqRef = useRef(0); // global sequence counter across all providers to cancel stale async resolutions
   const stateRef = useRef(state);
   stateRef.current = state;
   // Always-fresh handles for callbacks registered once (audio 'ended', native bridge, timers)
@@ -394,14 +406,22 @@ export function PlayerProvider({ children }) {
     if (!audio || !state.currentTrack) return;
     // A restored session is shown paused; nothing is loaded until the user presses play
     if (state.restoredPending) return;
-    // Skip native audio loading for external providers
-    if (state.provider !== 'native') return;
+    // When switching to an external engine (Spotify, Apple Music, or YouTube iframe), ensure AVPlayer and web <audio> are stopped
+    if (state.provider !== 'native') {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      try {
+        const mh = window.webkit?.messageHandlers;
+        if (mh?.audioFallback) mh.audioFallback.postMessage({ url: '' });
+      } catch (e) {}
+      return;
+    }
 
-    
     // Stop current playback cleanly before switching or if src is empty (placeholder)
     audio.pause();
     audio.currentTime = 0;
-    
+
     const src = state.currentTrack.src || state.currentTrack.fileUrl || state.currentTrack.audioUrl || '';
     if (src.startsWith('resolve:')) {
       // e.g. next track in a Discogs tracklist — find its real source instead of sending "resolve:" to AVPlayer
@@ -414,7 +434,7 @@ export function PlayerProvider({ children }) {
       try {
         const mh = window.webkit?.messageHandlers;
         if (mh?.audioFallback) mh.audioFallback.postMessage({ url: '' });
-      } catch(e) {}
+      } catch (e) {}
       return;
     }
 
@@ -422,23 +442,17 @@ export function PlayerProvider({ children }) {
     const myPlayId = ++playIdRef.current;
 
     // ── Send URL directly to native AVPlayer (iOS) ──
-    // Don't rely on the play() JS override to read currentSrc — it's racy.
-    // We know the exact URL from the track object.
+    // Whenever state.provider === 'native' (which includes Bandcamp, SoundCloud, resolved YouTube direct audio, and Native tracks),
+    // AVPlayer in AudioFallbackBridge is the single source of truth on iOS.
     try {
       const mh = window.webkit?.messageHandlers;
       if (mh?.audioFallback) {
-        if (state.currentTrack?.provider === 'youtube') {
-          // If switching to YouTube, explicitly kill the native AVPlayer so old audio stops!
-          mh.audioFallback.postMessage({ url: '' });
-        } else {
-          if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
-          // Resumed session: start exactly where the user left off
-          const ps = pendingSeekRef.current;
-          let seekTo = 0;
-          if (ps && ps.id === state.currentTrack.id && ps.pos > 1) { seekTo = ps.pos; pendingSeekRef.current = null; }
-          mh.audioFallback.postMessage(seekTo > 0 ? { url: src, seekTo } : { url: src });
-        }
-
+        if (window.__kyoyuTrack) window.__kyoyuTrack.lastSentUrl = src;
+        // Resumed session: start exactly where the user left off
+        const ps = pendingSeekRef.current;
+        let seekTo = 0;
+        if (ps && ps.id === state.currentTrack.id && ps.pos > 1) { seekTo = ps.pos; pendingSeekRef.current = null; }
+        mh.audioFallback.postMessage(seekTo > 0 ? { url: src, seekTo } : { url: src });
       }
       if (mh?.audioSession) mh.audioSession.postMessage('play');
     } catch (e) { /* not in WKWebView */ }
@@ -453,24 +467,22 @@ export function PlayerProvider({ children }) {
       } else {
         dbDuration = parseInt(d) || 0;
       }
-      if (dbDuration > 0) dispatch({ type:'SET_DURATION', value: dbDuration });
+      if (dbDuration > 0) dispatch({ type: 'SET_DURATION', value: dbDuration });
     }
 
-    // Load web audio (muted) for scrubber/duration UI ONLY if it's not a native provider
-    // Native providers (iOS) handle their own playback. Assigning native streams to the web audio tag
-    // causes CORS errors or 0-duration immediate 'ended' events that cause rapid phantom skipping!
-    const isNativeProvider = state.currentTrack.provider === 'native' || state.currentTrack.provider === 'bandcamp' || state.currentTrack.provider === 'soundcloud';
+    // On native iOS, AVPlayer handles all direct stream playback (Bandcamp, SoundCloud, YouTube direct, Native).
+    // Never load the stream into the WKWebView <audio> element on iOS, which causes dual-playback or CORS/0-duration ended events.
     const isNativeIOS = !!window.webkit?.messageHandlers?.audioFallback;
-    
-    if (isNativeIOS && isNativeProvider) {
+    if (isNativeIOS) {
       audio.removeAttribute('src');
       audio.load();
-    } else {
-      audio.src = src;
-      audio.load();
+      return;
     }
 
-    // Play muted web audio when ready (for scrubber tracking)
+    audio.src = src;
+    audio.load();
+
+    // Play web audio when ready (web browser only)
     const onCanPlay = () => {
       audio.removeEventListener('canplay', onCanPlay);
       if (playIdRef.current === myPlayId) {
@@ -492,7 +504,7 @@ export function PlayerProvider({ children }) {
     };
     // src is a dependency: a resolving track keeps its id (placeholder → real stream), and the
     // audio must load as soon as the stream URL arrives.
-  }, [state.currentTrack?.id, state.currentTrack?._restart, state.restoredPending, state.currentTrack?.src || state.currentTrack?.fileUrl || state.currentTrack?.audioUrl || '']); // eslint-disable-line
+  }, [state.currentTrack?.id, state.currentTrack?._restart, state.restoredPending, state.provider, state.currentTrack?.src || state.currentTrack?.fileUrl || state.currentTrack?.audioUrl || '']); // eslint-disable-line
 
 
   // ── Play / pause sync ──
@@ -503,15 +515,16 @@ export function PlayerProvider({ children }) {
     // External providers handle their own play/pause
     if (state.provider !== 'native') return;
 
+    const isNativeIOS = !!window.webkit?.messageHandlers?.audioFallback;
     if (state.isPlaying) {
-      audio.play().catch(() => {});
-      // On native iOS, also directly tell AVPlayer (the web audio path is unreliable)
+      if (!isNativeIOS) audio.play().catch(() => {});
+      // On native iOS, directly tell AVPlayer
       try {
         const mh = window.webkit?.messageHandlers?.audioFallback;
         if (mh) mh.postMessage('resume');
       } catch(e) {}
     } else {
-      audio.pause();
+      if (!isNativeIOS) audio.pause();
       try {
         const mh = window.webkit?.messageHandlers?.audioFallback;
         if (mh) mh.postMessage('pause');
@@ -577,7 +590,7 @@ export function PlayerProvider({ children }) {
       artistName: cleaned.artist || rawArtist,
       label: cleaned.label || rawLabel,
       releaseTitle: cleaned.album || rawAlbum,
-      releaseCover: track.releaseCover || track.cover || '',
+      releaseCover: track.releaseCover || track.cover || track.artworkUrl || '',
       duration: normDur > 0 ? normDur : (track.duration || 0),
     };
     dispatch({ type:'PLAY_TRACK', track: normTrack });
@@ -585,11 +598,14 @@ export function PlayerProvider({ children }) {
       window.webkit.messageHandlers.player.postMessage({
         visible: true,
         playing: true,
+        trackId: String(normTrack.id || ''),
         title: normTrack.title || '',
         artist: normTrack.artistName || '',
         label: normTrack.label || '',
         albumName: normTrack.releaseTitle || '',
-        artwork: normTrack.releaseCover || track.artworkUrl || '',
+        artwork: normTrack.releaseCover || '',
+        provider: 'native',
+        sourceProvider: normTrack.sourceProvider || normTrack.provider || normTrack.origin?.provider || 'native',
         ...(normDur > 0 ? { dur: normDur } : {}),
       });
     } catch(e){} 
@@ -606,7 +622,7 @@ export function PlayerProvider({ children }) {
         artistName: qClean.artist || qArtist,
         label: qClean.label || qLabel,
         releaseTitle: qClean.album || qAlbum,
-        releaseCover: t.releaseCover || t.cover || '',
+        releaseCover: t.releaseCover || t.cover || t.artworkUrl || '',
       };
     });
     if (normQueue.length) dispatch({ type:'SET_QUEUE', queue: normQueue });
@@ -638,22 +654,41 @@ export function PlayerProvider({ children }) {
     // Playlist ("PL…") / channel ("UC…") ids are not videos and would load forever
     if (!/^[\w-]{11}$/.test(String(videoId || ''))) { console.warn('[Player] ignoring invalid YouTube video id', videoId); return; }
     const myCounter = ++playYouTubeCounterRef.current;
-    const cleaned = splitCleanMetadata(metadata.title || 'YouTube Video', metadata.channelTitle || metadata.artist || '', metadata.label || '');
+    const mySeq = opts.seq || ++masterPlaySeqRef.current;
+    const rawAlbum = metadata.releaseTitle || metadata.albumName || metadata.album || '';
+    const cleaned = splitCleanMetadata(metadata.title || 'YouTube Video', metadata.channelTitle || metadata.artist || '', metadata.label || '', rawAlbum);
     const title = cleaned.title || metadata.title || 'YouTube Video';
     const artistName = cleaned.artist || metadata.channelTitle || metadata.artist || '';
     const label = cleaned.label || metadata.label || '';
-    const releaseCover = metadata.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
-    const providerUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const releaseTitle = cleaned.album || rawAlbum;
+    const releaseCover = metadata.releaseCover || metadata.thumbnail || metadata.artworkUrl || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+    const providerUrl = metadata.providerUrl || `https://www.youtube.com/watch?v=${videoId}`;
+    const sourceProvider = metadata.sourceProvider || 'youtube';
+    const trackId = metadata.id || `yt-${videoId}`;
     const origin = { provider: 'youtube', videoId };
 
     // Fallback engine: the YouTube iframe (foreground only on iOS, but works when the stream can't be resolved)
     const startIframe = () => {
-      if (myCounter !== playYouTubeCounterRef.current) return;
+      if (myCounter !== playYouTubeCounterRef.current || mySeq !== masterPlaySeqRef.current) return;
       const track = {
-        id: `yt-${videoId}`, title, artistName, label, releaseCover, duration: metadata.duration || 0,
-        src: '', provider: 'youtube', providerItemId: videoId,
+        id: trackId, title, artistName, label, releaseTitle, releaseCover, duration: parseDurationSeconds(metadata.duration) || 0,
+        src: '', provider: 'youtube', sourceProvider, providerItemId: videoId, videoId, providerUrl, origin,
       };
-      dispatch({ type: 'PLAY_YOUTUBE', videoId, track }); try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title || track.name || '', artist: track.artistName || '', label: track.label || '', artwork: track.releaseCover || track.cover || track.artworkUrl || '' }); } catch(e){}
+      dispatch({ type: 'PLAY_YOUTUBE', videoId, track });
+      try {
+        window.webkit.messageHandlers.player.postMessage({
+          visible: true,
+          playing: true,
+          trackId: String(track.id || ''),
+          title: track.title || '',
+          artist: track.artistName || '',
+          label: track.label || '',
+          albumName: track.releaseTitle || '',
+          artwork: track.releaseCover || '',
+          provider: 'youtube',
+          sourceProvider,
+        });
+      } catch(e){}
     };
 
     // iOS app: play the YouTube audio stream with AVPlayer — exactly like SoundCloud / Bandcamp
@@ -661,24 +696,37 @@ export function PlayerProvider({ children }) {
     if (opts.forceIframe || !isStreamingAvailable()) { startIframe(); return; }
 
     nativeRetryRef.current = '';
-    showPlaceholder({ id: `yt-${videoId}`, title, artistName, label, releaseCover, duration: metadata.duration || 0, videoId, providerUrl, origin });
+    showPlaceholder({ id: trackId, title, artistName, label, releaseTitle, releaseCover, duration: metadata.duration || 0, provider: 'youtube', sourceProvider, videoId, providerUrl, origin });
     (async () => {
       let res = null;
       try { res = await callStreaming('ytResolve', { videoId }, 15000); } catch (e) { res = null; window.__kyoyuYtError = e?.message || String(e); }
-      if (myCounter !== playYouTubeCounterRef.current) return;
+      if (myCounter !== playYouTubeCounterRef.current || mySeq !== masterPlaySeqRef.current) return;
       if (!res?.url) { startIframe(); return; }
       playTrack({
-        id: `yt-${videoId}`, title, artistName, label, releaseCover,
+        id: trackId,
+        _restart: Date.now(),
+        title,
+        artistName,
+        label,
+        releaseTitle,
+        releaseCover,
         duration: res.duration || metadata.duration || 0,
-        src: res.url, videoId, providerUrl, origin,
+        src: res.url,
+        provider: 'youtube',
+        sourceProvider,
+        providerItemId: videoId,
+        videoId,
+        providerUrl,
+        origin,
       });
     })();
   }
 
   const playSoundCloudCounterRef = useRef(0);
-  async function playSoundCloud(trackUrl, metadata = {}) {
+  async function playSoundCloud(trackUrl, metadata = {}, opts = {}) {
     playSoundCloudCounterRef.current += 1;
     const myCounter = playSoundCloudCounterRef.current;
+    const mySeq = opts.seq || ++masterPlaySeqRef.current;
     // Extract numeric track ID from metadata or the item id (e.g. "sc-88335161")
     let trackId = metadata.trackId || metadata.scTrackId || '';
     if (trackId) {
@@ -697,18 +745,22 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    const initClean = splitCleanMetadata(metadata.title || 'SoundCloud Track', metadata.artistName || metadata.artist || '', metadata.label || '');
+    const rawAlbum = metadata.releaseTitle || metadata.albumName || metadata.album || '';
+    const initClean = splitCleanMetadata(metadata.title || 'SoundCloud Track', metadata.artistName || metadata.artist || '', metadata.label || '', rawAlbum);
     const initDur = parseDurationSeconds(metadata.duration);
-    const placeholderId = trackId ? `sc-${trackId}` : `sc-${Date.now()}`;
+    const placeholderId = metadata.id || (trackId ? `sc-${trackId}` : `sc-${Date.now()}`);
+    const sourceProvider = metadata.sourceProvider || 'soundcloud';
     const placeholderTrack = {
       id: placeholderId,
       title: initClean.title || metadata.title || 'SoundCloud Track',
       artistName: initClean.artist || metadata.artistName || metadata.artist || '',
       label: initClean.label || metadata.label || '',
-      releaseCover: metadata.artworkUrl || metadata.cover || metadata.releaseCover || '',
+      releaseTitle: initClean.album || rawAlbum,
+      releaseCover: metadata.releaseCover || metadata.artworkUrl || metadata.cover || '',
       duration: initDur,
       src: '',
       provider: 'soundcloud',
+      sourceProvider,
       providerUrl: cleanTrackUrl,
       providerItemId: cleanTrackUrl || (trackId ? String(trackId) : ''),
       scTrackId: trackId ? String(trackId) : '',
@@ -763,7 +815,7 @@ export function PlayerProvider({ children }) {
         }
       }
 
-      if (myCounter !== playSoundCloudCounterRef.current) return;
+      if (myCounter !== playSoundCloudCounterRef.current || mySeq !== masterPlaySeqRef.current) return;
       if (!data || !data.streamUrl) {
         console.warn('[Player] SoundCloud: no stream URL returned');
         dispatch({ type: 'SET_PLAYING', value: false });
@@ -772,22 +824,25 @@ export function PlayerProvider({ children }) {
 
       const finalTrackId = String(data.trackId || trackId || '').replace(/^sc-/, '');
       const resClean = splitCleanMetadata(
-        data.title || metadata.title || 'SoundCloud Track',
-        data.artistName || metadata.artistName || metadata.artist || '',
-        initClean.label || metadata.label || ''
+        metadata.title || data.title || 'SoundCloud Track',
+        metadata.artistName || metadata.artist || data.artistName || '',
+        initClean.label || metadata.label || '',
+        initClean.album || rawAlbum
       );
       const resolvedDur = parseDurationSeconds(data.duration) || initDur || 0;
       const resolvedTrack = {
-        id: finalTrackId ? `sc-${finalTrackId}` : placeholderId,
+        id: metadata.id || (finalTrackId ? `sc-${finalTrackId}` : placeholderId),
         _restart: Date.now(), // re-fires the audio useEffect (same id as the placeholder)
         scTrackId: finalTrackId,
         provider: 'soundcloud',
+        sourceProvider,
         providerItemId: cleanTrackUrl || finalTrackId,
         origin: { provider: 'soundcloud', scTrackId: finalTrackId, url: cleanTrackUrl || '' },
-        title: resClean.title || data.title || metadata.title || 'SoundCloud Track',
-        artistName: resClean.artist || data.artistName || metadata.artistName || metadata.artist || '',
+        title: resClean.title || metadata.title || data.title || 'SoundCloud Track',
+        artistName: resClean.artist || metadata.artistName || metadata.artist || data.artistName || '',
         label: resClean.label || '',
-        releaseCover: data.artworkUrl || metadata.artworkUrl || metadata.cover || '',
+        releaseTitle: resClean.album || rawAlbum,
+        releaseCover: metadata.releaseCover || metadata.artworkUrl || data.artworkUrl || metadata.cover || '',
         duration: resolvedDur,
         src: data.streamUrl,
         providerUrl: cleanTrackUrl,
@@ -810,6 +865,7 @@ export function PlayerProvider({ children }) {
     if (!item) return;
     playSearchItemCounterRef.current += 1;
     const myCounter = playSearchItemCounterRef.current;
+    const mySeq = ++masterPlaySeqRef.current;
     if (item.provider === 'youtube') {
       let vid = item.providerItemId || item.videoId;
       if (!vid && item.id && item.id.startsWith('yt-')) vid = item.id.replace('yt-', '');
@@ -818,21 +874,26 @@ export function PlayerProvider({ children }) {
         if (m) vid = m[1];
       }
       playYouTube(vid, {
+        id: item.id || `yt-${vid}`,
         title: item.title,
-        channelTitle: item.artistName,
-        thumbnail: item.artworkUrl,
+        channelTitle: item.artistName || item.artist,
+        releaseTitle: item.albumName || item.releaseTitle || item.albumTitle || '',
+        label: item.label || item.labelName || '',
+        thumbnail: item.artworkUrl || item.releaseCover || item.cover,
         duration: item.duration,
-      });
+      }, { seq: mySeq });
     } else if (item.provider === 'soundcloud') {
       // Resolve stream URL via API and play natively (same as native tracks)
       playSoundCloud(item.providerItemId || item.permalinkUrl || item.url, {
-        trackId: item.scTrackId || item.trackId || (item.id && item.id.replace('sc-', '')),
+        id: item.id,
+        trackId: item.scTrackId || item.trackId || (item.id && String(item.id).replace(/^sc-/, '')),
         title: item.title,
-        artistName: item.artistName,
-        label: item.label || '',
-        artworkUrl: item.artworkUrl,
+        artistName: item.artistName || item.artist,
+        releaseTitle: item.albumName || item.releaseTitle || item.albumTitle || '',
+        label: item.label || item.labelName || '',
+        artworkUrl: item.artworkUrl || item.releaseCover || item.cover,
         duration: item.duration,
-      });
+      }, { seq: mySeq });
     } else if (item.provider === 'bandcamp') {
       const bcUrl = item.providerItemId || item.trackUrl || item.url;
       const cleaned = splitCleanMetadata(
@@ -849,15 +910,16 @@ export function PlayerProvider({ children }) {
         labelUrl: item.labelUrl || '',
         releaseTitle: cleaned.album || item.albumName || item.releaseTitle || '',
         year: item.year || '',
-        releaseCover: item.artworkUrl || '',
+        releaseCover: item.artworkUrl || item.releaseCover || item.cover || '',
         url: bcUrl,
         duration: item.duration || 0,
+        sourceProvider: 'bandcamp',
       };
       showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: meta.url, providerUrl: item.providerUrl || meta.url });
-      const isCurrent = () => myCounter === playSearchItemCounterRef.current && stateRef.current.currentTrack?.id === item.id;
+      const isCurrent = () => myCounter === playSearchItemCounterRef.current && mySeq === masterPlaySeqRef.current && stateRef.current.currentTrack?.id === item.id;
       await playBandcampOrFallback(meta, isCurrent);
     } else if (item.provider === 'spotify' || item.provider === 'applemusic' || item.provider === 'tidal') {
-      await playStreamingItem(item, myCounter);
+      await playStreamingItem(item, myCounter, mySeq);
     } else {
       // native track
       playTrack(item);
@@ -865,9 +927,9 @@ export function PlayerProvider({ children }) {
   }
 
   /** Apple Music / Spotify / TIDAL result → their native engine; if that's unavailable, the same song elsewhere. */
-  async function playStreamingItem(item, myCounter) {
+  async function playStreamingItem(item, myCounter, mySeq = ++masterPlaySeqRef.current) {
     const service = item.provider;
-    const itemId = String(item.providerItemId || item.spotifyId || item.tidalId || item.trackId || '').replace(/^(am|sp|td)-/, '');
+    const itemId = String(item.providerItemId || item.spotifyId || item.appleMusicId || item.tidalId || item.trackId || '').replace(/^(am|sp|td)-/, '');
     const cleaned = splitCleanMetadata(
       item.title || '',
       item.artistName || item.artist || '',
@@ -879,16 +941,21 @@ export function PlayerProvider({ children }) {
       title: cleaned.title || item.title || '',
       artistName: cleaned.artist || item.artistName || item.artist || '',
       label: cleaned.label || item.label || item.labelName || '',
-      releaseCover: item.artworkUrl || item.releaseCover || '',
-      duration: item.duration || 0,
+      releaseCover: item.artworkUrl || item.releaseCover || item.cover || '',
+      duration: parseDurationSeconds(item.duration) || 0,
       releaseTitle: cleaned.album || item.albumName || item.releaseTitle || '',
+      sourceProvider: service,
     };
-    const stillCurrent = () => myCounter === playSearchItemCounterRef.current;
+    const stillCurrent = () => myCounter === playSearchItemCounterRef.current && mySeq === masterPlaySeqRef.current;
+    // Immediately stop any active AVPlayer stream before handing off to Spotify / Apple Music
+    try { window.webkit?.messageHandlers?.audioFallback?.postMessage({ url: '' }); } catch (e) {}
+
     if (itemId && isStreamingAvailable()) {
       const track = {
         ...meta,
         src: '',
         provider: service,
+        sourceProvider: service,
         providerItemId: itemId,
         providerUrl: item.url || '',
         ...(service === 'spotify' ? { spotifyId: itemId } : {}),
@@ -896,9 +963,22 @@ export function PlayerProvider({ children }) {
         ...(service === 'tidal' ? { tidalId: itemId } : {}),
       };
       dispatch({ type: 'PLAY_STREAMING', service, itemId, url: item.url, track });
-      try { window.webkit.messageHandlers.player.postMessage({ visible: true, playing: true, title: track.title, artist: track.artistName || '', label: track.label || '', artwork: track.releaseCover || '' }); } catch (e) {}
+      try {
+        window.webkit.messageHandlers.player.postMessage({
+          visible: true,
+          playing: true,
+          trackId: String(track.id || ''),
+          title: track.title,
+          artist: track.artistName || '',
+          label: track.label || '',
+          albumName: track.releaseTitle || '',
+          artwork: track.releaseCover || '',
+          provider: service,
+          sourceProvider: service,
+          ...(meta.duration > 0 ? { dur: meta.duration } : {}),
+        });
+      } catch (e) {}
       // Spotify's App Remote is flaky right after a cold start / app switch: give its own engine a few tries
-      // before even thinking about another source.
       let lastError = '';
       for (let attempt = 0; attempt < 3; attempt++) {
         if (!stillCurrent()) return;
@@ -914,35 +994,30 @@ export function PlayerProvider({ children }) {
         } catch (err) {
           lastError = err?.message || String(err);
           console.warn(`[Player] ${service} playback failed (attempt ${attempt + 1}):`, lastError);
-          if (/subscription|not connected|not configured|not installed/i.test(lastError)) break;   // retrying can't fix these
-          if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
+          if (/subscription|not connected|not configured|not installed/i.test(lastError)) break;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 900));
         }
       }
       window.__kyoyuStreamError = lastError;
     }
     if (!stillCurrent()) return;
-    if (!isStreamingAvailable()) {
-      // Website (no native bridge): there is no Spotify / Apple Music / TIDAL engine, so play the same song elsewhere
-      showPlaceholder(meta);
-      const found = await findTrackSource({ artist: meta.artistName, title: meta.title }, stillCurrent);
-      if (!stillCurrent()) return;
-      if (found) playFoundSource(found, meta);
-      else dispatch({ type: 'SET_PLAYING', value: false });
+    // Seamless audio fallback: if the native Spotify / Apple Music / TIDAL SDK could not start playback
+    // (or on web where no native SDK exists), resolve the exact same track via Bandcamp / SoundCloud / YouTube
+    // while keeping the original Spotify/Apple Music metadata, album name, and artwork!
+    showPlaceholder({ ...meta, provider: service, sourceProvider: service, providerItemId: itemId, providerUrl: item.url || '' });
+    const found = await findTrackSource({ id: meta.id, artist: meta.artistName, title: meta.title }, stillCurrent);
+    if (!stillCurrent()) return;
+    if (found) {
+      playFoundSource(found, {
+        ...meta,
+        sourceProvider: service,
+        ...(service === 'spotify' ? { spotifyId: itemId } : {}),
+        ...(service === 'applemusic' ? { appleMusicId: itemId } : {}),
+        ...(service === 'tidal' ? { tidalId: itemId } : {}),
+      }, mySeq);
       return;
     }
-    // The user picked a Spotify / Apple Music / TIDAL title: only that provider may play it. Never swap in a
-    // Bandcamp/SoundCloud/YouTube copy under it — show why it failed instead.
     dispatch({ type: 'SET_PLAYING', value: false });
-    const label = service === 'spotify' ? 'Spotify' : service === 'tidal' ? 'TIDAL' : 'Apple Music';
-    const why = window.__kyoyuStreamError || (isStreamingAvailable() ? 'unknown error' : `${label} is only available in the Kyoyu iOS app`);
-    const hint = service === 'spotify'
-      ? 'Check that Spotify is connected in Settings (Spotify Premium + the Spotify app are required).'
-      : service === 'tidal'
-        ? 'Check that TIDAL is connected in Settings.'
-        : /subscription/i.test(why)
-          ? 'Open Settings › Streaming Services › Apple Music and tap “Get Apple Music”. The subscription must be on the Apple ID signed in on this device.'
-          : 'Check that Apple Music is connected in Settings.';
-    try { window.webkit.messageHandlers.player.postMessage({ alertTitle: `${label} could not play this track`, alert: `${why}\n\n${hint}` }); } catch (e) {}
   }
 
   // ── Shared helpers for resolving plays ──
@@ -960,16 +1035,20 @@ export function PlayerProvider({ children }) {
       releaseTitle: cleaned.album || meta.releaseTitle || '',
       duration: phDur > 0 ? phDur : (meta.duration || 0),
     };
+    try { window.webkit?.messageHandlers?.audioFallback?.postMessage({ url: '' }); } catch (e) {}
     dispatch({ type: 'PLAY_TRACK', track });
     try {
       window.webkit.messageHandlers.player.postMessage({
         visible: true,
         playing: true,
+        trackId: String(track.id || ''),
         title: track.title,
         artist: track.artistName || '',
         label: track.label || '',
         albumName: track.releaseTitle || '',
         artwork: track.releaseCover || '',
+        provider: track.provider || 'native',
+        sourceProvider: track.sourceProvider || track.provider || 'native',
         ...(phDur > 0 ? { dur: phDur } : {}),
       });
     } catch(e){}
@@ -978,22 +1057,44 @@ export function PlayerProvider({ children }) {
   }
 
   /** Play a source found by findTrackSource, keeping the visible metadata of `meta`. */
-  function playFoundSource(found, meta) {
+  function playFoundSource(found, meta, seq = masterPlaySeqRef.current) {
     const cleaned = splitCleanMetadata(meta.title || '', meta.artistName || meta.artist || '', meta.label || '', meta.releaseTitle || '');
     const title = cleaned.title || meta.title || '';
     const artist = cleaned.artist || meta.artistName || meta.artist || '';
+    const releaseTitle = cleaned.album || meta.releaseTitle || '';
     const cover = meta.releaseCover || meta.cover || meta.artworkUrl || '';
+    const sourceProvider = meta.sourceProvider || found.provider;
     if (found.provider === 'youtube') {
-      playYouTube(found.videoId, { title, artist, label: cleaned.label || meta.label || '', thumbnail: cover, duration: meta.duration });
+      playYouTube(found.videoId, {
+        id: meta.id || `yt-${found.videoId}`,
+        title,
+        artist,
+        releaseTitle,
+        label: cleaned.label || meta.label || '',
+        releaseCover: cover,
+        thumbnail: cover,
+        duration: found.duration || meta.duration,
+        sourceProvider,
+      }, { seq });
       return;
     }
     const isBc = found.provider === 'bandcamp';
     playTrack({
-      id: meta.id || (found.scTrackId ? `sc-${found.scTrackId}` : ''), title, artistName: artist, releaseCover: cover, src: found.src,
-      releaseTitle: cleaned.album || meta.releaseTitle || '',
+      id: meta.id || (found.scTrackId ? `sc-${found.scTrackId}` : ''),
+      _restart: Date.now(),
+      title,
+      artistName: artist,
+      releaseCover: cover,
+      src: found.src,
+      releaseTitle,
       label: cleaned.label || meta.label || '',
       year: meta.year || '',
-      duration: found.duration || meta.duration || 0, providerUrl: found.providerItemId,
+      duration: found.duration || meta.duration || 0,
+      providerUrl: found.providerItemId,
+      sourceProvider,
+      ...(meta.spotifyId ? { spotifyId: meta.spotifyId } : {}),
+      ...(meta.appleMusicId ? { appleMusicId: meta.appleMusicId } : {}),
+      ...(meta.tidalId ? { tidalId: meta.tidalId } : {}),
       ...(isBc
         ? { provider: 'bandcamp', providerItemId: found.providerItemId }
         : { provider: 'soundcloud', providerItemId: found.providerItemId, scTrackId: String(found.scTrackId || '') }),
@@ -1022,6 +1123,7 @@ export function PlayerProvider({ children }) {
       const mergedAlbumUrl = meta.albumUrl || resolved.albumUrl || '';
       playTrack({
         id: meta.id,
+        _restart: Date.now(),
         title: mergedTitle || meta.title || resolved.title,
         artistName: mergedArtist,
         releaseCover: meta.releaseCover || resolved.artworkUrl || '',
@@ -1033,12 +1135,14 @@ export function PlayerProvider({ children }) {
         src: resolved.streamUrl,
         duration: resolved.duration || meta.duration || 0,
         provider: 'bandcamp',
+        sourceProvider: meta.sourceProvider || 'bandcamp',
         providerItemId: meta.url,
         providerUrl: meta.url,
         origin: { provider: 'bandcamp', url: meta.url },
       });
       try {
         window.webkit?.messageHandlers?.player?.postMessage({
+          trackId: String(meta.id || ''),
           albumName: mergedAlbum,
           label: mergedLabel,
           labelUrl: mergedLabelUrl,
@@ -1048,7 +1152,7 @@ export function PlayerProvider({ children }) {
       return;
     }
     console.warn('[Player] Bandcamp stream unavailable, looking for the same song elsewhere:', meta.url);
-    const found = await findTrackSource({ artist: meta.artistName || '', title: meta.title || '' }, isCurrent);
+    const found = await findTrackSource({ id: meta.id, artist: meta.artistName || '', title: meta.title || '' }, isCurrent);
     if (!isCurrent()) return;
     if (found) playFoundSource(found, meta);
     else dispatch({ type: 'SET_PLAYING', value: false });
@@ -1060,6 +1164,7 @@ export function PlayerProvider({ children }) {
     if (!item) return;
     savedPlayCounterRef.current += 1;
     const myCounter = savedPlayCounterRef.current;
+    const mySeq = ++masterPlaySeqRef.current;
     // A saved-item tap is a standalone play, not part of a search-results queue
     if (!opts.keepSearchQueue) {
       searchQueueRef.current = [];
@@ -1091,15 +1196,15 @@ export function PlayerProvider({ children }) {
       duration: item.duration || 0,
       releaseTitle,
     };
-    const isCurrent = () => myCounter === savedPlayCounterRef.current && stateRef.current.currentTrack?.id === id;
+    const isCurrent = () => myCounter === savedPlayCounterRef.current && mySeq === masterPlaySeqRef.current && stateRef.current.currentTrack?.id === id;
 
     if (r.provider === 'youtube') {
-      playYouTube(r.videoId, { title, artist, label, thumbnail: cover, duration: item.duration });
+      playYouTube(r.videoId, { id, title, artist, releaseTitle, label, thumbnail: cover, releaseCover: cover, duration: item.duration }, { seq: mySeq });
     } else if (r.provider === 'soundcloud') {
-      playSoundCloud(r.url || '', { trackId: r.scTrackId, title, artistName: artist, label, artworkUrl: cover, duration: item.duration });
+      playSoundCloud(r.url || '', { id, trackId: r.scTrackId, title, artistName: artist, releaseTitle, label, artworkUrl: cover, releaseCover: cover, duration: item.duration }, { seq: mySeq });
     } else if (r.provider === 'bandcamp') {
-      showPlaceholder({ ...meta, provider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
-      await playBandcampOrFallback({ ...meta, url: r.url }, isCurrent);
+      showPlaceholder({ ...meta, provider: 'bandcamp', sourceProvider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
+      await playBandcampOrFallback({ ...meta, url: r.url, sourceProvider: 'bandcamp' }, isCurrent);
     } else if (isStreamingProvider(r.provider)) {
       if (!opts.keepSearchQueue) {
         searchQueueRef.current = [];
@@ -1108,15 +1213,16 @@ export function PlayerProvider({ children }) {
       await playStreamingItem(
         { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, label, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '', strict: true },
         playSearchItemCounterRef.current += 1,
+        mySeq,
       );
     } else if (r.provider === 'native') {
       playTrack({ ...item, id, title, artistName: artist, label, releaseTitle, releaseCover: cover });
     } else {
       // No identity saved (older entries): find the song again by artist + title
       showPlaceholder({ ...meta, replay: r });
-      const found = await findTrackSource({ artist, title }, isCurrent);
+      const found = await findTrackSource({ id, artist, title }, isCurrent);
       if (!isCurrent()) return;
-      if (found) playFoundSource(found, meta);
+      if (found) playFoundSource(found, meta, mySeq);
       else dispatch({ type: 'SET_PLAYING', value: false });
     }
   }

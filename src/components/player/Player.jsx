@@ -1054,7 +1054,6 @@ export default function Player({ hideMini = false }) {
       const cleanArtist = cleanedMeta.artist || rawArtist;
       const cleanLabel = cleanedMeta.label || rawLabel;
       const cleanAlbumFromMeta = cleanTrackOrReleaseTitle(cleanedMeta.album || cleanRawAlbum, cleanArtist);
-      const fallbackAlbum = cleanAlbumFromMeta || (cleanTitle ? (String(cleanTitle).replace(/\s*\((original|extended|club|radio|dub|instrumental|vocal|vip)\s+mix\)\s*$/i, '').trim() || cleanTitle) : '');
       postNative({
         visible: true,
         playing: isPlaying,
@@ -1063,7 +1062,7 @@ export default function Player({ hideMini = false }) {
         trackId: String(currentTrack.id || ''),
         albumId: String(currentTrack.releaseId || currentTrack.album || ''),
         artist: cleanArtist,
-        albumName: fallbackAlbum,
+        albumName: cleanAlbumFromMeta || '',
         label: cleanLabel,
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         bpm: String(currentTrack.bpm || ''),
@@ -1126,12 +1125,13 @@ export default function Player({ hideMini = false }) {
     });
     setResolvedGenre({ ...initial, _trackKey: trackKey });
     const initialPatch = {
+      trackId: String(currentTrack.id || ''),
       genre: initial.primaryGenre,
       secondaryGenres: initial.secondaryGenres,
       superGenre: initial.superGenre,
     };
-    if (cachedInfo?.bpm) initialPatch.bpm = String(cachedInfo.bpm);
-    if (cachedInfo?.key) initialPatch.key = String(cachedInfo.key);
+    if (cachedInfo?.bpm && cachedInfo?.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
+    if (cachedInfo?.key && cachedInfo?.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
     if (cachedInfo?.album && !isInvalidAlbumName(cachedInfo.album)) {
       initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
     }
@@ -1204,12 +1204,13 @@ export default function Player({ hideMini = false }) {
         setResolvedGenre({ ...refined, _trackKey: trackKey });
 
         const nativePatch = {
+          trackId: String(currentTrack.id || ''),
           genre: refined.primaryGenre,
           secondaryGenres: refined.secondaryGenres,
           superGenre: refined.superGenre,
         };
-        if (infoData.bpm) nativePatch.bpm = String(infoData.bpm);
-        if (infoData.key) nativePatch.key = String(infoData.key);
+        if (infoData.bpm && infoData.bpmFromProvider !== false) nativePatch.bpm = String(infoData.bpm);
+        if (infoData.key && infoData.keyFromProvider !== false) nativePatch.key = String(infoData.key);
         if (infoData.album && !isInvalidAlbumName(infoData.album)) {
           nativePatch.albumName = cleanTrackOrReleaseTitle(String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
         }
@@ -1270,19 +1271,14 @@ export default function Player({ hideMini = false }) {
   const scHiddenRef = useRef(null);
   const silentSessionLockRef = useRef(null);
 
-  // Play silent audio to lock the WKWebView MediaSession to our parent window
-  // This guarantees that navigator.mediaSession.metadata overrides any iframe's metadata
+  // Play silent audio ONLY when using the YouTube iframe in WKWebView.
+  // When provider === 'native' (AVPlayer) or isStreamingProvider (Spotify / Apple Music), native audio owns the session!
   useEffect(() => {
     if (isNative() && silentSessionLockRef.current) {
-      // Apple Music / Spotify own the audio session + lock screen: WebKit audio would interrupt them
-      if (isPlaying && !isStreamingProvider(provider)) {
-        // Start immediately to secure the background WebKit process
+      if (isPlaying && provider === 'youtube') {
         silentSessionLockRef.current?.play()?.catch(() => {});
       } else {
-        // The native anti-pause shield swallows pause() while it believes something should be playing —
-        // tell it Spotify / Apple Music took over, otherwise this unmuted element keeps WebKit's audio session
-        // alive and interrupts them.
-        if (isStreamingProvider(provider)) {
+        if (isStreamingProvider(provider) || provider === 'native') {
           try { if (window.__kyoyuTrack) window.__kyoyuTrack.playing = false; } catch (e) {}
         }
         silentSessionLockRef.current?.pause();
@@ -1302,12 +1298,30 @@ export default function Player({ hideMini = false }) {
     postNative(restoredPending ? { progress, dur: duration } : { dur: duration });
   }, [duration, provider, currentTrack?.id, restoredPending]);
 
-  // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end, artwork
+  // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end, artwork, or Lock Screen track change
   const streamingRef = useRef({});
   useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext, itemId: providerItemId, currentTrack }; });
   useEffect(() => onStreamingEvent((evt) => {
     const cur = streamingRef.current;
     if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
+    if (evt.type === 'trackChange' || evt.type === 'metadata') {
+      const newItemId = String(evt.itemId || cur.itemId || '').replace(/^(am|sp|td)-/, '');
+      const patch = {};
+      if (evt.title) patch.title = evt.title;
+      if (evt.artist) { patch.artistName = evt.artist; patch.artist = evt.artist; }
+      if (evt.album) { patch.releaseTitle = evt.album; patch.albumName = evt.album; }
+      if (evt.artworkUrl) { patch.releaseCover = evt.artworkUrl; patch.artworkUrl = evt.artworkUrl; patch.cover = evt.artworkUrl; }
+      if (evt.duration > 0) patch.duration = evt.duration;
+      if (evt.bpm) patch.bpm = String(evt.bpm);
+      if (evt.key) patch.key = String(evt.key);
+      if (newItemId) {
+        patch.providerItemId = newItemId;
+        if (evt.service === 'spotify') { patch.spotifyId = newItemId; patch.id = `spotify-${newItemId}`; }
+        if (evt.service === 'applemusic') { patch.appleMusicId = newItemId; patch.id = `applemusic-${newItemId}`; }
+      }
+      dispatch({ type: 'UPDATE_CURRENT_TRACK', patch, itemId: newItemId || undefined, duration: evt.duration || undefined });
+      return;
+    }
     // Events of a previous song (still in flight while the next one loads) must never drive the current one
     if (evt.itemId && cur.itemId && String(evt.itemId) !== String(cur.itemId)) return;
     if (evt.type === 'progress') {
@@ -1321,12 +1335,11 @@ export default function Player({ hideMini = false }) {
       if (evt.service === 'applemusic' && (curId.startsWith('am-i.') || curItem.startsWith('i.'))) {
         return;
       }
-      if (cur.currentTrack) {
-        cur.currentTrack.releaseCover = evt.artworkUrl;
-        cur.currentTrack.artworkUrl = evt.artworkUrl;
-        cur.currentTrack.cover = evt.artworkUrl;
-      }
-      postNative({ artwork: evt.artworkUrl });
+      dispatch({
+        type: 'UPDATE_CURRENT_TRACK',
+        patch: { releaseCover: evt.artworkUrl, artworkUrl: evt.artworkUrl, cover: evt.artworkUrl },
+      });
+      postNative({ trackId: curId, artwork: evt.artworkUrl });
     } else if (evt.type === 'ended') {
       cur.handleNext();
     } else if (evt.type === 'failed') {
