@@ -109,42 +109,183 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
   }
 }
 
-async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, rawNotes = '', stylesAndGenres = []) {
-  const wantTitle = normName(title || '');
-  const wantArtist = normName(artist || '');
+function extractMixQualifier(rawTitle = '') {
+  const m = String(rawTitle || '').match(/[\(\[]([^)\]]*\b(?:mix|remix|edit|dub|rework|vip|bootleg|version|instrumental|extended|original|club|radio)\b[^)\]]*)[\)\]]/i);
+  return m ? normName(m[1]) : '';
+}
 
-  // 1. Deezer Track Search + Detail
+function stripMixQualifier(rawTitle = '') {
+  return String(rawTitle || '')
+    .replace(/[\(\[][^)\]]*\b(?:mix|remix|edit|dub|rework|vip|bootleg|version|instrumental|extended|original|club|radio)\b[^)\]]*[\)\]]/gi, '')
+    .trim();
+}
+
+function resolveConsensusBpmAndKey({ beatport, deezer, ab, sc, notesBpm, notesKey, stylesAndGenres = [] }) {
+  const genreBlob = (stylesAndGenres || []).join(' ').toLowerCase();
+  const isElectronicOrClub = /house|techno|trance|electro|minimal|dubstep|garage|breakbeat|jungle|drum and bass|d&b|disco|acid|club|dance|idm|uk bass|hardcore|downtempo/.test(genreBlob);
+
+  // 1. BPM Consensus & Octave (Half-time / Double-time) Reconciliation
+  const rawBpmCandidates = [
+    beatport?.bpm ? { val: Number(beatport.bpm), weight: beatport.exactMixMatch ? 5.0 : 3.8, src: 'beatport' } : null,
+    deezer?.bpm ? { val: Number(deezer.bpm), weight: 3.4, src: 'deezer' } : null,
+    ab?.bpm ? { val: Number(ab.bpm), weight: 3.2, src: 'acousticbrainz' } : null,
+    sc?.bpm ? { val: Number(sc.bpm), weight: 2.5, src: 'soundcloud' } : null,
+    notesBpm ? { val: Number(notesBpm), weight: 2.8, src: 'discogs_notes' } : null,
+  ].filter(c => c && Number.isFinite(c.val) && c.val >= 45 && c.val <= 220);
+
+  let finalBpm = '';
+  if (rawBpmCandidates.length > 0) {
+    // Normalize half-time candidates (e.g. 60-87 BPM) when another provider or club genre indicates 120-174 BPM
+    const hasFastRef = rawBpmCandidates.some(c => c.val >= 115 && c.val <= 178);
+    const normalized = rawBpmCandidates.map(c => {
+      let v = c.val;
+      if (v >= 56 && v <= 88 && (hasFastRef || isElectronicOrClub)) {
+        const doubled = v * 2;
+        if (hasFastRef) {
+          const matchesFast = rawBpmCandidates.some(other => Math.abs(other.val - doubled) <= 2.5);
+          if (matchesFast) v = doubled;
+        } else if (isElectronicOrClub && v >= 58 && v <= 75) {
+          v = doubled;
+        }
+      }
+      return { ...c, normVal: Math.round(v) };
+    });
+
+    // Cluster candidates within ±1.5 BPM and sum weights
+    let bestClusterWeight = -1;
+    let bestClusterBpm = normalized[0].normVal;
+    for (const pivot of normalized) {
+      let wSum = 0;
+      let weightedValSum = 0;
+      for (const other of normalized) {
+        if (Math.abs(other.normVal - pivot.normVal) <= 1.5) {
+          wSum += other.weight;
+          weightedValSum += other.normVal * other.weight;
+        }
+      }
+      if (wSum > bestClusterWeight) {
+        bestClusterWeight = wSum;
+        bestClusterBpm = Math.round(weightedValSum / wSum);
+      }
+    }
+    finalBpm = String(bestClusterBpm);
+  }
+
+  // 2. Musical Key Consensus (Beatport + Essentia EDMA + Essentia Krumhansl + Chords + SoundCloud)
+  const keyVotes = new Map();
+  const addKeyVote = (rawK, weight) => {
+    if (!rawK) return;
+    const formatted = normalizeMusicalKey(rawK);
+    if (!formatted) return;
+    keyVotes.set(formatted, (keyVotes.get(formatted) || 0) + weight);
+  };
+
+  if (beatport?.key) addKeyVote(beatport.key, beatport.exactMixMatch ? 5.0 : 3.6);
+  if (ab?.edmaKey) addKeyVote(ab.edmaKey, isElectronicOrClub ? 4.2 : 3.2);
+  if (ab?.krumKey) addKeyVote(ab.krumKey, 2.8);
+  if (ab?.chordsKey) addKeyVote(ab.chordsKey, 2.2);
+  if (sc?.key) addKeyVote(sc.key, 2.6);
+  if (notesKey) addKeyVote(notesKey, 3.0);
+
+  let finalKey = '';
+  let bestKeyWeight = -1;
+  for (const [kName, w] of keyVotes.entries()) {
+    if (w > bestKeyWeight) {
+      bestKeyWeight = w;
+      finalKey = kName;
+    }
+  }
+
+  return { bpm: finalBpm, key: finalKey };
+}
+
+async function fetchAcousticBrainzForMbid(mbid) {
+  if (!mbid) return null;
+  try {
+    const r = await fetchWithTimeout(`https://acousticbrainz.org/api/v1/${mbid}/low-level`, { headers: MB_HEADERS }, 2400);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const bpmVal = Number(d?.rhythm?.bpm || 0);
+    const edmaK = d?.tonal?.key_edma?.key || '';
+    const edmaS = d?.tonal?.key_edma?.scale || '';
+    const krumK = d?.tonal?.key_key || '';
+    const krumS = d?.tonal?.key_scale || '';
+    const chordsK = d?.tonal?.chords_key || '';
+    const chordsS = d?.tonal?.chords_scale || '';
+    const edmaKey = edmaK ? normalizeMusicalKey(edmaK, edmaS) : '';
+    const krumKey = krumK ? normalizeMusicalKey(krumK, krumS) : '';
+    const chordsKey = chordsK ? normalizeMusicalKey(chordsK, chordsS) : '';
+    return {
+      bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
+      key: edmaKey || krumKey || chordsKey || '',
+      edmaKey,
+      krumKey,
+      chordsKey,
+      tuningFrequency: Number(d?.tonal?.tuning_frequency || 440),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, rawNotes = '', stylesAndGenres = [], mbExtra = {}) {
+  const wantTitle = normName(title || '');
+  const wantBaseTitle = normName(stripMixQualifier(title || '')) || wantTitle;
+  const wantMix = extractMixQualifier(title || '');
+  const wantArtist = normName(artist || '');
+  const wantAlbum = normName(album || '');
+  const knownIsrc = String(mbExtra?.isrc || '').trim().toUpperCase();
+
+  // 1. Deezer Track Search + Detail (mix-aware scoring + ISRC extraction)
   const deezerPromise = (async () => {
     if (!title && !artist) return null;
     try {
       const qStrict = artist && title ? `artist:"${artist}" track:"${title}"` : `${artist} ${title}`.trim();
-      let r = await fetchWithTimeout(`https://api.deezer.com/search?q=${encodeURIComponent(qStrict)}&limit=5`, {}, 2800);
+      let r = await fetchWithTimeout(`https://api.deezer.com/search?q=${encodeURIComponent(qStrict)}&limit=8`, {}, 2800);
       let d = r.ok ? await r.json() : null;
       let list = d?.data || [];
       if (!list.length && artist && title) {
-        r = await fetchWithTimeout(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${title}`)}&limit=5`, {}, 2500);
+        r = await fetchWithTimeout(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${title}`)}&limit=8`, {}, 2500);
         d = r.ok ? await r.json() : null;
         list = d?.data || [];
       }
-      const hit = list.find(item => {
-        const tNorm = normName(item.title_short || item.title || '');
+      let bestHit = null;
+      let bestScore = -1;
+      for (const item of list) {
+        const tFullNorm = normName(item.title || '');
+        const tShortNorm = normName(item.title_short || item.title || '');
         const aNorm = normName(item.artist?.name || '');
-        return (tNorm === wantTitle || tNorm.includes(wantTitle) || wantTitle.includes(tNorm)) &&
-               (!wantArtist || aNorm === wantArtist || aNorm.includes(wantArtist) || wantArtist.includes(aNorm));
-      });
-      if (!hit?.id) return null;
+        const titleMatch = tFullNorm === wantTitle || tShortNorm === wantBaseTitle || tFullNorm.includes(wantBaseTitle) || wantBaseTitle.includes(tShortNorm);
+        const artistMatch = !wantArtist || aNorm === wantArtist || aNorm.includes(wantArtist) || wantArtist.includes(aNorm);
+        if (!titleMatch || !artistMatch) continue;
+        let score = 10;
+        if (tFullNorm === wantTitle) score += 8;
+        const itemMix = extractMixQualifier(item.title || item.title_version || '');
+        if (wantMix) {
+          if (itemMix && (itemMix.includes(wantMix) || wantMix.includes(itemMix))) score += 10;
+          else if (itemMix) score -= 6;
+        } else if (itemMix && !/original|extended|main|album|radio/.test(itemMix)) {
+          score -= 5;
+        }
+        if (wantAlbum && normName(item.album?.title || '') === wantAlbum) score += 4;
+        if (score > bestScore) {
+          bestScore = score;
+          bestHit = item;
+        }
+      }
+      if (!bestHit?.id) return null;
 
-      const detRes = await fetchWithTimeout(`https://api.deezer.com/track/${hit.id}`, {}, 2500);
-      const det = detRes.ok ? await detRes.json() : hit;
-      const bpmVal = Number(det.bpm || hit.bpm || 0);
+      const detRes = await fetchWithTimeout(`https://api.deezer.com/track/${bestHit.id}`, {}, 2500);
+      const det = detRes.ok ? await detRes.json() : bestHit;
+      const bpmVal = Number(det.bpm || bestHit.bpm || 0);
       return {
         bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
         isrc: det.isrc || '',
         duration: det.duration ? formatDurationSec(det.duration) : '',
         releaseDate: det.release_date || '',
-        previewUrl: det.preview || hit.preview || '',
-        albumTitle: det.album?.title || hit.album?.title || '',
-        deezerUrl: det.link || hit.link || '',
+        previewUrl: det.preview || bestHit.preview || '',
+        albumTitle: det.album?.title || bestHit.album?.title || '',
+        deezerUrl: det.link || bestHit.link || '',
       };
     } catch (e) { return null; }
   })();
@@ -154,14 +295,14 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     if (!title && !artist) return null;
     try {
       const q = `${artist} ${title}`.trim();
-      const r = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=5`, {}, 2800);
+      const r = await fetchWithTimeout(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`, {}, 2800);
       if (!r.ok) return null;
       const d = await r.json();
       const list = d.results || [];
       const hit = list.find(item => {
         const tNorm = normName(item.trackName || '');
         const aNorm = normName(item.artistName || '');
-        return (tNorm === wantTitle || tNorm.includes(wantTitle) || wantTitle.includes(tNorm)) &&
+        return (tNorm === wantTitle || tNorm.includes(wantBaseTitle) || wantBaseTitle.includes(tNorm)) &&
                (!wantArtist || aNorm === wantArtist || aNorm.includes(wantArtist) || wantArtist.includes(aNorm));
       });
       if (!hit) return null;
@@ -177,48 +318,122 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     } catch (e) { return null; }
   })();
 
-  // 3. Beatport Track Search (__NEXT_DATA__ JSON for exact electronic BPM, Key, Genre & Release)
+  // 3. Beatport Track Search (Official API v4 if BEATPORT_API_TOKEN is configured, plus __NEXT_DATA__ with exact mix_name scoring)
   const beatportPromise = (async () => {
     if (!title || !artist) return null;
     try {
       const q = `${artist} ${title}`.trim();
-      const r = await fetchWithTimeout(`https://www.beatport.com/search/tracks?q=${encodeURIComponent(q)}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-        },
-      }, 2800);
-      if (!r.ok) return null;
-      const html = await r.text();
-      const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-      if (!m) return null;
-      const nextData = JSON.parse(m[1]);
-      const queries = nextData?.props?.pageProps?.dehydratedState?.queries || [];
       let tracks = [];
-      for (const qObj of queries) {
-        const dataArr = qObj?.state?.data?.data || qObj?.state?.data?.tracks?.data || [];
-        if (Array.isArray(dataArr) && dataArr.length) {
-          tracks.push(...dataArr);
+      const bpToken = process.env.BEATPORT_API_TOKEN || '';
+      if (bpToken) {
+        try {
+          const apiRes = await fetchWithTimeout(`https://api.beatport.com/v4/catalog/tracks/?q=${encodeURIComponent(q)}&per_page=10`, {
+            headers: {
+              'Authorization': `Bearer ${bpToken}`,
+              'Accept': 'application/json',
+            },
+          }, 2400);
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (Array.isArray(apiJson?.results)) tracks.push(...apiJson.results);
+          }
+        } catch (e) {}
+      }
+
+      if (!tracks.length) {
+        const r = await fetchWithTimeout(`https://www.beatport.com/search/tracks?q=${encodeURIComponent(q)}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+          },
+        }, 2800);
+        if (r.ok) {
+          const html = await r.text();
+          const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+          if (m) {
+            const nextData = JSON.parse(m[1]);
+            const queries = nextData?.props?.pageProps?.dehydratedState?.queries || [];
+            for (const qObj of queries) {
+              const dataArr = qObj?.state?.data?.data || qObj?.state?.data?.tracks?.data || [];
+              if (Array.isArray(dataArr) && dataArr.length) {
+                tracks.push(...dataArr);
+              }
+            }
+          }
         }
       }
-      const hit = tracks.find(t => {
-        const tNorm = normName(t.track_name || t.name || '');
+
+      if (!tracks.length) return null;
+
+      let bestHit = null;
+      let bestScore = -1;
+      let exactMixMatch = false;
+
+      for (const t of tracks) {
+        const rawTrackName = t.track_name || t.name || '';
+        const rawMixName = t.mix_name || '';
+        const tBaseNorm = normName(rawTrackName);
+        const tMixNorm = normName(rawMixName);
+        const tFullNorm = normName(`${rawTrackName} ${rawMixName}`);
         const artistsNorm = (t.artists || []).map(a => normName(a.artist_name || a.name || ''));
-        return (tNorm === wantTitle || tNorm.includes(wantTitle) || wantTitle.includes(tNorm)) &&
-               artistsNorm.some(a => a === wantArtist || a.includes(wantArtist) || wantArtist.includes(a));
-      });
-      if (!hit) return null;
-      const bpmVal = Number(hit.bpm || 0);
-      const rawKeyName = hit.key_name || hit.key?.name || '';
-      const bpGenre = hit.sub_genre?.sub_genre_name || hit.sub_genre?.name || (Array.isArray(hit.genre) ? hit.genre[0]?.genre_name || hit.genre[0]?.name : hit.genre?.genre_name || hit.genre?.name) || '';
+        const remixersNorm = (t.remixers || []).map(a => normName(a.artist_name || a.name || ''));
+        const allArtistsNorm = [...artistsNorm, ...remixersNorm];
+
+        const titleMatch = tBaseNorm === wantBaseTitle || tFullNorm === wantTitle || tBaseNorm.includes(wantBaseTitle) || wantBaseTitle.includes(tBaseNorm);
+        const artistMatch = allArtistsNorm.some(a => a && (a === wantArtist || a.includes(wantArtist) || wantArtist.includes(a)));
+        if (!titleMatch || !artistMatch) continue;
+
+        let score = 10;
+        if (tBaseNorm === wantBaseTitle) score += 6;
+        if (knownIsrc && String(t.isrc || '').toUpperCase() === knownIsrc) score += 20;
+
+        let isMixExact = false;
+        if (wantMix) {
+          if (tMixNorm && (tMixNorm === wantMix || tMixNorm.includes(wantMix) || wantMix.includes(tMixNorm))) {
+            score += 14;
+            isMixExact = true;
+          } else if (remixersNorm.some(rem => wantMix.includes(rem))) {
+            score += 12;
+            isMixExact = true;
+          } else {
+            score -= 8;
+          }
+        } else {
+          // User requested original / un-remixed track: prefer Original Mix / Extended Mix / Main Mix over unrelated remixes
+          if (!tMixNorm || /^(original|extended|main|club|album|vocal)\s*(mix|version)?$/i.test(rawMixName.trim())) {
+            score += 8;
+            isMixExact = true;
+          } else if (remixersNorm.length > 0 || /remix|rework|bootleg|flip|edit|dub/i.test(rawMixName)) {
+            score -= 7;
+          }
+        }
+
+        const relNameNorm = normName(t.release?.release_name || t.release?.name || '');
+        if (wantAlbum && relNameNorm && (relNameNorm === wantAlbum || relNameNorm.includes(wantAlbum))) {
+          score += 4;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestHit = t;
+          exactMixMatch = isMixExact;
+        }
+      }
+
+      if (!bestHit) return null;
+      const bpmVal = Number(bestHit.bpm || 0);
+      const rawKeyName = bestHit.key_name || bestHit.key?.name || '';
+      const bpGenre = bestHit.sub_genre?.sub_genre_name || bestHit.sub_genre?.name || (Array.isArray(bestHit.genre) ? bestHit.genre[0]?.genre_name || bestHit.genre[0]?.name : bestHit.genre?.genre_name || bestHit.genre?.name) || '';
+      const lengthMs = Number(bestHit.length_ms || bestHit.length || 0);
       return {
         bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
         key: rawKeyName ? normalizeMusicalKey(rawKeyName) : '',
-        isrc: hit.isrc || '',
-        releaseDate: hit.publish_date || hit.release_date || '',
-        duration: hit.length ? formatDurationSec(hit.length / 1000) : '',
-        labelName: hit.label?.label_name || hit.label?.name || '',
-        albumTitle: hit.release?.release_name || hit.release?.name || '',
+        exactMixMatch,
+        isrc: bestHit.isrc || '',
+        releaseDate: bestHit.publish_date || bestHit.release_date || bestHit.new_release_date || '',
+        duration: lengthMs > 0 ? formatDurationSec(lengthMs / 1000) : '',
+        labelName: bestHit.label?.label_name || bestHit.label?.name || bestHit.release?.label?.name || '',
+        albumTitle: bestHit.release?.release_name || bestHit.release?.name || '',
         genre: bpGenre,
       };
     } catch (e) { return null; }
@@ -237,7 +452,7 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
       const hit = collection.find(item => {
         const tNorm = normName(item.title || '');
         const uNorm = normName(item.user?.username || '');
-        const titleMatches = wantTitle && (tNorm.includes(wantTitle) || wantTitle.includes(tNorm));
+        const titleMatches = wantTitle && (tNorm.includes(wantTitle) || wantTitle.includes(tNorm) || tNorm.includes(wantBaseTitle));
         const artistMatches = !wantArtist || uNorm.includes(wantArtist) || wantArtist.includes(uNorm) || tNorm.includes(wantArtist);
         return titleMatches && artistMatches;
       });
@@ -258,26 +473,42 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     } catch (e) { return null; }
   })();
 
-  // 5. AcousticBrainz Low-Level API (via MusicBrainz Recording ID)
+  // 5. AcousticBrainz Low-Level API across all known MusicBrainz Recording MBIDs
+  const initialMbids = Array.from(new Set([mbRecordingId, ...(mbExtra?.recordingIds || [])].filter(Boolean))).slice(0, 4);
   const acousticBrainzPromise = (async () => {
-    if (!mbRecordingId) return null;
-    try {
-      const r = await fetchWithTimeout(`https://acousticbrainz.org/api/v1/${mbRecordingId}/low-level`, { headers: MB_HEADERS }, 2500);
-      if (!r.ok) return null;
-      const d = await r.json();
-      const bpmVal = Number(d?.rhythm?.bpm || 0);
-      const kKey = d?.tonal?.key_key || '';
-      const kScale = d?.tonal?.key_scale || '';
-      return {
-        bpm: bpmVal >= 45 && bpmVal <= 220 ? String(Math.round(bpmVal)) : '',
-        key: kKey ? normalizeMusicalKey(kKey, kScale) : '',
-      };
-    } catch (e) { return null; }
+    if (!initialMbids.length) return null;
+    const results = await Promise.all(initialMbids.map(id => fetchAcousticBrainzForMbid(id)));
+    return results.find(r => r && (r.bpm || r.key)) || null;
   })();
 
-  const [deezer, itunes, beatport, sc, ab] = await Promise.all([
+  let [deezer, itunes, beatport, sc, ab] = await Promise.all([
     deezerPromise, itunesPromise, beatportPromise, soundcloudPromise, acousticBrainzPromise,
   ]);
+
+  // 6. Tier-2 ISRC -> MusicBrainz -> AcousticBrainz Essentia Bridge:
+  // If AcousticBrainz didn't hit on the initial recording MBID (or we still need Key/BPM) and Deezer/Beatport/SC gave us an ISRC,
+  // resolve all MusicBrainz recording MBIDs linked to that exact ISRC and check AcousticBrainz!
+  const resolvedIsrc = beatport?.isrc || deezer?.isrc || sc?.isrc || knownIsrc || '';
+  if (!ab && resolvedIsrc && (!beatport?.key || !beatport?.bpm)) {
+    try {
+      const isrcRes = await fetchWithTimeout(
+        `https://musicbrainz.org/ws/2/isrc/${encodeURIComponent(resolvedIsrc)}?inc=recordings&fmt=json`,
+        { headers: MB_HEADERS },
+        2000
+      );
+      if (isrcRes.ok) {
+        const isrcData = await isrcRes.json();
+        const isrcMbids = (isrcData?.recordings || [])
+          .map(r => r?.id)
+          .filter(id => id && !initialMbids.includes(id))
+          .slice(0, 3);
+        if (isrcMbids.length) {
+          const abIsrcResults = await Promise.all(isrcMbids.map(id => fetchAcousticBrainzForMbid(id)));
+          ab = abIsrcResults.find(r => r && (r.bpm || r.key)) || null;
+        }
+      }
+    } catch (e) {}
+  }
 
   // Check Discogs notes for explicit BPM / Key mentions
   let notesBpm = '';
@@ -289,15 +520,25 @@ async function fetchMultiProviderTrackMeta(title, artist, album, mbRecordingId, 
     if (km) notesKey = normalizeMusicalKey(km[1]);
   }
 
-  const providerBpm = beatport?.bpm || deezer?.bpm || ab?.bpm || sc?.bpm || notesBpm || '';
-  const providerKey = beatport?.key || ab?.key || sc?.key || notesKey || '';
+  const consensus = resolveConsensusBpmAndKey({
+    beatport,
+    deezer,
+    ab,
+    sc,
+    notesBpm,
+    notesKey,
+    stylesAndGenres,
+  });
+
+  const providerBpm = consensus.bpm || beatport?.bpm || deezer?.bpm || ab?.bpm || sc?.bpm || notesBpm || '';
+  const providerKey = consensus.key || beatport?.key || ab?.key || sc?.key || notesKey || '';
 
   return {
     bpm: providerBpm || '',
     key: providerKey || '',
     bpmFromProvider: Boolean(providerBpm),
     keyFromProvider: Boolean(providerKey),
-    isrc: beatport?.isrc || deezer?.isrc || sc?.isrc || '',
+    isrc: resolvedIsrc,
     duration: deezer?.duration || itunes?.duration || beatport?.duration || '',
     releaseDate: beatport?.releaseDate || deezer?.releaseDate || itunes?.releaseDate || '',
     previewUrl: deezer?.previewUrl || itunes?.previewUrl || '',
@@ -936,18 +1177,22 @@ function sanitizeAndRankTrackGenres({ styles = [], genres = [], mbTags = [], pro
 async function fetchMusicBrainz(title, artist) {
   try {
     const wantTitle = normName(title || '');
+    const wantBaseTitle = normName(stripMixQualifier(title || '')) || wantTitle;
     const wantArtist = normName(artist || '');
-    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`"${title}" AND artist:"${artist}"`)}&fmt=json&limit=5`, { headers: MB_HEADERS });
+    const res = await fetch(`https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`"${title}" AND artist:"${artist}"`)}&fmt=json&limit=8`, { headers: MB_HEADERS });
     if (!res.ok) return null;
     const data = await res.json();
     const recordings = data.recordings || [];
-    const rec = recordings.find(r => {
+    const matchedRecordings = recordings.filter(r => {
       const rTitle = normName(r.title || '');
       const rArtists = (r['artist-credit'] || []).map(ac => normName(ac.name || ac.artist?.name || ''));
-      return (rTitle === wantTitle || rTitle.includes(wantTitle) || wantTitle.includes(rTitle)) &&
+      return (rTitle === wantTitle || rTitle === wantBaseTitle || rTitle.includes(wantBaseTitle) || wantBaseTitle.includes(rTitle)) &&
              (!wantArtist || rArtists.some(a => a === wantArtist || a.includes(wantArtist) || wantArtist.includes(a)));
     });
+    const rec = matchedRecordings[0];
     if (!rec) return null;
+    const allRecordingIds = matchedRecordings.map(r => r.id).filter(Boolean).slice(0, 5);
+    const allIsrcs = Array.from(new Set(matchedRecordings.flatMap(r => r.isrcs || []).filter(Boolean)));
     // Prefer non-compilation Album/EP/Single release over "Various Artists" compilation
     const releases = rec.releases || [];
     const release = releases.find(rel => {
@@ -958,11 +1203,12 @@ async function fetchMusicBrainz(title, artist) {
     const lbl = release?.['label-info']?.[0]?.label;
     const resObj = {
       recordingId: rec.id,
+      recordingIds: allRecordingIds,
       releaseId: release?.id || '',
       releaseTitle: release?.title || '',
       title: rec.title || title || '',
       lengthSec: rec.length ? Math.round(rec.length / 1000) : 0,
-      isrc: rec.isrcs?.[0] || '',
+      isrc: rec.isrcs?.[0] || allIsrcs[0] || '',
       year: release?.date?.substring(0, 4) || rec['first-release-date']?.substring(0, 4) || '',
       releaseDate: release?.date || rec['first-release-date'] || '',
       label: lbl?.name || '',
@@ -1075,7 +1321,7 @@ async function handleTrackInfo(body, res) {
       savedAnalysis = analysisResp.data.data;
     }
     const cached = cachedResp?.data;
-    if (cached?.data && cached.data._v === 19) {
+    if (cached?.data && cached.data._v === 20) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) {
         const mergedCached = {
@@ -1125,7 +1371,15 @@ async function handleTrackInfo(body, res) {
     fetchMusicBrainzArtist(mb?.artistMbid, cleanArtist),
     fetchDiscogsLabel(primaryLabelId, primaryLabelName),
     fetchMusicBrainzLabel(primaryLabelName, primaryLabelId),
-    fetchMultiProviderTrackMeta(cleanTitle, cleanArtist, cleanAlbum || discogs?.title || mb?.releaseTitle || '', mb?.recordingId || '', discogs?.rawNotes || '', rawStylesAndGenres),
+    fetchMultiProviderTrackMeta(
+      cleanTitle,
+      cleanArtist,
+      cleanAlbum || discogs?.title || mb?.releaseTitle || '',
+      mb?.recordingId || '',
+      discogs?.rawNotes || '',
+      rawStylesAndGenres,
+      { isrc: mb?.isrc || '', recordingIds: mb?.recordingIds || [] }
+    ),
   ]);
 
   // Build links (both unified and categorized by Release, Artist, Label)
@@ -1353,7 +1607,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 19,
+    _v: 20,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',
@@ -1366,7 +1620,7 @@ async function handleTrackInfo(body, res) {
     key: isLongFormMix ? '' : (savedAnalysis?.key || trackMeta?.key || ''),
     bpmFromProvider: isLongFormMix ? false : Boolean(savedAnalysis?.bpm || trackMeta?.bpmFromProvider),
     keyFromProvider: isLongFormMix ? false : Boolean(savedAnalysis?.key || trackMeta?.keyFromProvider),
-    analyzed: isLongFormMix ? false : Boolean(savedAnalysis?._analyzed),
+    analyzed: isLongFormMix ? false : Boolean(savedAnalysis?._analyzed || (trackMeta?.bpmFromProvider && trackMeta?.keyFromProvider && accurateGenres[0])),
     kyoyuAnalysis: isLongFormMix ? null : (savedAnalysis || null),
     primaryGenre: isLongFormMix ? '' : (savedAnalysis?.primaryGenre || accurateGenres[0] || ''),
     secondaryGenres: isLongFormMix ? [] : (savedAnalysis?.secondaryGenres || accurateGenres.slice(1, 4)),

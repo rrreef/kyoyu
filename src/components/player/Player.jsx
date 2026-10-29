@@ -4,6 +4,7 @@ import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
 import { callStreaming, isStreamingProvider, onStreamingEvent, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../../lib/streaming';
 import { classifyTrackGenre } from '../../lib/genreIntelligence';
+import { analyzeAudioUrlWithEssentiaDSP } from '../../lib/webAudioEssentiaAnalyzer';
 import { openRichGenreSheet, refreshGenreSheetTracks, openRichSceneSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X, RefreshCw } from 'lucide-react';
@@ -1187,7 +1188,7 @@ export default function Player({ hideMini = false }) {
       window.__kyoyuPreloadPlayingEntities(currentTrack, cachedInfo || null);
     }
 
-    if (cachedInfo && cachedInfo._v === 19 && (cachedInfo.label || !bcTrackUrl)) return;
+    if (cachedInfo && cachedInfo._v === 20 && (cachedInfo.label || !bcTrackUrl)) return;
 
     // 2. Asynchronously query /api/discogs-search (action: 'track-info') AND /api/bandcamp-resolve (when on Bandcamp)
     (async () => {
@@ -1233,11 +1234,32 @@ export default function Player({ hideMini = false }) {
           }
         }
 
+        const isLongMixInfo = Boolean(isLongFormTrack || infoData.isLongFormMix || Number(infoData.duration) > 1320);
+
+        // Tier 1 Web Audio Essentia MIR fallback when running on Web and Tier 2 metadata lacks BPM or Key
+        if (!isLongMixInfo && !isNative() && (!infoData.bpm || !infoData.key)) {
+          const candidateAudioUrl = infoData.previewUrl || currentTrack.previewUrl || currentTrack.src || '';
+          if (candidateAudioUrl && /^https?:\/\//i.test(candidateAudioUrl)) {
+            const dspRes = await analyzeAudioUrlWithEssentiaDSP(candidateAudioUrl, fullCacheKey || cacheKey);
+            if (cancelled) return;
+            if (dspRes) {
+              if (!infoData.bpm && dspRes.bpm) {
+                infoData.bpm = dspRes.bpm;
+                infoData.bpmFromProvider = true;
+              }
+              if (!infoData.key && dspRes.key) {
+                infoData.key = dspRes.key;
+                infoData.keyFromProvider = true;
+              }
+              infoData.analyzed = true;
+            }
+          }
+        }
+
         window.__kyoyuInfoCache = window.__kyoyuInfoCache || {};
         window.__kyoyuInfoCache[cacheKey] = infoData;
         if (fullCacheKey) window.__kyoyuInfoCache[fullCacheKey] = infoData;
 
-        const isLongMixInfo = Boolean(isLongFormTrack || infoData.isLongFormMix || Number(infoData.duration) > 1320);
         const refined = isLongMixInfo ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
           ...infoData,
           provider: srcProv,
@@ -1247,6 +1269,24 @@ export default function Player({ hideMini = false }) {
           || (refined.secondaryGenres?.length ? refined.secondaryGenres : null)
           || (Array.isArray(infoData.styles) ? infoData.styles.slice(1, 4) : []));
         const isTrackAnalyzed = !isLongMixInfo && Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
+
+        // Persist newly completed Web DSP analysis to Supabase track_info_cache
+        if (!isLongMixInfo && !isNative() && isTrackAnalyzed && infoData.bpm && infoData.key && bestPrimaryGenre && !rawInfoData?.analyzed) {
+          fetch('/api/discogs-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'save-track-analysis',
+              title,
+              artist,
+              album: infoData.album || album || '',
+              bpm: String(infoData.bpm),
+              key: String(infoData.key),
+              primaryGenre: bestPrimaryGenre,
+              secondaryGenres: bestSecondaryGenres,
+            }),
+          }).catch(() => {});
+        }
 
         setResolvedGenre({
           ...refined,
