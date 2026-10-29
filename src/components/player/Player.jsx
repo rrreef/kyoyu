@@ -858,11 +858,11 @@ export default function Player({ hideMini = false }) {
 
   const activeGenreInfo = useMemo(() => {
     if (!currentTrack) return null;
-    if (resolvedGenre && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}`) {
+    if (resolvedGenre && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}` && !resolvedGenre.unverified) {
       return resolvedGenre;
     }
-    return classifyTrackGenre(currentTrack, { provider: badgeProviderOf(provider, currentTrack) });
-  }, [resolvedGenre, currentTrack, provider]);
+    return null;
+  }, [resolvedGenre, currentTrack]);
 
   // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
   const handleNext = useCallback(() => {
@@ -1054,6 +1054,7 @@ export default function Player({ hideMini = false }) {
       const cleanArtist = cleanedMeta.artist || rawArtist;
       const cleanLabel = cleanedMeta.label || rawLabel;
       const cleanAlbumFromMeta = cleanTrackOrReleaseTitle(cleanedMeta.album || cleanRawAlbum, cleanArtist);
+      const hasVerifiedTrackAnalysis = Boolean(activeGenreInfo && !activeGenreInfo.unverified && activeGenreInfo.analyzed);
       postNative({
         visible: true,
         playing: isPlaying,
@@ -1065,11 +1066,12 @@ export default function Player({ hideMini = false }) {
         albumName: cleanAlbumFromMeta || '',
         label: cleanLabel,
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
-        bpm: String(currentTrack.bpm || ''),
-        key: String(currentTrack.key || currentTrack.musicalKey || ''),
-        genre: activeGenreInfo?.primaryGenre || '',
-        secondaryGenres: activeGenreInfo?.secondaryGenres || [],
-        superGenre: activeGenreInfo?.superGenre || '',
+        bpm: hasVerifiedTrackAnalysis ? String(activeGenreInfo.bpm || currentTrack.bpm || '') : '',
+        key: hasVerifiedTrackAnalysis ? String(activeGenreInfo.key || currentTrack.key || currentTrack.musicalKey || '') : '',
+        genre: hasVerifiedTrackAnalysis ? (activeGenreInfo?.primaryGenre || '') : '',
+        secondaryGenres: hasVerifiedTrackAnalysis ? (activeGenreInfo?.secondaryGenres || []) : [],
+        superGenre: hasVerifiedTrackAnalysis ? (activeGenreInfo?.superGenre || '') : '',
+        analyzed: hasVerifiedTrackAnalysis,
         provider: provider || 'native',
         sourceProvider: badgeProviderOf(provider, currentTrack),
         trackUrl: currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.replay?.url || '',
@@ -1119,36 +1121,54 @@ export default function Player({ hideMini = false }) {
 
     // 1. Check if we already have cached track-info
     const cachedInfo = window.__kyoyuInfoCache?.[fullCacheKey] || window.__kyoyuInfoCache?.[cacheKey];
-    const initial = classifyTrackGenre(currentTrack, {
-      ...(cachedInfo || {}),
-      provider: srcProv,
-    });
-    setResolvedGenre({ ...initial, _trackKey: trackKey });
-    const initialPatch = {
-      trackId: String(currentTrack.id || ''),
-      genre: initial.primaryGenre,
-      secondaryGenres: initial.secondaryGenres,
-      superGenre: initial.superGenre,
-    };
-    if (cachedInfo?.bpm && cachedInfo?.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
-    if (cachedInfo?.key && cachedInfo?.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
-    if (cachedInfo?.album && !isInvalidAlbumName(cachedInfo.album)) {
-      initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
+    if (cachedInfo) {
+      const initial = classifyTrackGenre(currentTrack, {
+        ...cachedInfo,
+        provider: srcProv,
+      });
+      const isAlreadyAnalyzed = Boolean(cachedInfo.analyzed || (cachedInfo.bpm && cachedInfo.key && (initial.primaryGenre || cachedInfo.primaryGenre)));
+      setResolvedGenre({
+        ...initial,
+        primaryGenre: cachedInfo.primaryGenre || initial.primaryGenre || '',
+        secondaryGenres: cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || []),
+        bpm: (cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) ? String(cachedInfo.bpm) : '',
+        key: (cachedInfo.key && cachedInfo.keyFromProvider !== false) ? String(cachedInfo.key) : '',
+        analyzed: isAlreadyAnalyzed,
+        unverified: !isAlreadyAnalyzed && initial.unverified,
+        _trackKey: trackKey,
+      });
+      const initialPatch = {
+        trackId: String(currentTrack.id || ''),
+        verifiedGenre: cachedInfo.primaryGenre || initial.primaryGenre || '',
+        verifiedSecondaryGenres: cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || []),
+        superGenre: initial.superGenre || '',
+        analyzed: isAlreadyAnalyzed,
+      };
+      if (isAlreadyAnalyzed) {
+        initialPatch.genre = initialPatch.verifiedGenre;
+        initialPatch.secondaryGenres = initialPatch.verifiedSecondaryGenres;
+      }
+      if (cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
+      if (cachedInfo.key && cachedInfo.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
+      if (cachedInfo.previewUrl) initialPatch.previewUrl = String(cachedInfo.previewUrl);
+      if (cachedInfo.album && !isInvalidAlbumName(cachedInfo.album)) {
+        initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
+      }
+      if (cachedInfo.label && !(cleaned.label || currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
+        initialPatch.label = cachedInfo.label;
+      }
+      if (cachedInfo.year && !(currentTrack.year || currentTrack.releaseYear)) {
+        initialPatch.year = String(cachedInfo.year);
+      }
+      postNative(initialPatch);
     }
-    if (cachedInfo?.label && !(cleaned.label || currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
-      initialPatch.label = cachedInfo.label;
-    }
-    if (cachedInfo?.year && !(currentTrack.year || currentTrack.releaseYear)) {
-      initialPatch.year = String(cachedInfo.year);
-    }
-    postNative(initialPatch);
 
     // Preload Album, Artist, and Label sheets immediately in background
     if (typeof window.__kyoyuPreloadPlayingEntities === 'function') {
       window.__kyoyuPreloadPlayingEntities(currentTrack, cachedInfo || null);
     }
 
-    if (cachedInfo && cachedInfo._v === 13 && (cachedInfo.label || !bcTrackUrl)) return;
+    if (cachedInfo && cachedInfo._v === 19 && (cachedInfo.label || !bcTrackUrl)) return;
 
     // 2. Asynchronously query /api/discogs-search (action: 'track-info') AND /api/bandcamp-resolve (when on Bandcamp)
     (async () => {
@@ -1201,16 +1221,37 @@ export default function Player({ hideMini = false }) {
           ...infoData,
           provider: srcProv,
         });
-        setResolvedGenre({ ...refined, _trackKey: trackKey });
+        const bestPrimaryGenre = infoData.kyoyuAnalysis?.primaryGenre || refined.primaryGenre || (Array.isArray(infoData.styles) && infoData.styles[0]) || '';
+        const bestSecondaryGenres = (infoData.kyoyuAnalysis?.secondaryGenres?.length ? infoData.kyoyuAnalysis.secondaryGenres : null)
+          || (refined.secondaryGenres?.length ? refined.secondaryGenres : null)
+          || (Array.isArray(infoData.styles) ? infoData.styles.slice(1, 4) : []);
+        const isTrackAnalyzed = Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
+
+        setResolvedGenre({
+          ...refined,
+          primaryGenre: bestPrimaryGenre,
+          secondaryGenres: bestSecondaryGenres,
+          bpm: (infoData.bpm && infoData.bpmFromProvider !== false) ? String(infoData.bpm) : '',
+          key: (infoData.key && infoData.keyFromProvider !== false) ? String(infoData.key) : '',
+          analyzed: isTrackAnalyzed,
+          unverified: !bestPrimaryGenre,
+          _trackKey: trackKey,
+        });
 
         const nativePatch = {
           trackId: String(currentTrack.id || ''),
-          genre: refined.primaryGenre,
-          secondaryGenres: refined.secondaryGenres,
-          superGenre: refined.superGenre,
+          verifiedGenre: bestPrimaryGenre,
+          verifiedSecondaryGenres: bestSecondaryGenres,
+          superGenre: refined.superGenre || '',
+          analyzed: isTrackAnalyzed,
         };
+        if (isTrackAnalyzed) {
+          nativePatch.genre = bestPrimaryGenre;
+          nativePatch.secondaryGenres = bestSecondaryGenres;
+        }
         if (infoData.bpm && infoData.bpmFromProvider !== false) nativePatch.bpm = String(infoData.bpm);
         if (infoData.key && infoData.keyFromProvider !== false) nativePatch.key = String(infoData.key);
+        if (infoData.previewUrl) nativePatch.previewUrl = String(infoData.previewUrl);
         if (infoData.album && !isInvalidAlbumName(infoData.album)) {
           nativePatch.albumName = cleanTrackOrReleaseTitle(String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
         }

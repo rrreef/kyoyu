@@ -433,7 +433,9 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
         const artParam = (targetArtist || fallbackArtist).trim();
         searches.push(
           fetch(`https://api.discogs.com/database/search?track=${encodeURIComponent(targetTitle.trim())}&artist=${encodeURIComponent(artParam)}&type=release&per_page=10`, { headers: DISCOGS_HEADERS })
-            .then(r => r.ok ? r.json() : null).catch(() => null)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => d?.results ? { results: d.results.map(x => ({ ...x, _fromTrackSearch: true })) } : null)
+            .catch(() => null)
         );
       }
       if (wantAlbum && (targetArtist || fallbackArtist)) {
@@ -467,6 +469,7 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
         // Strict candidate scoring: never pick a release by an unrelated artist!
         let bestScore = 0;
         let bestRelNorm = '';
+        const scoredCandidates = [];
         for (const c of candidates) {
           const rawFull = String(c.title || '');
           const splitIdx = rawFull.indexOf(' - ');
@@ -480,13 +483,15 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
           const hasArtistMatch = !wantArtist || artistMatchesString(candArtistRaw, wantArtist) || cTitleNorm.startsWith(wantArtist);
 
           // If we know the artist, reject candidates from a completely different artist (unless Various compilation matching album/track)
-          if (wantArtist && !hasArtistMatch && !(isVarious && ((wantAlbum && candRelNorm.includes(wantAlbum)) || (wantTitle && candRelNorm.includes(wantTitle))))) {
+          if (wantArtist && !hasArtistMatch && !(isVarious && ((wantAlbum && candRelNorm.includes(wantAlbum)) || (wantTitle && candRelNorm.includes(wantTitle)) || c._fromTrackSearch))) {
             continue;
           }
 
           let score = 0;
           if (wantArtist && hasArtistMatch) score += 60;
           else if (isVarious) score += 5;
+
+          if (c._fromTrackSearch) score += 55;
 
           if (wantAlbum && (candRelNorm === wantAlbum || candRelNorm.includes(wantAlbum) || wantAlbum.includes(candRelNorm))) {
             score += candRelNorm === wantAlbum ? 65 : 45;
@@ -507,12 +512,14 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
           }
           if (c.year) score += 5;
 
+          scoredCandidates.push({ c, score, candRelNorm });
           if (score > bestScore) {
             bestScore = score;
             best = c;
             bestRelNorm = candRelNorm;
           }
         }
+        scoredCandidates.sort((a, b) => b.score - a.score);
         if (best && bestRelNorm) {
           for (const c of candidates) {
             const rawFull = String(c.title || '');
@@ -526,27 +533,31 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
             }
           }
         }
+        best._topFallbacks = scoredCandidates.slice(1, 4).map(x => x.c);
       }
     }
     if (!best) return null;
     let detail = null;
-    if (best.id) {
+    const candidateQueue = [best, ...(best._topFallbacks || [])].filter((v, i, a) => v?.id && a.findIndex(x => x?.id === v.id) === i);
+    for (let cIdx = 0; cIdx < Math.min(3, candidateQueue.length); cIdx++) {
+      const cand = candidateQueue[cIdx];
       try {
-        const endpoint = best.type === 'master' ? `masters/${best.id}` : `releases/${best.id}`;
+        const endpoint = cand.type === 'master' ? `masters/${cand.id}` : `releases/${cand.id}`;
         const r = await fetch(`https://api.discogs.com/${endpoint}`, { headers: DISCOGS_HEADERS });
-        if (r.ok) detail = await r.json();
+        if (!r.ok) continue;
+        let candDetail = await r.json();
 
-        const masterId = best.type === 'master' ? best.id : detail?.master_id;
+        const masterId = cand.type === 'master' ? cand.id : candDetail?.master_id;
         const [mrRes, verRes] = await Promise.all([
-          (best.type === 'master' && detail && detail.main_release)
-            ? fetch(`https://api.discogs.com/releases/${detail.main_release}`, { headers: DISCOGS_HEADERS }).catch(() => null)
+          (cand.type === 'master' && candDetail && candDetail.main_release)
+            ? fetch(`https://api.discogs.com/releases/${candDetail.main_release}`, { headers: DISCOGS_HEADERS }).catch(() => null)
             : Promise.resolve(null),
-          masterId
+          (cIdx === 0 && masterId)
             ? fetch(`https://api.discogs.com/masters/${masterId}/versions?per_page=30`, { headers: DISCOGS_HEADERS }).catch(() => null)
             : Promise.resolve(null),
         ]);
         if (mrRes && mrRes.ok) {
-          detail = await mrRes.json();
+          candDetail = await mrRes.json();
         }
         if (verRes && verRes.ok) {
           const verData = await verRes.json();
@@ -556,6 +567,16 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
             if (v.format) parts.push(v.format);
             if (parts.length > 0) siblingFormatStrings.push(parts.join(', '));
           }
+        }
+        const candTracks = (candDetail?.tracklist || []).filter(t => t.type_ === 'track' || !t.type_);
+        const hasTrackMatch = !wantTitle || candTracks.some(t => {
+          const tn = normName(t.title || '');
+          return tn && (tn === wantTitle || tn.includes(wantTitle) || wantTitle.includes(tn));
+        });
+        if (!detail || hasTrackMatch) {
+          detail = candDetail;
+          best = cand;
+          if (hasTrackMatch) break;
         }
       } catch (e) {}
     }
@@ -1042,21 +1063,42 @@ async function handleTrackInfo(body, res) {
     : '';
 
   const lookupKey = makeLookupKey(cleanArtist, cleanAlbum, cleanTitle);
+  const analysisKey = `kyoyu_analysis|${normName(cleanArtist)}|${normName(cleanTitle)}`;
 
-  // Check cache (_v: 18 ensures 100% complete format details across all Discogs master versions including Vinyl 12"/10"/7"/LP)
+  let savedAnalysis = null;
   try {
-    const { data: cached } = await supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single();
-    if (cached?.data && cached.data._v === 18) {
+    const [cachedResp, analysisResp] = await Promise.all([
+      supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single(),
+      (cleanTitle ? supabase.from('track_info_cache').select('data').eq('lookup_key', analysisKey).single() : Promise.resolve({ data: null })),
+    ]);
+    if (analysisResp?.data?.data && analysisResp.data.data._analyzed) {
+      savedAnalysis = analysisResp.data.data;
+    }
+    const cached = cachedResp?.data;
+    if (cached?.data && cached.data._v === 19) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 30 * 24 * 60 * 60 * 1000) {
-        if (cleanKnownLabel && normLabelName(cached.data.labelName || cached.data.label || '') !== normLabelName(cleanKnownLabel)) {
+        const mergedCached = {
+          ...cached.data,
+          ...(savedAnalysis ? {
+            kyoyuAnalysis: savedAnalysis,
+            analyzed: true,
+            bpm: savedAnalysis.bpm || cached.data.bpm || '',
+            key: savedAnalysis.key || cached.data.key || '',
+            bpmFromProvider: true,
+            keyFromProvider: true,
+            primaryGenre: savedAnalysis.primaryGenre || '',
+            secondaryGenres: savedAnalysis.secondaryGenres || [],
+          } : {}),
+        };
+        if (cleanKnownLabel && normLabelName(mergedCached.labelName || mergedCached.label || '') !== normLabelName(cleanKnownLabel)) {
           return res.status(200).json({
-            ...cached.data,
+            ...mergedCached,
             label: cleanKnownLabel,
             labelName: cleanKnownLabel,
           });
         }
-        return res.status(200).json(cached.data);
+        return res.status(200).json(mergedCached);
       }
     }
   } catch (e) {}
@@ -1301,7 +1343,7 @@ async function handleTrackInfo(body, res) {
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
   const result = {
-    _v: 18,
+    _v: 19,
     title: cleanTitle || discogs?.matchedTrack?.title || '',
     album: resolvedAlbumTitle,
     artist: cleanArtist || discogsArtist?.name || '',
@@ -1309,10 +1351,14 @@ async function handleTrackInfo(body, res) {
     releaseDate: fullReleaseDate,
     trackPosition: trackPos,
     trackDuration: trackDur,
-    bpm: trackMeta?.bpm || '',
-    key: trackMeta?.key || '',
-    bpmFromProvider: Boolean(trackMeta?.bpmFromProvider),
-    keyFromProvider: Boolean(trackMeta?.keyFromProvider),
+    bpm: savedAnalysis?.bpm || trackMeta?.bpm || '',
+    key: savedAnalysis?.key || trackMeta?.key || '',
+    bpmFromProvider: Boolean(savedAnalysis?.bpm || trackMeta?.bpmFromProvider),
+    keyFromProvider: Boolean(savedAnalysis?.key || trackMeta?.keyFromProvider),
+    analyzed: Boolean(savedAnalysis?._analyzed),
+    kyoyuAnalysis: savedAnalysis || null,
+    primaryGenre: savedAnalysis?.primaryGenre || accurateGenres[0] || '',
+    secondaryGenres: savedAnalysis?.secondaryGenres || accurateGenres.slice(1, 4),
     isrc: trackMeta?.isrc || mb?.isrc || '',
     previewUrl: trackMeta?.previewUrl || '',
     label: labelDisplay,
@@ -1365,6 +1411,106 @@ async function handleTrackInfo(body, res) {
   } catch (e) {}
 
   return res.status(200).json(result);
+}
+
+async function handleGetTrackAnalysis(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  const { title, artist, tracks } = body || {};
+  const items = Array.isArray(tracks) && tracks.length > 0
+    ? tracks
+    : (title ? [{ title, artist }] : []);
+  if (items.length === 0) return res.status(200).json({ analyses: {}, analysis: null });
+
+  const keyToItem = new Map();
+  for (const item of items.slice(0, 25)) {
+    const t = normName(item?.title || '');
+    const a = normName(item?.artist || '');
+    if (!t) continue;
+    const k = `kyoyu_analysis|${a}|${t}`;
+    keyToItem.set(k, item);
+  }
+  const lookupKeys = [...keyToItem.keys()];
+  if (lookupKeys.length === 0) return res.status(200).json({ analyses: {}, analysis: null });
+
+  try {
+    const { data: rows } = await supabase
+      .from('track_info_cache')
+      .select('lookup_key, data')
+      .in('lookup_key', lookupKeys);
+    const analyses = {};
+    for (const row of (rows || [])) {
+      if (row?.lookup_key && row?.data?._analyzed) {
+        analyses[row.lookup_key] = row.data;
+        const shortKey = row.lookup_key.replace(/^kyoyu_analysis\|/, '');
+        analyses[shortKey] = row.data;
+      }
+    }
+    const firstKey = lookupKeys[0];
+    return res.status(200).json({
+      analyses,
+      analysis: analyses[firstKey] || null,
+    });
+  } catch (e) {
+    return res.status(200).json({ analyses: {}, analysis: null });
+  }
+}
+
+async function handleSaveTrackAnalysis(body, res) {
+  const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+  const items = Array.isArray(body?.analyses) && body.analyses.length > 0
+    ? body.analyses
+    : [body || {}];
+
+  const rowsToUpsert = [];
+  const nowIso = new Date().toISOString();
+  for (const item of items.slice(0, 15)) {
+    const cleanTitle = String(item.title || '').trim();
+    const cleanArtist = stripArtistSuffix(String(item.artist || '').trim());
+    const cleanAlbum = String(item.album || '').trim();
+    const tNorm = normName(cleanTitle);
+    const aNorm = normName(cleanArtist);
+    const bpmStr = String(item.bpm || '').trim();
+    const keyStr = String(item.key || '').trim();
+    const primaryGenre = String(item.primaryGenre || item.genre || '').trim();
+    const secondaryGenres = Array.isArray(item.secondaryGenres)
+      ? item.secondaryGenres.map(s => String(s || '').trim()).filter(Boolean).slice(0, 3)
+      : [];
+    if (!tNorm || (!bpmStr && !keyStr && !primaryGenre)) continue;
+
+    const lookupKey = `kyoyu_analysis|${aNorm}|${tNorm}`;
+    const payload = {
+      _analyzed: true,
+      _v: 2,
+      title: cleanTitle,
+      artist: cleanArtist,
+      album: cleanAlbum,
+      bpm: bpmStr,
+      key: keyStr ? normalizeMusicalKey(keyStr) : '',
+      primaryGenre,
+      secondaryGenres,
+      superGenre: String(item.superGenre || '').trim(),
+      subBassRatio: Number(item.subBassRatio || 0),
+      kickRegularity4x4: Number(item.kickRegularity4x4 || 0),
+      syncopationIndex: Number(item.syncopationIndex || 0),
+      spectralBrightness: Number(item.spectralBrightness || 0),
+      analyzedAt: nowIso,
+    };
+    rowsToUpsert.push({
+      lookup_key: lookupKey,
+      title: cleanTitle,
+      artist: cleanArtist,
+      album: cleanAlbum,
+      data: payload,
+      updated_at: nowIso,
+    });
+  }
+
+  if (rowsToUpsert.length > 0) {
+    try {
+      await supabase.from('track_info_cache').upsert(rowsToUpsert, { onConflict: 'lookup_key' });
+    } catch (e) {}
+  }
+  return res.status(200).json({ ok: true, saved: rowsToUpsert.length });
 }
 
 // ── Search orchestration helpers (artist-top-releases, track-release) ──
@@ -3474,6 +3620,16 @@ export default async function handler(req, res) {
   // ==== ACTION: track-info ====
   if (action === 'track-info') {
     return handleTrackInfo(body, res);
+  }
+
+  // ==== ACTION: get-track-analysis ====
+  if (action === 'get-track-analysis') {
+    return handleGetTrackAnalysis(body, res);
+  }
+
+  // ==== ACTION: save-track-analysis ====
+  if (action === 'save-track-analysis') {
+    return handleSaveTrackAnalysis(body, res);
   }
 
   // ==== ACTION: artist-top-releases ====

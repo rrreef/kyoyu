@@ -1379,8 +1379,11 @@ export function PlayerProvider({ children }) {
         id: String(t.id || `queue-${idx}`),
         title: String(t.title || t.name || 'Unknown'),
         artist: t.artistName || t.artist || fallbackArtist || '',
+        album: t.releaseTitle || t.albumTitle || t.album || '',
         cover: t.releaseCover || t.cover || t.artworkUrl || fallbackCover || '',
-        url: t.src || t.audioUrl || t.fileUrl || t.trackUrl || t.url || '',
+        url: t.src || t.audioUrl || t.fileUrl || t.trackUrl || t.providerUrl || t.url || '',
+        videoId: t.videoId || (String(t.id || '').startsWith('yt-') ? String(t.id).slice(3) : ''),
+        scTrackId: t.scTrackId || (String(t.id || '').startsWith('sc-') ? String(t.id).slice(3) : ''),
         provider: t.provider || t.sourceProvider || '',
       })));
     };
@@ -1687,7 +1690,7 @@ export function PlayerProvider({ children }) {
         const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         if (!key) return;
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 18) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 19) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return;
         }
@@ -1734,7 +1737,7 @@ export function PlayerProvider({ children }) {
         const knownLabel = String(label || cur.label || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
-        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 18) {
+        if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 19) {
           syncResolvedTrackMetaToBridge(window.__kyoyuInfoCache[key], title, artist);
           return JSON.stringify(window.__kyoyuInfoCache[key]);
         }

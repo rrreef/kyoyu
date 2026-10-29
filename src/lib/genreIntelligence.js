@@ -3190,23 +3190,19 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
 
   const ranked = [...scoreMap.values()].sort((a, b) => b.score - a.score);
 
-  // 7. Guaranteed Fallback so EVERY title in the app has a rich canonical genre
+  // 7. Do NOT fabricate random fallback genres when a track has not been analyzed or matched yet
   if (ranked.length === 0) {
-    let fallbackGenre = 'Hypnotic Techno';
-    if (provider === 'bandcamp') fallbackGenre = 'Hypnotic Techno';
-    else if (provider === 'soundcloud') fallbackGenre = 'UK Bass / Leftfield Bass';
-    else if (provider === 'spotify' || provider === 'applemusic' || provider === 'tidal') fallbackGenre = 'Deep House';
-    const fbNode = resolveGenreNode(fallbackGenre);
     return {
-      primaryGenre: fbNode.name,
-      secondaryGenres: fbNode.adjacentGenres.slice(0, 2),
-      superGenre: fbNode.superGenre,
-      secondarySuperGenre: fbNode.secondarySuperGenre || '',
-      originYear: fbNode.originYear,
-      originPlace: fbNode.originPlace,
-      confidence: 0.62,
-      provenance: ['Audio & Provider Context'],
-      node: fbNode,
+      primaryGenre: '',
+      secondaryGenres: [],
+      superGenre: '',
+      secondarySuperGenre: '',
+      originYear: '',
+      originPlace: '',
+      confidence: 0,
+      provenance: [],
+      unverified: true,
+      node: null,
     };
   }
 
@@ -3232,9 +3228,7 @@ export function classifyTrackGenre(track = {}, extraMeta = {}) {
     .slice(0, 3)
     .map(r => r.node.name);
 
-  const secondaryGenres = coherentSecondaries.length > 0
-    ? coherentSecondaries
-    : primary.adjacentGenres.slice(0, 2);
+  const secondaryGenres = coherentSecondaries;
 
   return {
     primaryGenre: primary.name,
