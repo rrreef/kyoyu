@@ -135,8 +135,9 @@ export default function Profile() {
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.82rem', lineHeight: 1.6, opacity: 0.82 }}>
               <li><strong>Musicmap Genre &amp; Scene Genealogy:</strong> Fuses Discogs styles, label/artist signatures, and acoustic descriptors (sub-bass ratio, 4/4 kick regularity, syncopation index, spectral brightness) to determine primary and secondary subgenres.</li>
               <li><strong>Long-Form Mix &amp; Podcast Rule (&gt; 22 Minutes):</strong> Any continuous DJ set, radio show, or podcast exceeding 22 minutes (1,320 seconds) automatically suppresses single-track BPM, Key, and Genre tags so multi-track mixes are never mislabeled.</li>
+              <li><strong>Private Uploads (&lt; 22 Minutes):</strong> Private SoundCloud and Apple Music uploads under 22 minutes undergo full on-device DSP tempo &amp; harmonic analysis and display verified BPM and Key while suppressing public catalog genre and album tags.</li>
               <li><strong>Step-Ahead Lookahead &amp; Shared Cache:</strong> Upcoming tracks in your queue, album, or radio are pre-analyzed in the background and cached globally so subsequent plays load instantaneously.</li>
-              <li><strong>Tap BPM or Key to Re-Analyze:</strong> Spot an inaccurate tempo or key on any title? Simply tap directly on the <strong>BPM</strong> or <strong>Key</strong> on the Player Sheet to purge cached data and force a fresh deep acoustic + multi-provider re-analysis.</li>
+              <li><strong>Tap BPM for Speed Fader · Hold (&gt; 2.2s) to Re-Analyze:</strong> Tap directly on the <strong>BPM</strong> on the Player Sheet to open the high-precision BPM speed fader card at the bottom of the sheet. Hold your finger for more than 2.2 seconds on either the <strong>BPM</strong> or <strong>Key</strong> to purge cached data and force a fresh deep acoustic + multi-provider re-analysis.</li>
             </ul>
           </div>
         </div>

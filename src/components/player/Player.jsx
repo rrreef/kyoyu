@@ -181,10 +181,41 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek, buffering 
     on every progress tick, causing React to unmount/remount Scrubber
     and tear down its event listeners each second)                    ── */
 const PlayerControls = memo(function PlayerControls({
-  progress, duration, isPlaying, dispatch, onSeek, onNext, onPrev, showQueue, setShowQueue, buffering, bpm, musicalKey, isReanalyzing, onReanalyze
+  progress, duration, isPlaying, dispatch, onSeek, onNext, onPrev, showQueue, setShowQueue, buffering, bpm, musicalKey, isReanalyzing, onReanalyze,
+  showBpmFader, setShowBpmFader, baseBpm, activeBpm, onChangeBpmSpeed, onResetBpmSpeed
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
-  const formattedBpm = bpm ? (/bpm/i.test(bpm) ? bpm : `${bpm} BPM`) : '';
+  const liveBpmNumber = (activeBpm > 0 && baseBpm > 0) ? activeBpm : (parseFloat(String(bpm || '').replace(/[^0-9.]/g, '')) || 0);
+  const isPitched = baseBpm > 0 && activeBpm > 0 && Math.abs(activeBpm - baseBpm) >= 0.05;
+  const formattedBpm = isPitched
+    ? `${activeBpm.toFixed(1)} BPM`
+    : (bpm ? (/bpm/i.test(bpm) ? bpm : `${bpm} BPM`) : '');
+  const holdTimerRef = useRef(null);
+  const holdFiredRef = useRef(false);
+
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  const startHoldTimer = useCallback(() => {
+    clearHoldTimer();
+    holdFiredRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
+      holdFiredRef.current = true;
+      if (onReanalyze && !isReanalyzing) onReanalyze();
+    }, 2210);
+  }, [clearHoldTimer, onReanalyze, isReanalyzing]);
+
+  useEffect(() => () => clearHoldTimer(), [clearHoldTimer]);
+
+  const minBpm = baseBpm > 0 ? Math.max(30, Number((baseBpm * 0.84).toFixed(1))) : 60;
+  const maxBpm = baseBpm > 0 ? Math.min(260, Number((baseBpm * 1.16).toFixed(1))) : 180;
+  const pctDiff = (baseBpm > 0 && activeBpm > 0) ? (((activeBpm - baseBpm) / baseBpm) * 100) : 0;
+
   return (
     <>
       <div className="fp-scrub-wrap">
@@ -194,19 +225,56 @@ const PlayerControls = memo(function PlayerControls({
           {(isReanalyzing || formattedBpm || musicalKey) && (
             <span
               className="fp-bpm-key-tap"
-              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, opacity: isReanalyzing ? 0.85 : 0.72, fontWeight: 600 }}
-              title="Tap to re-analyze BPM & Key"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onReanalyze && !isReanalyzing) onReanalyze();
-              }}
+              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, opacity: isReanalyzing ? 0.85 : 0.78, fontWeight: 600, userSelect: 'none', WebkitUserSelect: 'none' }}
+              title="Tap BPM for speed fader · Hold > 2.2s on BPM or Key to re-analyze"
+              onClick={(e) => e.stopPropagation()}
             >
               {isReanalyzing ? (
                 <span>Re-analyzing…</span>
               ) : (
                 <>
-                  {formattedBpm && <span>{formattedBpm}</span>}
-                  {musicalKey && <span>{musicalKey}</span>}
+                  {formattedBpm && (
+                    <span
+                      style={{
+                        padding: showBpmFader || isPitched ? '1px 7px' : '0',
+                        borderRadius: 999,
+                        background: showBpmFader || isPitched ? 'rgba(255,255,255,0.16)' : 'transparent',
+                        transition: 'background 0.18s ease',
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        startHoldTimer();
+                      }}
+                      onPointerUp={(e) => {
+                        e.stopPropagation();
+                        const didFireHold = holdFiredRef.current;
+                        clearHoldTimer();
+                        if (!didFireHold && setShowBpmFader && liveBpmNumber > 0) {
+                          setShowBpmFader(v => !v);
+                        }
+                      }}
+                      onPointerLeave={clearHoldTimer}
+                      onPointerCancel={clearHoldTimer}
+                    >
+                      {formattedBpm}
+                    </span>
+                  )}
+                  {musicalKey && (
+                    <span
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        startHoldTimer();
+                      }}
+                      onPointerUp={(e) => {
+                        e.stopPropagation();
+                        clearHoldTimer();
+                      }}
+                      onPointerLeave={clearHoldTimer}
+                      onPointerCancel={clearHoldTimer}
+                    >
+                      {musicalKey}
+                    </span>
+                  )}
                 </>
               )}
             </span>
@@ -221,13 +289,99 @@ const PlayerControls = memo(function PlayerControls({
         </button>
         <button className="fp-ctrl" onClick={onNext}><FastForward size={36} fill="currentColor" strokeWidth={0}/></button>
       </div>
-      <div className="fp-actions">
-        <button className="fp-action-btn"><MessageSquare size={22}/></button>
-        <button className="fp-action-btn"><Airplay size={22}/></button>
-        <button className={`fp-action-btn${showQueue?' fp-action-btn--on':''}`} onClick={()=>setShowQueue(q=>!q)}>
-          <AlignJustify size={22}/>
-        </button>
-      </div>
+      {showBpmFader && baseBpm > 0 ? (
+        <div
+          className="fp-bpm-fader-card glass"
+          style={{
+            marginTop: 8,
+            padding: '12px 16px',
+            borderRadius: 28,
+            border: '0.5px solid rgba(255,255,255,0.16)',
+            background: 'rgba(255,255,255,0.10)',
+            backdropFilter: 'blur(28px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+            boxShadow: '0 10px 28px rgba(0,0,0,0.22)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {(activeBpm || baseBpm).toFixed(1)} BPM
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', fontVariantNumeric: 'tabular-nums' }}>
+                {pctDiff >= 0 ? `+${pctDiff.toFixed(1)}%` : `${pctDiff.toFixed(1)}%`}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isPitched && (
+                <button
+                  type="button"
+                  onClick={() => onResetBpmSpeed && onResetBpmSpeed()}
+                  style={{ border: 'none', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.16)', color: 'inherit', cursor: 'pointer' }}
+                >
+                  Reset
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowBpmFader && setShowBpmFader(false)}
+                style={{ border: 'none', borderRadius: 999, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.14)', color: 'inherit', cursor: 'pointer' }}
+                aria-label="Close BPM Fader"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => onChangeBpmSpeed && onChangeBpmSpeed(Math.max(minBpm, Number(((activeBpm || baseBpm) - 0.1).toFixed(1))))}
+              style={{ border: 'none', borderRadius: 999, width: 28, height: 28, fontWeight: 700, background: 'rgba(255,255,255,0.12)', color: 'inherit', cursor: 'pointer' }}
+            >
+              −
+            </button>
+            <input
+              type="range"
+              min={minBpm}
+              max={maxBpm}
+              step={0.1}
+              value={activeBpm || baseBpm}
+              onChange={(e) => {
+                const nextVal = parseFloat(e.target.value);
+                if (!isNaN(nextVal) && onChangeBpmSpeed) {
+                  if (Math.abs(nextVal - baseBpm) < 0.08) {
+                    onResetBpmSpeed && onResetBpmSpeed();
+                  } else {
+                    onChangeBpmSpeed(Number(nextVal.toFixed(1)));
+                  }
+                }
+              }}
+              style={{ flex: 1, accentColor: '#fff', cursor: 'pointer' }}
+            />
+            <button
+              type="button"
+              onClick={() => onChangeBpmSpeed && onChangeBpmSpeed(Math.min(maxBpm, Number(((activeBpm || baseBpm) + 0.1).toFixed(1))))}
+              style={{ border: 'none', borderRadius: 999, width: 28, height: 28, fontWeight: 700, background: 'rgba(255,255,255,0.12)', color: 'inherit', cursor: 'pointer' }}
+            >
+              +
+            </button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, opacity: 0.55, fontWeight: 600 }}>
+            <span>-16%</span>
+            <span>{baseBpm.toFixed(1)} BPM (Original)</span>
+            <span>+16%</span>
+          </div>
+        </div>
+      ) : (
+        <div className="fp-actions">
+          <button className="fp-action-btn"><MessageSquare size={22}/></button>
+          <button className="fp-action-btn"><Airplay size={22}/></button>
+          <button className={`fp-action-btn${showQueue?' fp-action-btn--on':''}`} onClick={()=>setShowQueue(q=>!q)}>
+            <AlignJustify size={22}/>
+          </button>
+        </div>
+      )}
     </>
   );
 });
@@ -257,7 +411,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch, onNext }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev, genreInfo, isReanalyzing, onReanalyze }) {
+function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev, genreInfo, isReanalyzing, onReanalyze, showBpmFader, setShowBpmFader, baseBpm, activeBpm, onChangeBpmSpeed, onResetBpmSpeed }) {
   const ytRef = useRef(null);
   const scRef = useRef(null);
   const fpRef    = useRef(null);
@@ -361,7 +515,10 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
     onNext={onNext} onPrev={onPrev}
     showQueue={showQueue} setShowQueue={setShowQueue} buffering={buffering}
     bpm={genreInfo?.bpm} musicalKey={genreInfo?.key}
-    isReanalyzing={isReanalyzing} onReanalyze={onReanalyze}/>;
+    isReanalyzing={isReanalyzing} onReanalyze={onReanalyze}
+    showBpmFader={showBpmFader} setShowBpmFader={setShowBpmFader}
+    baseBpm={baseBpm} activeBpm={activeBpm}
+    onChangeBpmSpeed={onChangeBpmSpeed} onResetBpmSpeed={onResetBpmSpeed}/>;
 
   /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
   const fpStyle = (() => {
@@ -440,7 +597,7 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
               >
                 {track.artistName || track.artist || '—'}
               </div>
-              {genreInfo && genreInfo.primaryGenre && (
+              {!track.isPrivate && genreInfo && genreInfo.primaryGenre && (
                 <div className="fp-genre-row">
                   {[genreInfo.primaryGenre, ...(genreInfo.secondaryGenres || []).slice(0, 2)].map((g, idx) => (
                     <button
@@ -884,6 +1041,49 @@ export default function Player({ hideMini = false }) {
   const [resolvedGenre, setResolvedGenre] = useState(null);
   const [reanalyzeTick, setReanalyzeTick] = useState(0);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
+  const [showBpmFader, setShowBpmFader] = useState(false);
+  const [baseBpm, setBaseBpm] = useState(0);
+  const [activeBpm, setActiveBpm] = useState(0);
+
+  const applyPlaybackRate = useCallback((rate) => {
+    const clampedRate = Math.max(0.5, Math.min(2.0, Number(rate) || 1.0));
+    window.__kyoyuPlaybackRate = clampedRate;
+    const audioEl = window.__kyoyuAudioRef;
+    if (audioEl) {
+      try {
+        if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
+        else if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = true;
+        audioEl.playbackRate = clampedRate;
+      } catch (e) {}
+    }
+    try {
+      const mh = window.webkit?.messageHandlers?.audioFallback;
+      if (mh) mh.postMessage({ playbackRate: clampedRate });
+    } catch (e) {}
+  }, []);
+
+  const handleChangeBpmSpeed = useCallback((targetBpm) => {
+    if (!(baseBpm > 0)) return;
+    const minBpm = Math.max(30, baseBpm * 0.84);
+    const maxBpm = Math.min(260, baseBpm * 1.16);
+    const clampedBpm = Math.max(minBpm, Math.min(maxBpm, Number(targetBpm) || baseBpm));
+    setActiveBpm(clampedBpm);
+    const rate = clampedBpm / baseBpm;
+    applyPlaybackRate(rate);
+  }, [baseBpm, applyPlaybackRate]);
+
+  const handleResetBpmSpeed = useCallback(() => {
+    if (baseBpm > 0) setActiveBpm(baseBpm);
+    applyPlaybackRate(1.0);
+  }, [baseBpm, applyPlaybackRate]);
+
+  // Reset BPM speed fader and playback rate when switching to a new track
+  useEffect(() => {
+    setShowBpmFader(false);
+    setBaseBpm(0);
+    setActiveBpm(0);
+    applyPlaybackRate(1.0);
+  }, [currentTrack?.id, applyPlaybackRate]);
 
   const handleReanalyzeCurrentTrack = useCallback(() => {
     if (!currentTrack) return;
@@ -933,13 +1133,50 @@ export default function Player({ hideMini = false }) {
     return false;
   }, [duration, currentTrack]);
 
+  const isPrivateTrack = useMemo(() => {
+    if (!currentTrack) return false;
+    const tid = String(currentTrack.id || '');
+    const rawItemId = String(currentTrack.trackId || currentTrack.providerItemId || currentTrack.appleMusicId || '');
+    const rawUrl = String(currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.url || '');
+    return Boolean(
+      currentTrack.isPrivate ||
+      currentTrack.origin?.isPrivate ||
+      /soundcloud\.com\/[^/]+\/[^/]+\/s-[A-Za-z0-9]+/i.test(rawUrl) ||
+      ((provider === 'applemusic' || currentTrack.sourceProvider === 'applemusic' || tid.startsWith('am-')) &&
+        (tid.startsWith('am-i.') || rawItemId.startsWith('i.')) &&
+        !currentTrack.catalogId)
+    );
+  }, [currentTrack, provider]);
+
   const activeGenreInfo = useMemo(() => {
     if (!currentTrack || isLongFormTrack) return null;
     if (resolvedGenre && !resolvedGenre.isLongFormMix && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}` && !resolvedGenre.unverified) {
+      if (isPrivateTrack) {
+        return {
+          ...resolvedGenre,
+          primaryGenre: '',
+          secondaryGenres: [],
+          superGenre: '',
+        };
+      }
       return resolvedGenre;
     }
     return null;
-  }, [resolvedGenre, currentTrack, isLongFormTrack]);
+  }, [resolvedGenre, currentTrack, isLongFormTrack, isPrivateTrack]);
+
+  // Sync baseBpm whenever activeGenreInfo reports a verified BPM
+  useEffect(() => {
+    const rawBpmStr = String(activeGenreInfo?.bpm || currentTrack?.bpm || '').replace(/[^0-9.]/g, '');
+    const parsed = parseFloat(rawBpmStr);
+    if (parsed > 30 && parsed < 260) {
+      setBaseBpm(prev => {
+        if (Math.abs(prev - parsed) > 0.05) {
+          setActiveBpm(parsed);
+        }
+        return parsed;
+      });
+    }
+  }, [activeGenreInfo?.bpm, currentTrack?.bpm]);
 
   // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
   const handleNext = useCallback(() => {
@@ -973,6 +1210,19 @@ export default function Player({ hideMini = false }) {
     window.__kyoyuPlayerCmd = (cmd, val)=>{
       if (cmd === 'nativeError') {
         dispatch({ type: 'NATIVE_ERROR' });
+        return;
+      }
+      if (cmd === 'setPlaybackRate') {
+        const rate = Math.max(0.5, Math.min(2.0, Number(val) || 1.0));
+        window.__kyoyuPlaybackRate = rate;
+        const audioEl = window.__kyoyuAudioRef;
+        if (audioEl) {
+          try {
+            if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
+            else if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = true;
+            audioEl.playbackRate = rate;
+          } catch (e) {}
+        }
         return;
       }
       if (cmd === 'ytEnsurePause') {
@@ -1122,15 +1372,15 @@ export default function Player({ hideMini = false }) {
       };
       const rawArtist = currentTrack.artistName || currentTrack.artist || '';
       const rawTitle = currentTrack.title || '';
-      const rawLabel = currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '';
-      const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
-        .find(a => !isInvalidAlbumName(a)) || '';
+      const rawLabel = isPrivateTrack ? '' : (currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '');
+      const rawAlbum = isPrivateTrack ? '' : ([currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
+        .find(a => !isInvalidAlbumName(a)) || '');
       const cleanRawAlbum = rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim();
       const cleanedMeta = splitCleanMetadata(rawTitle, rawArtist, rawLabel, cleanRawAlbum);
       const cleanTitle = cleanedMeta.title || rawTitle;
       const cleanArtist = cleanedMeta.artist || rawArtist;
-      const cleanLabel = cleanedMeta.label || rawLabel;
-      const cleanAlbumFromMeta = cleanTrackOrReleaseTitle(cleanedMeta.album || cleanRawAlbum, cleanArtist);
+      const cleanLabel = isPrivateTrack ? '' : (cleanedMeta.label || rawLabel);
+      const cleanAlbumFromMeta = isPrivateTrack ? '' : cleanTrackOrReleaseTitle(cleanedMeta.album || cleanRawAlbum, cleanArtist);
       const hasVerifiedTrackAnalysis = Boolean(activeGenreInfo && !activeGenreInfo.unverified && activeGenreInfo.analyzed);
       postNative({
         visible: true,
@@ -1138,26 +1388,27 @@ export default function Player({ hideMini = false }) {
         title: cleanTitle,
         artwork: validArt,
         trackId: String(currentTrack.id || ''),
-        albumId: String(currentTrack.releaseId || currentTrack.album || ''),
+        albumId: isPrivateTrack ? '' : String(currentTrack.releaseId || currentTrack.album || ''),
         artist: cleanArtist,
-        albumName: cleanAlbumFromMeta || '',
-        label: cleanLabel,
+        albumName: isPrivateTrack ? '' : (cleanAlbumFromMeta || ''),
+        label: isPrivateTrack ? '' : cleanLabel,
         year: String(currentTrack.year || currentTrack.releaseYear || ''),
         bpm: hasVerifiedTrackAnalysis ? String(activeGenreInfo.bpm || currentTrack.bpm || '') : '',
         key: hasVerifiedTrackAnalysis ? String(activeGenreInfo.key || currentTrack.key || currentTrack.musicalKey || '') : '',
-        genre: hasVerifiedTrackAnalysis ? (activeGenreInfo?.primaryGenre || '') : '',
-        secondaryGenres: hasVerifiedTrackAnalysis ? (activeGenreInfo?.secondaryGenres || []) : [],
-        superGenre: hasVerifiedTrackAnalysis ? (activeGenreInfo?.superGenre || '') : '',
+        genre: (hasVerifiedTrackAnalysis && !isPrivateTrack) ? (activeGenreInfo?.primaryGenre || '') : '',
+        secondaryGenres: (hasVerifiedTrackAnalysis && !isPrivateTrack) ? (activeGenreInfo?.secondaryGenres || []) : [],
+        superGenre: (hasVerifiedTrackAnalysis && !isPrivateTrack) ? (activeGenreInfo?.superGenre || '') : '',
         analyzed: hasVerifiedTrackAnalysis,
+        isPrivate: isPrivateTrack,
         provider: provider || 'native',
         sourceProvider: badgeProviderOf(provider, currentTrack),
         trackUrl: currentTrack.providerUrl || currentTrack.trackUrl || currentTrack.providerItemId || currentTrack.replay?.url || '',
-        albumUrl: currentTrack.albumUrl || ''
+        albumUrl: isPrivateTrack ? '' : (currentTrack.albumUrl || '')
       });
     } else {
       postNative({ visible: false, playing: false });
     }
-  }, [currentTrack, isPlaying, provider, likedUploads, likedTracks, activeGenreInfo]);
+  }, [currentTrack, isPlaying, provider, likedUploads, likedTracks, activeGenreInfo, isPrivateTrack]);
 
   // Universal Multi-Signal Genre Determination (Musicmap Classifier + Discogs / MusicBrainz / Bandcamp enrichment)
   useEffect(() => {
@@ -1178,13 +1429,13 @@ export default function Player({ hideMini = false }) {
     const srcProv = badgeProviderOf(provider, currentTrack);
     const rawTitle = currentTrack.title || '';
     const rawArtist = currentTrack.artistName || currentTrack.artist || '';
-    const rawLabel = currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '';
-    const rawAlbum = [currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
-      .find(a => !isInvalidAlbumName(a)) || '';
+    const rawLabel = isPrivateTrack ? '' : (currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '');
+    const rawAlbum = isPrivateTrack ? '' : ([currentTrack.releaseTitle, currentTrack.albumTitle, currentTrack.album]
+      .find(a => !isInvalidAlbumName(a)) || '');
     const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim());
     const title = cleaned.title || rawTitle;
     const artist = cleaned.artist || rawArtist;
-    const album = cleanTrackOrReleaseTitle(cleaned.album || rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim(), artist);
+    const album = isPrivateTrack ? '' : cleanTrackOrReleaseTitle(cleaned.album || rawAlbum.replace(/\s*\(single\)\s*$/i, '').trim(), artist);
     const bcTrackUrl = [
       currentTrack.albumUrl,
       currentTrack.providerUrl,
@@ -1202,39 +1453,43 @@ export default function Player({ hideMini = false }) {
     const cachedInfo = forceRefreshNow ? null : (window.__kyoyuInfoCache?.[fullCacheKey] || window.__kyoyuInfoCache?.[cacheKey]);
     if (cachedInfo) {
       const isLongMixCached = Boolean(isLongFormTrack || cachedInfo.isLongFormMix || Number(cachedInfo.duration) > 1320);
-      const initial = isLongMixCached ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
+      const initial = (isLongMixCached || isPrivateTrack) ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: isLongMixCached } : classifyTrackGenre(currentTrack, {
         ...cachedInfo,
         provider: srcProv,
       });
-      const isAlreadyAnalyzed = !isLongMixCached && Boolean(cachedInfo.analyzed || (cachedInfo.bpm && cachedInfo.key && (initial.primaryGenre || cachedInfo.primaryGenre)));
+      const isAlreadyAnalyzed = !isLongMixCached && Boolean(
+        cachedInfo.analyzed ||
+        (cachedInfo.bpm && cachedInfo.key && (isPrivateTrack || initial.primaryGenre || cachedInfo.primaryGenre))
+      );
       setResolvedGenre({
         ...initial,
-        primaryGenre: isLongMixCached ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
-        secondaryGenres: isLongMixCached ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
+        primaryGenre: (isLongMixCached || isPrivateTrack) ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
+        secondaryGenres: (isLongMixCached || isPrivateTrack) ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
         bpm: (!isLongMixCached && cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) ? String(cachedInfo.bpm) : '',
         key: (!isLongMixCached && cachedInfo.key && cachedInfo.keyFromProvider !== false) ? String(cachedInfo.key) : '',
         analyzed: isAlreadyAnalyzed,
-        unverified: isLongMixCached || (!isAlreadyAnalyzed && initial.unverified),
+        unverified: isLongMixCached || (!isAlreadyAnalyzed && !isPrivateTrack && initial.unverified),
         _trackKey: trackKey,
       });
       const initialPatch = {
         trackId: String(currentTrack.id || ''),
-        verifiedGenre: isLongMixCached ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
-        verifiedSecondaryGenres: isLongMixCached ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
-        superGenre: isLongMixCached ? '' : (initial.superGenre || ''),
+        verifiedGenre: (isLongMixCached || isPrivateTrack) ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
+        verifiedSecondaryGenres: (isLongMixCached || isPrivateTrack) ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
+        superGenre: (isLongMixCached || isPrivateTrack) ? '' : (initial.superGenre || ''),
         analyzed: isAlreadyAnalyzed,
+        isPrivate: isPrivateTrack,
       };
       if (isAlreadyAnalyzed && !isLongMixCached) {
-        initialPatch.genre = initialPatch.verifiedGenre;
-        initialPatch.secondaryGenres = initialPatch.verifiedSecondaryGenres;
+        initialPatch.genre = isPrivateTrack ? '' : initialPatch.verifiedGenre;
+        initialPatch.secondaryGenres = isPrivateTrack ? [] : initialPatch.verifiedSecondaryGenres;
       }
       if (!isLongMixCached && cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
       if (!isLongMixCached && cachedInfo.key && cachedInfo.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
       if (cachedInfo.previewUrl) initialPatch.previewUrl = String(cachedInfo.previewUrl);
-      if (cachedInfo.album && !isInvalidAlbumName(cachedInfo.album)) {
+      if (!isPrivateTrack && cachedInfo.album && !isInvalidAlbumName(cachedInfo.album)) {
         initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
       }
-      if (cachedInfo.label && !(cleaned.label || currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
+      if (!isPrivateTrack && cachedInfo.label && !(cleaned.label || currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel)) {
         initialPatch.label = cachedInfo.label;
       }
       if (cachedInfo.year && !(currentTrack.year || currentTrack.releaseYear)) {
@@ -1277,10 +1532,10 @@ export default function Player({ hideMini = false }) {
           : Promise.resolve(null);
 
         const [rawInfoData, bcPageData] = await Promise.all([discogsPromise, bcPagePromise]);
-        if (cancelled || (!rawInfoData && !bcPageData)) return;
+        if (cancelled || (!rawInfoData && !bcPageData && !isPrivateTrack)) return;
 
         const infoData = { ...(rawInfoData || {}) };
-        if (bcPageData && !bcPageData.error) {
+        if (!isPrivateTrack && bcPageData && !bcPageData.error) {
           if (bcPageData.label && (!infoData.label || /not on label|unknown/i.test(infoData.label))) {
             infoData.label = bcPageData.label;
           }
@@ -1297,7 +1552,7 @@ export default function Player({ hideMini = false }) {
 
         const isLongMixInfo = Boolean(isLongFormTrack || infoData.isLongFormMix || Number(infoData.duration) > 1320);
 
-        // Tier 1 Web Audio Essentia MIR fallback when running on Web and Tier 2 metadata lacks BPM or Key (or when user explicitly tapped BPM/Key to re-analyze)
+        // Tier 1 Web Audio Essentia MIR fallback when running on Web and Tier 2 metadata lacks BPM or Key (or when user explicitly held BPM/Key to re-analyze)
         if (!isLongMixInfo && !isNative() && (forceRefreshNow || !infoData.bpm || !infoData.key)) {
           const candidateAudioUrl = infoData.previewUrl || currentTrack.previewUrl || currentTrack.src || '';
           if (candidateAudioUrl && /^https?:\/\//i.test(candidateAudioUrl)) {
@@ -1321,18 +1576,21 @@ export default function Player({ hideMini = false }) {
         window.__kyoyuInfoCache[cacheKey] = infoData;
         if (fullCacheKey) window.__kyoyuInfoCache[fullCacheKey] = infoData;
 
-        const refined = isLongMixInfo ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
+        const refined = (isLongMixInfo || isPrivateTrack) ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: isLongMixInfo } : classifyTrackGenre(currentTrack, {
           ...infoData,
           provider: srcProv,
         });
-        const bestPrimaryGenre = isLongMixInfo ? '' : (infoData.kyoyuAnalysis?.primaryGenre || refined.primaryGenre || (Array.isArray(infoData.styles) && infoData.styles[0]) || '');
-        const bestSecondaryGenres = isLongMixInfo ? [] : ((infoData.kyoyuAnalysis?.secondaryGenres?.length ? infoData.kyoyuAnalysis.secondaryGenres : null)
+        const bestPrimaryGenre = (isLongMixInfo || isPrivateTrack) ? '' : (infoData.kyoyuAnalysis?.primaryGenre || refined.primaryGenre || (Array.isArray(infoData.styles) && infoData.styles[0]) || '');
+        const bestSecondaryGenres = (isLongMixInfo || isPrivateTrack) ? [] : ((infoData.kyoyuAnalysis?.secondaryGenres?.length ? infoData.kyoyuAnalysis.secondaryGenres : null)
           || (refined.secondaryGenres?.length ? refined.secondaryGenres : null)
           || (Array.isArray(infoData.styles) ? infoData.styles.slice(1, 4) : []));
-        const isTrackAnalyzed = !isLongMixInfo && Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
+        const isTrackAnalyzed = !isLongMixInfo && Boolean(
+          infoData.analyzed ||
+          (infoData.bpm && infoData.key && (isPrivateTrack || bestPrimaryGenre))
+        );
 
         // Persist newly completed Web DSP analysis to Supabase track_info_cache
-        if (!isLongMixInfo && !isNative() && isTrackAnalyzed && infoData.bpm && infoData.key && bestPrimaryGenre && (forceRefreshNow || !rawInfoData?.analyzed)) {
+        if (!isLongMixInfo && !isNative() && isTrackAnalyzed && infoData.bpm && infoData.key && (bestPrimaryGenre || isPrivateTrack) && (forceRefreshNow || !rawInfoData?.analyzed)) {
           fetch('/api/discogs-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1340,45 +1598,46 @@ export default function Player({ hideMini = false }) {
               action: 'save-track-analysis',
               title,
               artist,
-              album: infoData.album || album || '',
+              album: isPrivateTrack ? '' : (infoData.album || album || ''),
               bpm: String(infoData.bpm),
               key: String(infoData.key),
-              primaryGenre: bestPrimaryGenre,
-              secondaryGenres: bestSecondaryGenres,
+              primaryGenre: isPrivateTrack ? '' : bestPrimaryGenre,
+              secondaryGenres: isPrivateTrack ? [] : bestSecondaryGenres,
             }),
           }).catch(() => {});
         }
 
         setResolvedGenre({
           ...refined,
-          primaryGenre: bestPrimaryGenre,
-          secondaryGenres: bestSecondaryGenres,
+          primaryGenre: isPrivateTrack ? '' : bestPrimaryGenre,
+          secondaryGenres: isPrivateTrack ? [] : bestSecondaryGenres,
           bpm: (!isLongMixInfo && infoData.bpm && infoData.bpmFromProvider !== false) ? String(infoData.bpm) : '',
           key: (!isLongMixInfo && infoData.key && infoData.keyFromProvider !== false) ? String(infoData.key) : '',
           analyzed: isTrackAnalyzed,
-          unverified: isLongMixInfo || !bestPrimaryGenre,
+          unverified: isLongMixInfo || (!isPrivateTrack && !bestPrimaryGenre),
           _trackKey: trackKey,
         });
 
         const nativePatch = {
           trackId: String(currentTrack.id || ''),
-          verifiedGenre: bestPrimaryGenre,
-          verifiedSecondaryGenres: bestSecondaryGenres,
-          superGenre: isLongMixInfo ? '' : (refined.superGenre || ''),
+          verifiedGenre: isPrivateTrack ? '' : bestPrimaryGenre,
+          verifiedSecondaryGenres: isPrivateTrack ? [] : bestSecondaryGenres,
+          superGenre: (isLongMixInfo || isPrivateTrack) ? '' : (refined.superGenre || ''),
           analyzed: isTrackAnalyzed,
+          isPrivate: isPrivateTrack,
         };
         if (isTrackAnalyzed && !isLongMixInfo) {
-          nativePatch.genre = bestPrimaryGenre;
-          nativePatch.secondaryGenres = bestSecondaryGenres;
+          nativePatch.genre = isPrivateTrack ? '' : bestPrimaryGenre;
+          nativePatch.secondaryGenres = isPrivateTrack ? [] : bestSecondaryGenres;
         }
         if (!isLongMixInfo && infoData.bpm && infoData.bpmFromProvider !== false) nativePatch.bpm = String(infoData.bpm);
         if (!isLongMixInfo && infoData.key && infoData.keyFromProvider !== false) nativePatch.key = String(infoData.key);
         if (infoData.previewUrl) nativePatch.previewUrl = String(infoData.previewUrl);
-        if (infoData.album && !isInvalidAlbumName(infoData.album)) {
+        if (!isPrivateTrack && infoData.album && !isInvalidAlbumName(infoData.album)) {
           nativePatch.albumName = cleanTrackOrReleaseTitle(String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
         }
-        const resolvedLabel = infoData.label || bcPageData?.label || cleaned.label || '';
-        if (resolvedLabel) {
+        const resolvedLabel = isPrivateTrack ? '' : (infoData.label || bcPageData?.label || cleaned.label || '');
+        if (!isPrivateTrack && resolvedLabel) {
           nativePatch.label = resolvedLabel;
         }
         if (infoData.year && !(currentTrack.year || currentTrack.releaseYear)) {
@@ -1387,7 +1646,7 @@ export default function Player({ hideMini = false }) {
         postNative(nativePatch);
 
         // Preload Album, Artist, and Label sheets with enriched Discogs/MusicBrainz/Bandcamp info
-        if (typeof window.__kyoyuPreloadPlayingEntities === 'function') {
+        if (!isPrivateTrack && typeof window.__kyoyuPreloadPlayingEntities === 'function') {
           window.__kyoyuPreloadPlayingEntities(currentTrack, infoData);
         }
       } catch (e) {} finally {
@@ -1398,7 +1657,7 @@ export default function Player({ hideMini = false }) {
     return () => {
       cancelled = true;
     };
-  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artistName, currentTrack?.artist, provider, reanalyzeTick]);
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artistName, currentTrack?.artist, provider, reanalyzeTick, isPrivateTrack, isLongFormTrack]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');
@@ -1471,10 +1730,21 @@ export default function Player({ hideMini = false }) {
     if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
     if (evt.type === 'trackChange' || evt.type === 'metadata') {
       const newItemId = String(evt.itemId || cur.itemId || '').replace(/^(am|sp|td)-/, '');
+      const isEvtPrivate = Boolean(
+        evt.isPrivate ||
+        (evt.service === 'applemusic' && newItemId.startsWith('i.'))
+      );
       const patch = {};
       if (evt.title) patch.title = evt.title;
       if (evt.artist) { patch.artistName = evt.artist; patch.artist = evt.artist; }
-      if (evt.album) { patch.releaseTitle = evt.album; patch.albumName = evt.album; }
+      if (isEvtPrivate) {
+        patch.isPrivate = true;
+        patch.releaseTitle = '';
+        patch.albumName = '';
+      } else if (evt.album) {
+        patch.releaseTitle = evt.album;
+        patch.albumName = evt.album;
+      }
       if (evt.artworkUrl) { patch.releaseCover = evt.artworkUrl; patch.artworkUrl = evt.artworkUrl; patch.cover = evt.artworkUrl; }
       if (evt.duration > 0) patch.duration = evt.duration;
       if (evt.bpm) patch.bpm = String(evt.bpm);
@@ -1599,7 +1869,10 @@ export default function Player({ hideMini = false }) {
             open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
             provider={provider} providerItemId={providerItemId} volume={volume}
             onNext={handleNext} onPrev={handlePrev} genreInfo={activeGenreInfo}
-            isReanalyzing={isReanalyzing} onReanalyze={handleReanalyzeCurrentTrack}/>
+            isReanalyzing={isReanalyzing} onReanalyze={handleReanalyzeCurrentTrack}
+            showBpmFader={showBpmFader} setShowBpmFader={setShowBpmFader}
+            baseBpm={baseBpm} activeBpm={activeBpm}
+            onChangeBpmSpeed={handleChangeBpmSpeed} onResetBpmSpeed={handleResetBpmSpeed}/>
           <WebGenreSheetModal />
         </>
       )}

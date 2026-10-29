@@ -62,7 +62,7 @@ export function historyReplayInfo(t) {
 export function trackIdentity(t) {
   if (!t) return {};
   const out = {};
-  for (const k of ['provider', 'providerItemId', 'providerUrl', 'scTrackId', 'spotifyId', 'appleMusicId', 'tidalId', 'videoId', 'origin']) {
+  for (const k of ['provider', 'providerItemId', 'providerUrl', 'scTrackId', 'spotifyId', 'appleMusicId', 'tidalId', 'videoId', 'origin', 'isPrivate']) {
     if (t[k]) out[k] = t[k];
   }
   out.replay = historyReplayInfo(t);
@@ -583,15 +583,23 @@ export function PlayerProvider({ children }) {
     const rawAlbum = track.releaseTitle || track.albumTitle || track.album || '';
     const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum);
     const normDur = parseDurationSeconds(track.duration);
+    const isPrivateTrack = Boolean(
+      track.isPrivate ||
+      (typeof (track.providerUrl || track.providerItemId || track.url) === 'string' && /soundcloud\.com\/[^/]+\/[^/]+\/s-[A-Za-z0-9]+/i.test(track.providerUrl || track.providerItemId || track.url)) ||
+      ((track.provider === 'applemusic' || track.sourceProvider === 'applemusic' || String(track.id || '').startsWith('am-')) &&
+        (String(track.id || '').startsWith('am-i.') || String(track.appleMusicId || track.providerItemId || '').startsWith('i.')) &&
+        !track.catalogId)
+    );
     const normTrack = {
       ...track,
       title: cleaned.title || rawTitle,
       src: track.src || track.fileUrl || track.audioUrl || '',
       artistName: cleaned.artist || rawArtist,
-      label: cleaned.label || rawLabel,
-      releaseTitle: cleaned.album || rawAlbum,
+      label: isPrivateTrack ? '' : (cleaned.label || rawLabel),
+      releaseTitle: isPrivateTrack ? '' : (cleaned.album || rawAlbum),
       releaseCover: track.releaseCover || track.cover || track.artworkUrl || '',
       duration: normDur > 0 ? normDur : (track.duration || 0),
+      isPrivate: isPrivateTrack,
     };
     dispatch({ type:'PLAY_TRACK', track: normTrack });
     try {
@@ -601,11 +609,12 @@ export function PlayerProvider({ children }) {
         trackId: String(normTrack.id || ''),
         title: normTrack.title || '',
         artist: normTrack.artistName || '',
-        label: normTrack.label || '',
-        albumName: normTrack.releaseTitle || '',
+        label: isPrivateTrack ? '' : (normTrack.label || ''),
+        albumName: isPrivateTrack ? '' : (normTrack.releaseTitle || ''),
         artwork: normTrack.releaseCover || '',
         provider: 'native',
         sourceProvider: normTrack.sourceProvider || normTrack.provider || normTrack.origin?.provider || 'native',
+        isPrivate: isPrivateTrack,
         ...(normDur > 0 ? { dur: normDur } : {}),
       });
     } catch(e){} 
@@ -620,8 +629,8 @@ export function PlayerProvider({ children }) {
         title: qClean.title || qTitle,
         src: t.src || t.fileUrl || t.audioUrl || '',
         artistName: qClean.artist || qArtist,
-        label: qClean.label || qLabel,
-        releaseTitle: qClean.album || qAlbum,
+        label: t.isPrivate ? '' : (qClean.label || qLabel),
+        releaseTitle: t.isPrivate ? '' : (qClean.album || qAlbum),
         releaseCover: t.releaseCover || t.cover || t.artworkUrl || '',
       };
     });
@@ -745,8 +754,9 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    const rawAlbum = metadata.releaseTitle || metadata.albumName || metadata.album || '';
-    const initClean = splitCleanMetadata(metadata.title || 'SoundCloud Track', metadata.artistName || metadata.artist || '', metadata.label || '', rawAlbum);
+    const isPrivateSc = Boolean(metadata.isPrivate || /\/s-[A-Za-z0-9]+/i.test(cleanTrackUrl || ''));
+    const rawAlbum = isPrivateSc ? '' : (metadata.releaseTitle || metadata.albumName || metadata.album || '');
+    const initClean = splitCleanMetadata(metadata.title || 'SoundCloud Track', metadata.artistName || metadata.artist || '', isPrivateSc ? '' : (metadata.label || ''), rawAlbum);
     const initDur = parseDurationSeconds(metadata.duration);
     const placeholderId = metadata.id || (trackId ? `sc-${trackId}` : `sc-${Date.now()}`);
     const sourceProvider = metadata.sourceProvider || 'soundcloud';
@@ -754,8 +764,8 @@ export function PlayerProvider({ children }) {
       id: placeholderId,
       title: initClean.title || metadata.title || 'SoundCloud Track',
       artistName: initClean.artist || metadata.artistName || metadata.artist || '',
-      label: initClean.label || metadata.label || '',
-      releaseTitle: initClean.album || rawAlbum,
+      label: isPrivateSc ? '' : (initClean.label || metadata.label || ''),
+      releaseTitle: isPrivateSc ? '' : (initClean.album || rawAlbum),
       releaseCover: metadata.releaseCover || metadata.artworkUrl || metadata.cover || '',
       duration: initDur,
       src: '',
@@ -764,7 +774,8 @@ export function PlayerProvider({ children }) {
       providerUrl: cleanTrackUrl,
       providerItemId: cleanTrackUrl || (trackId ? String(trackId) : ''),
       scTrackId: trackId ? String(trackId) : '',
-      origin: { provider: 'soundcloud', scTrackId: trackId ? String(trackId) : '', url: cleanTrackUrl || '' },
+      isPrivate: isPrivateSc,
+      origin: { provider: 'soundcloud', scTrackId: trackId ? String(trackId) : '', url: cleanTrackUrl || '', isPrivate: isPrivateSc },
     };
     showPlaceholder(placeholderTrack);
 
@@ -787,6 +798,7 @@ export function PlayerProvider({ children }) {
               artistName: nativeRes.artistName || '',
               artworkUrl: nativeRes.artworkUrl || '',
               duration: parseDurationSeconds(nativeRes.duration),
+              isPrivate: Boolean(nativeRes.isPrivate || isPrivateSc),
             };
           }
         } catch (nativeErr) {
@@ -823,11 +835,12 @@ export function PlayerProvider({ children }) {
       }
 
       const finalTrackId = String(data.trackId || trackId || '').replace(/^sc-/, '');
+      const finalIsPrivate = Boolean(data.isPrivate || isPrivateSc);
       const resClean = splitCleanMetadata(
         metadata.title || data.title || 'SoundCloud Track',
         metadata.artistName || metadata.artist || data.artistName || '',
-        initClean.label || metadata.label || '',
-        initClean.album || rawAlbum
+        finalIsPrivate ? '' : (initClean.label || metadata.label || ''),
+        finalIsPrivate ? '' : (initClean.album || rawAlbum)
       );
       const resolvedDur = parseDurationSeconds(data.duration) || initDur || 0;
       const resolvedTrack = {
@@ -837,15 +850,16 @@ export function PlayerProvider({ children }) {
         provider: 'soundcloud',
         sourceProvider,
         providerItemId: cleanTrackUrl || finalTrackId,
-        origin: { provider: 'soundcloud', scTrackId: finalTrackId, url: cleanTrackUrl || '' },
+        origin: { provider: 'soundcloud', scTrackId: finalTrackId, url: cleanTrackUrl || '', isPrivate: finalIsPrivate },
         title: resClean.title || metadata.title || data.title || 'SoundCloud Track',
         artistName: resClean.artist || metadata.artistName || metadata.artist || data.artistName || '',
-        label: resClean.label || '',
-        releaseTitle: resClean.album || rawAlbum,
+        label: finalIsPrivate ? '' : (resClean.label || ''),
+        releaseTitle: finalIsPrivate ? '' : (resClean.album || rawAlbum),
         releaseCover: metadata.releaseCover || metadata.artworkUrl || data.artworkUrl || metadata.cover || '',
         duration: resolvedDur,
         src: data.streamUrl,
         providerUrl: cleanTrackUrl,
+        isPrivate: finalIsPrivate,
       };
       playTrack(resolvedTrack);
     } catch (err) {
@@ -889,10 +903,11 @@ export function PlayerProvider({ children }) {
         trackId: item.scTrackId || item.trackId || (item.id && String(item.id).replace(/^sc-/, '')),
         title: item.title,
         artistName: item.artistName || item.artist,
-        releaseTitle: item.albumName || item.releaseTitle || item.albumTitle || '',
-        label: item.label || item.labelName || '',
+        releaseTitle: item.isPrivate ? '' : (item.albumName || item.releaseTitle || item.albumTitle || ''),
+        label: item.isPrivate ? '' : (item.label || item.labelName || ''),
         artworkUrl: item.artworkUrl || item.releaseCover || item.cover,
         duration: item.duration,
+        isPrivate: Boolean(item.isPrivate),
       }, { seq: mySeq });
     } else if (item.provider === 'bandcamp') {
       const bcUrl = item.providerItemId || item.trackUrl || item.url;
@@ -930,21 +945,26 @@ export function PlayerProvider({ children }) {
   async function playStreamingItem(item, myCounter, mySeq = ++masterPlaySeqRef.current) {
     const service = item.provider;
     const itemId = String(item.providerItemId || item.spotifyId || item.appleMusicId || item.tidalId || item.trackId || '').replace(/^(am|sp|td)-/, '');
+    const isPrivateAm = Boolean(
+      item.isPrivate ||
+      (service === 'applemusic' && (itemId.startsWith('i.') || String(item.id || '').startsWith('am-i.')) && !item.catalogId)
+    );
     const cleaned = splitCleanMetadata(
       item.title || '',
       item.artistName || item.artist || '',
-      item.label || item.labelName || '',
-      item.albumName || item.releaseTitle || ''
+      isPrivateAm ? '' : (item.label || item.labelName || ''),
+      isPrivateAm ? '' : (item.albumName || item.releaseTitle || '')
     );
     const meta = {
       id: item.id || `${service}-${itemId}`,
       title: cleaned.title || item.title || '',
       artistName: cleaned.artist || item.artistName || item.artist || '',
-      label: cleaned.label || item.label || item.labelName || '',
+      label: isPrivateAm ? '' : (cleaned.label || item.label || item.labelName || ''),
       releaseCover: item.artworkUrl || item.releaseCover || item.cover || '',
       duration: parseDurationSeconds(item.duration) || 0,
-      releaseTitle: cleaned.album || item.albumName || item.releaseTitle || '',
+      releaseTitle: isPrivateAm ? '' : (cleaned.album || item.albumName || item.releaseTitle || ''),
       sourceProvider: service,
+      isPrivate: isPrivateAm,
     };
     const stillCurrent = () => myCounter === playSearchItemCounterRef.current && mySeq === masterPlaySeqRef.current;
     // Immediately stop any active AVPlayer stream before handing off to Spotify / Apple Music
@@ -958,6 +978,7 @@ export function PlayerProvider({ children }) {
         sourceProvider: service,
         providerItemId: itemId,
         providerUrl: item.url || '',
+        isPrivate: isPrivateAm,
         ...(service === 'spotify' ? { spotifyId: itemId } : {}),
         ...(service === 'applemusic' ? { appleMusicId: itemId } : {}),
         ...(service === 'tidal' ? { tidalId: itemId } : {}),
@@ -970,11 +991,12 @@ export function PlayerProvider({ children }) {
           trackId: String(track.id || ''),
           title: track.title,
           artist: track.artistName || '',
-          label: track.label || '',
-          albumName: track.releaseTitle || '',
+          label: isPrivateAm ? '' : (track.label || ''),
+          albumName: isPrivateAm ? '' : (track.releaseTitle || ''),
           artwork: track.releaseCover || '',
           provider: service,
           sourceProvider: service,
+          isPrivate: isPrivateAm,
           ...(meta.duration > 0 ? { dur: meta.duration } : {}),
         });
       } catch (e) {}
@@ -1024,16 +1046,18 @@ export function PlayerProvider({ children }) {
 
   /** Show a track in the player immediately (no stream yet). */
   function showPlaceholder(meta) {
-    const cleaned = splitCleanMetadata(meta.title || 'Loading...', meta.artistName || meta.artist || '', meta.label || '', meta.releaseTitle || '');
+    const isPrivateMeta = Boolean(meta.isPrivate);
+    const cleaned = splitCleanMetadata(meta.title || 'Loading...', meta.artistName || meta.artist || '', isPrivateMeta ? '' : (meta.label || ''), isPrivateMeta ? '' : (meta.releaseTitle || ''));
     const phDur = parseDurationSeconds(meta.duration);
     const track = {
       ...meta,
       src: '',
       title: cleaned.title || meta.title || 'Loading...',
       artistName: cleaned.artist || meta.artistName || meta.artist || '',
-      label: cleaned.label || meta.label || '',
-      releaseTitle: cleaned.album || meta.releaseTitle || '',
+      label: isPrivateMeta ? '' : (cleaned.label || meta.label || ''),
+      releaseTitle: isPrivateMeta ? '' : (cleaned.album || meta.releaseTitle || ''),
       duration: phDur > 0 ? phDur : (meta.duration || 0),
+      isPrivate: isPrivateMeta,
     };
     try { window.webkit?.messageHandlers?.audioFallback?.postMessage({ url: '' }); } catch (e) {}
     dispatch({ type: 'PLAY_TRACK', track });
@@ -1044,11 +1068,12 @@ export function PlayerProvider({ children }) {
         trackId: String(track.id || ''),
         title: track.title,
         artist: track.artistName || '',
-        label: track.label || '',
-        albumName: track.releaseTitle || '',
+        label: isPrivateMeta ? '' : (track.label || ''),
+        albumName: isPrivateMeta ? '' : (track.releaseTitle || ''),
         artwork: track.releaseCover || '',
         provider: track.provider || 'native',
         sourceProvider: track.sourceProvider || track.provider || 'native',
+        isPrivate: isPrivateMeta,
         ...(phDur > 0 ? { dur: phDur } : {}),
       });
     } catch(e){}
@@ -1173,15 +1198,16 @@ export function PlayerProvider({ children }) {
     if (Array.isArray(queue) && queue.length) dispatch({ type: 'SET_QUEUE', queue });
 
     const r = historyReplayInfo(item);
+    const isPrivateSaved = Boolean(item.isPrivate || item.origin?.isPrivate);
     const rawTitle = item.title || item.name || '';
     const rawArtist = item.artist || item.artistName || '';
-    const rawLabel = item.label || item.labelName || item.releaseLabel || '';
-    const rawAlbum = item.releaseTitle || item.album || '';
+    const rawLabel = isPrivateSaved ? '' : (item.label || item.labelName || item.releaseLabel || '');
+    const rawAlbum = isPrivateSaved ? '' : (item.releaseTitle || item.album || '');
     const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum);
     const title = cleaned.title || rawTitle;
     const artist = cleaned.artist || rawArtist;
-    const label = cleaned.label || rawLabel;
-    const releaseTitle = cleaned.album || rawAlbum;
+    const label = isPrivateSaved ? '' : (cleaned.label || rawLabel);
+    const releaseTitle = isPrivateSaved ? '' : (cleaned.album || rawAlbum);
     const cover = item.cover || item.releaseCover || item.artworkUrl || '';
     const id = item.id || `saved-${artist}-${title}`;
     const meta = {
@@ -1191,17 +1217,18 @@ export function PlayerProvider({ children }) {
       label,
       labelUrl: item.labelUrl || '',
       year: item.year || item.releaseYear || '',
-      albumUrl: item.albumUrl || '',
+      albumUrl: isPrivateSaved ? '' : (item.albumUrl || ''),
       releaseCover: cover,
       duration: item.duration || 0,
       releaseTitle,
+      isPrivate: isPrivateSaved,
     };
     const isCurrent = () => myCounter === savedPlayCounterRef.current && mySeq === masterPlaySeqRef.current && stateRef.current.currentTrack?.id === id;
 
     if (r.provider === 'youtube') {
       playYouTube(r.videoId, { id, title, artist, releaseTitle, label, thumbnail: cover, releaseCover: cover, duration: item.duration }, { seq: mySeq });
     } else if (r.provider === 'soundcloud') {
-      playSoundCloud(r.url || '', { id, trackId: r.scTrackId, title, artistName: artist, releaseTitle, label, artworkUrl: cover, releaseCover: cover, duration: item.duration }, { seq: mySeq });
+      playSoundCloud(r.url || '', { id, trackId: r.scTrackId, title, artistName: artist, releaseTitle, label, artworkUrl: cover, releaseCover: cover, duration: item.duration, isPrivate: isPrivateSaved }, { seq: mySeq });
     } else if (r.provider === 'bandcamp') {
       showPlaceholder({ ...meta, provider: 'bandcamp', sourceProvider: 'bandcamp', providerItemId: r.url, providerUrl: r.url, replay: r });
       await playBandcampOrFallback({ ...meta, url: r.url, sourceProvider: 'bandcamp' }, isCurrent);
@@ -1211,12 +1238,12 @@ export function PlayerProvider({ children }) {
         searchQueueIdxRef.current = -1;
       }
       await playStreamingItem(
-        { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, label, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '', strict: true },
+        { id, provider: r.provider, providerItemId: r.itemId, title, artistName: artist, label, artworkUrl: cover, duration: item.duration || 0, releaseTitle: meta.releaseTitle, url: item.providerUrl || item.url || '', isPrivate: isPrivateSaved, strict: true },
         playSearchItemCounterRef.current += 1,
         mySeq,
       );
     } else if (r.provider === 'native') {
-      playTrack({ ...item, id, title, artistName: artist, label, releaseTitle, releaseCover: cover });
+      playTrack({ ...item, id, title, artistName: artist, label, releaseTitle, releaseCover: cover, isPrivate: isPrivateSaved });
     } else {
       // No identity saved (older entries): find the song again by artist + title
       showPlaceholder({ ...meta, replay: r });
