@@ -1339,6 +1339,16 @@ async function handleTrackInfo(body, res) {
 
   const trackPos = discogs?.matchedTrack?.position || '';
   const trackDur = discogs?.matchedTrack?.duration || trackMeta?.duration || (mb?.lengthSec ? formatDurationSec(mb.lengthSec) : '');
+  const parseDurSec = (dStr) => {
+    if (!dStr) return 0;
+    const parts = String(dStr).trim().split(':').map(Number);
+    if (parts.some(isNaN)) return 0;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return Number(dStr) || 0;
+  };
+  const resolvedDurSec = parseDurSec(trackDur) || Number(mb?.lengthSec || 0);
+  const isLongFormMix = resolvedDurSec > 1320;
   const releaseYear = String(discogs?.year || mb?.year || (trackMeta?.releaseDate ? trackMeta.releaseDate.slice(0, 4) : '') || '');
   const fullReleaseDate = discogs?.released || trackMeta?.releaseDate || mb?.releaseDate || releaseYear;
 
@@ -1351,14 +1361,15 @@ async function handleTrackInfo(body, res) {
     releaseDate: fullReleaseDate,
     trackPosition: trackPos,
     trackDuration: trackDur,
-    bpm: savedAnalysis?.bpm || trackMeta?.bpm || '',
-    key: savedAnalysis?.key || trackMeta?.key || '',
-    bpmFromProvider: Boolean(savedAnalysis?.bpm || trackMeta?.bpmFromProvider),
-    keyFromProvider: Boolean(savedAnalysis?.key || trackMeta?.keyFromProvider),
-    analyzed: Boolean(savedAnalysis?._analyzed),
-    kyoyuAnalysis: savedAnalysis || null,
-    primaryGenre: savedAnalysis?.primaryGenre || accurateGenres[0] || '',
-    secondaryGenres: savedAnalysis?.secondaryGenres || accurateGenres.slice(1, 4),
+    isLongFormMix,
+    bpm: isLongFormMix ? '' : (savedAnalysis?.bpm || trackMeta?.bpm || ''),
+    key: isLongFormMix ? '' : (savedAnalysis?.key || trackMeta?.key || ''),
+    bpmFromProvider: isLongFormMix ? false : Boolean(savedAnalysis?.bpm || trackMeta?.bpmFromProvider),
+    keyFromProvider: isLongFormMix ? false : Boolean(savedAnalysis?.key || trackMeta?.keyFromProvider),
+    analyzed: isLongFormMix ? false : Boolean(savedAnalysis?._analyzed),
+    kyoyuAnalysis: isLongFormMix ? null : (savedAnalysis || null),
+    primaryGenre: isLongFormMix ? '' : (savedAnalysis?.primaryGenre || accurateGenres[0] || ''),
+    secondaryGenres: isLongFormMix ? [] : (savedAnalysis?.secondaryGenres || accurateGenres.slice(1, 4)),
     isrc: trackMeta?.isrc || mb?.isrc || '',
     previewUrl: trackMeta?.previewUrl || '',
     label: labelDisplay,
@@ -1369,10 +1380,10 @@ async function handleTrackInfo(body, res) {
     labelParent: parentLabelName,
     labelSublabels,
     labelCountry,
-    genre: accurateGenres.join(', '),
-    styles: accurateGenres,
-    genres: discogs?.genres || [],
-    mbTags: mb?.tags || [],
+    genre: isLongFormMix ? '' : accurateGenres.join(', '),
+    styles: isLongFormMix ? [] : accurateGenres,
+    genres: isLongFormMix ? [] : (discogs?.genres || []),
+    mbTags: isLongFormMix ? [] : (mb?.tags || []),
     formats: discogs?.formats || [],
     country: discogs?.country || mbArtist?.area || '',
     location: artistOrigin || labelCountry || discogs?.country || '',
@@ -3579,11 +3590,11 @@ export default async function handler(req, res) {
   } else if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const now = Date.now();
   requestLog = requestLog.filter(t => now - t < RATE_WINDOW);
@@ -3593,6 +3604,11 @@ export default async function handler(req, res) {
   let body = req.body;
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (e) { return res.status(400).json({ error: 'Invalid JSON' }); }
+  }
+  if (!body || typeof body !== 'object') {
+    body = { ...(req.query || {}) };
+  } else if (req.query && typeof req.query === 'object') {
+    body = { ...req.query, ...body };
   }
 
   const { query, type, page, perPage, action } = body || {};

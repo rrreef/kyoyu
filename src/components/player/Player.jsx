@@ -856,13 +856,31 @@ export default function Player({ hideMini = false }) {
   const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume, restoredPending } = state;
   const [resolvedGenre, setResolvedGenre] = useState(null);
 
+  const isLongFormTrack = useMemo(() => {
+    if (Number(duration) > 1320) return true;
+    const rawDur = currentTrack?.duration;
+    if (typeof rawDur === 'number' && rawDur > 0) {
+      const sec = rawDur > 43200 ? rawDur / 1000 : rawDur;
+      if (sec > 1320) return true;
+    } else if (typeof rawDur === 'string' && rawDur.includes(':')) {
+      const parts = rawDur.trim().split(':').map(Number);
+      if (!parts.some(isNaN)) {
+        const sec = parts.length === 3
+          ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+          : parts[0] * 60 + (parts[1] || 0);
+        if (sec > 1320) return true;
+      }
+    }
+    return false;
+  }, [duration, currentTrack]);
+
   const activeGenreInfo = useMemo(() => {
-    if (!currentTrack) return null;
-    if (resolvedGenre && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}` && !resolvedGenre.unverified) {
+    if (!currentTrack || isLongFormTrack) return null;
+    if (resolvedGenre && !resolvedGenre.isLongFormMix && String(resolvedGenre._trackKey) === `${currentTrack.id || ''}:${currentTrack.title || ''}` && !resolvedGenre.unverified) {
       return resolvedGenre;
     }
     return null;
-  }, [resolvedGenre, currentTrack]);
+  }, [resolvedGenre, currentTrack, isLongFormTrack]);
 
   // Search-queue-aware next/prev — used by controls, mini bar, onEnded, and native bridge
   const handleNext = useCallback(() => {
@@ -1122,34 +1140,35 @@ export default function Player({ hideMini = false }) {
     // 1. Check if we already have cached track-info
     const cachedInfo = window.__kyoyuInfoCache?.[fullCacheKey] || window.__kyoyuInfoCache?.[cacheKey];
     if (cachedInfo) {
-      const initial = classifyTrackGenre(currentTrack, {
+      const isLongMixCached = Boolean(isLongFormTrack || cachedInfo.isLongFormMix || Number(cachedInfo.duration) > 1320);
+      const initial = isLongMixCached ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
         ...cachedInfo,
         provider: srcProv,
       });
-      const isAlreadyAnalyzed = Boolean(cachedInfo.analyzed || (cachedInfo.bpm && cachedInfo.key && (initial.primaryGenre || cachedInfo.primaryGenre)));
+      const isAlreadyAnalyzed = !isLongMixCached && Boolean(cachedInfo.analyzed || (cachedInfo.bpm && cachedInfo.key && (initial.primaryGenre || cachedInfo.primaryGenre)));
       setResolvedGenre({
         ...initial,
-        primaryGenre: cachedInfo.primaryGenre || initial.primaryGenre || '',
-        secondaryGenres: cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || []),
-        bpm: (cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) ? String(cachedInfo.bpm) : '',
-        key: (cachedInfo.key && cachedInfo.keyFromProvider !== false) ? String(cachedInfo.key) : '',
+        primaryGenre: isLongMixCached ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
+        secondaryGenres: isLongMixCached ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
+        bpm: (!isLongMixCached && cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) ? String(cachedInfo.bpm) : '',
+        key: (!isLongMixCached && cachedInfo.key && cachedInfo.keyFromProvider !== false) ? String(cachedInfo.key) : '',
         analyzed: isAlreadyAnalyzed,
-        unverified: !isAlreadyAnalyzed && initial.unverified,
+        unverified: isLongMixCached || (!isAlreadyAnalyzed && initial.unverified),
         _trackKey: trackKey,
       });
       const initialPatch = {
         trackId: String(currentTrack.id || ''),
-        verifiedGenre: cachedInfo.primaryGenre || initial.primaryGenre || '',
-        verifiedSecondaryGenres: cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || []),
-        superGenre: initial.superGenre || '',
+        verifiedGenre: isLongMixCached ? '' : (cachedInfo.primaryGenre || initial.primaryGenre || ''),
+        verifiedSecondaryGenres: isLongMixCached ? [] : (cachedInfo.secondaryGenres?.length ? cachedInfo.secondaryGenres : (initial.secondaryGenres || [])),
+        superGenre: isLongMixCached ? '' : (initial.superGenre || ''),
         analyzed: isAlreadyAnalyzed,
       };
-      if (isAlreadyAnalyzed) {
+      if (isAlreadyAnalyzed && !isLongMixCached) {
         initialPatch.genre = initialPatch.verifiedGenre;
         initialPatch.secondaryGenres = initialPatch.verifiedSecondaryGenres;
       }
-      if (cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
-      if (cachedInfo.key && cachedInfo.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
+      if (!isLongMixCached && cachedInfo.bpm && cachedInfo.bpmFromProvider !== false) initialPatch.bpm = String(cachedInfo.bpm);
+      if (!isLongMixCached && cachedInfo.key && cachedInfo.keyFromProvider !== false) initialPatch.key = String(cachedInfo.key);
       if (cachedInfo.previewUrl) initialPatch.previewUrl = String(cachedInfo.previewUrl);
       if (cachedInfo.album && !isInvalidAlbumName(cachedInfo.album)) {
         initialPatch.albumName = cleanTrackOrReleaseTitle(String(cachedInfo.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
@@ -1183,6 +1202,7 @@ export default function Player({ hideMini = false }) {
             album,
             provider: srcProv,
             trackId: String(currentTrack.id || ''),
+            duration: Number(duration || currentTrack.duration || 0),
           }),
         }).then(r => r.ok ? r.json() : null).catch(() => null);
 
@@ -1217,24 +1237,25 @@ export default function Player({ hideMini = false }) {
         window.__kyoyuInfoCache[cacheKey] = infoData;
         if (fullCacheKey) window.__kyoyuInfoCache[fullCacheKey] = infoData;
 
-        const refined = classifyTrackGenre(currentTrack, {
+        const isLongMixInfo = Boolean(isLongFormTrack || infoData.isLongFormMix || Number(infoData.duration) > 1320);
+        const refined = isLongMixInfo ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
           ...infoData,
           provider: srcProv,
         });
-        const bestPrimaryGenre = infoData.kyoyuAnalysis?.primaryGenre || refined.primaryGenre || (Array.isArray(infoData.styles) && infoData.styles[0]) || '';
-        const bestSecondaryGenres = (infoData.kyoyuAnalysis?.secondaryGenres?.length ? infoData.kyoyuAnalysis.secondaryGenres : null)
+        const bestPrimaryGenre = isLongMixInfo ? '' : (infoData.kyoyuAnalysis?.primaryGenre || refined.primaryGenre || (Array.isArray(infoData.styles) && infoData.styles[0]) || '');
+        const bestSecondaryGenres = isLongMixInfo ? [] : ((infoData.kyoyuAnalysis?.secondaryGenres?.length ? infoData.kyoyuAnalysis.secondaryGenres : null)
           || (refined.secondaryGenres?.length ? refined.secondaryGenres : null)
-          || (Array.isArray(infoData.styles) ? infoData.styles.slice(1, 4) : []);
-        const isTrackAnalyzed = Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
+          || (Array.isArray(infoData.styles) ? infoData.styles.slice(1, 4) : []));
+        const isTrackAnalyzed = !isLongMixInfo && Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
 
         setResolvedGenre({
           ...refined,
           primaryGenre: bestPrimaryGenre,
           secondaryGenres: bestSecondaryGenres,
-          bpm: (infoData.bpm && infoData.bpmFromProvider !== false) ? String(infoData.bpm) : '',
-          key: (infoData.key && infoData.keyFromProvider !== false) ? String(infoData.key) : '',
+          bpm: (!isLongMixInfo && infoData.bpm && infoData.bpmFromProvider !== false) ? String(infoData.bpm) : '',
+          key: (!isLongMixInfo && infoData.key && infoData.keyFromProvider !== false) ? String(infoData.key) : '',
           analyzed: isTrackAnalyzed,
-          unverified: !bestPrimaryGenre,
+          unverified: isLongMixInfo || !bestPrimaryGenre,
           _trackKey: trackKey,
         });
 
@@ -1242,15 +1263,15 @@ export default function Player({ hideMini = false }) {
           trackId: String(currentTrack.id || ''),
           verifiedGenre: bestPrimaryGenre,
           verifiedSecondaryGenres: bestSecondaryGenres,
-          superGenre: refined.superGenre || '',
+          superGenre: isLongMixInfo ? '' : (refined.superGenre || ''),
           analyzed: isTrackAnalyzed,
         };
-        if (isTrackAnalyzed) {
+        if (isTrackAnalyzed && !isLongMixInfo) {
           nativePatch.genre = bestPrimaryGenre;
           nativePatch.secondaryGenres = bestSecondaryGenres;
         }
-        if (infoData.bpm && infoData.bpmFromProvider !== false) nativePatch.bpm = String(infoData.bpm);
-        if (infoData.key && infoData.keyFromProvider !== false) nativePatch.key = String(infoData.key);
+        if (!isLongMixInfo && infoData.bpm && infoData.bpmFromProvider !== false) nativePatch.bpm = String(infoData.bpm);
+        if (!isLongMixInfo && infoData.key && infoData.keyFromProvider !== false) nativePatch.key = String(infoData.key);
         if (infoData.previewUrl) nativePatch.previewUrl = String(infoData.previewUrl);
         if (infoData.album && !isInvalidAlbumName(infoData.album)) {
           nativePatch.albumName = cleanTrackOrReleaseTitle(String(infoData.album).replace(/\s*\(single\)\s*$/i, '').trim(), artist);
