@@ -283,6 +283,13 @@ const YouTubePlayer = forwardRef(({
            });
         }
       }
+    },
+    setPlaybackRate: (rate) => {
+      if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+        try {
+          playerRef.current.setPlaybackRate(Number(rate) || 1.0);
+        } catch (e) {}
+      }
     }
   }));
 

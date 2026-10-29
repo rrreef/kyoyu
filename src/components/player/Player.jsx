@@ -345,7 +345,7 @@ const PlayerControls = memo(function PlayerControls({
               type="range"
               min={minBpm}
               max={maxBpm}
-              step={0.1}
+              step={0.01}
               value={activeBpm || baseBpm}
               onChange={(e) => {
                 const nextVal = parseFloat(e.target.value);
@@ -353,7 +353,7 @@ const PlayerControls = memo(function PlayerControls({
                   if (Math.abs(nextVal - baseBpm) < 0.08) {
                     onResetBpmSpeed && onResetBpmSpeed();
                   } else {
-                    onChangeBpmSpeed(Number(nextVal.toFixed(1)));
+                    onChangeBpmSpeed(nextVal);
                   }
                 }
               }}
@@ -1051,11 +1051,15 @@ export default function Player({ hideMini = false }) {
     const audioEl = window.__kyoyuAudioRef;
     if (audioEl) {
       try {
-        if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
-        else if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = true;
+        if ('preservesPitch' in audioEl) audioEl.preservesPitch = false;
+        if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = false;
+        if ('mozPreservesPitch' in audioEl) audioEl.mozPreservesPitch = false;
         audioEl.playbackRate = clampedRate;
       } catch (e) {}
     }
+    try {
+      ytHiddenRef.current?.setPlaybackRate?.(clampedRate);
+    } catch (e) {}
     try {
       const mh = window.webkit?.messageHandlers?.audioFallback;
       if (mh) mh.postMessage({ playbackRate: clampedRate });
@@ -1218,11 +1222,15 @@ export default function Player({ hideMini = false }) {
         const audioEl = window.__kyoyuAudioRef;
         if (audioEl) {
           try {
-            if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
-            else if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = true;
+            if ('preservesPitch' in audioEl) audioEl.preservesPitch = false;
+            if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = false;
+            if ('mozPreservesPitch' in audioEl) audioEl.mozPreservesPitch = false;
             audioEl.playbackRate = rate;
           } catch (e) {}
         }
+        try {
+          ytHiddenRef.current?.setPlaybackRate?.(rate);
+        } catch (e) {}
         return;
       }
       if (cmd === 'ytEnsurePause') {
