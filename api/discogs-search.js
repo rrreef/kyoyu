@@ -1279,8 +1279,10 @@ async function fetchMusicBrainzArtist(mbid, fallbackArtistName = '') {
 
 async function handleTrackInfo(body, res) {
   const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
-  const { title, artist, album, provider, trackId, discogsReleaseId, knownLabel } = body || {};
+  const { title, artist, album, provider, trackId, discogsReleaseId, knownLabel, forceRefresh } = body || {};
   if (!title && !artist) return res.status(400).json({ error: 'Missing title or artist' });
+
+  const isForceRefresh = forceRefresh === true || forceRefresh === 'true' || forceRefresh === '1' || forceRefresh === 1;
 
   const cleanTitle = (title || '').trim();
   const cleanArtist = stripArtistSuffix(artist || '');
@@ -1312,42 +1314,44 @@ async function handleTrackInfo(body, res) {
   const analysisKey = `kyoyu_analysis|${normName(cleanArtist)}|${normName(cleanTitle)}`;
 
   let savedAnalysis = null;
-  try {
-    const [cachedResp, analysisResp] = await Promise.all([
-      supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single(),
-      (cleanTitle ? supabase.from('track_info_cache').select('data').eq('lookup_key', analysisKey).single() : Promise.resolve({ data: null })),
-    ]);
-    if (analysisResp?.data?.data && analysisResp.data.data._analyzed) {
-      savedAnalysis = analysisResp.data.data;
-    }
-    const cached = cachedResp?.data;
-    if (cached?.data && cached.data._v === 20) {
-      const age = Date.now() - new Date(cached.updated_at).getTime();
-      if (age < 30 * 24 * 60 * 60 * 1000) {
-        const mergedCached = {
-          ...cached.data,
-          ...(savedAnalysis ? {
-            kyoyuAnalysis: savedAnalysis,
-            analyzed: true,
-            bpm: savedAnalysis.bpm || cached.data.bpm || '',
-            key: savedAnalysis.key || cached.data.key || '',
-            bpmFromProvider: true,
-            keyFromProvider: true,
-            primaryGenre: savedAnalysis.primaryGenre || '',
-            secondaryGenres: savedAnalysis.secondaryGenres || [],
-          } : {}),
-        };
-        if (cleanKnownLabel && normLabelName(mergedCached.labelName || mergedCached.label || '') !== normLabelName(cleanKnownLabel)) {
-          return res.status(200).json({
-            ...mergedCached,
-            label: cleanKnownLabel,
-            labelName: cleanKnownLabel,
-          });
-        }
-        return res.status(200).json(mergedCached);
+  if (!isForceRefresh) {
+    try {
+      const [cachedResp, analysisResp] = await Promise.all([
+        supabase.from('track_info_cache').select('data, updated_at').eq('lookup_key', lookupKey).single(),
+        (cleanTitle ? supabase.from('track_info_cache').select('data').eq('lookup_key', analysisKey).single() : Promise.resolve({ data: null })),
+      ]);
+      if (analysisResp?.data?.data && analysisResp.data.data._analyzed) {
+        savedAnalysis = analysisResp.data.data;
       }
-    }
-  } catch (e) {}
+      const cached = cachedResp?.data;
+      if (cached?.data && cached.data._v === 20) {
+        const age = Date.now() - new Date(cached.updated_at).getTime();
+        if (age < 30 * 24 * 60 * 60 * 1000) {
+          const mergedCached = {
+            ...cached.data,
+            ...(savedAnalysis ? {
+              kyoyuAnalysis: savedAnalysis,
+              analyzed: true,
+              bpm: savedAnalysis.bpm || cached.data.bpm || '',
+              key: savedAnalysis.key || cached.data.key || '',
+              bpmFromProvider: true,
+              keyFromProvider: true,
+              primaryGenre: savedAnalysis.primaryGenre || '',
+              secondaryGenres: savedAnalysis.secondaryGenres || [],
+            } : {}),
+          };
+          if (cleanKnownLabel && normLabelName(mergedCached.labelName || mergedCached.label || '') !== normLabelName(cleanKnownLabel)) {
+            return res.status(200).json({
+              ...mergedCached,
+              label: cleanKnownLabel,
+              labelName: cleanKnownLabel,
+            });
+          }
+          return res.status(200).json(mergedCached);
+        }
+      }
+    } catch (e) {}
+  }
 
   // Fetch primary release & recording sources in parallel
   const searchQuery = [cleanArtist, cleanAlbum || cleanTitle].filter(Boolean).join(' ');

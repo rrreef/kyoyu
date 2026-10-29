@@ -50,10 +50,20 @@ const KRUM_MIN = normalizeVec12([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75,
 
 const analysisCache = new Map();
 
-export async function analyzeAudioUrlWithEssentiaDSP(audioUrl, cacheId = '') {
+export function clearEssentiaAudioCache(cacheId = '', audioUrl = '') {
+  if (cacheId) analysisCache.delete(cacheId);
+  if (audioUrl) analysisCache.delete(audioUrl);
+}
+
+export async function analyzeAudioUrlWithEssentiaDSP(audioUrl, cacheId = '', forceRefresh = false) {
   if (!audioUrl || typeof window === 'undefined') return null;
   const key = cacheId || audioUrl;
-  if (analysisCache.has(key)) return analysisCache.get(key);
+  if (forceRefresh) {
+    analysisCache.delete(key);
+    analysisCache.delete(audioUrl);
+  } else if (analysisCache.has(key)) {
+    return analysisCache.get(key);
+  }
 
   try {
     const controller = new AbortController();

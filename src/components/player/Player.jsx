@@ -4,7 +4,7 @@ import YouTubePlayer from './YouTubePlayer';
 import SoundCloudPlayer from './SoundCloudPlayer';
 import { callStreaming, isStreamingProvider, onStreamingEvent, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../../lib/streaming';
 import { classifyTrackGenre } from '../../lib/genreIntelligence';
-import { analyzeAudioUrlWithEssentiaDSP } from '../../lib/webAudioEssentiaAnalyzer';
+import { analyzeAudioUrlWithEssentiaDSP, clearEssentiaAudioCache } from '../../lib/webAudioEssentiaAnalyzer';
 import { openRichGenreSheet, refreshGenreSheetTracks, openRichSceneSheet, openRichArtistSheet, openRichLabelSheet, playGenreTrack } from '../ui/AlbumSheet';
 import { Play, Pause, Rewind, FastForward, Music2, Star, MoreHorizontal,
          Airplay, AlignJustify, MessageSquare, Shuffle, Repeat, Infinity, X, RefreshCw } from 'lucide-react';
@@ -181,14 +181,38 @@ const Scrubber = memo(function Scrubber({ progress, duration, onSeek, buffering 
     on every progress tick, causing React to unmount/remount Scrubber
     and tear down its event listeners each second)                    ── */
 const PlayerControls = memo(function PlayerControls({
-  progress, duration, isPlaying, dispatch, onSeek, onNext, onPrev, showQueue, setShowQueue, buffering
+  progress, duration, isPlaying, dispatch, onSeek, onNext, onPrev, showQueue, setShowQueue, buffering, bpm, musicalKey, isReanalyzing, onReanalyze
 }) {
   const rem = Math.max(0, (duration||0) - (progress||0));
+  const formattedBpm = bpm ? (/bpm/i.test(bpm) ? bpm : `${bpm} BPM`) : '';
   return (
     <>
       <div className="fp-scrub-wrap">
         <Scrubber progress={progress} duration={duration} onSeek={onSeek} buffering={buffering}/>
-        <div className="fp-times"><span>{fmt(progress)}</span><span>-{fmt(rem)}</span></div>
+        <div className="fp-times">
+          <span>{fmt(progress)}</span>
+          {(isReanalyzing || formattedBpm || musicalKey) && (
+            <span
+              className="fp-bpm-key-tap"
+              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, opacity: isReanalyzing ? 0.85 : 0.72, fontWeight: 600 }}
+              title="Tap to re-analyze BPM & Key"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onReanalyze && !isReanalyzing) onReanalyze();
+              }}
+            >
+              {isReanalyzing ? (
+                <span>Re-analyzing…</span>
+              ) : (
+                <>
+                  {formattedBpm && <span>{formattedBpm}</span>}
+                  {musicalKey && <span>{musicalKey}</span>}
+                </>
+              )}
+            </span>
+          )}
+          <span>-{fmt(rem)}</span>
+        </div>
       </div>
       <div className="fp-ctrls">
         <button className="fp-ctrl" onClick={onPrev}><Rewind size={36} fill="currentColor" strokeWidth={0}/></button>
@@ -233,7 +257,7 @@ function MiniBar({ track, isPlaying, onExpand, dispatch, onNext }) {
 }
 
 /* ── Full screen player ── */
-function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev, genreInfo }) {
+function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, dispatch, seekTo, provider, providerItemId, volume, onNext, onPrev, genreInfo, isReanalyzing, onReanalyze }) {
   const ytRef = useRef(null);
   const scRef = useRef(null);
   const fpRef    = useRef(null);
@@ -335,7 +359,9 @@ function FullPlayer({ track, isPlaying, progress, duration, open, onCollapse, di
   const controls = <PlayerControls progress={progress} duration={duration}
     isPlaying={isPlaying} dispatch={dispatch} onSeek={handleSeek}
     onNext={onNext} onPrev={onPrev}
-    showQueue={showQueue} setShowQueue={setShowQueue} buffering={buffering}/>;
+    showQueue={showQueue} setShowQueue={setShowQueue} buffering={buffering}
+    bpm={genreInfo?.bpm} musicalKey={genreInfo?.key}
+    isReanalyzing={isReanalyzing} onReanalyze={onReanalyze}/>;
 
   /* Flat dominant colour: top bright → bottom 45% darker, same hue, no black */
   const fpStyle = (() => {
@@ -856,6 +882,38 @@ export default function Player({ hideMini = false }) {
   const [exp, setExp] = useState(false);
   const { currentTrack, isPlaying, progress, duration, provider, providerItemId, volume, restoredPending } = state;
   const [resolvedGenre, setResolvedGenre] = useState(null);
+  const [reanalyzeTick, setReanalyzeTick] = useState(0);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+
+  const handleReanalyzeCurrentTrack = useCallback(() => {
+    if (!currentTrack) return;
+    const rawTitle = currentTrack.title || '';
+    const rawArtist = currentTrack.artistName || currentTrack.artist || '';
+    const rawLabel = currentTrack.label || currentTrack.labelName || currentTrack.releaseLabel || '';
+    const rawAlbum = (currentTrack.releaseTitle || currentTrack.albumTitle || currentTrack.album || '').replace(/\s*\(single\)\s*$/i, '').trim();
+    const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum);
+    const title = cleaned.title || rawTitle;
+    const artist = cleaned.artist || rawArtist;
+    const album = cleanTrackOrReleaseTitle(cleaned.album || rawAlbum, artist);
+    const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+    const fullCacheKey = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
+    if (window.__kyoyuInfoCache) {
+      delete window.__kyoyuInfoCache[cacheKey];
+      if (fullCacheKey) delete window.__kyoyuInfoCache[fullCacheKey];
+    }
+    clearEssentiaAudioCache(fullCacheKey || cacheKey, currentTrack.previewUrl || currentTrack.src || '');
+    setIsReanalyzing(true);
+    setReanalyzeTick(t => t + 1);
+  }, [currentTrack]);
+
+  useEffect(() => {
+    window.__kyoyuReanalyzeCurrentTrack = handleReanalyzeCurrentTrack;
+    return () => {
+      if (window.__kyoyuReanalyzeCurrentTrack === handleReanalyzeCurrentTrack) {
+        delete window.__kyoyuReanalyzeCurrentTrack;
+      }
+    };
+  }, [handleReanalyzeCurrentTrack]);
 
   const isLongFormTrack = useMemo(() => {
     if (Number(duration) > 1320) return true;
@@ -1138,8 +1196,10 @@ export default function Player({ hideMini = false }) {
     const cacheKey = [artist, album || title].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
     const fullCacheKey = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
 
+    const forceRefreshNow = reanalyzeTick > 0;
+
     // 1. Check if we already have cached track-info
-    const cachedInfo = window.__kyoyuInfoCache?.[fullCacheKey] || window.__kyoyuInfoCache?.[cacheKey];
+    const cachedInfo = forceRefreshNow ? null : (window.__kyoyuInfoCache?.[fullCacheKey] || window.__kyoyuInfoCache?.[cacheKey]);
     if (cachedInfo) {
       const isLongMixCached = Boolean(isLongFormTrack || cachedInfo.isLongFormMix || Number(cachedInfo.duration) > 1320);
       const initial = isLongMixCached ? { primaryGenre: '', secondaryGenres: [], superGenre: '', unverified: true } : classifyTrackGenre(currentTrack, {
@@ -1188,7 +1248,7 @@ export default function Player({ hideMini = false }) {
       window.__kyoyuPreloadPlayingEntities(currentTrack, cachedInfo || null);
     }
 
-    if (cachedInfo && cachedInfo._v === 20 && (cachedInfo.label || !bcTrackUrl)) return;
+    if (!forceRefreshNow && cachedInfo && cachedInfo._v === 20 && (cachedInfo.label || !bcTrackUrl)) return;
 
     // 2. Asynchronously query /api/discogs-search (action: 'track-info') AND /api/bandcamp-resolve (when on Bandcamp)
     (async () => {
@@ -1204,6 +1264,7 @@ export default function Player({ hideMini = false }) {
             provider: srcProv,
             trackId: String(currentTrack.id || ''),
             duration: Number(duration || currentTrack.duration || 0),
+            forceRefresh: forceRefreshNow,
           }),
         }).then(r => r.ok ? r.json() : null).catch(() => null);
 
@@ -1236,18 +1297,18 @@ export default function Player({ hideMini = false }) {
 
         const isLongMixInfo = Boolean(isLongFormTrack || infoData.isLongFormMix || Number(infoData.duration) > 1320);
 
-        // Tier 1 Web Audio Essentia MIR fallback when running on Web and Tier 2 metadata lacks BPM or Key
-        if (!isLongMixInfo && !isNative() && (!infoData.bpm || !infoData.key)) {
+        // Tier 1 Web Audio Essentia MIR fallback when running on Web and Tier 2 metadata lacks BPM or Key (or when user explicitly tapped BPM/Key to re-analyze)
+        if (!isLongMixInfo && !isNative() && (forceRefreshNow || !infoData.bpm || !infoData.key)) {
           const candidateAudioUrl = infoData.previewUrl || currentTrack.previewUrl || currentTrack.src || '';
           if (candidateAudioUrl && /^https?:\/\//i.test(candidateAudioUrl)) {
-            const dspRes = await analyzeAudioUrlWithEssentiaDSP(candidateAudioUrl, fullCacheKey || cacheKey);
+            const dspRes = await analyzeAudioUrlWithEssentiaDSP(candidateAudioUrl, fullCacheKey || cacheKey, forceRefreshNow);
             if (cancelled) return;
             if (dspRes) {
-              if (!infoData.bpm && dspRes.bpm) {
+              if ((forceRefreshNow || !infoData.bpm) && dspRes.bpm) {
                 infoData.bpm = dspRes.bpm;
                 infoData.bpmFromProvider = true;
               }
-              if (!infoData.key && dspRes.key) {
+              if ((forceRefreshNow || !infoData.key) && dspRes.key) {
                 infoData.key = dspRes.key;
                 infoData.keyFromProvider = true;
               }
@@ -1271,7 +1332,7 @@ export default function Player({ hideMini = false }) {
         const isTrackAnalyzed = !isLongMixInfo && Boolean(infoData.analyzed || (infoData.bpm && infoData.key && bestPrimaryGenre));
 
         // Persist newly completed Web DSP analysis to Supabase track_info_cache
-        if (!isLongMixInfo && !isNative() && isTrackAnalyzed && infoData.bpm && infoData.key && bestPrimaryGenre && !rawInfoData?.analyzed) {
+        if (!isLongMixInfo && !isNative() && isTrackAnalyzed && infoData.bpm && infoData.key && bestPrimaryGenre && (forceRefreshNow || !rawInfoData?.analyzed)) {
           fetch('/api/discogs-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1329,13 +1390,15 @@ export default function Player({ hideMini = false }) {
         if (typeof window.__kyoyuPreloadPlayingEntities === 'function') {
           window.__kyoyuPreloadPlayingEntities(currentTrack, infoData);
         }
-      } catch (e) {}
+      } catch (e) {} finally {
+        if (!cancelled) setIsReanalyzing(false);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artistName, currentTrack?.artist, provider]);
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artistName, currentTrack?.artist, provider, reanalyzeTick]);
   // Signal to CSS that a mini pill player is visible (used by album sheet positioning)
   useEffect(()=>{
     if(currentTrack) document.body.classList.add('has-mini-player');
@@ -1535,7 +1598,8 @@ export default function Player({ hideMini = false }) {
           <FullPlayer track={currentTrack} isPlaying={isPlaying} progress={progress} duration={duration}
             open={exp} onCollapse={collapse} dispatch={dispatch} seekTo={seekTo}
             provider={provider} providerItemId={providerItemId} volume={volume}
-            onNext={handleNext} onPrev={handlePrev} genreInfo={activeGenreInfo}/>
+            onNext={handleNext} onPrev={handlePrev} genreInfo={activeGenreInfo}
+            isReanalyzing={isReanalyzing} onReanalyze={handleReanalyzeCurrentTrack}/>
           <WebGenreSheetModal />
         </>
       )}
