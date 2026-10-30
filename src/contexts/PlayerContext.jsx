@@ -1042,6 +1042,44 @@ export function PlayerProvider({ children }) {
     dispatch({ type: 'SET_PLAYING', value: false });
   }
 
+  useEffect(() => {
+    window.__kyoyuRecoverStreamingFailure = async (service, failedTrack, rawItemId) => {
+      if (!failedTrack || !failedTrack.title) {
+        dispatch({ type: 'SET_PLAYING', value: false });
+        return;
+      }
+      const mySeq = masterPlaySeqRef.current;
+      const myCounter = playSearchItemCounterRef.current;
+      const stillCurrent = () => myCounter === playSearchItemCounterRef.current && mySeq === masterPlaySeqRef.current;
+      const itemId = String(rawItemId || failedTrack.providerItemId || failedTrack.spotifyId || failedTrack.appleMusicId || failedTrack.tidalId || '').replace(/^(am|sp|td|spotify|applemusic|tidal)-/, '');
+      const meta = {
+        id: failedTrack.id || `${service}-${itemId}`,
+        title: failedTrack.title || '',
+        artistName: failedTrack.artistName || failedTrack.artist || '',
+        label: failedTrack.label || '',
+        releaseCover: failedTrack.releaseCover || failedTrack.artworkUrl || failedTrack.cover || '',
+        duration: parseDurationSeconds(failedTrack.duration) || 0,
+        releaseTitle: failedTrack.releaseTitle || failedTrack.albumName || '',
+        sourceProvider: service || failedTrack.sourceProvider || 'spotify',
+        isPrivate: Boolean(failedTrack.isPrivate),
+      };
+      const found = await findTrackSource({ id: meta.id, artist: meta.artistName, title: meta.title }, stillCurrent);
+      if (!stillCurrent()) return;
+      if (found) {
+        playFoundSource(found, {
+          ...meta,
+          sourceProvider: meta.sourceProvider,
+          ...(service === 'spotify' ? { spotifyId: itemId } : {}),
+          ...(service === 'applemusic' ? { appleMusicId: itemId } : {}),
+          ...(service === 'tidal' ? { tidalId: itemId } : {}),
+        }, mySeq);
+        return;
+      }
+      dispatch({ type: 'SET_PLAYING', value: false });
+    };
+    return () => { delete window.__kyoyuRecoverStreamingFailure; };
+  });
+
   // ── Shared helpers for resolving plays ──
 
   /** Show a track in the player immediately (no stream yet). */

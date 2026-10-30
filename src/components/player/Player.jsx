@@ -1851,7 +1851,7 @@ export default function Player({ hideMini = false }) {
 
   // Apple Music / Spotify → web: progress, play state (e.g. paused from Control Center), track end, artwork, or Lock Screen track change
   const streamingRef = useRef({});
-  useEffect(() => { streamingRef.current = { provider, isPlaying, handleNext, itemId: providerItemId, currentTrack }; });
+  useEffect(() => { streamingRef.current = { provider, isPlaying, progress, handleNext, itemId: providerItemId, currentTrack }; });
   useEffect(() => onStreamingEvent((evt) => {
     const cur = streamingRef.current;
     if (!isStreamingProvider(cur.provider) || evt.service !== cur.provider) return;
@@ -1905,9 +1905,14 @@ export default function Player({ hideMini = false }) {
     } else if (evt.type === 'ended') {
       cur.handleNext();
     } else if (evt.type === 'failed') {
+      if (cur.isPlaying && Number(cur.progress) > 0.5) {
+        return;
+      }
+      if (typeof window.__kyoyuRecoverStreamingFailure === 'function' && cur.currentTrack) {
+        window.__kyoyuRecoverStreamingFailure(evt.service, cur.currentTrack, cur.itemId);
+        return;
+      }
       dispatch({ type: 'SET_PLAYING', value: false });
-      const label = evt.service === 'spotify' ? 'Spotify' : evt.service === 'tidal' ? 'TIDAL' : 'Apple Music';
-      postNative({ alertTitle: `${label} did not start playing`, alert: `${evt.reason || 'No response from the player.'}\n\nOpen the ${label} app once, make sure you are logged in with Premium, then try again.` });
     }
   }), [dispatch]);
 
