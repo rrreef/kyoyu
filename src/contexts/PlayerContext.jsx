@@ -1761,7 +1761,18 @@ export function PlayerProvider({ children }) {
     window.__kyoyuGetTrackInfo = async (trackId, title, artist, album, provider, label) => {
       try {
         const cur = stateRef.current.currentTrack || {};
-        const knownLabel = String(label || cur.label || '').trim();
+        const curTitle = String(cur.title || cur.name || '').trim().toLowerCase();
+        const curArtist = String(cur.artistName || cur.artist || '').trim().toLowerCase();
+        const curAlbum = String(cur.releaseTitle || cur.albumTitle || cur.album || '').trim().toLowerCase();
+        const reqTitle = String(title || '').trim().toLowerCase();
+        const reqArtist = String(artist || '').trim().toLowerCase();
+        const reqAlbum = String(album || '').trim().toLowerCase();
+        const isCurrentPlayingMatch = Boolean(
+          (trackId && cur.id && String(trackId) === String(cur.id)) ||
+          (reqTitle && curTitle && reqTitle === curTitle && (!reqArtist || !curArtist || reqArtist === curArtist)) ||
+          (reqAlbum && curAlbum && reqAlbum === curAlbum && (!reqArtist || !curArtist || reqArtist === curArtist))
+        );
+        const knownLabel = String(label || (isCurrentPlayingMatch ? cur.label : '') || '').trim();
         const key = [artist, title, album].filter(Boolean).map(s => s.trim().toLowerCase()).join('|');
         // Return from cache if available
         if (window.__kyoyuInfoCache[key] && window.__kyoyuInfoCache[key]._v === 19) {

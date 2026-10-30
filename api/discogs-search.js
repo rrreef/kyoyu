@@ -732,10 +732,11 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
           if (wantArtist && hasArtistMatch) score += 60;
           else if (isVarious) score += 5;
 
-          if (c._fromTrackSearch) score += 55;
+          const isAlbumLookup = Boolean(wantAlbum && wantTitle && wantAlbum === wantTitle);
+          if (c._fromTrackSearch) score += isAlbumLookup ? 20 : 55;
 
           if (wantAlbum && (candRelNorm === wantAlbum || candRelNorm.includes(wantAlbum) || wantAlbum.includes(candRelNorm))) {
-            score += candRelNorm === wantAlbum ? 65 : 45;
+            score += candRelNorm === wantAlbum ? (isAlbumLookup ? 95 : 65) : 45;
           }
           if (wantTitle && (candRelNorm === wantTitle || candRelNorm.includes(wantTitle) || wantTitle.includes(candRelNorm))) {
             score += candRelNorm === wantTitle ? 50 : 35;
@@ -810,7 +811,9 @@ async function fetchDiscogsRelease(query, explicitReleaseId = null, fallbackArti
           }
         }
         const candTracks = (candDetail?.tracklist || []).filter(t => t.type_ === 'track' || !t.type_);
-        const hasTrackMatch = !wantTitle || candTracks.some(t => {
+        const candRelTitleNorm = normName(candDetail?.title || '');
+        const hasReleaseTitleMatch = Boolean(wantAlbum && candRelTitleNorm && (candRelTitleNorm === wantAlbum || candRelTitleNorm.includes(wantAlbum) || wantAlbum.includes(candRelTitleNorm)));
+        const hasTrackMatch = !wantTitle || hasReleaseTitleMatch || candTracks.some(t => {
           const tn = normName(t.title || '');
           return tn && (tn === wantTitle || tn.includes(wantTitle) || wantTitle.includes(tn));
         });
