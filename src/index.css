@@ -1121,3 +1121,27 @@ html[data-glass-tint="true"] #kpl-sh {
   background: var(--glass-bg-elevated) !important;
   border-color: var(--glass-border) !important;
 }
+
+/* ── Custom Text Color (Custom Appearance) ── */
+html[data-custom-text="true"],
+html[data-custom-text="true"][data-theme="dark"],
+html[data-custom-text="true"][data-theme="grey"],
+html[data-custom-text="true"][data-theme="white"] {
+  --text-heading:   var(--custom-text-color) !important;
+  --text-primary:   var(--custom-text-color) !important;
+  --text-title:     color-mix(in srgb, var(--custom-text-color) 92%, transparent) !important;
+  --text-subtitle:  color-mix(in srgb, var(--custom-text-color) 80%, transparent) !important;
+  --text-secondary: color-mix(in srgb, var(--custom-text-color) 77%, transparent) !important;
+  --text-category:  color-mix(in srgb, var(--custom-text-color) 70%, transparent) !important;
+  --text-muted:     color-mix(in srgb, var(--custom-text-color) 58%, transparent) !important;
+  --text-dim:       color-mix(in srgb, var(--custom-text-color) 42%, transparent) !important;
+  color: var(--custom-text-color) !important;
+}
+html[data-custom-text="true"] body,
+html[data-custom-text="true"] #root,
+html[data-custom-text="true"] .app-layout,
+html[data-custom-text="true"] .main-content,
+html[data-custom-text="true"] .page {
+  color: var(--custom-text-color) !important;
+}
+
