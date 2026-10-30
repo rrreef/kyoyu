@@ -1122,7 +1122,7 @@ html[data-glass-tint="true"] #kpl-sh {
   border-color: var(--glass-border) !important;
 }
 
-/* ── Custom Text Color (Custom Appearance) ── */
+/* ── Custom Background Text Color (Text directly on background, outside Glass UI elements) ── */
 html[data-custom-text="true"],
 html[data-custom-text="true"][data-theme="dark"],
 html[data-custom-text="true"][data-theme="grey"],
@@ -1145,3 +1145,57 @@ html[data-custom-text="true"] .page {
   color: var(--custom-text-color) !important;
 }
 
+/* Keep glass UI elements isolated from Background Text Color when Glass UI Text Color is Auto */
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] .bottom-dock-pill,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] .topbar-pill,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] .upl-sheet-card,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] .event-sheet-card,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] .search-playlist-sheet,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] #kyoyu-fbar button,
+html[data-custom-text="true"]:not([data-glass-text="true"])[data-theme="white"] #kpl-sh {
+  --text-heading:   #0f0f0f !important;
+  --text-primary:   #0f0f0f !important;
+  --text-title:     rgba(15, 15, 26, 0.92) !important;
+  --text-subtitle:  rgba(15, 15, 26, 0.78) !important;
+  --text-secondary: rgba(15, 15, 26, 0.72) !important;
+  --text-category:  rgba(15, 15, 26, 0.65) !important;
+  --text-muted:     rgba(15, 15, 26, 0.56) !important;
+  --text-dim:       rgba(15, 15, 26, 0.42) !important;
+  color: #0f0f0f !important;
+}
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) .bottom-dock-pill,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) .topbar-pill,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) .upl-sheet-card,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) .event-sheet-card,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) .search-playlist-sheet,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) #kyoyu-fbar button,
+html[data-custom-text="true"]:not([data-glass-text="true"]):not([data-theme="white"]) #kpl-sh {
+  --text-heading:   #ffffff !important;
+  --text-primary:   #ffffff !important;
+  --text-title:     rgba(255, 255, 255, 0.92) !important;
+  --text-subtitle:  rgba(255, 255, 255, 0.80) !important;
+  --text-secondary: rgba(255, 255, 255, 0.77) !important;
+  --text-category:  rgba(255, 255, 255, 0.70) !important;
+  --text-muted:     rgba(255, 255, 255, 0.58) !important;
+  --text-dim:       rgba(255, 255, 255, 0.42) !important;
+  color: #ffffff !important;
+}
+
+/* ── Custom Glass UI Text Color (Text & icons inside Glass UI elements) ── */
+html[data-glass-text="true"] .bottom-dock-pill,
+html[data-glass-text="true"] .topbar-pill,
+html[data-glass-text="true"] .upl-sheet-card,
+html[data-glass-text="true"] .event-sheet-card,
+html[data-glass-text="true"] .search-playlist-sheet,
+html[data-glass-text="true"] #kyoyu-fbar button,
+html[data-glass-text="true"] #kpl-sh {
+  --text-heading:   var(--glass-text-color) !important;
+  --text-primary:   var(--glass-text-color) !important;
+  --text-title:     color-mix(in srgb, var(--glass-text-color) 92%, transparent) !important;
+  --text-subtitle:  color-mix(in srgb, var(--glass-text-color) 80%, transparent) !important;
+  --text-secondary: color-mix(in srgb, var(--glass-text-color) 77%, transparent) !important;
+  --text-category:  color-mix(in srgb, var(--glass-text-color) 70%, transparent) !important;
+  --text-muted:     color-mix(in srgb, var(--glass-text-color) 58%, transparent) !important;
+  --text-dim:       color-mix(in srgb, var(--glass-text-color) 42%, transparent) !important;
+  color: var(--glass-text-color) !important;
+}

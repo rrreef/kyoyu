@@ -16,9 +16,10 @@ const LS_THEME_KEY     = 'kyoyu-theme';
 const LS_MODE_KEY      = 'kyoyu-appearance-mode';
 const LS_BASE_KEY      = 'kyoyu-custom-base-theme';
 const LS_CUSTOM_BG_KEY = 'kyoyu-custom-bg';
-const LS_TINT_KEY      = 'kyoyu-glass-tint';
-const LS_POS_KEY       = 'kyoyu-glass-tint-pos';
+const LS_TINT_KEY       = 'kyoyu-glass-tint';
+const LS_POS_KEY        = 'kyoyu-glass-tint-pos';
 const LS_TEXT_COLOR_KEY = 'kyoyu-custom-text-color';
+const LS_GLASS_TEXT_COLOR_KEY = 'kyoyu-custom-glass-text-color';
 
 export const DEFAULT_CUSTOM_BG = '#7c7c7c';
 
@@ -59,6 +60,10 @@ function readStoredAppearance() {
   const textColor = rawTextColor && /^#[0-9a-fA-F]{6}$/.test(rawTextColor.trim())
     ? rawTextColor.trim()
     : '';
+  const rawGlassTextColor = localStorage.getItem(LS_GLASS_TEXT_COLOR_KEY) || '';
+  const glassTextColor = rawGlassTextColor && /^#[0-9a-fA-F]{6}$/.test(rawGlassTextColor.trim())
+    ? rawGlassTextColor.trim()
+    : '';
   let tintPos = { x: 0.58, y: 0.45 };
   try {
     const rawPos = localStorage.getItem(LS_POS_KEY);
@@ -72,10 +77,10 @@ function readStoredAppearance() {
   const effectiveTheme = mode === 'custom'
     ? (isLightHex(customBg) ? 'white' : 'grey')
     : mode;
-  return { mode, customBase, customBg, glassTint, textColor, tintPos, effectiveTheme };
+  return { mode, customBase, customBg, glassTint, textColor, glassTextColor, tintPos, effectiveTheme };
 }
 
-export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glassTint, textColor }, notifyNative = true) {
+export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glassTint, textColor, glassTextColor }, notifyNative = true) {
   const activeCustomBg = (customBg && /^#[0-9a-fA-F]{6}$/.test(customBg.trim()))
     ? customBg.trim().toLowerCase()
     : DEFAULT_CUSTOM_BG;
@@ -86,6 +91,10 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   const storedText = textColor !== undefined ? textColor : (localStorage.getItem(LS_TEXT_COLOR_KEY) || '');
   const activeTextColor = (mode === 'custom' && storedText && /^#[0-9a-fA-F]{6}$/.test(storedText.trim()))
     ? storedText.trim()
+    : '';
+  const storedGlassText = glassTextColor !== undefined ? glassTextColor : (localStorage.getItem(LS_GLASS_TEXT_COLOR_KEY) || '');
+  const activeGlassTextColor = (mode === 'custom' && storedGlassText && /^#[0-9a-fA-F]{6}$/.test(storedGlassText.trim()))
+    ? storedGlassText.trim()
     : '';
 
   localStorage.setItem(LS_MODE_KEY, mode);
@@ -133,6 +142,14 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   } else {
     root.removeAttribute('data-custom-text');
     root.style.removeProperty('--custom-text-color');
+  }
+
+  if (activeGlassTextColor) {
+    root.setAttribute('data-glass-text', 'true');
+    root.style.setProperty('--glass-text-color', activeGlassTextColor);
+  } else {
+    root.removeAttribute('data-glass-text');
+    root.style.removeProperty('--glass-text-color');
   }
 
   root.style.backgroundColor = finalBg;
@@ -210,7 +227,7 @@ export function useTheme() {
       setState(latest);
     };
     const onStorage = (e) => {
-      if (!e.key || [LS_THEME_KEY, LS_MODE_KEY, LS_BASE_KEY, LS_CUSTOM_BG_KEY, LS_TINT_KEY, LS_TEXT_COLOR_KEY, 'kyoyu-custom-bg-image'].includes(e.key)) {
+      if (!e.key || [LS_THEME_KEY, LS_MODE_KEY, LS_BASE_KEY, LS_CUSTOM_BG_KEY, LS_TINT_KEY, LS_TEXT_COLOR_KEY, LS_GLASS_TEXT_COLOR_KEY, 'kyoyu-custom-bg-image'].includes(e.key)) {
         onSync();
       }
     };
