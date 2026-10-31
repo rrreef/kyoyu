@@ -5,7 +5,7 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { useState, useRef } from 'react';
 import './Cards.css';
 
-export function ReleaseCard({ release, size = 'md' }) {
+export function ReleaseCard({ release, size = 'md', onSelect }) {
   const { playRelease } = usePlayer();
   const { isSaved, toggleSave } = useLibrary();
   const saved = isSaved(release.id);
@@ -25,6 +25,8 @@ export function ReleaseCard({ release, size = 'md' }) {
     <div
       className={`release-card glass-card ${size}${longPressed ? ' long-pressed' : ''}`}
       onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchMove={onTouchMove}
+      onClick={() => (onSelect ? onSelect(release) : playRelease(release))}
+      style={{ cursor: 'pointer' }}
     >
       <div className="card-cover-wrap">
         <img
@@ -34,24 +36,24 @@ export function ReleaseCard({ release, size = 'md' }) {
           onError={(e) => { e.currentTarget.style.display = 'none'; }}
         />
         <div className="card-cover-overlay">
-          <button className="card-play-btn" onClick={() => playRelease(release)} aria-label="Play">
+          <button className="card-play-btn" onClick={(e) => { e.stopPropagation(); playRelease(release); }} aria-label="Play">
             <Play size={18} fill="currentColor" />
           </button>
         </div>
       </div>
       <div className="card-body">
-        <Link to={`/release/${release.id}`} className="card-title">{release.title}</Link>
-        <Link to={`/artist/${release.artistId}`} className="card-sub">{release.artist}</Link>
+        <Link to={`/release/${release.id}`} className="card-title" onClick={(e) => e.stopPropagation()}>{release.title}</Link>
+        <Link to={`/artist/${release.artistId}`} className="card-sub" onClick={(e) => e.stopPropagation()}>{release.artist}</Link>
         <div className="card-meta">
           <span className="card-genre">{release.genre}</span>
           <span className="card-year">{release.year}</span>
         </div>
         <div className="card-actions">
-          <button className={`card-action-btn ${saved ? 'active' : ''}`} onClick={() => toggleSave(release.id)} title="Save to Library">
-            <img src={LikeIcon} style={{ width: 14, height: 14, opacity: saved ? 1 : 0.5,  }} alt="like" />
+          <button className={`card-action-btn ${saved ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); toggleSave(release.id); }} title="Save to Library">
+            <Heart size={14} fill={saved ? 'currentColor' : 'none'} style={{ opacity: saved ? 1 : 0.5 }} />
           </button>
           {release.vinylPrice && (
-            <Link to={`/release/${release.id}`} className="card-action-btn" title="Buy Vinyl">
+            <Link to={`/release/${release.id}`} className="card-action-btn" title="Buy Vinyl" onClick={(e) => e.stopPropagation()}>
               <ShoppingBag size={14} />
             </Link>
           )}
@@ -115,7 +117,7 @@ export function TrackRow({ track, index, release, onPlay }) {
       </div>
       <div className="track-actions">
         <button className={`track-action-btn ${liked ? 'liked' : ''}`} onClick={() => toggleLike(track.id)}>
-          <img src={LikeIcon} style={{ width: 13, height: 13, opacity: liked ? 1 : 0.5,  }} alt="like" />
+          <Heart size={13} fill={liked ? 'currentColor' : 'none'} style={{ opacity: liked ? 1 : 0.5 }} />
         </button>
       </div>
       <div className="track-duration">{track.duration}</div>

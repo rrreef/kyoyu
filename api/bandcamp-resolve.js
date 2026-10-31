@@ -87,6 +87,25 @@ export default async function handler(req, res) {
             }
           }
         }
+        if (!parsed || !parsed.trackinfo) {
+          const blobMatch = pageHtml.match(/id="pagedata"[^>]*data-blob="([^"]+)"/) || pageHtml.match(/data-blob="([^"]+)"/);
+          if (blobMatch) {
+            try {
+              const decoded = blobMatch[1]
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&#39;|&apos;/g, "'");
+              const blob = JSON.parse(decoded);
+              if (blob?.tralbum?.trackinfo) {
+                parsed = blob.tralbum;
+              } else if (Array.isArray(blob?.trackinfo)) {
+                parsed = blob;
+              }
+            } catch (e) {}
+          }
+        }
         return parsed;
       };
 

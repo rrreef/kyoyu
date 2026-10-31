@@ -107,8 +107,10 @@ export function applyAppearanceToDOMAndNative({ mode, customBase, customBg, glas
   root.setAttribute('data-theme', effectiveTheme);
 
   const colors = THEME_BG_MAP[effectiveTheme] || THEME_BG_MAP.white;
-  const isNativeWebView = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.player);
-  const hasCustomBgImage = mode === 'custom' && (Boolean((localStorage.getItem('kyoyu-custom-bg-image') || '').trim()) || isNativeWebView);
+  const hasCustomBgImage = mode === 'custom' && (
+    root.getAttribute('data-custom-bg-image') === 'true' ||
+    Boolean((localStorage.getItem('kyoyu-custom-bg-image') || '').trim())
+  );
   const finalBg = hasCustomBgImage ? 'transparent' : (mode === 'custom' ? activeCustomBg : colors.bg);
   const finalFg = activeTextColor || (mode === 'custom' ? (isLightHex(activeCustomBg) ? '#0f0f0f' : '#ffffff') : colors.fg);
 

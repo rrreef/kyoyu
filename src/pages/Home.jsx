@@ -384,7 +384,7 @@ export default function Home() {
         if (pl.kind === 'album') {
           window.webkit?.messageHandlers?.player?.postMessage({
             albumOpen: true,
-            isUpdate: Boolean(trackList && trackList.length > 0 && trackList !== initialTracks),
+            isUpdate: Boolean(currentTracks && currentTracks.length > 0 && currentTracks !== initialTracks),
             nativeAlbum: {
               _ts: String(ts),
               id: pl.id,
@@ -419,7 +419,7 @@ export default function Home() {
 
     pushToSheet(initialTracks);
 
-    if (!initialTracks.length && pl.provider === 'bandcamp' && pl.kind === 'album' && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
+    if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.kind === 'album' || pl.kind === 'track') && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
       const albumUrl = pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId;
       try {
         const r = await fetch('/api/bandcamp-search', {
@@ -513,6 +513,31 @@ export default function Home() {
         }
         if (!fetched.length) {
           fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
+        }
+        if ((!Array.isArray(fetched) || !fetched.length) && (pl.kind === 'track' || String(albumUrl).includes('/track/'))) {
+          fetched = [{
+            id: pl.id || `bc-single-${now}`,
+            kind: 'track',
+            provider: 'bandcamp',
+            title: cleanAlbumTitle,
+            artist: creator,
+            artistName: creator,
+            label: resolvedLabel || undefined,
+            year: resolvedYear || undefined,
+            album: cleanAlbumTitle,
+            releaseTitle: cleanAlbumTitle,
+            artworkUrl: cover,
+            cover,
+            duration: pl.duration || 0,
+            streamUrl: pl.streamUrl || '',
+            audioUrl: pl.streamUrl || '',
+            url: pl.streamUrl || albumUrl,
+            trackUrl: albumUrl,
+            albumUrl,
+            providerItemId: albumUrl,
+            playable: true,
+            unplayable: false,
+          }];
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;

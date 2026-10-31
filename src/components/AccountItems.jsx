@@ -623,16 +623,22 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
 
   const isAlbumItem = (it) => {
     if (!it || it.kind === 'playlist' || it.kind === 'profile') return false;
+    if (it.kind === 'album') return true;
     const u = String(it.trackUrl || it.url || '');
     if (it.provider === 'bandcamp') {
-      if (u.includes('/track/')) return false;
       if (u.includes('/album/')) return true;
+      if (u.includes('/track/')) return false;
     }
-    return it.kind === 'album';
+    return false;
   };
 
   const handleSelect = useCallback(async (it) => {
-    if (!it || it.kind === 'profile') return;
+    if (!it) return;
+    if (it.kind === 'profile') {
+      const artistName = it.title || it.artistName || it.artist || '';
+      if (artistName) window.__kyoyuOpenArtist?.(artistName);
+      return;
+    }
     const handlePlaylistClick = async (pl) => {
       if (onOpenPlaylistRef.current) {
         onOpenPlaylistRef.current(pl);
@@ -649,6 +655,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
       let resolvedLabel = meta.label || pl.label || pl.labelName || null;
       let resolvedYear = pl.year ? String(pl.year) : null;
       const cover = pl.artworkUrl || pl.cover || null;
+      const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
 
       const postSheet = (tracksList) => {
         const mappedTracks = (tracksList || []).map(t => {
@@ -670,12 +677,14 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
           if (isAlbum) {
             window.webkit?.messageHandlers?.player?.postMessage({
               albumOpen: true,
+              isUpdate: Boolean(tracksList && tracksList.length > 0 && tracksList !== initialTracks),
               nativeAlbum: {
                 _ts: String(ts),
                 id: pl.id,
                 title: cleanAlbumTitle,
                 artist: creator,
                 cover,
+                url: pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId || null,
                 genre: pl.genre || null,
                 year: resolvedYear,
                 label: resolvedLabel,
@@ -701,7 +710,6 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
         } catch(e) {}
       };
 
-      const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
       postSheet(initialTracks);
 
       if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
@@ -794,7 +802,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
               cols={safeCols}
               isActive={isItemActive(it)}
               isPlaying={!!state?.isPlaying}
-              onSelect={it.kind === 'profile' ? undefined : handleSelect}
+              onSelect={handleSelect}
             />
           ))}
         </div>
@@ -813,7 +821,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
           }
           // ── followed profiles (SoundCloud / Bandcamp) ──
           if (it.kind === 'profile') {
-            return <Row key={it.id} item={it} round sub={it.followers ? `${it.followers.toLocaleString()} followers` : (it.artistName || '')} />;
+            return <Row key={it.id} item={it} round sub={it.followers ? `${it.followers.toLocaleString()} followers` : (it.artistName || '')} onClick={() => handleSelect(it)} />;
           }
           // ── albums / tracks ──
           return (

@@ -97,17 +97,19 @@ function groupByAlbum(tracks) {
 
 
 /* ── Shelf card — identical to Home ───────────────────────── */
-function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback, item }) {
+function ShelfCard({ cover, title, sub, badge, badgeIcon: BadgeIcon, fallback, item, onClick }) {
   const cleanCover = cover ? pinImageInMemory(cover) : '';
   const lp = useLongPressContentAction(item || { title, artist: sub, cover: cleanCover, kind: 'playlist' });
   return (
     <div
       className="shelf-card"
+      onClick={lp.wrapClick(onClick)}
       onTouchStart={lp.onTouchStart}
       onTouchMove={lp.onTouchMove}
       onTouchEnd={lp.onTouchEnd}
       onTouchCancel={lp.onTouchCancel}
       onContextMenu={lp.onContextMenu}
+      style={onClick ? { cursor: 'pointer' } : undefined}
     >
       <div className="shelf-card-art">
         {cleanCover
@@ -493,7 +495,7 @@ export default function Library() {
         if (pl.kind === 'album') {
           window.webkit?.messageHandlers?.player?.postMessage({
             albumOpen: true,
-            isUpdate: Boolean(trackList && trackList.length > 0 && trackList !== initialTracks),
+            isUpdate: Boolean(currentTracks && currentTracks.length > 0 && currentTracks !== initialTracks),
             nativeAlbum: {
               _ts: String(ts),
               id: pl.id,
@@ -530,7 +532,7 @@ export default function Library() {
     // Open sheet immediately (0ms latency!)
     pushToSheet(initialTracks);
 
-    if (!initialTracks.length && pl.provider === 'bandcamp' && pl.kind === 'album' && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
+    if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.kind === 'album' || pl.kind === 'track') && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
       const albumUrl = pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId;
       try {
         const r = await fetch('/api/bandcamp-search', {
@@ -596,6 +598,26 @@ export default function Library() {
         }
         if (!fetched.length) {
           fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
+        }
+        if ((!Array.isArray(fetched) || !fetched.length) && (pl.kind === 'track' || String(albumUrl).includes('/track/'))) {
+          fetched = [{
+            id: pl.id || `bc-single-${now}`,
+            kind: 'track',
+            provider: 'bandcamp',
+            title: pl.title || 'Untitled',
+            artist: creator,
+            artistName: creator,
+            artworkUrl: cover,
+            cover,
+            duration: pl.duration || 0,
+            streamUrl: pl.streamUrl || '',
+            audioUrl: pl.streamUrl || '',
+            url: pl.streamUrl || albumUrl,
+            trackUrl: albumUrl,
+            providerItemId: albumUrl,
+            playable: true,
+            unplayable: false,
+          }];
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
@@ -1204,13 +1226,13 @@ export default function Library() {
                   {layoutMode === 'list' ? (
                     <div>
                       {followedArtists.map(a => (
-                        <LibRow key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''} round showPlay={false} />
+                        <LibRow key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''} round showPlay={false} onClick={() => window.__kyoyuOpenArtist?.(a.name)} />
                       ))}
                     </div>
                   ) : (
                     <div className="scroll-row">
                       {followedArtists.map(a => (
-                        <ShelfCard key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''}/>
+                        <ShelfCard key={a.id} cover={a.avatar||a.cover||''} title={a.name} sub={a.genre||''} onClick={() => window.__kyoyuOpenArtist?.(a.name)} />
                       ))}
                     </div>
                   )}

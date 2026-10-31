@@ -244,12 +244,12 @@ export function PlayerProvider({ children }) {
   useEffect(() => { refreshStreamingStatus(); }, []);
 
   // ── Native Error Fallback ──
-  // AVPlayer could not load the stream: try a fresh Bandcamp stream once, then the same song elsewhere.
+  // AVPlayer could not load the stream: try a fresh Bandcamp/YouTube stream once, then the same song elsewhere.
   const nativeRetryRef = useRef('');
   useEffect(() => {
     const cur = state.currentTrack;
     if (!(state.nativeErrorCount > 0) || !cur) return;
-    if (cur.provider === 'youtube' || !(cur.src || cur.audioUrl || cur.fileUrl)) return;
+    if (!(cur.src || cur.audioUrl || cur.fileUrl)) return;
     const id = cur.id;
     const stillCurrent = () => stateRef.current.currentTrack?.id === id;
     (async () => {
@@ -301,14 +301,15 @@ export function PlayerProvider({ children }) {
     audioRef.current = audio;
     window.__kyoyuAudioRef = audio;
 
-    const onTime  = () => dispatch({ type:'SET_PROGRESS', value: audio.currentTime });
+    const onTime  = () => { if (stateRef.current.provider === 'native') dispatch({ type:'SET_PROGRESS', value: audio.currentTime }); };
     const onMeta  = () => {
+      if (stateRef.current.provider !== 'native') return;
       const d = audio.duration;
       if (d && isFinite(d) && d > 0) dispatch({ type:'SET_DURATION', value: d });
     };
     const isNativeIOS = !!window.webkit?.messageHandlers?.audioFallback;
-    const onPlay  = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: true  }); };
-    const onPause = () => { if (!isNativeIOS) dispatch({ type:'SET_PLAYING',  value: false }); };
+    const onPlay  = () => { if (!isNativeIOS && stateRef.current.provider === 'native') dispatch({ type:'SET_PLAYING',  value: true  }); };
+    const onPause = () => { if (!isNativeIOS && stateRef.current.provider === 'native') dispatch({ type:'SET_PLAYING',  value: false }); };
     const onEnded = () => {
       // Always go through refs: this listener is registered once, so direct calls would use stale state
       if (stateRef.current.repeatMode === 'one') { dispatch({ type: 'RESTART_CURRENT' }); return; }
