@@ -1731,31 +1731,54 @@ export default function Search() {
     }
     if (item._libType === 'acctItem') {
       if (raw.kind === 'album') {
-        if (raw.provider === 'bandcamp' && (raw.trackUrl || raw.url)) {
-          const bcUrl = raw.trackUrl || raw.url;
-          try {
-            const r = await fetch('/api/bandcamp-search', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'fetch-album', albumUrl: bcUrl }),
-            });
-            const data = r.ok ? await r.json() : { tracks: [] };
-            const tracks = (data.tracks || []).map(t => ({
-              id: `bc-${t.trackId}`,
-              title: t.title,
-              artist: t.artistName || raw.artistName,
-              cover: t.artworkUrl || raw.artworkUrl,
-              trackUrl: t.trackUrl,
-              provider: 'bandcamp',
-            }));
-            openNativeAlbumFast({
-              id: raw.id,
-              title: raw.title,
-              artist: raw.artistName,
-              cover: raw.artworkUrl,
-              provider: 'bandcamp',
-              tracks,
-            });
-          } catch {}
+        if (raw.provider === 'bandcamp' && (raw.trackUrl || raw.url || raw.albumUrl)) {
+          const bcUrl = raw.trackUrl || raw.url || raw.albumUrl;
+          const initialTracks = Array.isArray(raw.tracks) ? raw.tracks : [];
+          openNativeAlbumFast({
+            id: raw.id,
+            title: raw.title,
+            artist: raw.artistName,
+            cover: raw.artworkUrl,
+            url: bcUrl,
+            provider: 'bandcamp',
+            tracks: initialTracks,
+          });
+          if (!initialTracks.length) {
+            try {
+              const r = await fetch('/api/bandcamp-search', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'fetch-album', albumUrl: bcUrl }),
+              });
+              const data = r.ok ? await r.json() : { tracks: [] };
+              const tracks = (data.tracks || []).map((t, i) => ({
+                id: `bc-${t.trackId || i}`,
+                title: t.title,
+                artist: t.artistName || raw.artistName,
+                cover: t.artworkUrl || raw.artworkUrl,
+                trackUrl: t.trackUrl || bcUrl,
+                streamUrl: t.streamUrl || '',
+                url: t.streamUrl || t.trackUrl || bcUrl,
+                playable: t.playable !== false && !t.unplayable,
+                unplayable: Boolean(t.unplayable || t.playable === false),
+                provider: 'bandcamp',
+              }));
+              if (tracks.length > 0) {
+                raw.tracks = tracks;
+                openNativeAlbumFast({
+                  id: raw.id,
+                  title: data.album?.title || raw.title,
+                  artist: data.album?.artistName || raw.artistName,
+                  cover: data.album?.artworkUrl || raw.artworkUrl,
+                  url: bcUrl,
+                  year: data.album?.year || raw.year || null,
+                  label: data.album?.label || raw.label || null,
+                  isPreorder: Boolean(data.isPreorder || data.album?.isPreorder),
+                  provider: 'bandcamp',
+                  tracks,
+                }, { isUpdate: true });
+              }
+            } catch {}
+          }
           return;
         }
         let tracks = raw.tracks || [];
@@ -2068,19 +2091,63 @@ export default function Search() {
                     url: item.trackUrl || item.url || '',
                   });
                 } else if (isRelease) {
-                  // Universal Album Sheet: fetch tracks from provider, info from Discogs
+                  // Universal Album Sheet: open immediately (0ms latency) with release URL, then fetch tracks & Discogs info
+                  const albumId = item.id || `album-${item.title}`;
+                  const releaseUrl = item.albumUrl || item.trackUrl || item.url || null;
+                  const initialCover = item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '';
+                  openNativeAlbumFast({
+                    id: albumId,
+                    title: item.title || '',
+                    artist: item.artistName || '',
+                    cover: initialCover,
+                    url: releaseUrl,
+                    year: item.year || null,
+                    genre: item.genre || '',
+                    label: item.label || '',
+                    provider: item.provider,
+                    tracks: Array.isArray(item.tracks) ? item.tracks : [],
+                  });
                   try {
                     let tracks = [];
                     let bcAlbumMeta = null;
+                    let bcIsPreorder = false;
                     if (item.provider === 'bandcamp') {
                       const r = await fetch('/api/bandcamp-search', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'fetch-album', albumUrl: item.albumUrl || item.trackUrl }),
-                      });
-                      if (r.ok) {
+                        body: JSON.stringify({ action: 'fetch-album', albumUrl: releaseUrl }),
+                      }).catch(() => null);
+                      if (r && r.ok) {
                         const bcData = await r.json();
                         bcAlbumMeta = bcData.album || null;
-                        tracks = (bcData.tracks || []).map(t => ({ ...t, id: `bc-${t.trackId}`, url: t.streamUrl, trackUrl: t.trackUrl, providerItemId: t.trackUrl, cover: t.artworkUrl || item.artworkUrl || '' }));
+                        bcIsPreorder = Boolean(bcData.isPreorder || bcData.album?.isPreorder);
+                        tracks = (bcData.tracks || []).map((t, idx) => ({
+                          ...t,
+                          id: `bc-${t.trackId || idx}`,
+                          url: t.streamUrl || t.trackUrl || releaseUrl || '',
+                          streamUrl: t.streamUrl || '',
+                          trackUrl: t.trackUrl || releaseUrl || '',
+                          providerItemId: t.trackUrl || releaseUrl || '',
+                          cover: t.artworkUrl || bcAlbumMeta?.artworkUrl || initialCover,
+                          playable: t.playable !== false && !t.unplayable,
+                          unplayable: Boolean(t.unplayable || t.playable === false),
+                          provider: 'bandcamp',
+                        }));
+                        if (tracks.length > 0) {
+                          openNativeAlbumFast({
+                            id: albumId,
+                            title: bcAlbumMeta?.title || item.title || '',
+                            artist: bcAlbumMeta?.artistName || item.artistName || '',
+                            cover: bcAlbumMeta?.artworkUrl || initialCover,
+                            url: releaseUrl,
+                            year: bcAlbumMeta?.year || item.year || null,
+                            genre: item.genre || '',
+                            label: bcAlbumMeta?.label || item.label || '',
+                            provider: item.provider,
+                            formats: bcAlbumMeta?.formats || [],
+                            isPreorder: bcIsPreorder,
+                            tracks,
+                          }, { isUpdate: true });
+                        }
                       }
                     } else if (item.provider === 'spotify') {
                       const r = await fetch('/api/youtube-search', {
@@ -2165,26 +2232,28 @@ export default function Search() {
                     }
                     
                     let info = {};
-                    if (item.provider !== 'discogs') {
-                      const rInfo = await fetch('/api/discogs-search', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title }),
-                      });
-                      if (rInfo.ok) info = await rInfo.json();
-                    } else {
-                      const rInfo = await fetch('/api/discogs-search', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title, discogsReleaseId: item.id }),
-                      });
-                      if (rInfo.ok) info = await rInfo.json();
-                      tracks = (info.tracklist || []).map((t, i) => ({
-                        id: `discogs-track-${i}`,
-                        title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
-                        artist: t.artists?.join(', ') || info.artist || item.artistName || '',
-                        url: `resolve:${t.artists?.join(', ') || info.artist || item.artistName || ''} ${t.title || ''}`,
-                        provider: '',
-                      }));
-                    }
+                    try {
+                      if (item.provider !== 'discogs') {
+                        const rInfo = await fetch('/api/discogs-search', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title }),
+                        });
+                        if (rInfo.ok) info = await rInfo.json();
+                      } else {
+                        const rInfo = await fetch('/api/discogs-search', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'track-info', title: item.title, artist: item.artistName || '', album: item.title, discogsReleaseId: item.id }),
+                        });
+                        if (rInfo.ok) info = await rInfo.json();
+                        tracks = (info.tracklist || []).map((t, i) => ({
+                          id: `discogs-track-${i}`,
+                          title: `${t.position ? t.position + '. ' : ''}${t.title || ''}`,
+                          artist: t.artists?.join(', ') || info.artist || item.artistName || '',
+                          url: `resolve:${t.artists?.join(', ') || info.artist || item.artistName || ''} ${t.title || ''}`,
+                          provider: '',
+                        }));
+                      }
+                    } catch {}
 
                     const formatLinks = (links) => {
                       if (!links || !links.length) return '';
@@ -2224,18 +2293,20 @@ export default function Search() {
                     ].filter(Boolean).join('\n');
 
                     openNativeAlbumFast({
-                      id: item.id || `album-${item.title}`,
+                      id: albumId,
                       title: bcAlbumMeta?.title || info.album || item.title || '',
                       artist: bcAlbumMeta?.artistName || info.artist || item.artistName || '',
-                      cover: bcAlbumMeta?.artworkUrl || item.coverImage || item.artworkUrl || item.thumbnail || item.thumb || '',
+                      cover: bcAlbumMeta?.artworkUrl || initialCover,
+                      url: releaseUrl,
                       year: bcAlbumMeta?.year || info.year || item.year || null,
                       genre: info.genre || item.genre || '',
                       label: bcAlbumMeta?.label || info.label || item.label || '',
                       provider: item.provider,
                       formats: mergedFormats,
                       description: desc,
+                      isPreorder: bcIsPreorder,
                       tracks: tracks,
-                    });
+                    }, { isUpdate: true });
                   } catch (e) { /* ignore */ }
                 } else if (item._isGenreCuratedTrack || String(item.url || '').startsWith('resolve:')) {
                   playGenreTrack({

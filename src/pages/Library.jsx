@@ -493,12 +493,14 @@ export default function Library() {
         if (pl.kind === 'album') {
           window.webkit?.messageHandlers?.player?.postMessage({
             albumOpen: true,
+            isUpdate: Boolean(trackList && trackList.length > 0 && trackList !== initialTracks),
             nativeAlbum: {
               _ts: String(ts),
               id: pl.id,
               title: pl.title,
               artist: creator,
               cover,
+              url: pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId || null,
               genre: pl.genre || null,
               year: pl.year ? String(pl.year) : null,
               label: pl.label || null,
@@ -528,8 +530,8 @@ export default function Library() {
     // Open sheet immediately (0ms latency!)
     pushToSheet(initialTracks);
 
-    if (!initialTracks.length && pl.provider === 'bandcamp' && pl.kind === 'album' && (pl.trackUrl || pl.url)) {
-      const albumUrl = pl.trackUrl || pl.url;
+    if (!initialTracks.length && pl.provider === 'bandcamp' && pl.kind === 'album' && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
+      const albumUrl = pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId;
       try {
         const r = await fetch('/api/bandcamp-search', {
           method: 'POST',

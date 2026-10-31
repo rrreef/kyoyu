@@ -68,6 +68,33 @@ export default async function handler(req, res) {
         return r.ok ? await r.text() : '';
       };
 
+      const extractBalancedJson = (str, startIdx, openChar, closeChar) => {
+        let depth = 0;
+        let inStr = false;
+        let quoteChar = '';
+        let escaped = false;
+        for (let i = startIdx; i < str.length; i++) {
+          const ch = str[i];
+          if (escaped) { escaped = false; continue; }
+          if (ch === '\\') { escaped = true; continue; }
+          if (inStr) {
+            if (ch === quoteChar) inStr = false;
+            continue;
+          }
+          if (ch === '"' || ch === "'") {
+            inStr = true;
+            quoteChar = ch;
+            continue;
+          }
+          if (ch === openChar) depth++;
+          else if (ch === closeChar) {
+            depth--;
+            if (depth === 0) return str.slice(startIdx, i + 1);
+          }
+        }
+        return '';
+      };
+
       const parseTralbum = (pageHtml) => {
         let tr = null;
         const tralbumMatch = pageHtml.match(/data-tralbum="([^"]+)"/) || pageHtml.match(/data-tralbum='([^']+)'/);
@@ -75,7 +102,7 @@ export default async function handler(req, res) {
           try {
             const decoded = tralbumMatch[1]
               .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
+              .replace(/&#39;|&apos;/g, "'")
               .replace(/&lt;/g, '<')
               .replace(/&gt;/g, '>')
               .replace(/&amp;/g, '&');
@@ -83,15 +110,32 @@ export default async function handler(req, res) {
           } catch (e) {}
         }
         if (!tr || !tr.trackinfo) {
-          const varMatch = pageHtml.match(/var\s+TralbumData\s*=\s*(\{[\s\S]*?\});\s*\n/);
-          if (varMatch) {
-            try { tr = JSON.parse(varMatch[1]); } catch (e) {}
+          const varIdx = pageHtml.search(/var\s+TralbumData\s*=\s*\{/);
+          if (varIdx !== -1) {
+            const braceIdx = pageHtml.indexOf('{', varIdx);
+            if (braceIdx !== -1) {
+              const block = extractBalancedJson(pageHtml, braceIdx, '{', '}');
+              if (block) {
+                try { tr = JSON.parse(block); } catch (e) {}
+              }
+            }
           }
         }
         if (!tr || !tr.trackinfo) {
-          const scriptMatch = pageHtml.match(/"trackinfo"\s*:\s*(\[[\s\S]*?\])\s*,/);
-          if (scriptMatch) {
-            try { tr = { trackinfo: JSON.parse(scriptMatch[1]) }; } catch (e) {}
+          const tiMatch = pageHtml.match(/(?:"trackinfo"|trackinfo)\s*:\s*\[/);
+          if (tiMatch && tiMatch.index != null) {
+            const bracketIdx = pageHtml.indexOf('[', tiMatch.index);
+            if (bracketIdx !== -1) {
+              const arrStr = extractBalancedJson(pageHtml, bracketIdx, '[', ']');
+              if (arrStr) {
+                try {
+                  const parsedArr = JSON.parse(arrStr);
+                  if (Array.isArray(parsedArr)) {
+                    tr = { ...(tr || {}), trackinfo: parsedArr };
+                  }
+                } catch (e) {}
+              }
+            }
           }
         }
         return tr;
@@ -369,22 +413,25 @@ export default async function handler(req, res) {
       
       // 4. Fallback: try LD+JSON
       if (tracks.length === 0) {
-        const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
-        if (ldMatch) {
+        const ldScripts = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+        for (const ldMatch of ldScripts) {
           try {
             const ld = JSON.parse(ldMatch[1]);
             const ldArt = ld.image || albumArt;
             const ldArtist = ld.byArtist?.name || albumArtist || '';
             const rawLdLabel = ld.publisher?.name || resolvedLabel || '';
             const ldLabel = isDistinctFromArtist(rawLdLabel) ? rawLdLabel : resolvedLabel;
-            for (const t of (ld.track?.itemListElement || [])) {
+            const itemList = ld.track?.itemListElement || (Array.isArray(ld.track) ? ld.track : []);
+            for (const t of itemList) {
               const item = t.item || t;
               const tArtist = item.byArtist?.name || ldArtist;
               tracks.push({
-                trackId: item['@id'] || t.position,
+                trackId: item['@id'] || t.position || tracks.length + 1,
                 trackUrl: /^https?:\/\//.test(item['@id'] || '') ? item['@id'] : effectiveUrl,
-                title: stripArtistFromTitle(item.name || '', tArtist),
+                title: stripArtistFromTitle(decodeEntities(item.name || ''), tArtist),
                 duration: 0,
+                playable: true,
+                unplayable: false,
                 artworkUrl: ldArt,
                 artistName: tArtist,
                 albumName: cleanAlbumTitle || ld.name || '',
@@ -396,8 +443,68 @@ export default async function handler(req, res) {
                 formats,
               });
             }
+            if (tracks.length > 0) break;
           } catch (e) { /* parse error */ }
         }
+      }
+
+      // 5. Fallback: HTML <table id="track_table"> rows + single-track page fallback
+      if (tracks.length === 0) {
+        const rowMatches = html.matchAll(/<tr[^>]*class="[^"]*track_row_view[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi);
+        let rowIdx = 0;
+        for (const rm of rowMatches) {
+          rowIdx++;
+          const rowHtml = rm[1];
+          const titleRaw = (rowHtml.match(/<span[^>]*class="[^"]*track-title[^"]*"[^>]*>([\s\S]*?)<\/span>/i) || [])[1] || '';
+          const titleClean = stripArtistFromTitle(decodeEntities(titleRaw.replace(/<[^>]+>/g, '')), albumArtist);
+          if (!titleClean) continue;
+          const hrefMatch = (rowHtml.match(/<a[^>]*href="([^"]*\/track\/[^"?#]+)"/i) || [])[1] || '';
+          let fullTrackUrl = effectiveUrl;
+          if (hrefMatch) {
+            try { fullTrackUrl = new URL(hrefMatch, effectiveUrl).href; } catch {}
+          }
+          const isLinkedPlayable = Boolean(hrefMatch) || /play_status/i.test(rowHtml);
+          tracks.push({
+            trackId: `${rowIdx}`,
+            trackUrl: fullTrackUrl,
+            title: titleClean,
+            duration: 0,
+            streamUrl: '',
+            playable: isLinkedPlayable,
+            unplayable: !isLinkedPlayable,
+            artworkUrl: albumArt,
+            artistName: albumArtist,
+            albumName: cleanAlbumTitle,
+            label: resolvedLabel,
+            labelUrl: originUrl,
+            year: releaseYear,
+            releaseDate: formattedReleaseDate,
+            location: bandLocation,
+            formats,
+          });
+        }
+      }
+
+      // 6. Single-track release fallback (/track/ page with a single track)
+      if (tracks.length === 0 && cleanAlbumTitle) {
+        tracks.push({
+          trackId: tralbum?.current?.id || tralbum?.id || '1',
+          trackUrl: effectiveUrl,
+          title: cleanAlbumTitle,
+          duration: 0,
+          streamUrl: '',
+          playable: true,
+          unplayable: false,
+          artworkUrl: albumArt,
+          artistName: albumArtist,
+          albumName: cleanAlbumTitle,
+          label: resolvedLabel,
+          labelUrl: originUrl,
+          year: releaseYear,
+          releaseDate: formattedReleaseDate,
+          location: bandLocation,
+          formats,
+        });
       }
 
       const isPreorder = Boolean(

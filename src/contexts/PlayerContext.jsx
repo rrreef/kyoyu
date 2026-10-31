@@ -452,7 +452,19 @@ export function PlayerProvider({ children }) {
         const ps = pendingSeekRef.current;
         let seekTo = 0;
         if (ps && ps.id === state.currentTrack.id && ps.pos > 1) { seekTo = ps.pos; pendingSeekRef.current = null; }
-        mh.audioFallback.postMessage(seekTo > 0 ? { url: src, seekTo } : { url: src });
+        mh.audioFallback.postMessage(seekTo > 0 ? { url: src, seekTo, autoplay: true } : { url: src, autoplay: true });
+        if (state.isPlaying !== false) {
+          setTimeout(() => {
+            if (playIdRef.current === myPlayId && stateRef.current.isPlaying !== false && stateRef.current.provider === 'native') {
+              try { window.webkit?.messageHandlers?.audioFallback?.postMessage('resume'); } catch (e) {}
+            }
+          }, 180);
+          setTimeout(() => {
+            if (playIdRef.current === myPlayId && stateRef.current.isPlaying !== false && stateRef.current.provider === 'native') {
+              try { window.webkit?.messageHandlers?.audioFallback?.postMessage('resume'); } catch (e) {}
+            }
+          }, 550);
+        }
       }
       if (mh?.audioSession) mh.audioSession.postMessage('play');
     } catch (e) { /* not in WKWebView */ }

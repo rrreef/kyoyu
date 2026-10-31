@@ -236,6 +236,7 @@ export function openNativeAlbumFast(album, opts = {}) {
     title: album.title || '',
     artist: album.artist || '',
     cover: album.cover || album.artworkUrl || null,
+    url: album.url || album.albumUrl || album.trackUrl || null,
     genre: album.genre || null,
     year: album.year ? String(album.year) : null,
     releaseDate: album.releaseDate || (album.year ? String(album.year) : null),
