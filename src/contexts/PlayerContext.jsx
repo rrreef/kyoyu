@@ -587,7 +587,59 @@ export function PlayerProvider({ children }) {
     dispatch({ type:'SET_VOLUME', value: vol });
   }, []);
 
+  function consumePendingDJDeckTarget(rawTrack) {
+    if (typeof window === 'undefined' || !window.__kyoyuPendingDJDeckTarget) return false;
+    const target = String(window.__kyoyuPendingDJDeckTarget).toUpperCase();
+    window.__kyoyuPendingDJDeckTarget = null;
+    if (target === 'B') {
+      const t = rawTrack || {};
+      const rawArtist = t.artistName || t.artist || t.channelTitle || '';
+      const rawTitle = t.title || t.name || 'Unknown Title';
+      const rawLabel = t.label || t.labelName || t.releaseLabel || '';
+      const rawAlbum = t.releaseTitle || t.albumName || t.albumTitle || t.album || '';
+      const cleaned = splitCleanMetadata(rawTitle, rawArtist, rawLabel, rawAlbum);
+      const art = t.releaseCover || t.artworkUrl || t.cover || t.thumbnail || '';
+      const dur = parseDurationSeconds(t.duration) || 0;
+      const sUrl = String(t.src || t.streamUrl || t.fileUrl || t.audioUrl || '').trim();
+      let tUrl = String(t.providerUrl || t.trackUrl || t.permalinkUrl || t.url || t.providerItemId || '').trim();
+      const prov = String(t.provider || t.sourceProvider || t.origin?.provider || '').toLowerCase();
+      const vid = t.videoId || (prov === 'youtube' ? t.providerItemId : '') || (String(t.id || '').startsWith('yt-') ? String(t.id).slice(3) : '');
+      if (vid && !tUrl) {
+        tUrl = `https://www.youtube.com/watch?v=${vid}`;
+      }
+      const scId = t.scTrackId || t.trackId || (prov === 'soundcloud' && /^\d+$/.test(String(t.providerItemId || '')) ? String(t.providerItemId) : '') || (String(t.id || '').startsWith('sc-') ? String(t.id).slice(3) : '');
+      const itemPayload = {
+        id: String(t.id || (vid ? `yt-${vid}` : (scId ? `sc-${scId}` : `dj-${Date.now()}`))),
+        title: cleaned.title || rawTitle,
+        artist: cleaned.artist || rawArtist,
+        album: cleaned.album || rawAlbum,
+        artworkUrl: art,
+        duration: dur,
+        streamUrl: (sUrl && !sUrl.startsWith('resolve:')) ? sUrl : '',
+        trackUrl: tUrl,
+        provider: prov || (vid ? 'youtube' : (scId ? 'soundcloud' : 'native')),
+      };
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          cmd: 'dj_load_deck_b',
+          item: itemPayload,
+        });
+      } catch (e) {}
+      return true;
+    }
+    if (target === 'A') {
+      try {
+        window.webkit?.messageHandlers?.player?.postMessage({
+          cmd: 'dj_load_deck_a',
+        });
+      } catch (e) {}
+      return false;
+    }
+    return false;
+  }
+
   function playTrack(track, queue = []) {
+    if (consumePendingDJDeckTarget(track)) return;
     // Normalise track shape — public tracks use audioUrl (R2), uploads use fileUrl/src
     const rawArtist = track.artistName || track.artist || '';
     const rawTitle = track.title || track.name || '';
@@ -674,6 +726,14 @@ export function PlayerProvider({ children }) {
   function playYouTube(videoId, metadata = {}, opts = {}) {
     // Playlist ("PL…") / channel ("UC…") ids are not videos and would load forever
     if (!/^[\w-]{11}$/.test(String(videoId || ''))) { console.warn('[Player] ignoring invalid YouTube video id', videoId); return; }
+    if (consumePendingDJDeckTarget({
+      ...metadata,
+      id: metadata.id || `yt-${videoId}`,
+      videoId,
+      provider: 'youtube',
+      providerUrl: metadata.providerUrl || `https://www.youtube.com/watch?v=${videoId}`,
+      artworkUrl: metadata.releaseCover || metadata.thumbnail || metadata.artworkUrl || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+    })) return;
     const myCounter = ++playYouTubeCounterRef.current;
     const mySeq = opts.seq || ++masterPlaySeqRef.current;
     const rawAlbum = metadata.releaseTitle || metadata.albumName || metadata.album || '';
@@ -745,6 +805,11 @@ export function PlayerProvider({ children }) {
 
   const playSoundCloudCounterRef = useRef(0);
   async function playSoundCloud(trackUrl, metadata = {}, opts = {}) {
+    if (consumePendingDJDeckTarget({
+      ...metadata,
+      provider: 'soundcloud',
+      trackUrl: trackUrl || metadata.permalinkUrl || metadata.providerUrl || metadata.url || '',
+    })) return;
     playSoundCloudCounterRef.current += 1;
     const myCounter = playSoundCloudCounterRef.current;
     const mySeq = opts.seq || ++masterPlaySeqRef.current;
@@ -889,6 +954,7 @@ export function PlayerProvider({ children }) {
   const playSearchItemCounterRef = useRef(0);
   async function playSearchItem(item) {
     if (!item) return;
+    if (consumePendingDJDeckTarget(item)) return;
     playSearchItemCounterRef.current += 1;
     const myCounter = playSearchItemCounterRef.current;
     const mySeq = ++masterPlaySeqRef.current;
@@ -1237,6 +1303,7 @@ export function PlayerProvider({ children }) {
   const savedPlayCounterRef = useRef(0);
   async function playSaved(item, queue, opts = {}) {
     if (!item) return;
+    if (consumePendingDJDeckTarget(item)) return;
     savedPlayCounterRef.current += 1;
     const myCounter = savedPlayCounterRef.current;
     const mySeq = ++masterPlaySeqRef.current;

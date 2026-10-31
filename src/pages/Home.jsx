@@ -1048,7 +1048,7 @@ export default function Home() {
 
           {expandedSectionKey === 'featured' ? (
             <>
-              <div className="upl-grid upl-grid-3">
+              <div className={`upl-grid upl-grid-${homeLayout.cols || 3}`}>
                 {featuredAlbums.slice(0, expandedVisibleCount).map((album) => {
                   const metaKey = `${(album.artist || '').toLowerCase()}::${(album.title || '').toLowerCase()}`;
                   const rich = heroMetaMap[album.id] || heroMetaMap[metaKey] || {};
