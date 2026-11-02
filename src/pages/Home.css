@@ -13,6 +13,12 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   padding-bottom: 8px;
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+  scroll-padding-left: 16px;
+  scroll-padding-right: 16px;
 }
 .featured-hero-row::-webkit-scrollbar { display: none; }
 
@@ -312,13 +318,16 @@ button.featured-hero-card:active:not(:disabled),
 /* ═══ Horizontal Swipeable Catalog Pages ══════════════════ */
 .catalog-swipe-row {
   display: flex;
-  gap: 16px;
+  gap: 0px;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
+  margin-left: -16px;
+  margin-right: -16px;
+  width: calc(100% + 32px);
 }
 .catalog-swipe-row::-webkit-scrollbar {
   display: none;
@@ -329,5 +338,15 @@ button.featured-hero-card:active:not(:disabled),
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  box-sizing: border-box;
+}
+.catalog-swipe-page .upl-grid {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+.catalog-swipe-page .upl-list {
+  padding-left: 16px;
+  padding-right: 16px;
 }
 

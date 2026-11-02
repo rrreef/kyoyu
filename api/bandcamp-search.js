@@ -504,8 +504,72 @@ export default async function handler(req, res) {
         }
       }
 
-      // 6. Single-track release fallback (/track/ page with a single track)
-      if (tracks.length === 0 && cleanAlbumTitle) {
+      // 5.5. Bandcamp Mobile API (tralbum_details) fallback — 100% accurate tracklist when HTML parsing yields <= 1 track on an album
+      if (tracks.length <= 1 && !isStillTrackPage) {
+        let bandId = Number(body?.bandId || tralbum?.current?.band_id || tralbum?.band_id || 0);
+        let tralbumId = Number(body?.tralbumId || tralbum?.id || tralbum?.current?.id || 0);
+        if (!bandId || !tralbumId) {
+          const propMatch = html.match(/<meta[^>]*name=["']bc-page-properties["'][^>]*content=["']([^"']+)["']/i);
+          if (propMatch) {
+            try {
+              const propJson = JSON.parse(decodeEntities(propMatch[1]));
+              if (!bandId && propJson?.band_id) bandId = Number(propJson.band_id);
+              if (!tralbumId && propJson?.item_id) tralbumId = Number(propJson.item_id);
+            } catch {}
+          }
+        }
+        if (!bandId) {
+          const bandAttr = (html.match(/data-band="([^"]+)"/) || [])[1];
+          if (bandAttr) {
+            try {
+              const bandJson = JSON.parse(decodeEntities(bandAttr));
+              if (bandJson?.id) bandId = Number(bandJson.id);
+            } catch {}
+          }
+        }
+        if (bandId > 0 && tralbumId > 0) {
+          try {
+            const mobRes = await fetch(`https://bandcamp.com/api/mobile/24/tralbum_details?band_id=${bandId}&tralbum_type=a&tralbum_id=${tralbumId}`, {
+              headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+            if (mobRes.ok) {
+              const mobJson = await mobRes.json();
+              if (Array.isArray(mobJson?.tracks) && mobJson.tracks.length > tracks.length) {
+                tracks.length = 0;
+                for (let idx = 0; idx < mobJson.tracks.length; idx++) {
+                  const mt = mobJson.tracks[idx];
+                  const streamDict = mt.streaming_url || {};
+                  const sUrl = streamDict['mp3-v0'] || streamDict['mp3-128'] || Object.values(streamDict)[0] || '';
+                  const isPlayable = Boolean(sUrl) || mt.is_streamable === true;
+                  const tArtist = decodeEntities(mt.band_name || albumArtist || '');
+                  const tTitle = stripArtistFromTitle(decodeEntities(mt.title || `Track ${idx + 1}`), tArtist);
+                  tracks.push({
+                    trackId: mt.track_id || mt.id || `${idx + 1}`,
+                    title: tTitle || `Track ${idx + 1}`,
+                    duration: Math.round(Number(mt.duration || 0)),
+                    streamUrl: sUrl,
+                    playable: isPlayable,
+                    unplayable: !isPlayable,
+                    trackUrl: effectiveUrl,
+                    artworkUrl: albumArt,
+                    artistName: tArtist,
+                    albumName: cleanAlbumTitle,
+                    label: resolvedLabel,
+                    labelUrl: originUrl,
+                    year: releaseYear,
+                    releaseDate: formattedReleaseDate,
+                    location: bandLocation,
+                    formats,
+                  });
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // 6. Single-track release fallback (only for genuine /track/ single pages)
+      if (tracks.length === 0 && cleanAlbumTitle && isStillTrackPage) {
         tracks.push({
           trackId: tralbum?.current?.id || tralbum?.id || '1',
           trackUrl: effectiveUrl,

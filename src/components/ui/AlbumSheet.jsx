@@ -3327,7 +3327,7 @@ export async function startTrackRadio(seedInput = null) {
     // Exclude the exact seed track itself from the suggestions
     seenTrackKey.add(`${seedArtistNorm}|${seedTitleNorm}`);
 
-    const seedAlbumNorm = _normStr(cleanAlbumTitle || '');
+    const seedAlbumNorm = _normStr(seedAlbum || '');
 
     for (let i = 0; i < rawCandidates.length; i++) {
       const c = rawCandidates[i];
@@ -3723,12 +3723,18 @@ export async function startPlaylistRadio(tracksB64, playlistTitle = 'Playlist') 
   }
 
   // Seed ontology pool from the playlist's musical neighborhood so even initial 0ms tracks are diverse
-  const providerPriority = getStoredProviderPriority();
-  const primaryNode = resolveGenreNode('', firstSeed.artist, firstSeed.title, '');
-  const relatedNodes = (primaryNode.relatedGenres || [])
+  const providerPriority = getProviderPriority();
+  const classifiedPl = classifyTrackGenre(firstSeed, {});
+  const primaryNode = resolveGenreNode(classifiedPl?.primaryGenre || 'Hypnotic Techno', { forSheet: true });
+  const relatedNodes = Array.from(new Set([
+    ...(classifiedPl?.secondaryGenres || []),
+    ...(primaryNode.subgenres || []),
+    ...(primaryNode.adjacentGenres || []),
+    ...(primaryNode.parentGenres || []),
+  ]))
+    .filter(gName => _normStr(gName) !== _normStr(primaryNode.name))
     .slice(0, 3)
-    .map(gName => resolveGenreNode(gName, '', '', ''))
-    .filter(n => n && n.name !== primaryNode.name);
+    .map(gName => resolveGenreNode(gName, { forSheet: true }));
 
   const ontologyPool = [];
   const pSec = selectGenreThreeSections(primaryNode, {}, { artist: firstSeed.artist, label: '', title: firstSeed.title }, 0, providerPriority);

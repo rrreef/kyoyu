@@ -419,13 +419,13 @@ export default function Home() {
 
     pushToSheet(initialTracks);
 
-    if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.kind === 'album' || pl.kind === 'track') && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
+    if ((!initialTracks.length || (initialTracks.length <= 1 && !pl.hasFullTracks)) && pl.provider === 'bandcamp' && (pl.kind === 'album' || pl.kind === 'track') && (pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId)) {
       const albumUrl = pl.trackUrl || pl.url || pl.albumUrl || pl.providerItemId;
       try {
         const r = await fetch('/api/bandcamp-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'fetch-album', albumUrl }),
+          body: JSON.stringify({ action: 'fetch-album', albumUrl, bandId: pl.bandId, tralbumId: pl.tralbumId }),
         });
         const data = r.ok ? await r.json() : { tracks: [] };
         if (data.album) {
@@ -511,8 +511,11 @@ export default function Home() {
             };
           });
         }
-        if (!fetched.length) {
-          fetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
+        if (!fetched.length || (fetched.length <= 1 && !String(albumUrl).includes('/track/'))) {
+          const nativeFetched = await fetchAccountLibrary('bandcamp', 'playlistTracks', { playlistUrl: albumUrl }).catch(() => []);
+          if (Array.isArray(nativeFetched) && nativeFetched.length > fetched.length) {
+            fetched = nativeFetched;
+          }
         }
         if ((!Array.isArray(fetched) || !fetched.length) && (pl.kind === 'track' || String(albumUrl).includes('/track/'))) {
           fetched = [{
@@ -541,6 +544,7 @@ export default function Home() {
         }
         if (Array.isArray(fetched) && fetched.length > 0) {
           pl.tracks = fetched;
+          pl.hasFullTracks = true;
           pl.label = resolvedLabel || pl.label;
           pl.year = resolvedYear || pl.year;
           pl.isPreorder = Boolean(resolvedPreorder || fetched.some(t => t.playable === false || t.unplayable));

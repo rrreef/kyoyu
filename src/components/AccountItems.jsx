@@ -712,12 +712,12 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
 
       postSheet(initialTracks);
 
-      if (!initialTracks.length && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
+      if ((!initialTracks.length || (initialTracks.length <= 1 && !pl.hasFullTracks)) && pl.provider === 'bandcamp' && (pl.trackUrl || pl.url)) {
         try {
           const r = await fetch('/api/bandcamp-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url }),
+            body: JSON.stringify({ action: 'fetch-album', albumUrl: pl.trackUrl || pl.url, bandId: pl.bandId, tralbumId: pl.tralbumId }),
           });
           const data = r.ok ? await r.json() : { tracks: [] };
           if (data.album) {
@@ -757,6 +757,7 @@ const AccountItemList = memo(function AccountItemList({ items = [], view = 'list
           });
           if (tracks.length > 0) {
             pl.tracks = tracks;
+            pl.hasFullTracks = true;
             pl.label = resolvedLabel || pl.label;
             pl.year = resolvedYear || pl.year;
             pl.isPreorder = Boolean(data.isPreorder || data.album?.isPreorder || tracks.some(t => !t.playable));

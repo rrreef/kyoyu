@@ -255,18 +255,39 @@ export function PlayerProvider({ children }) {
     (async () => {
       const r = historyReplayInfo(cur);
       if (r.provider === 'youtube' && r.videoId) {
-        // YouTube stream refused by AVPlayer: retry with the next client (skip the ones that failed), iframe only as the last resort
+        // YouTube stream refused by AVPlayer: retry with the next client (skip the ones that failed), then same song elsewhere, iframe only as the last resort
         const meta = { title: cur.title, artist: cur.artistName || cur.artist, thumbnail: cur.releaseCover, duration: cur.duration };
-        const failedClient = ((cur.src || '').match(/[?&]c=([A-Z_]+)/) || [])[1];
+        const failedClient = ((cur.src || '').match(/[?&]c=([A-Z0-9_]+)/) || (cur.src || '').match(/\/c\/([A-Z0-9_]+)\//) || [])[1];
         const key = `${id}|yt`;
         const skip = (nativeRetryRef.current.startsWith(key) ? nativeRetryRef.current.slice(key.length).split(',').filter(Boolean) : []);
         if (failedClient && !skip.includes(failedClient)) skip.push(failedClient);
         nativeRetryRef.current = key + skip.join(',');
-        if (skip.length < 3) {
+        if (skip.length < 4) {
           let res = null;
-          try { res = await callStreaming('ytResolve', { videoId: r.videoId, skip }, 15000); } catch (e) { window.__kyoyuYtError = e?.message || String(e); }
+          try {
+            res = await callStreaming('ytResolve', {
+              videoId: r.videoId,
+              skip,
+              title: cur.title || '',
+              artist: cur.artistName || cur.artist || '',
+              duration: cur.duration || 0,
+            }, 15000);
+          } catch (e) { window.__kyoyuYtError = e?.message || String(e); }
           if (!stillCurrent()) return;
           if (res?.url && res.url !== cur.src) { playTrack({ ...cur, src: res.url, _restart: Date.now() }); return; }
+        }
+        let altFound = null;
+        try {
+          altFound = await findTrackSource(
+            { artist: cur.artistName || cur.artist || '', title: cur.title || '' },
+            stillCurrent,
+            { excludeProviders: ['youtube'], strictMatch: true }
+          );
+        } catch (e) {}
+        if (!stillCurrent()) return;
+        if (altFound && altFound.provider !== 'youtube') {
+          playFoundSource(altFound, cur);
+          return;
         }
         playYouTube(r.videoId, meta, { forceIframe: true });
         return;
@@ -283,10 +304,10 @@ export function PlayerProvider({ children }) {
       }
       if (nativeRetryRef.current === `${id}|alt`) return;
       nativeRetryRef.current = `${id}|alt`;
-      const found = await findTrackSource({ artist: cur.artistName || cur.artist || '', title: cur.title || '' }, stillCurrent);
+      const found = await findTrackSource({ artist: cur.artistName || cur.artist || '', title: cur.title || '' }, stillCurrent, { strictMatch: true });
       if (!stillCurrent()) return;
       if (found && !(found.provider === 'bandcamp' && found.providerItemId === r.url)) playFoundSource(found, cur);
-      else dispatch({ type: 'NEXT_TRACK' });
+      else dispatch({ type: 'SET_PLAYING', value: false });
     })();
   }, [state.nativeErrorCount]); // eslint-disable-line
 
@@ -781,9 +802,32 @@ export function PlayerProvider({ children }) {
     showPlaceholder({ id: trackId, title, artistName, label, releaseTitle, releaseCover, duration: metadata.duration || 0, provider: 'youtube', sourceProvider, videoId, providerUrl, origin });
     (async () => {
       let res = null;
-      try { res = await callStreaming('ytResolve', { videoId }, 15000); } catch (e) { res = null; window.__kyoyuYtError = e?.message || String(e); }
+      try {
+        res = await callStreaming('ytResolve', {
+          videoId,
+          title,
+          artist: artistName,
+          duration: parseDurationSeconds(metadata.duration) || 0,
+        }, 15000);
+      } catch (e) { res = null; window.__kyoyuYtError = e?.message || String(e); }
       if (myCounter !== playYouTubeCounterRef.current || mySeq !== masterPlaySeqRef.current) return;
-      if (!res?.url) { startIframe(); return; }
+      if (!res?.url) {
+        let altFound = null;
+        try {
+          altFound = await findTrackSource(
+            { artist: artistName, title },
+            () => myCounter === playYouTubeCounterRef.current && mySeq === masterPlaySeqRef.current,
+            { excludeProviders: ['youtube'], strictMatch: true }
+          );
+        } catch (e) {}
+        if (myCounter !== playYouTubeCounterRef.current || mySeq !== masterPlaySeqRef.current) return;
+        if (altFound && altFound.provider !== 'youtube') {
+          playFoundSource(altFound, { id: trackId, title, artistName, label, releaseTitle, releaseCover, duration: parseDurationSeconds(metadata.duration) || 0 });
+          return;
+        }
+        startIframe();
+        return;
+      }
       playTrack({
         id: trackId,
         _restart: Date.now(),
@@ -1936,10 +1980,48 @@ export function PlayerProvider({ children }) {
       } catch (e) { console.warn('Report error:', e); return 'error'; }
     };
 
+    window.__kyoyuQueueTrack = (trackInput) => {
+      try {
+        const raw = typeof trackInput === 'string' ? JSON.parse(trackInput) : trackInput;
+        if (!raw || typeof raw !== 'object') return false;
+        const tArtist = String(raw.artistName || raw.artist || '').trim();
+        const tTitle = String(raw.title || raw.name || 'Unknown Track').trim();
+        const tAlbum = String(raw.releaseTitle || raw.albumTitle || raw.album || '').trim();
+        const tCover = String(raw.releaseCover || raw.cover || raw.artworkUrl || '').trim();
+        const tUrl = String(raw.src || raw.streamUrl || raw.audioUrl || raw.fileUrl || raw.trackUrl || raw.url || '').trim();
+        const newItem = {
+          ...raw,
+          id: String(raw.id || `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+          title: tTitle,
+          artist: tArtist,
+          artistName: tArtist,
+          album: tAlbum,
+          releaseTitle: tAlbum,
+          cover: tCover,
+          releaseCover: tCover,
+          artworkUrl: tCover,
+          url: tUrl,
+          src: raw.src || raw.streamUrl || raw.audioUrl || raw.fileUrl || '',
+          provider: raw.provider || 'bandcamp',
+        };
+        const cur = stateRef.current?.currentTrack || state.currentTrack;
+        const existingQ = [...((stateRef.current?.queue?.length ? stateRef.current.queue : state.queue) || [])];
+        if (existingQ.length === 0 && cur) {
+          existingQ.push(cur);
+        }
+        existingQ.push(newItem);
+        dispatch({ type: 'SET_QUEUE', queue: existingQ });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+
     return () => {
       delete window.__kyoyuGetQueue;
       delete window.__kyoyuPlayQueueItem;
       delete window.__kyoyuRemoveFromQueue;
+      delete window.__kyoyuQueueTrack;
       delete window.__kyoyuGetComments;
       delete window.__kyoyuPostComment;
       delete window.__kyoyuGetTrackInfo;
@@ -1951,22 +2033,31 @@ export function PlayerProvider({ children }) {
   const AUTOPLAY_TIMEOUT_MS = 6000;
 
   /** 'Next' that ALWAYS ends in sound: queue → radio-style autoplay → replay current. */
-  /** The YouTube iframe can't play this video (blocked / never starts): same song elsewhere, else the next track. */
+  /** The YouTube iframe can't play this video (blocked / never starts): same song elsewhere, else stop cleanly without cascading. */
   const ytRecoverRef = useRef('');
   async function recoverYouTubeFailure() {
     const cur = stateRef.current.currentTrack;
     if (!cur) return;
     const id = cur.id;
-    if (ytRecoverRef.current === id) { playNextAutoplay(); return; }
+    if (ytRecoverRef.current === id) {
+      dispatch({ type: 'SET_PLAYING', value: false });
+      return;
+    }
     ytRecoverRef.current = id;
     const stillCurrent = () => stateRef.current.currentTrack?.id === id;
     let found = null;
-    try { found = await findTrackSource({ artist: cur.artistName || cur.artist || '', title: cur.title || '' }, stillCurrent); } catch (e) {}
+    try {
+      found = await findTrackSource(
+        { artist: cur.artistName || cur.artist || '', title: cur.title || '' },
+        stillCurrent,
+        { excludeProviders: ['youtube'], strictMatch: true }
+      );
+    } catch (e) {}
     if (!stillCurrent()) return;
     if (found && found.provider !== 'youtube') {
       playFoundSource(found, { id, title: cur.title, artistName: cur.artistName || cur.artist, releaseCover: cur.releaseCover, duration: cur.duration });
     } else {
-      playNextAutoplay();
+      dispatch({ type: 'SET_PLAYING', value: false });
     }
   }
 
