@@ -552,14 +552,62 @@ export function callStreaming(cmd, args = {}, timeoutMs = 20000) {
 }
 
 // ── Events (progress / state / ended / status) ──
+const STREAMING_STATUS_CACHE_KEY = 'kyoyu-streaming-status-cache-v1';
 const listeners = new Set();
-let cachedStatus = null;
+let cachedStatus = (() => {
+  if (typeof window === 'undefined') return null;
+  let initial = null;
+  try {
+    if (window.__kyoyuInitialStreamingStatus && typeof window.__kyoyuInitialStreamingStatus === 'object') {
+      initial = { ...window.__kyoyuInitialStreamingStatus };
+    } else {
+      const raw = localStorage.getItem(STREAMING_STATUS_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') initial = parsed;
+      }
+    }
+    const rawFast = localStorage.getItem('kyoyu-connected-fast-cache-v2');
+    if (rawFast) {
+      const parsedFast = JSON.parse(rawFast);
+      if (parsedFast && typeof parsedFast === 'object') {
+        for (const svc of ['bandcamp', 'soundcloud', 'discogs', 'youtube', 'spotify', 'applemusic', 'tidal']) {
+          const svcData = parsedFast[svc];
+          if (svcData && typeof svcData === 'object' && Object.values(svcData).some(arr => Array.isArray(arr) && arr.length > 0)) {
+            if (!initial) initial = {};
+            if (!initial[svc]) initial[svc] = { connected: true };
+          }
+        }
+      }
+    }
+    const rawBc = localStorage.getItem('kyoyu-bc-fast-cache-v1');
+    if (rawBc) {
+      const parsedBc = JSON.parse(rawBc);
+      if (parsedBc && ((Array.isArray(parsedBc.collection) && parsedBc.collection.length > 0) || (Array.isArray(parsedBc.wishlist) && parsedBc.wishlist.length > 0))) {
+        if (!initial) initial = {};
+        if (!initial.bandcamp) initial.bandcamp = { connected: true };
+      }
+    }
+  } catch { /* ignore */ }
+  return initial;
+})();
+
+function persistStreamingStatus(nextStatus) {
+  if (typeof window === 'undefined' || !nextStatus || typeof nextStatus !== 'object') return;
+  try {
+    localStorage.setItem(STREAMING_STATUS_CACHE_KEY, JSON.stringify(nextStatus));
+  } catch { /* ignore */ }
+}
+
 if (typeof window !== 'undefined') {
   window.__kyoyuStreamingEvent = (evt) => {
     if (evt?.type === 'artwork' && evt?.service === 'applemusic' && String(evt.itemId || '').startsWith('i.')) {
       return;
     }
-    if (evt?.type === 'status' && evt.status) cachedStatus = evt.status;
+    if (evt?.type === 'status' && evt.status) {
+      cachedStatus = evt.status;
+      persistStreamingStatus(cachedStatus);
+    }
     listeners.forEach((fn) => { try { fn(evt); } catch { /* ignore */ } });
   };
 }
@@ -575,6 +623,7 @@ export async function refreshStreamingStatus() {
     const localOrder = getProviderPriority();
     callStreaming('setProviderPriority', { order: localOrder }).catch(() => {});
     cachedStatus = await callStreaming('status');
+    persistStreamingStatus(cachedStatus);
     listeners.forEach((fn) => { try { fn({ type: 'status', status: cachedStatus }); } catch { /* ignore */ } });
   } catch { /* keep last known */ }
   return cachedStatus;
@@ -583,7 +632,7 @@ export const getCachedStreamingStatus = () => cachedStatus;
 
 /** React hook: live connection status of both services (null on the website). */
 export function useStreamingStatus() {
-  const [status, setStatus] = useState(cachedStatus);
+  const [status, setStatus] = useState(() => cachedStatus);
   useEffect(() => {
     const off = onStreamingEvent((evt) => { if (evt.type === 'status') setStatus(evt.status); });
     refreshStreamingStatus();

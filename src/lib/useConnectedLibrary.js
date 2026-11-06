@@ -22,7 +22,7 @@ try {
             for (const [k, list] of Object.entries(parsed[svc])) {
               if (Array.isArray(list) && list.length) {
                 cache[svc][k] = list;
-                preloadImagesInMemory(list, 36);
+                preloadImagesInMemory(list, 60);
               }
             }
           }
@@ -35,11 +35,11 @@ try {
       if (parsed && typeof parsed === 'object') {
         if (!cache.bandcamp?.collection?.length && Array.isArray(parsed.collection) && parsed.collection.length) {
           cache.bandcamp.collection = parsed.collection;
-          preloadImagesInMemory(parsed.collection, 36);
+          preloadImagesInMemory(parsed.collection, 60);
         }
         if (!cache.bandcamp?.wishlist?.length && Array.isArray(parsed.wishlist) && parsed.wishlist.length) {
           cache.bandcamp.wishlist = parsed.wishlist;
-          preloadImagesInMemory(parsed.wishlist, 36);
+          preloadImagesInMemory(parsed.wishlist, 60);
         }
       }
     }
@@ -76,15 +76,15 @@ export function saveFastConnectedCache() {
         for (const k of kinds) {
           const arr = cache[svc]?.[k];
           if (Array.isArray(arr) && arr.length) {
-            svcObj[k] = arr.slice(0, 36);
+            svcObj[k] = arr.slice(0, 60);
           }
         }
         if (Object.keys(svcObj).length) snapshot[svc] = svcObj;
       }
       localStorage.setItem(FAST_CACHE_KEY, JSON.stringify(snapshot));
       if (cache.bandcamp) {
-        const col = Array.isArray(cache.bandcamp.collection) ? cache.bandcamp.collection.slice(0, 36) : [];
-        const wish = Array.isArray(cache.bandcamp.wishlist) ? cache.bandcamp.wishlist.slice(0, 36) : [];
+        const col = Array.isArray(cache.bandcamp.collection) ? cache.bandcamp.collection.slice(0, 60) : [];
+        const wish = Array.isArray(cache.bandcamp.wishlist) ? cache.bandcamp.wishlist.slice(0, 60) : [];
         localStorage.setItem(LEGACY_BC_CACHE_KEY, JSON.stringify({ collection: col, wishlist: wish, ts: Date.now() }));
       }
     } catch (_) {}
@@ -459,14 +459,16 @@ export function useConnectedLibrary() {
     return () => listeners.delete(fn);
   }, []);
 
+  const hasCached = (svc) => Object.values(cache[svc] || {}).some(arr => Array.isArray(arr) && arr.length > 0);
+  const isConn = (svc) => (status?.[svc]?.connected === true) || (status?.[svc]?.connected !== false && hasCached(svc));
   const hasStatus = !!status;
-  const bc = !!status?.bandcamp?.connected;
-  const sc = !!status?.soundcloud?.connected;
-  const sp = !!status?.spotify?.connected;
-  const am = !!status?.applemusic?.connected;
-  const td = !!status?.tidal?.connected;
-  const dg = !!status?.discogs?.connected;
-  const yt = !!status?.youtube?.connected;
+  const bc = isConn('bandcamp');
+  const sc = isConn('soundcloud');
+  const sp = isConn('spotify');
+  const am = isConn('applemusic');
+  const td = isConn('tidal');
+  const dg = isConn('discogs');
+  const yt = isConn('youtube');
 
   useEffect(() => {
     if (!isStreamingAvailable() || !hasStatus) return;

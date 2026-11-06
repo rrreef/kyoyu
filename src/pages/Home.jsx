@@ -1,19 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { ArrowRight, Lock, Music2 } from 'lucide-react';
-import { berghainEvents } from '../data/berghainEvents';
-import { BerghainEventCard } from '../components/ui/Cards';
+import { ArrowRight, Lock, Music2, ListMusic } from 'lucide-react';
 import { usePlayer, historyReplayInfo } from '../contexts/PlayerContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useHomeLayoutLive } from '../contexts/DisplayContext';
 import { UploadExpandedList, UploadGridView } from '../components/uploads/UploadShelf';
-import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory, toPlayable, openContentActionCard, usePinnedAndHiddenContent } from '../components/AccountItems';
+import AccountItemList, { sanitizeArtworkUrl, pinImageInMemory, preloadImagesInMemory, toPlayable, openContentActionCard, usePinnedAndHiddenContent, openArtistFromHomeTap, openLabelFromHomeTap } from '../components/AccountItems';
 import { useConnectedLibrary, preloadConnectedLibrary } from '../lib/useConnectedLibrary';
 import { fetchAccountLibrary, useProviderPriority, useHomeSectionRows, DEFAULT_HOME_SECTION_ROWS, HOME_TITLES_PER_ROW, cleanTrackOrReleaseTitle, splitCleanMetadata } from '../lib/streaming';
 import { fetchPublicTracks } from '../lib/uploadPipeline';
 import AlbumSheet, { openNativeAlbumFast, registerAlbumPlayback } from '../components/ui/AlbumSheet';
-import EventSheet from '../components/ui/EventSheet';
 import './Home.css';
 
 const PUBLIC_RELEASES_CACHE_KEY = 'kyoyu-public-releases-cache-v1';
@@ -22,42 +19,655 @@ let _publicReleasesPromise = null;
 const _publicReleaseListeners = new Set();
 const _expandedVisibleCounts = new Map();
 const _horizontalSwipePageCounts = new Map();
+const _horizontalSwipePageIndices = new Map();
+const _freeSwipeOffsets = new Map();
+let _lastHomeVerticalScrollTs = 0;
+
+if (typeof window !== 'undefined' && !window.__kyoyuHomeScrollTrackerInstalled) {
+  window.__kyoyuHomeScrollTrackerInstalled = true;
+  window.addEventListener(
+    'scroll',
+    (e) => {
+      const tgt = e.target;
+      if (
+        tgt === window ||
+        tgt === document ||
+        tgt === document.documentElement ||
+        tgt === document.body ||
+        tgt?.id === 'kyoyu-tab-pane-0' ||
+        tgt?.classList?.contains('kyoyu-keepalive-pane') ||
+        tgt?.classList?.contains('main-content')
+      ) {
+        _lastHomeVerticalScrollTs = performance.now();
+      }
+    },
+    { capture: true, passive: true }
+  );
+}
+
+function markHorizontalSwipeNow() {
+  if (typeof window !== 'undefined') {
+    window.__kyoyuLastHorizontalSwipeTs = Date.now();
+    window.__kyoyuCancelActiveLongPress?.();
+  }
+}
 
 function CatalogSwipeRow({ sectionKey, pages, renderPage }) {
-  const [renderedPages, setRenderedPages] = useState(() =>
-    Math.min(pages.length, Math.max(2, _horizontalSwipePageCounts.get(sectionKey) || 2))
-  );
+  const [pageIndex, setPageIndex] = useState(() => {
+    const saved = _horizontalSwipePageIndices.get(sectionKey) || 0;
+    return Math.max(0, Math.min(saved, Math.max(0, pages.length - 1)));
+  });
+  const [renderedPages, setRenderedPages] = useState(() => {
+    const savedPage = _horizontalSwipePageIndices.get(sectionKey) || 0;
+    const savedCount = _horizontalSwipePageCounts.get(sectionKey) || 4;
+    return Math.min(pages.length, Math.max(4, savedPage + 4, savedCount));
+  });
+
+  const rowRef = useRef(null);
+  const trackRef = useRef(null);
+  const settleTimerRef = useRef(null);
+  const pageIndexRef = useRef(pageIndex);
+  pageIndexRef.current = pageIndex;
+  const pagesLenRef = useRef(pages.length);
+  pagesLenRef.current = pages.length;
+  const renderedPagesRef = useRef(renderedPages);
+  renderedPagesRef.current = renderedPages;
+
+  const gestureRef = useRef({
+    active: false,
+    axis: null,
+    isDraggingX: false,
+    startX: 0,
+    startY: 0,
+    lockX: 0,
+    rowWidth: 340,
+    lastX: 0,
+    lastTs: 0,
+    vx: 0,
+    rawDx: 0,
+  });
 
   useEffect(() => {
-    const saved = _horizontalSwipePageCounts.get(sectionKey) || 2;
-    const target = Math.min(pages.length, Math.max(2, saved));
-    if (target > renderedPages) setRenderedPages(target);
-  }, [sectionKey, pages.length, renderedPages]);
-
-  const handleScroll = useCallback((e) => {
-    const el = e.currentTarget;
-    if (!el) return;
-    const pageW = Math.max(1, el.clientWidth);
-    const curPage = Math.floor((el.scrollLeft + pageW * 0.25) / pageW);
-    const needed = Math.min(pages.length, curPage + 3);
-    if (needed > renderedPages) {
-      _horizontalSwipePageCounts.set(sectionKey, Math.max(_horizontalSwipePageCounts.get(sectionKey) || 2, needed));
-      setRenderedPages(needed);
+    const maxPage = Math.max(0, pages.length - 1);
+    const savedIdx = _horizontalSwipePageIndices.get(sectionKey) || 0;
+    const clampedPage = Math.max(0, Math.min(savedIdx, maxPage));
+    if (clampedPage !== pageIndexRef.current) {
+      pageIndexRef.current = clampedPage;
+      setPageIndex(clampedPage);
     }
-  }, [sectionKey, pages.length, renderedPages]);
+    const savedCount = _horizontalSwipePageCounts.get(sectionKey) || 4;
+    const targetRendered = Math.min(pages.length, Math.max(4, clampedPage + 4, savedCount));
+    if (targetRendered > renderedPagesRef.current) {
+      renderedPagesRef.current = targetRendered;
+      setRenderedPages(targetRendered);
+    }
+    const track = trackRef.current;
+    if (track && !gestureRef.current.isDraggingX) {
+      track.style.transition = 'none';
+      track.style.transform = `translate3d(${-clampedPage * 100}%, 0, 0)`;
+    }
+  }, [sectionKey, pages.length]);
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e) => {
+      const g = gestureRef.current;
+      if (pagesLenRef.current <= 1 || e.touches.length !== 1) {
+        g.active = false;
+        g.axis = null;
+        g.isDraggingX = false;
+        return;
+      }
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      const t = e.touches[0];
+      const now = performance.now();
+      const scrollingVertically = now - _lastHomeVerticalScrollTs < 60;
+      g.active = true;
+      g.axis = scrollingVertically ? 'y' : null;
+      g.isDraggingX = false;
+      g.startX = t.clientX;
+      g.startY = t.clientY;
+      g.lockX = t.clientX;
+      g.rowWidth = el.clientWidth || 340;
+      g.lastX = t.clientX;
+      g.lastTs = now;
+      g.vx = 0;
+      g.rawDx = 0;
+    };
+
+    const onTouchMove = (e) => {
+      const g = gestureRef.current;
+      if (!g.active || g.axis === 'y') return;
+      if (e.touches.length !== 1) {
+        g.axis = 'y';
+        return;
+      }
+      const now = performance.now();
+      if (g.axis === null && now - _lastHomeVerticalScrollTs < 50) {
+        g.axis = 'y';
+        return;
+      }
+      const t = e.touches[0];
+      const dx = t.clientX - g.startX;
+      const dy = t.clientY - g.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (g.axis === null) {
+        if (absDx < 6 && absDy < 6) return;
+        if (absDy > absDx * 1.15 && absDy >= 7) {
+          g.axis = 'y';
+          return;
+        }
+        if (absDx >= 6 && absDx >= absDy * 1.12) {
+          g.axis = 'x';
+          g.isDraggingX = true;
+          g.lockX = t.clientX;
+          g.lastX = t.clientX;
+          g.lastTs = now;
+          g.vx = 0;
+          g.rawDx = 0;
+          markHorizontalSwipeNow();
+        } else {
+          return;
+        }
+      }
+
+      if (g.axis === 'x') {
+        if (e.cancelable) e.preventDefault();
+        markHorizontalSwipeNow();
+        const dt = Math.max(1, now - g.lastTs);
+        const instVx = (t.clientX - g.lastX) / dt;
+        g.vx = g.vx * 0.32 + instVx * 0.68;
+        g.lastX = t.clientX;
+        g.lastTs = now;
+
+        const rawDx = t.clientX - g.lockX;
+        g.rawDx = rawDx;
+        const curPage = pageIndexRef.current;
+        const maxPage = Math.max(0, pagesLenRef.current - 1);
+        let effectiveDx = rawDx;
+        if ((curPage <= 0 && rawDx > 0) || (curPage >= maxPage && rawDx < 0)) {
+          effectiveDx = rawDx * 0.26;
+        }
+        const track = trackRef.current;
+        if (track) {
+          const pctOffset = (-curPage * 100) + (effectiveDx / Math.max(1, g.rowWidth)) * 100;
+          track.style.transition = 'none';
+          track.style.transform = `translate3d(${pctOffset.toFixed(3)}%, 0, 0)`;
+        }
+      }
+    };
+
+    const finishTouch = () => {
+      const g = gestureRef.current;
+      if (!g.active) return;
+      const wasDraggingX = g.axis === 'x' && g.isDraggingX;
+      const rawDx = g.rawDx;
+      const vx = g.vx;
+      const width = g.rowWidth || el.clientWidth || 340;
+      g.active = false;
+      g.axis = null;
+      g.isDraggingX = false;
+      if (!wasDraggingX) return;
+
+      markHorizontalSwipeNow();
+      const curPage = pageIndexRef.current;
+      const maxPage = Math.max(0, pagesLenRef.current - 1);
+      const threshold = Math.min(64, width * 0.14);
+      let nextPage = curPage;
+      if ((rawDx < -threshold || (vx < -0.18 && rawDx < -8)) && curPage < maxPage) {
+        nextPage = curPage + 1;
+      } else if ((rawDx > threshold || (vx > 0.18 && rawDx > 8)) && curPage > 0) {
+        nextPage = curPage - 1;
+      }
+
+      pageIndexRef.current = nextPage;
+      _horizontalSwipePageIndices.set(sectionKey, nextPage);
+
+      // Animate purely on the GPU compositor thread first — defer React state updates until after the glide settles
+      const track = trackRef.current;
+      if (track) {
+        track.style.transition = 'transform 320ms cubic-bezier(0.16, 1, 0.3, 1)';
+        track.style.transform = `translate3d(${-nextPage * 100}%, 0, 0)`;
+      }
+
+      const needed = Math.min(pagesLenRef.current, nextPage + 4);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        if (needed > renderedPagesRef.current) {
+          renderedPagesRef.current = needed;
+          _horizontalSwipePageCounts.set(sectionKey, Math.max(_horizontalSwipePageCounts.get(sectionKey) || 4, needed));
+          setRenderedPages(needed);
+        }
+        setPageIndex(nextPage);
+      }, 330);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', finishTouch, { passive: true });
+    el.addEventListener('touchcancel', finishTouch, { passive: true });
+    return () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', finishTouch);
+      el.removeEventListener('touchcancel', finishTouch);
+    };
+  }, [sectionKey]);
+
+  const handleClickCapture = useCallback((e) => {
+    if (typeof window !== 'undefined' && window.__kyoyuLastHorizontalSwipeTs && Date.now() - window.__kyoyuLastHorizontalSwipeTs < 360) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
 
   return (
-    <div className="catalog-swipe-row" onScroll={handleScroll}>
-      {pages.slice(0, renderedPages).map((pageItems, pIdx) => (
-        <div key={`${sectionKey}-p${pIdx}`} className="catalog-swipe-page">
-          {renderPage(pageItems, pIdx)}
-        </div>
-      ))}
+    <div ref={rowRef} className="catalog-swipe-row" onClickCapture={handleClickCapture}>
+      <div
+        ref={trackRef}
+        className="catalog-swipe-track"
+        style={{ transform: `translate3d(${-pageIndex * 100}%, 0, 0)` }}
+      >
+        {pages.slice(0, renderedPages).map((pageItems, pIdx) => (
+          <div key={`${sectionKey}-p${pIdx}`} className="catalog-swipe-page">
+            {renderPage(pageItems, pIdx)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function HeroMarqueeRow({ className, children }) {
+function HeroSwipeRow({ sectionKey, itemCount, children }) {
+  const [pageIndex, setPageIndex] = useState(() => {
+    const saved = _horizontalSwipePageIndices.get(sectionKey) || 0;
+    return Math.max(0, Math.min(saved, Math.max(0, itemCount - 1)));
+  });
+
+  const rowRef = useRef(null);
+  const trackRef = useRef(null);
+  const settleTimerRef = useRef(null);
+  const pageIndexRef = useRef(pageIndex);
+  pageIndexRef.current = pageIndex;
+  const itemCountRef = useRef(itemCount);
+  itemCountRef.current = itemCount;
+
+  const gestureRef = useRef({
+    active: false,
+    axis: null,
+    isDraggingX: false,
+    startX: 0,
+    startY: 0,
+    lockX: 0,
+    lastX: 0,
+    lastTs: 0,
+    vx: 0,
+    rawDx: 0,
+  });
+
+  useEffect(() => {
+    const maxPage = Math.max(0, itemCount - 1);
+    const savedIdx = _horizontalSwipePageIndices.get(sectionKey) || 0;
+    const clampedPage = Math.max(0, Math.min(savedIdx, maxPage));
+    if (clampedPage !== pageIndexRef.current) {
+      pageIndexRef.current = clampedPage;
+      setPageIndex(clampedPage);
+    }
+    const track = trackRef.current;
+    if (track && !gestureRef.current.isDraggingX) {
+      track.style.transition = 'none';
+      track.style.transform = `translate3d(calc(${-clampedPage} * (100% + 14px)), 0, 0)`;
+    }
+  }, [sectionKey, itemCount]);
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e) => {
+      const g = gestureRef.current;
+      if (itemCountRef.current <= 1 || e.touches.length !== 1) {
+        g.active = false;
+        g.axis = null;
+        g.isDraggingX = false;
+        return;
+      }
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      const t = e.touches[0];
+      const now = performance.now();
+      const scrollingVertically = now - _lastHomeVerticalScrollTs < 60;
+      g.active = true;
+      g.axis = scrollingVertically ? 'y' : null;
+      g.isDraggingX = false;
+      g.startX = t.clientX;
+      g.startY = t.clientY;
+      g.lockX = t.clientX;
+      g.lastX = t.clientX;
+      g.lastTs = now;
+      g.vx = 0;
+      g.rawDx = 0;
+    };
+
+    const onTouchMove = (e) => {
+      const g = gestureRef.current;
+      if (!g.active || g.axis === 'y') return;
+      if (e.touches.length !== 1) {
+        g.axis = 'y';
+        return;
+      }
+      const now = performance.now();
+      if (g.axis === null && now - _lastHomeVerticalScrollTs < 50) {
+        g.axis = 'y';
+        return;
+      }
+      const t = e.touches[0];
+      const dx = t.clientX - g.startX;
+      const dy = t.clientY - g.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (g.axis === null) {
+        if (absDx < 6 && absDy < 6) return;
+        if (absDy > absDx * 1.15 && absDy >= 7) {
+          g.axis = 'y';
+          return;
+        }
+        if (absDx >= 6 && absDx >= absDy * 1.12) {
+          g.axis = 'x';
+          g.isDraggingX = true;
+          g.lockX = t.clientX;
+          g.lastX = t.clientX;
+          g.lastTs = now;
+          g.vx = 0;
+          g.rawDx = 0;
+          markHorizontalSwipeNow();
+        } else {
+          return;
+        }
+      }
+
+      if (g.axis === 'x') {
+        if (e.cancelable) e.preventDefault();
+        markHorizontalSwipeNow();
+        const dt = Math.max(1, now - g.lastTs);
+        const instVx = (t.clientX - g.lastX) / dt;
+        g.vx = g.vx * 0.32 + instVx * 0.68;
+        g.lastX = t.clientX;
+        g.lastTs = now;
+
+        const rawDx = t.clientX - g.lockX;
+        g.rawDx = rawDx;
+        const curPage = pageIndexRef.current;
+        const maxPage = Math.max(0, itemCountRef.current - 1);
+        let effectiveDx = rawDx;
+        if ((curPage <= 0 && rawDx > 0) || (curPage >= maxPage && rawDx < 0)) {
+          effectiveDx = rawDx * 0.26;
+        }
+        const track = trackRef.current;
+        if (track) {
+          track.style.transition = 'none';
+          track.style.transform = `translate3d(calc(${-curPage} * (100% + 14px) + ${effectiveDx}px), 0, 0)`;
+        }
+      }
+    };
+
+    const finishTouch = () => {
+      const g = gestureRef.current;
+      if (!g.active) return;
+      const wasDraggingX = g.axis === 'x' && g.isDraggingX;
+      const rawDx = g.rawDx;
+      const vx = g.vx;
+      g.active = false;
+      g.axis = null;
+      g.isDraggingX = false;
+      if (!wasDraggingX) return;
+
+      markHorizontalSwipeNow();
+      const curPage = pageIndexRef.current;
+      const maxPage = Math.max(0, itemCountRef.current - 1);
+      const width = el.clientWidth || 340;
+      const threshold = Math.min(64, width * 0.14);
+      let nextPage = curPage;
+      if ((rawDx < -threshold || (vx < -0.18 && rawDx < -8)) && curPage < maxPage) {
+        nextPage = curPage + 1;
+      } else if ((rawDx > threshold || (vx > 0.18 && rawDx > 8)) && curPage > 0) {
+        nextPage = curPage - 1;
+      }
+
+      pageIndexRef.current = nextPage;
+      _horizontalSwipePageIndices.set(sectionKey, nextPage);
+      const track = trackRef.current;
+      if (track) {
+        track.style.transition = 'transform 320ms cubic-bezier(0.16, 1, 0.3, 1)';
+        track.style.transform = `translate3d(calc(${-nextPage} * (100% + 14px)), 0, 0)`;
+      }
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        setPageIndex(nextPage);
+      }, 330);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', finishTouch, { passive: true });
+    el.addEventListener('touchcancel', finishTouch, { passive: true });
+    return () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', finishTouch);
+      el.removeEventListener('touchcancel', finishTouch);
+    };
+  }, [sectionKey]);
+
+  const handleClickCapture = useCallback((e) => {
+    if (typeof window !== 'undefined' && window.__kyoyuLastHorizontalSwipeTs && Date.now() - window.__kyoyuLastHorizontalSwipeTs < 360) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
+
+  return (
+    <div ref={rowRef} className="featured-hero-row" onClickCapture={handleClickCapture}>
+      <div
+        ref={trackRef}
+        className="featured-hero-track"
+        style={{ transform: `translate3d(calc(${-pageIndex} * (100% + 14px)), 0, 0)` }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FreeSwipeRow({ sectionKey, className = 'scroll-row', style, disabled = false, children }) {
+  const rowRef = useRef(null);
+  const trackRef = useRef(null);
+  const offsetRef = useRef(_freeSwipeOffsets.get(sectionKey) || 0);
+
+  const gestureRef = useRef({
+    active: false,
+    axis: null,
+    isDraggingX: false,
+    startX: 0,
+    startY: 0,
+    lockX: 0,
+    baseOffset: 0,
+    lastX: 0,
+    lastTs: 0,
+    vx: 0,
+  });
+
+  useEffect(() => {
+    if (disabled) return;
+    const el = rowRef.current;
+    const track = trackRef.current;
+    if (!el || !track) return;
+
+    const getMinX = () => {
+      const styles = window.getComputedStyle(el);
+      const padL = parseFloat(styles.paddingLeft) || 0;
+      const padR = parseFloat(styles.paddingRight) || 0;
+      const innerW = Math.max(1, el.clientWidth - padL - padR);
+      return -Math.max(0, track.scrollWidth - innerW);
+    };
+
+    const clampedInit = Math.max(getMinX(), Math.min(0, offsetRef.current));
+    offsetRef.current = clampedInit;
+    track.style.transition = 'none';
+    track.style.transform = `translate3d(${clampedInit}px, 0, 0)`;
+
+    const onTouchStart = (e) => {
+      const g = gestureRef.current;
+      if (e.touches.length !== 1) {
+        g.active = false;
+        g.axis = null;
+        g.isDraggingX = false;
+        return;
+      }
+      const t = e.touches[0];
+      const now = performance.now();
+      const scrollingVertically = now - _lastHomeVerticalScrollTs < 60;
+      g.active = true;
+      g.axis = scrollingVertically ? 'y' : null;
+      g.isDraggingX = false;
+      g.startX = t.clientX;
+      g.startY = t.clientY;
+      g.lockX = t.clientX;
+      g.baseOffset = offsetRef.current;
+      g.lastX = t.clientX;
+      g.lastTs = now;
+      g.vx = 0;
+    };
+
+    const onTouchMove = (e) => {
+      const g = gestureRef.current;
+      if (!g.active || g.axis === 'y') return;
+      if (e.touches.length !== 1) {
+        g.axis = 'y';
+        return;
+      }
+      const now = performance.now();
+      if (g.axis === null && now - _lastHomeVerticalScrollTs < 50) {
+        g.axis = 'y';
+        return;
+      }
+      const t = e.touches[0];
+      const dx = t.clientX - g.startX;
+      const dy = t.clientY - g.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (g.axis === null) {
+        if (absDx < 6 && absDy < 6) return;
+        if (absDy > absDx * 1.15 && absDy >= 7) {
+          g.axis = 'y';
+          return;
+        }
+        if (absDx >= 6 && absDx >= absDy * 1.12) {
+          g.axis = 'x';
+          g.isDraggingX = true;
+          g.lockX = t.clientX;
+          g.baseOffset = offsetRef.current;
+          g.lastX = t.clientX;
+          g.lastTs = now;
+          g.vx = 0;
+          markHorizontalSwipeNow();
+        } else {
+          return;
+        }
+      }
+
+      if (g.axis === 'x') {
+        if (e.cancelable) e.preventDefault();
+        markHorizontalSwipeNow();
+        const dt = Math.max(1, now - g.lastTs);
+        const instVx = (t.clientX - g.lastX) / dt;
+        g.vx = g.vx * 0.35 + instVx * 0.65;
+        g.lastX = t.clientX;
+        g.lastTs = now;
+
+        const minX = getMinX();
+        const rawNext = g.baseOffset + (t.clientX - g.lockX);
+        let effectiveNext = rawNext;
+        if (rawNext > 0) effectiveNext = rawNext * 0.25;
+        else if (rawNext < minX) effectiveNext = minX + (rawNext - minX) * 0.25;
+        offsetRef.current = effectiveNext;
+        track.style.transition = 'none';
+        track.style.transform = `translate3d(${effectiveNext}px, 0, 0)`;
+      }
+    };
+
+    const finishTouch = () => {
+      const g = gestureRef.current;
+      if (!g.active) return;
+      const wasDraggingX = g.axis === 'x' && g.isDraggingX;
+      const vx = g.vx;
+      g.active = false;
+      g.axis = null;
+      g.isDraggingX = false;
+      if (!wasDraggingX) return;
+
+      markHorizontalSwipeNow();
+      const minX = getMinX();
+      const projected = offsetRef.current + vx * 240;
+      const finalOffset = Math.max(minX, Math.min(0, projected));
+      offsetRef.current = finalOffset;
+      _freeSwipeOffsets.set(sectionKey, finalOffset);
+      track.style.transition = 'transform 340ms cubic-bezier(0.16, 1, 0.3, 1)';
+      track.style.transform = `translate3d(${finalOffset}px, 0, 0)`;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', finishTouch, { passive: true });
+    el.addEventListener('touchcancel', finishTouch, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', finishTouch);
+      el.removeEventListener('touchcancel', finishTouch);
+    };
+  }, [sectionKey, disabled]);
+
+  const handleClickCapture = useCallback((e) => {
+    if (typeof window !== 'undefined' && window.__kyoyuLastHorizontalSwipeTs && Date.now() - window.__kyoyuLastHorizontalSwipeTs < 360) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
+
+  if (disabled) {
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={rowRef} className={`${className} free-swipe-row`} style={style} onClickCapture={handleClickCapture}>
+      <div ref={trackRef} className="free-swipe-track">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function HeroMarqueeRow({ className, children, onClick }) {
   const wrapRef = useRef(null);
   const copyRef = useRef(null);
   const [overflowState, setOverflowState] = useState({ overflowing: false, duration: 9 });
@@ -93,8 +703,19 @@ function HeroMarqueeRow({ className, children }) {
 
   if (!textStr) return null;
 
+  const isInteractive = typeof onClick === 'function';
+
   return (
-    <div ref={wrapRef} className={className}>
+    <div
+      ref={wrapRef}
+      className={className}
+      data-subtap={isInteractive ? 'true' : undefined}
+      onTouchStart={isInteractive ? (e) => { e.stopPropagation(); window.__kyoyuCancelActiveLongPress?.(); } : undefined}
+      onTouchEnd={isInteractive ? (e) => { e.stopPropagation(); } : undefined}
+      onPointerDown={isInteractive ? (e) => { e.stopPropagation(); } : undefined}
+      onClick={isInteractive ? (e) => { e.stopPropagation(); e.preventDefault(); onClick(e); } : undefined}
+      style={isInteractive ? { cursor: 'pointer', width: 'fit-content', maxWidth: '100%', position: 'relative', zIndex: 3 } : undefined}
+    >
       <div
         className={`featured-hero-marquee-track${overflowState.overflowing ? ' is-overflowing' : ''}`}
         style={overflowState.overflowing ? { '--hero-marquee-dur': `${overflowState.duration.toFixed(1)}s` } : undefined}
@@ -310,17 +931,88 @@ function groupByAlbum(tracks) {
 }
 
 export default function Home() {
-  const { playRelease, playTrack, playFromHistory, setSearchQueue, playSearchItem } = usePlayer();
+  const { playRelease, playTrack, playFromHistory, setSearchQueue, playSearchItem, addToQueue, state: playerState } = usePlayer();
   const { user } = useAuth();
   const { getLikedUploads, playlists, playlistActivity, touchPlaylistActivity } = useLibrary();
   const acct = useConnectedLibrary();
   const [providerPriority] = useProviderPriority();
   const [homeSectionRows] = useHomeSectionRows();
   const homeLayout = useHomeLayoutLive();
-  const [myUploads,      setMyUploads]      = useState([]);
+  const [myUploads,      setMyUploads]      = useState(() => {
+    if (!user?.id) return [];
+    try {
+      const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(t => ({
+        ...t,
+        artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
+      })) : [];
+    } catch {
+      return [];
+    }
+  });
   const [publicReleases, setPublicReleases] = useState(() => _cachedPublicReleases);
   const [selectedAlbum,  setSelectedAlbum]  = useState(null);
-  const [selectedEventIndex, setSelectedEventIndex] = useState(null);
+  const [historyColsMode, setHistoryColsMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kyoyu-history-cols-v1');
+      if (saved === 'list') return 'list';
+      const num = parseInt(saved, 10);
+      if (num >= 1 && num <= 5) return num;
+    } catch (_) {}
+    return 'list';
+  });
+  const [historyRows, setHistoryRows] = useState(() => {
+    try {
+      const saved = parseInt(localStorage.getItem('kyoyu-history-rows-v1'), 10);
+      if (saved >= 1 && saved <= 10) return saved;
+    } catch (_) {}
+    return 5;
+  });
+
+  const updateHistoryColsMode = useCallback((nextMode) => {
+    const val = nextMode === 'list' ? 'list' : Math.min(5, Math.max(1, Number(nextMode) || 3));
+    setHistoryColsMode(val);
+    try {
+      localStorage.setItem('kyoyu-history-cols-v1', String(val));
+    } catch (_) {}
+  }, []);
+
+  const updateHistoryRows = useCallback((nextRows) => {
+    const clamped = Math.min(10, Math.max(1, Number(nextRows) || 1));
+    setHistoryRows(clamped);
+    try {
+      localStorage.setItem('kyoyu-history-rows-v1', String(clamped));
+    } catch (_) {}
+  }, []);
+
+  const queueHistoryItem = useCallback((e, item) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (typeof window !== 'undefined') {
+      window.__kyoyuCancelActiveLongPress?.();
+    }
+    if (!item) return;
+    const trackPayload = {
+      id: item.id || `hist-${Date.now()}`,
+      title: item.title || 'Untitled',
+      artistName: item.artist || item.artistName || '',
+      artist: item.artist || item.artistName || '',
+      releaseCover: item.cover || item.artworkUrl || '',
+      cover: item.cover || item.artworkUrl || '',
+      src: item.src || item.url || item.trackUrl || '',
+      url: item.url || item.trackUrl || item.src || '',
+      provider: item.provider || 'bandcamp',
+    };
+    addToQueue?.(trackPayload);
+    if (typeof window !== 'undefined' && typeof window.__kyoyuQueueTrack === 'function') {
+      window.__kyoyuQueueTrack(trackPayload);
+    }
+    window.webkit?.messageHandlers?.player?.postMessage({ cmd: 'open_queue_sheet' });
+  }, [addToQueue]);
 
   async function openPlaylistSheet(pl) {
     if (pl && pl.kind !== 'album') {
@@ -335,25 +1027,41 @@ export default function Home() {
     let cleanAlbumTitle = meta.title || pl.title;
     let resolvedLabel = meta.label || pl.label || pl.labelName || null;
     let resolvedYear = pl.year ? String(pl.year) : null;
-    let cover = pl.artworkUrl || pl.cover || null;
+    const validCoverUrl = (c) => (c && c !== '/album1.png' && !String(c).endsWith('/album1.png')) ? c : null;
+    let cover = validCoverUrl(pl.artworkUrl) || validCoverUrl(pl.cover) || null;
     if (cover && cover.includes('bcbits.com')) {
       cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
     }
 
+    const isAlbumKind = pl.kind === 'album';
     const pushToSheet = (currentTracks) => {
       const cleanedTracks = (currentTracks || []).map(t => {
-        const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || creator, resolvedLabel || '');
+        const tm = splitCleanMetadata(t.title || t.name || 'Unknown Track', t.artist || t.artistName || (isAlbumKind ? creator : ''), resolvedLabel || '');
+        const ownAlbum = t.album || t.releaseTitle || t.albumTitle || (isAlbumKind ? cleanAlbumTitle : '');
+        const ownCover = validCoverUrl(t.artworkUrl) || validCoverUrl(t.cover) || validCoverUrl(t.releaseCover) || (isAlbumKind ? cover : null);
         return {
           ...t,
           title: tm.title || t.title || t.name || 'Unknown Track',
-          artist: tm.artist || t.artist || t.artistName || creator,
-          artistName: tm.artist || t.artistName || t.artist || creator,
-          label: t.label || resolvedLabel || undefined,
-          year: t.year || resolvedYear || undefined,
-          album: cleanAlbumTitle,
-          releaseTitle: cleanAlbumTitle,
+          artist: tm.artist || t.artist || t.artistName || (isAlbumKind ? creator : ''),
+          artistName: tm.artist || t.artistName || t.artist || (isAlbumKind ? creator : ''),
+          label: t.label || (isAlbumKind ? resolvedLabel : undefined) || undefined,
+          year: t.year || (isAlbumKind ? resolvedYear : undefined) || undefined,
+          album: ownAlbum,
+          releaseTitle: ownAlbum,
+          cover: ownCover,
+          artworkUrl: ownCover || t.artworkUrl,
+          releaseCover: ownCover || t.releaseCover,
         };
       });
+      if (!cover) {
+        const trackWithCover = cleanedTracks.find(t => validCoverUrl(t.artworkUrl) || validCoverUrl(t.cover) || validCoverUrl(t.releaseCover));
+        if (trackWithCover) {
+          cover = validCoverUrl(trackWithCover.artworkUrl) || validCoverUrl(trackWithCover.cover) || validCoverUrl(trackWithCover.releaseCover);
+          if (cover && cover.includes('bcbits.com')) {
+            cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
+          }
+        }
+      }
       const albumObj = {
         ...pl,
         title: cleanAlbumTitle,
@@ -361,6 +1069,7 @@ export default function Home() {
         label: resolvedLabel,
         year: resolvedYear,
         cover,
+        isPlaylist: !isAlbumKind,
         tracks: cleanedTracks,
         _ts: ts,
       };
@@ -374,7 +1083,7 @@ export default function Home() {
           artist: t.artist || t.artistName || '',
           url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || '',
           streamUrl: t.streamUrl || t.audioUrl || '',
-          cover: t.artworkUrl || t.cover || null,
+          cover: validCoverUrl(t.artworkUrl) || validCoverUrl(t.cover) || validCoverUrl(t.releaseCover) || (isAlbumKind ? cover : null),
           provider: t.provider || pl.provider || null,
           playable: isPlayable,
           unplayable: !isPlayable,
@@ -589,16 +1298,28 @@ export default function Home() {
       lpTimerRef.current = null;
     }
   }, []);
-  useEffect(() => clearLp, [clearLp]);
+  useEffect(() => {
+    window.__kyoyuCancelActiveLongPress = clearLp;
+    return () => {
+      clearLp();
+      if (window.__kyoyuCancelActiveLongPress === clearLp) {
+        delete window.__kyoyuCancelActiveLongPress;
+      }
+    };
+  }, [clearLp]);
 
   const bindLongPress = useCallback((itemPayload, onClickFn) => ({
     onTouchStart: (e) => {
+      if (e?.target?.closest?.('[data-subtap]')) return;
       lpFiredRef.current = false;
       const t = e.touches?.[0];
       if (!t) return;
       lpStartRef.current = { x: t.clientX, y: t.clientY };
       clearLp();
       lpTimerRef.current = setTimeout(() => {
+        if (window.__kyoyuLastHorizontalSwipeTs && Date.now() - window.__kyoyuLastHorizontalSwipeTs < 450) {
+          return;
+        }
         lpFiredRef.current = true;
         openContentActionCard(itemPayload);
       }, 460);
@@ -607,7 +1328,7 @@ export default function Home() {
       if (!lpTimerRef.current) return;
       const t = e.touches?.[0];
       if (!t) return;
-      if (Math.abs(t.clientX - lpStartRef.current.x) > 10 || Math.abs(t.clientY - lpStartRef.current.y) > 10) {
+      if (Math.abs(t.clientX - lpStartRef.current.x) > 8 || Math.abs(t.clientY - lpStartRef.current.y) > 8) {
         clearLp();
       }
     },
@@ -620,6 +1341,7 @@ export default function Home() {
     },
     onTouchCancel: clearLp,
     onContextMenu: (e) => {
+      if (e?.target?.closest?.('[data-subtap]')) return;
       e.preventDefault();
       e.stopPropagation();
       clearLp();
@@ -627,7 +1349,9 @@ export default function Home() {
       openContentActionCard(itemPayload);
     },
     onClick: (e) => {
-      if (lpFiredRef.current) {
+      if (e?.target?.closest?.('[data-subtap]')) return;
+      const swipeRecent = window.__kyoyuLastHorizontalSwipeTs && Date.now() - window.__kyoyuLastHorizontalSwipeTs < 400;
+      if (lpFiredRef.current || swipeRecent) {
         lpFiredRef.current = false;
         e.preventDefault();
         e.stopPropagation();
@@ -981,7 +1705,11 @@ export default function Home() {
       if (prev === sectionKey) return null;
       const savedCount = _expandedVisibleCounts.get(sectionKey) || 45;
       setExpandedVisibleCount(savedCount);
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) {}
+      try {
+        const pane = document.getElementById('kyoyu-tab-pane-0');
+        if (pane) pane.scrollTo({ top: 0, behavior: 'smooth' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (_) {}
       return sectionKey;
     });
   }, []);
@@ -1008,17 +1736,25 @@ export default function Home() {
       );
       observer.observe(node);
     }
+    const pane = document.getElementById('kyoyu-tab-pane-0');
     const onScroll = () => {
+      if (pane) {
+        if (pane.scrollHeight > 0 && pane.scrollHeight - (pane.scrollTop + pane.clientHeight) < 800) {
+          bump();
+        }
+        return;
+      }
       const scrollBottom = window.innerHeight + window.scrollY;
       const docHeight = document.documentElement?.scrollHeight || document.body?.scrollHeight || 0;
       if (docHeight > 0 && docHeight - scrollBottom < 800) {
         bump();
       }
     };
-    window.addEventListener('scroll', onScroll, { passive: true });
+    const scrollTarget = pane || window;
+    scrollTarget.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       if (observer) observer.disconnect();
-      window.removeEventListener('scroll', onScroll);
+      scrollTarget.removeEventListener('scroll', onScroll);
     };
   }, [expandedSectionKey, expandedVisibleCount]);
 
@@ -1026,7 +1762,6 @@ export default function Home() {
   const f = shelfFilter;
   const showFeatured    = f === 'all' || f === 'music';
   const showReleases    = f === 'all' || f === 'music';
-  const showEvents      = f === 'all' || f === 'events';
 
   return (
     <div className="page home-page animate-in">
@@ -1040,7 +1775,6 @@ export default function Home() {
               { key: 'music',   label: 'Music'    },
               { key: 'podcasts', label: 'Podcasts' },
               { key: 'merch',   label: 'Merch'    },
-              { key: 'events',  label: 'Events'   },
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -1087,8 +1821,10 @@ export default function Home() {
                     ? cleanCover
                     : (rich.cover && !brokenCovers[rich.cover] ? rich.cover : '');
                   return (
-                    <button
+                    <div
                       key={album.id}
+                      role="button"
+                      tabIndex={0}
                       className="upl-grid-cell"
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
                       {...bindLongPress({
@@ -1113,8 +1849,17 @@ export default function Home() {
                           : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>}
                       </div>
                       <div className="upl-grid-title">{album.title}</div>
-                      <div className="upl-grid-artist">{album.artist}</div>
-                    </button>
+                      <div
+                        className="upl-grid-artist"
+                        data-subtap={album.artist ? 'artist' : undefined}
+                        onTouchStart={album.artist ? (e) => e.stopPropagation() : undefined}
+                        onTouchEnd={album.artist ? (e) => e.stopPropagation() : undefined}
+                        onPointerDown={album.artist ? (e) => e.stopPropagation() : undefined}
+                        onClick={album.artist ? (e) => openArtistFromHomeTap(e, album.artist, album) : undefined}
+                      >
+                        {album.artist}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1124,11 +1869,7 @@ export default function Home() {
             </>
           ) : (
             <>
-              <div
-                className="featured-hero-row"
-                ref={featuredRef}
-                onScroll={handleFeaturedScroll}
-              >
+              <HeroSwipeRow sectionKey="hero-featured" itemCount={featuredAlbums.length}>
                 {featuredAlbums.map((album) => {
                   const metaKey = `${(album.artist || '').toLowerCase()}::${(album.title || '').toLowerCase()}`;
                   const rich = heroMetaMap[album.id] || heroMetaMap[metaKey] || {};
@@ -1146,8 +1887,10 @@ export default function Home() {
                   const formatsList = normalizeHeroFormats(rawHeroFormats, true);
                   const formatsText = Array.isArray(formatsList) ? formatsList.join(', ') : String(formatsList || 'Digital');
                   return (
-                    <button
+                    <div
                       key={album.id}
+                      role="button"
+                      tabIndex={0}
                       className="featured-hero-card"
                       {...bindLongPress({
                         id: album.id,
@@ -1182,16 +1925,28 @@ export default function Home() {
                       {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Formats */}
                       <div className="featured-hero-info">
                         <HeroMarqueeRow className="featured-hero-title">{album.title}</HeroMarqueeRow>
-                        <HeroMarqueeRow className="featured-hero-artist">{album.artist}</HeroMarqueeRow>
-                        {labelStr && <HeroMarqueeRow className="featured-hero-label">{labelStr}</HeroMarqueeRow>}
+                        <HeroMarqueeRow
+                          className="featured-hero-artist"
+                          onClick={album.artist ? (e) => openArtistFromHomeTap(e, album.artist, album) : undefined}
+                        >
+                          {album.artist}
+                        </HeroMarqueeRow>
+                        {labelStr && (
+                          <HeroMarqueeRow
+                            className="featured-hero-label"
+                            onClick={(e) => openLabelFromHomeTap(e, labelStr, album)}
+                          >
+                            {labelStr}
+                          </HeroMarqueeRow>
+                        )}
                         {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
                         {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
                         <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
-              </div>
+              </HeroSwipeRow>
             </>
           )}
         </section>
@@ -1213,6 +1968,14 @@ export default function Home() {
         }));
         const pinCols = homeLayout.cols || HOME_TITLES_PER_ROW;
         const pinViewMode = homeLayout.mode === 'list' ? 'list' : 'grid';
+        const pinRows = homeSectionRows?.['home-pinned'] ?? DEFAULT_HOME_SECTION_ROWS;
+        const pinPageSize = Math.max(0, Number(pinRows) || 0) * (pinViewMode === 'list' ? HOME_TITLES_PER_ROW : pinCols);
+        const pinPages = [];
+        if (pinPageSize > 0) {
+          for (let i = 0; i < mappedPinned.length; i += pinPageSize) {
+            pinPages.push(mappedPinned.slice(i, i + pinPageSize));
+          }
+        }
         return (
           <section className="home-section">
             <div className="section-title">
@@ -1223,12 +1986,39 @@ export default function Home() {
                 <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{mappedPinned.length}</span>
               )}
             </div>
-            <AccountItemList
-              items={expandedSectionKey === 'home-pinned' ? mappedPinned.slice(0, expandedVisibleCount) : mappedPinned}
-              view={pinViewMode}
-              cols={pinCols}
-              onOpenPlaylist={openPlaylistSheet}
-            />
+            {expandedSectionKey === 'home-pinned' ? (
+              <>
+                <AccountItemList
+                  items={mappedPinned.slice(0, expandedVisibleCount)}
+                  view={pinViewMode}
+                  cols={pinCols}
+                  onOpenPlaylist={openPlaylistSheet}
+                />
+                {expandedVisibleCount < mappedPinned.length && (
+                  <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                )}
+              </>
+            ) : pinPages.length <= 1 ? (
+              <AccountItemList
+                items={pinPages[0] || mappedPinned}
+                view={pinViewMode}
+                cols={pinCols}
+                onOpenPlaylist={openPlaylistSheet}
+              />
+            ) : (
+              <CatalogSwipeRow
+                sectionKey="home-pinned"
+                pages={pinPages}
+                renderPage={(pageItems) => (
+                  <AccountItemList
+                    items={pageItems}
+                    view={pinViewMode}
+                    cols={pinCols}
+                    onOpenPlaylist={openPlaylistSheet}
+                  />
+                )}
+              />
+            )}
           </section>
         );
       })()}
@@ -1403,11 +2193,7 @@ export default function Home() {
                 {expandedSectionKey === 'home-community' ? '← Community' : 'Community'}
               </span>
             </div>
-            <div
-              className="featured-hero-row"
-              ref={communityHeroRef}
-              onScroll={handleCommunityHeroScroll}
-            >
+            <HeroSwipeRow sectionKey="hero-community" itemCount={Math.min(18, allCommunityItems.length)}>
               {allCommunityItems.slice(0, 18).map((post, idx) => {
                 const entityType = String(post.entityType || 'album').toLowerCase();
                 const releaseUrl = post.albumUrl || post.url || '';
@@ -1446,8 +2232,10 @@ export default function Home() {
                 const sharerName = post.sharedByName || currentUserName;
 
                 return (
-                  <button
+                  <div
                     key={lookupKey}
+                    role="button"
+                    tabIndex={0}
                     className="featured-hero-card"
                     {...bindLongPress({
                       id: post.id || lookupKey,
@@ -1519,17 +2307,31 @@ export default function Home() {
                     </div>
                     <div className="featured-hero-info">
                       <HeroMarqueeRow className="featured-hero-title">{displayTitle}</HeroMarqueeRow>
-                      {displayArtist && <HeroMarqueeRow className="featured-hero-artist">{displayArtist}</HeroMarqueeRow>}
-                      {showLabel && entityType !== 'label' && <HeroMarqueeRow className="featured-hero-label">{showLabel}</HeroMarqueeRow>}
+                      {displayArtist && (
+                        <HeroMarqueeRow
+                          className="featured-hero-artist"
+                          onClick={entityType !== 'artist' && entityType !== 'label' ? (e) => openArtistFromHomeTap(e, displayArtist, { ...post, url: releaseUrl, title: displayTitle }) : undefined}
+                        >
+                          {displayArtist}
+                        </HeroMarqueeRow>
+                      )}
+                      {showLabel && entityType !== 'label' && (
+                        <HeroMarqueeRow
+                          className="featured-hero-label"
+                          onClick={(e) => openLabelFromHomeTap(e, showLabel, { ...post, url: releaseUrl })}
+                        >
+                          {showLabel}
+                        </HeroMarqueeRow>
+                      )}
                       {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
                       {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
                       <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
                       <HeroMarqueeRow className="featured-hero-sharer">Shared by {sharerName}</HeroMarqueeRow>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
-            </div>
+            </HeroSwipeRow>
           </section>
         );
       })()}
@@ -1665,11 +2467,7 @@ export default function Home() {
                     <div className="section-title">
                       <span onClick={() => toggleExpandSection(sec.key)} style={{ cursor: 'pointer' }}>{sec.title}</span>
                     </div>
-                    <div
-                      className="featured-hero-row"
-                      ref={bandcampHeroRef}
-                      onScroll={handleBcHeroScroll}
-                    >
+                    <HeroSwipeRow sectionKey="hero-bandcamp-new" itemCount={bcHeroItems.length}>
                       {bcHeroItems.map((it, idx) => {
                         const releaseUrl = it.albumUrl || it.trackUrl || it.url || '';
                         const rawTitleCandidate = it.album || it.releaseTitle || it.title || '';
@@ -1698,8 +2496,10 @@ export default function Home() {
                         const formatsList = normalizeHeroFormats(rawBcFormats, true);
                         const formatsText = Array.isArray(formatsList) ? formatsList.join(', ') : String(formatsList || 'Digital');
                         return (
-                          <button
+                          <div
                             key={it.id || `bc-new-${idx}`}
+                            role="button"
+                            tabIndex={0}
                             className="featured-hero-card"
                             {...bindLongPress({
                               id: it.id || `bc-new-${idx}`,
@@ -1734,16 +2534,28 @@ export default function Home() {
                             {/* Info on the right of artwork: 1. Album, 2. Artist, 3. Label, 4. Release Date, 5. Location, 6. Formats */}
                             <div className="featured-hero-info">
                               <HeroMarqueeRow className="featured-hero-title">{albumTitle}</HeroMarqueeRow>
-                              <HeroMarqueeRow className="featured-hero-artist">{artistDisplay}</HeroMarqueeRow>
-                              {showLabel && <HeroMarqueeRow className="featured-hero-label">{showLabel}</HeroMarqueeRow>}
+                              <HeroMarqueeRow
+                                className="featured-hero-artist"
+                                onClick={artistDisplay ? (e) => openArtistFromHomeTap(e, artistDisplay, { ...it, url: releaseUrl, title: albumTitle }) : undefined}
+                              >
+                                {artistDisplay}
+                              </HeroMarqueeRow>
+                              {showLabel && (
+                                <HeroMarqueeRow
+                                  className="featured-hero-label"
+                                  onClick={(e) => openLabelFromHomeTap(e, showLabel, { ...it, url: releaseUrl })}
+                                >
+                                  {showLabel}
+                                </HeroMarqueeRow>
+                              )}
                               {releaseDateStr && <HeroMarqueeRow className="featured-hero-date">{releaseDateStr}</HeroMarqueeRow>}
                               {locationStr && <HeroMarqueeRow className="featured-hero-location">{locationStr}</HeroMarqueeRow>}
                               <HeroMarqueeRow className="featured-hero-formats">{formatsText}</HeroMarqueeRow>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
-                    </div>
+                    </HeroSwipeRow>
                   </section>
                 );
               }
@@ -1789,92 +2601,325 @@ export default function Home() {
       })()}
 
       {/* ═══ 1.5 — HISTORY ═══ */}
-      {showFeatured && playHistory.filter(it => !isItemHidden(it)).length > 0 && (!expandedSectionKey || expandedSectionKey === 'history') && (
-        <section className="home-section">
-          <div className="section-title">
-            <span onClick={() => toggleExpandSection('history')} style={{ cursor: 'pointer' }}>
-              {expandedSectionKey === 'history' ? '← History' : 'History'}
-            </span>
-            {expandedSectionKey === 'history' && (
-              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{playHistory.filter(it => !isItemHidden(it)).length}</span>
-            )}
-          </div>
-          {expandedSectionKey === 'history' ? (
-            <>
-              <div className={`upl-grid upl-grid-${homeLayout.cols || 3}`}>
-                {playHistory.filter(it => !isItemHidden(it)).slice(0, expandedVisibleCount).map(item => {
-                  const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
-                  const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
-                  return (
-                    <button
-                      key={item._hkey || item.id}
-                      className="upl-grid-cell"
-                      style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                      {...bindLongPress({
-                        id: item.id,
-                        title: item.title,
-                        artist: item.artist,
-                        artworkUrl: showCover || item.cover || item.artworkUrl,
-                        provider: item.provider || 'bandcamp',
-                        kind: 'track',
-                        url: item.url || item.trackUrl || '',
-                      }, () => playFromHistory(item))}
-                    >
-                      <div className="upl-grid-art">
-                        {showCover ? (
-                          <img src={showCover} alt={item.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
-                        ) : (
-                          <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2} /></div>
-                        )}
+      {showFeatured && playHistory.filter(it => !isItemHidden(it)).length > 0 && (!expandedSectionKey || expandedSectionKey === 'history') && (() => {
+        const visibleHistory = playHistory.filter(it => !isItemHidden(it));
+        const isHistoryList = historyColsMode === 'list';
+        const safeCols = isHistoryList ? 1 : Math.min(5, Math.max(1, Number(historyColsMode) || 3));
+        const safeRows = Math.min(10, Math.max(1, Number(historyRows) || 5));
+        const pageSize = isHistoryList ? safeRows : safeRows * safeCols;
+        const historyPages = [];
+        for (let i = 0; i < visibleHistory.length; i += pageSize) {
+          historyPages.push(visibleHistory.slice(i, i + pageSize));
+        }
+
+        const renderHistoryListPage = (pageItems, pageIdx = 0) => (
+          <div className="history-album-sheet-list" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {pageItems.map((item, idx) => {
+              const globalIdx = pageIdx * pageSize + idx;
+              const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
+              const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
+              const isPlayingThis = Boolean(
+                playerState?.currentTrack &&
+                ((playerState.currentTrack.id && item.id && String(playerState.currentTrack.id) === String(item.id)) ||
+                 (playerState.currentTrack.title && item.title &&
+                  String(playerState.currentTrack.title).toLowerCase() === String(item.title).toLowerCase()))
+              );
+              return (
+                <div
+                  key={item._hkey || `${item.id}-${globalIdx}`}
+                  className={`history-album-track-row${isPlayingThis ? ' active' : ''}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 11,
+                    padding: '7px 6px',
+                    borderRadius: 10,
+                    background: isPlayingThis ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  {...bindLongPress({
+                    id: item.id,
+                    title: item.title,
+                    artist: item.artist,
+                    artworkUrl: showCover || item.cover || item.artworkUrl,
+                    provider: item.provider || 'bandcamp',
+                    kind: 'track',
+                    url: item.url || item.trackUrl || '',
+                  }, () => playFromHistory(item))}
+                >
+                  <span style={{
+                    width: 22,
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: isPlayingThis ? 'var(--text-primary)' : 'var(--text-muted)',
+                    textAlign: 'center',
+                    flexShrink: 0,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {globalIdx + 1}
+                  </span>
+                  <div style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 7,
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    background: 'var(--grey-800)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {showCover ? (
+                      <img
+                        src={showCover}
+                        alt={item.title}
+                        loading="eager"
+                        decoding="sync"
+                        onError={() => markCoverBroken(showCover)}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <Music2 size={16} strokeWidth={1.3} color="var(--text-dim)" />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.92rem',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {item.title}
+                    </div>
+                    {item.artist ? (
+                      <div
+                        data-subtap="artist"
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchEnd={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => openArtistFromHomeTap(e, item.artist, item)}
+                        style={{
+                          fontSize: '0.78rem',
+                          color: 'var(--text-dim)',
+                          marginTop: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          width: 'fit-content',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {item.artist}
                       </div>
-                      <div className="upl-grid-title">{item.title}</div>
-                      <div className="upl-grid-artist">{item.artist}</div>
-                    </button>
-                  );
-                })}
-              </div>
-              {expandedVisibleCount < playHistory.filter(it => !isItemHidden(it)).length && (
-                <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
-              )}
-            </>
-          ) : (
-            <div className="scroll-row">
-              {playHistory.filter(it => !isItemHidden(it)).slice(0, 30).map(item => {
-                const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
-                const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
-                return (
-                  <button 
-                    key={item._hkey || item.id} 
-                    className="shelf-card" 
-                    style={{ width: 110, border: 'none', background: 'none', textAlign: 'left', padding: 0 }} 
-                    {...bindLongPress({
-                      id: item.id,
-                      title: item.title,
-                      artist: item.artist,
-                      artworkUrl: showCover || item.cover || item.artworkUrl,
-                      provider: item.provider || 'bandcamp',
-                      kind: 'track',
-                      url: item.url || item.trackUrl || '',
-                    }, () => playFromHistory(item))}
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Add to Queue"
+                    data-subtap="queue"
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => queueHistoryItem(e, item)}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      border: 'none',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <div className="shelf-card-art">
-                      {showCover ? (
-                        <img src={showCover} alt={item.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
-                      ) : (
-                        <div className="featured-hero-art-ph"><Music2 size={24} strokeWidth={1.2} /></div>
-                      )}
-                    </div>
-                    <div className="shelf-card-info">
-                      <div className="shelf-card-title">{item.title}</div>
-                      <div className="shelf-card-sub">{item.artist}</div>
-                    </div>
+                    <ListMusic size={14} />
                   </button>
-                );
-              })}
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        const renderHistoryGridPage = (pageItems) => (
+          <div
+            className={`upl-grid upl-grid-${safeCols}`}
+            style={{ gridTemplateColumns: `repeat(${safeCols}, minmax(0, 1fr))` }}
+          >
+            {pageItems.map(item => {
+              const cleanCover = pinImageInMemory(item.cover || item.artworkUrl, item.id);
+              const showCover = cleanCover && !brokenCovers[cleanCover] ? cleanCover : '';
+              return (
+                <div
+                  key={item._hkey || item.id}
+                  role="button"
+                  tabIndex={0}
+                  className="upl-grid-cell"
+                  style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                  {...bindLongPress({
+                    id: item.id,
+                    title: item.title,
+                    artist: item.artist,
+                    artworkUrl: showCover || item.cover || item.artworkUrl,
+                    provider: item.provider || 'bandcamp',
+                    kind: 'track',
+                    url: item.url || item.trackUrl || '',
+                  }, () => playFromHistory(item))}
+                >
+                  <div className="upl-grid-art">
+                    {showCover ? (
+                      <img src={showCover} alt={item.title} loading="eager" decoding="sync" onError={() => markCoverBroken(showCover)} />
+                    ) : (
+                      <div className="upl-grid-art-ph"><Music2 size={safeCols >= 4 ? 14 : 22} strokeWidth={1.2} /></div>
+                    )}
+                  </div>
+                  <div className="upl-grid-title">{item.title}</div>
+                  {item.artist ? (
+                    <div
+                      className="upl-grid-artist"
+                      data-subtap="artist"
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchEnd={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => openArtistFromHomeTap(e, item.artist, item)}
+                    >
+                      {item.artist}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        return (
+          <section className="home-section">
+            <div className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span onClick={() => toggleExpandSection('history')} style={{ cursor: 'pointer' }}>
+                {expandedSectionKey === 'history' ? '← History' : 'History'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {/* Layout / Icons-per-row selector: List | 1 | 2 | 3 | 4 | 5 */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  background: 'rgba(255, 255, 255, 0.07)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: 999,
+                  padding: 2,
+                  gap: 2,
+                }}>
+                  {[
+                    { key: 'list', label: 'List' },
+                    { key: 1, label: '1' },
+                    { key: 2, label: '2' },
+                    { key: 3, label: '3' },
+                    { key: 4, label: '4' },
+                    { key: 5, label: '5' },
+                  ].map(opt => {
+                    const active = historyColsMode === opt.key;
+                    return (
+                      <button
+                        key={String(opt.key)}
+                        type="button"
+                        onClick={() => updateHistoryColsMode(opt.key)}
+                        style={{
+                          border: 'none',
+                          background: active ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
+                          color: active ? '#fff' : 'rgba(255, 255, 255, 0.58)',
+                          fontSize: '0.68rem',
+                          fontWeight: 600,
+                          padding: '3px 7px',
+                          borderRadius: 999,
+                          cursor: 'pointer',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Rows count selector (1 to 10 rows maximum) */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  background: 'rgba(255, 255, 255, 0.07)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: 999,
+                  padding: '2px 4px',
+                  gap: 4,
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => updateHistoryRows(safeRows - 1)}
+                    disabled={safeRows <= 1}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: safeRows <= 1 ? 'rgba(255,255,255,0.25)' : '#fff',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      cursor: safeRows <= 1 ? 'default' : 'pointer',
+                    }}
+                  >
+                    −
+                  </button>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'rgba(255,255,255,0.85)', fontVariantNumeric: 'tabular-nums' }}>
+                    {safeRows} {safeRows === 1 ? 'row' : 'rows'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateHistoryRows(safeRows + 1)}
+                    disabled={safeRows >= 10}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: safeRows >= 10 ? 'rgba(255,255,255,0.25)' : '#fff',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      cursor: safeRows >= 10 ? 'default' : 'pointer',
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
             </div>
-          )}
-        </section>
-      )}
+            {expandedSectionKey === 'history' ? (
+              <>
+                {isHistoryList
+                  ? renderHistoryListPage(visibleHistory.slice(0, expandedVisibleCount), 0)
+                  : renderHistoryGridPage(visibleHistory.slice(0, expandedVisibleCount))}
+                {expandedVisibleCount < visibleHistory.length && (
+                  <div ref={loadMoreSentinelRef} style={{ height: 32 }} />
+                )}
+              </>
+            ) : historyPages.length <= 1 ? (
+              isHistoryList
+                ? renderHistoryListPage(historyPages[0] || [], 0)
+                : renderHistoryGridPage(historyPages[0] || [])
+            ) : (
+              <CatalogSwipeRow
+                key={`home-history-${historyColsMode}-${safeRows}`}
+                sectionKey={`home-history-${historyColsMode}-${safeRows}`}
+                pages={historyPages}
+                renderPage={(pageItems, pIdx) =>
+                  isHistoryList
+                    ? renderHistoryListPage(pageItems, pIdx)
+                    : renderHistoryGridPage(pageItems)
+                }
+              />
+            )}
+          </section>
+        );
+      })()}
 
       {/* ═══ 2 — MY UPLOADS (private) ═══ */}
       {showReleases && myUploads.length > 0 && (!expandedSectionKey || expandedSectionKey === 'my-uploads') && (() => {
@@ -1933,8 +2978,10 @@ export default function Home() {
             {albumsSlice.map(album => {
               const cleanCover = album.cover ? pinImageInMemory(album.cover, album.id) : '';
               return (
-                <button
+                <div
                   key={album.id}
+                  role="button"
+                  tabIndex={0}
                   className="upl-grid-cell"
                   style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
                   {...bindLongPress({
@@ -1960,8 +3007,17 @@ export default function Home() {
                       : <div className="upl-grid-art-ph"><Music2 size={22} strokeWidth={1.2}/></div>}
                   </div>
                   <div className="upl-grid-title">{album.title}</div>
-                  <div className="upl-grid-artist">{album.artist}</div>
-                </button>
+                  <div
+                    className="upl-grid-artist"
+                    data-subtap={album.artist ? 'artist' : undefined}
+                    onTouchStart={album.artist ? (e) => e.stopPropagation() : undefined}
+                    onTouchEnd={album.artist ? (e) => e.stopPropagation() : undefined}
+                    onPointerDown={album.artist ? (e) => e.stopPropagation() : undefined}
+                    onClick={album.artist ? (e) => openArtistFromHomeTap(e, album.artist, album) : undefined}
+                  >
+                    {album.artist}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -2001,30 +3057,6 @@ export default function Home() {
       {/* Album detail sheet */}
       {!window.webkit?.messageHandlers?.player && selectedAlbum && (
         <AlbumSheet album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
-      )}
-
-      {/* ═══ 4 — EVENTS ═══ */}
-      {showEvents && (!expandedSectionKey || expandedSectionKey === 'events') && (
-        <section className="home-section">
-          <div className="section-title">
-            <span onClick={() => toggleExpandSection('events')} style={{ cursor: 'pointer' }}>
-              {expandedSectionKey === 'events' ? '← Events' : 'Events'}
-            </span>
-          </div>
-          <div className="scroll-row" style={expandedSectionKey === 'events' ? { flexWrap: 'wrap', gap: 14 } : undefined}>
-            {berghainEvents.map((e, idx) => (
-              <BerghainEventCard key={e.id} event={e} onClick={() => setSelectedEventIndex(idx)} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {selectedEventIndex !== null && (
-        <EventSheet
-          events={berghainEvents}
-          initialIndex={selectedEventIndex}
-          onClose={() => setSelectedEventIndex(null)}
-        />
       )}
 
     </div>

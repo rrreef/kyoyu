@@ -186,14 +186,15 @@ if (typeof window !== 'undefined' && typeof window.__kyoyuSwitchTab !== 'functio
       panes.forEach((el, idx) => {
         el.style.transition = 'none';
         el.style.visibility = 'visible';
+        el.style.transform = 'translate3d(0%, 0, 0)';
         if (idx === nextTab) {
+          el.style.opacity = '1';
           el.style.pointerEvents = 'auto';
           el.style.zIndex = '2';
-          el.style.transform = 'translate3d(0%, 0, 0)';
         } else {
+          el.style.opacity = '0.0001';
           el.style.pointerEvents = 'none';
           el.style.zIndex = '1';
-          el.style.transform = 'translate3d(100%, 0, 0)';
         }
       });
       window.__kyoyuActiveWebTab = nextTab;
@@ -212,9 +213,10 @@ if (typeof window !== 'undefined' && typeof window.__kyoyuSwitchTab !== 'functio
       if (idx !== nextTab && idx !== prevTab) {
         el.style.transition = 'none';
         el.style.visibility = 'visible';
+        el.style.opacity = '0.0001';
         el.style.pointerEvents = 'none';
         el.style.zIndex = '1';
-        el.style.transform = 'translate3d(100%, 0, 0)';
+        el.style.transform = 'translate3d(0%, 0, 0)';
       }
     });
 
@@ -222,17 +224,19 @@ if (typeof window !== 'undefined' && typeof window.__kyoyuSwitchTab !== 'functio
     outgoingEl.style.transition = 'none';
     incomingEl.style.visibility = 'visible';
     outgoingEl.style.visibility = 'visible';
+    incomingEl.style.opacity = '1';
+    outgoingEl.style.opacity = '1';
     incomingEl.style.pointerEvents = 'auto';
     outgoingEl.style.pointerEvents = 'none';
-    incomingEl.style.zIndex = '2';
-    outgoingEl.style.zIndex = '1';
+    incomingEl.style.zIndex = '3';
+    outgoingEl.style.zIndex = '2';
     incomingEl.style.transform = dir > 0 ? 'translate3d(100%, 0, 0)' : 'translate3d(-100%, 0, 0)';
     outgoingEl.style.transform = 'translate3d(0%, 0, 0)';
 
-    // Force synchronous reflow so the starting transforms commit before transition begins
+    // Force synchronous reflow so starting transforms commit before transition begins
     void incomingEl.offsetWidth;
 
-    const transitionCSS = 'transform 300ms cubic-bezier(0.22, 1.0, 0.36, 1.0)';
+    const transitionCSS = 'transform 280ms cubic-bezier(0.22, 1.0, 0.36, 1.0)';
     incomingEl.style.transition = transitionCSS;
     outgoingEl.style.transition = transitionCSS;
     incomingEl.style.transform = 'translate3d(0%, 0, 0)';
@@ -247,17 +251,18 @@ if (typeof window !== 'undefined' && typeof window.__kyoyuSwitchTab !== 'functio
         if (!el) return;
         el.style.transition = 'none';
         el.style.visibility = 'visible';
+        el.style.transform = 'translate3d(0%, 0, 0)';
         if (idx === activeIdx) {
+          el.style.opacity = '1';
           el.style.pointerEvents = 'auto';
           el.style.zIndex = '2';
-          el.style.transform = 'translate3d(0%, 0, 0)';
         } else {
+          el.style.opacity = '0.0001';
           el.style.pointerEvents = 'none';
           el.style.zIndex = '1';
-          el.style.transform = 'translate3d(100%, 0, 0)';
         }
       });
-    }, 315);
+    }, 295);
 
     return true;
   };
@@ -293,7 +298,8 @@ function KeepAliveTabStage({ effectivePathname, isKeepAliveActive }) {
         id="kyoyu-tab-pane-0"
         className="kyoyu-keepalive-pane"
         style={{
-          transform: initTab === 0 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          transform: 'translate3d(0%, 0, 0)',
+          opacity: initTab === 0 ? 1 : 0.0001,
           visibility: 'visible',
           pointerEvents: initTab === 0 ? 'auto' : 'none',
           zIndex: initTab === 0 ? 2 : 1,
@@ -305,7 +311,8 @@ function KeepAliveTabStage({ effectivePathname, isKeepAliveActive }) {
         id="kyoyu-tab-pane-1"
         className="kyoyu-keepalive-pane"
         style={{
-          transform: initTab === 1 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          transform: 'translate3d(0%, 0, 0)',
+          opacity: initTab === 1 ? 1 : 0.0001,
           visibility: 'visible',
           pointerEvents: initTab === 1 ? 'auto' : 'none',
           zIndex: initTab === 1 ? 2 : 1,
@@ -317,7 +324,8 @@ function KeepAliveTabStage({ effectivePathname, isKeepAliveActive }) {
         id="kyoyu-tab-pane-2"
         className="kyoyu-keepalive-pane"
         style={{
-          transform: initTab === 2 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          transform: 'translate3d(0%, 0, 0)',
+          opacity: initTab === 2 ? 1 : 0.0001,
           visibility: 'visible',
           pointerEvents: initTab === 2 ? 'auto' : 'none',
           zIndex: initTab === 2 ? 2 : 1,

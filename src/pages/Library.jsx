@@ -182,10 +182,11 @@ const LIKES_SUB = [
 const PROVIDER_LABELS = { soundcloud: 'SoundCloud', youtube: 'YouTube', discogs: 'Discogs', spotify: 'Spotify', applemusic: 'Apple Music', tidal: 'TIDAL' };
 
 export default function Library() {
+  const { user } = useAuth();
   // The native filter bar owns provider / category / view; the page only mirrors it
-  const [activeFilter, setFilter]    = useState(window.__kyoyuLibraryCategory || 'likes');
-  const [libProvider,  setLibProvider] = useState(window.__kyoyuLibraryProvider || 'all');
-  const [nativeView,   setNativeView]  = useState(window.__kyoyuLibraryView || null);   // 'list' | 'grid' | null (website)
+  const [activeFilter, setFilter]    = useState(() => window.__kyoyuLibraryCategory || 'titles');
+  const [libProvider,  setLibProvider] = useState(() => window.__kyoyuLibraryProvider || 'all');
+  const [nativeView,   setNativeView]  = useState(() => window.__kyoyuLibraryView || (typeof window !== 'undefined' && window.webkit?.messageHandlers ? 'grid' : null));   // 'list' | 'grid' | null (website)
   useEffect(() => {
     const onState = (e) => {
       const d = e.detail || {};
@@ -222,11 +223,23 @@ export default function Library() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistProviders, setNewPlaylistProviders] = useState([]);
-  const [myUploads,    setMyUploads]  = useState([]);
+  const [myUploads,    setMyUploads]  = useState(() => {
+    if (!user?.id) return [];
+    try {
+      const raw = localStorage.getItem(`kyoyu-uploads-${user.id}`);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(t => ({
+        ...t,
+        artworkUrl: localStorage.getItem(`kyoyu-art-${user.id}-${t.id}`) || t.artworkUrl || null,
+      })) : [];
+    } catch {
+      return [];
+    }
+  });
   const [uploadsSort,  setUploadsSort]= useState('newest');
   const [eventsFilter, setEventsFilter]= useState('All');
   const [selectedEventIndex, setSelectedEventIndex] = useState(null);
-  const { user } = useAuth();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -459,16 +472,28 @@ export default function Library() {
     window.__lastFastOpenTs = ts;
     const initialTracks = Array.isArray(pl.tracks) ? pl.tracks : [];
     const creator = pl.artistName || pl.creator || user?.displayName || 'You';
-    let cover = pl.artworkUrl || pl.cover || null;
+    const validCoverUrl = (c) => (c && c !== '/album1.png' && !String(c).endsWith('/album1.png')) ? c : null;
+    let cover = validCoverUrl(pl.artworkUrl) || validCoverUrl(pl.cover) || null;
     if (cover && cover.includes('bcbits.com')) {
       cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
     }
 
     const pushToSheet = (currentTracks) => {
+      if (!cover && Array.isArray(currentTracks)) {
+        const trackWithCover = currentTracks.find(t => validCoverUrl(t?.artworkUrl) || validCoverUrl(t?.cover) || validCoverUrl(t?.releaseCover));
+        if (trackWithCover) {
+          cover = validCoverUrl(trackWithCover.artworkUrl) || validCoverUrl(trackWithCover.cover) || validCoverUrl(trackWithCover.releaseCover);
+          if (cover && cover.includes('bcbits.com')) {
+            cover = cover.replace(/_[0-9]+\.jpg/, '_10.jpg');
+          }
+        }
+      }
+      const isAlbumKind = pl.kind === 'album';
       const albumObj = {
         ...pl,
         artist: creator,
         cover,
+        isPlaylist: !isAlbumKind,
         tracks: currentTracks,
         _ts: ts,
       };
@@ -479,13 +504,14 @@ export default function Library() {
       registerAlbumPlayback(albumObj);
       const mappedTracks = currentTracks.map(t => {
         const isPlayable = t.playable !== false && !t.unplayable && t.isPlayable !== false;
+        const ownCover = validCoverUrl(t.cover) || validCoverUrl(t.artworkUrl) || validCoverUrl(t.releaseCover) || (isAlbumKind ? cover : null);
         return {
           id: t.id || String(Date.now() + Math.random()),
           title: t.title || t.name || 'Unknown Track',
           artist: t.artist || t.artistName || '',
           url: t.url || t.streamUrl || t.audioUrl || t.trackUrl || t.src || '',
           streamUrl: t.streamUrl || t.audioUrl || '',
-          cover: t.cover || t.artworkUrl || t.releaseCover || null,
+          cover: ownCover,
           provider: t.provider || pl.provider || null,
           playable: isPlayable,
           unplayable: !isPlayable,
@@ -865,23 +891,29 @@ export default function Library() {
             <div className="shelf-row-label">My Playlists</div>
             {layoutMode === 'list' ? (
               <div>
-                {playlists.map(pl => (
-                  <LibRow
-                    key={pl.id}
-                    cover={pl.cover}
-                    title={pl.title}
-                    sub={`${pl.tracks?.length || 0} tracks`}
-                    onClick={() => openPlaylistSheet(pl)}
-                  />
-                ))}
+                {playlists.map(pl => {
+                  const plCov = (pl.cover && pl.cover !== '/album1.png' ? pl.cover : '') || pl.artworkUrl || pl.tracks?.find(t => (t?.cover && t.cover !== '/album1.png') || t?.artworkUrl)?.cover || pl.tracks?.find(t => t?.artworkUrl)?.artworkUrl || '';
+                  return (
+                    <LibRow
+                      key={pl.id}
+                      cover={plCov}
+                      title={pl.title}
+                      sub={`${pl.tracks?.length || 0} tracks`}
+                      onClick={() => openPlaylistSheet(pl)}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className="scroll-row">
-                {playlists.map(pl => (
-                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
-                    <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length || 0} tracks`} badge={pl.isAI ? 'AI' : null} />
-                  </div>
-                ))}
+                {playlists.map(pl => {
+                  const plCov = (pl.cover && pl.cover !== '/album1.png' ? pl.cover : '') || pl.artworkUrl || pl.tracks?.find(t => (t?.cover && t.cover !== '/album1.png') || t?.artworkUrl)?.cover || pl.tracks?.find(t => t?.artworkUrl)?.artworkUrl || '';
+                  return (
+                    <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
+                      <ShelfCard cover={plCov} title={pl.title} sub={`${pl.tracks?.length || 0} tracks`} badge={pl.isAI ? 'AI' : null} />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1177,23 +1209,29 @@ export default function Library() {
             ? <div className="lib-empty"><p>No playlists yet.</p></div>
             : layoutMode === 'list' ? (
               <div>
-                {playlists.map(pl => (
-                  <LibRow
-                    key={pl.id}
-                    cover={pl.cover}
-                    title={pl.title}
-                    sub={`${pl.tracks?.length||0} tracks`}
-                    onClick={() => openPlaylistSheet(pl)}
-                  />
-                ))}
+                {playlists.map(pl => {
+                  const plCov = (pl.cover && pl.cover !== '/album1.png' ? pl.cover : '') || pl.artworkUrl || pl.tracks?.find(t => (t?.cover && t.cover !== '/album1.png') || t?.artworkUrl)?.cover || pl.tracks?.find(t => t?.artworkUrl)?.artworkUrl || '';
+                  return (
+                    <LibRow
+                      key={pl.id}
+                      cover={plCov}
+                      title={pl.title}
+                      sub={`${pl.tracks?.length||0} tracks`}
+                      onClick={() => openPlaylistSheet(pl)}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className="scroll-row">
-                {playlists.map(pl => (
-                  <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
-                    <ShelfCard cover={pl.cover} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
-                  </div>
-                ))}
+                {playlists.map(pl => {
+                  const plCov = (pl.cover && pl.cover !== '/album1.png' ? pl.cover : '') || pl.artworkUrl || pl.tracks?.find(t => (t?.cover && t.cover !== '/album1.png') || t?.artworkUrl)?.cover || pl.tracks?.find(t => t?.artworkUrl)?.artworkUrl || '';
+                  return (
+                    <div key={pl.id} onClick={() => openPlaylistSheet(pl)} style={{ cursor: 'pointer' }}>
+                      <ShelfCard cover={plCov} title={pl.title} sub={`${pl.tracks?.length||0} tracks`} badge={pl.isAI?'AI':null}/>
+                    </div>
+                  );
+                })}
               </div>
             )
           }
