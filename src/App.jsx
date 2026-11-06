@@ -119,6 +119,216 @@ function LabelRoute() {
   return isCanonical ? <CanonicalLabelPage /> : <ArtistPage />;
 }
 
+const TAB_ROUTE_BY_INDEX = {
+  0: '/',
+  1: '/library',
+  2: '/search',
+  3: '/messages',
+};
+
+function getWebTabIndexForPath(p) {
+  if (!p) return 0;
+  if (p === '/library' || p.startsWith('/library/')) return 1;
+  if (p === '/search' || p.startsWith('/search/')) return 2;
+  if (p === '/messages' || p.startsWith('/messages/')) return -2; // Native Chats tab
+  if (p === '/' || p === '' || p.startsWith('/track/') || p.startsWith('/album/')) return 0;
+  return -1;
+}
+
+if (typeof window !== 'undefined' && typeof window.__kyoyuSwitchTab !== 'function') {
+  window.__kyoyuSwitchTab = function (targetTab, fromTab, direction, animated) {
+    if (targetTab === 3) {
+      window.__kyoyuLastMainRoute = '/messages';
+      return true;
+    }
+    const nextTab = (targetTab === 0 || targetTab === 1 || targetTab === 2) ? targetTab : 0;
+    const prevTab = (fromTab === 0 || fromTab === 1 || fromTab === 2)
+      ? fromTab
+      : (typeof window.__kyoyuActiveWebTab === 'number' ? window.__kyoyuActiveWebTab : 0);
+    const targetPath = TAB_ROUTE_BY_INDEX[nextTab] || '/';
+    window.__kyoyuLastMainRoute = targetPath;
+
+    const panes = [
+      document.getElementById('kyoyu-tab-pane-0'),
+      document.getElementById('kyoyu-tab-pane-1'),
+      document.getElementById('kyoyu-tab-pane-2'),
+    ];
+
+    const syncRouteNow = () => {
+      const curPath = window.location.pathname || '/';
+      const curWebTab = getWebTabIndexForPath(curPath);
+      if (curWebTab === -1 && !PROFILE_ROUTES.has(curPath)) {
+        if (typeof window.__kyoyuGo === 'function') {
+          try { window.__kyoyuGo(targetPath); } catch (_) {}
+        }
+      } else if (!PROFILE_ROUTES.has(curPath) && curPath !== targetPath) {
+        try { window.history.replaceState({}, '', targetPath); } catch (_) {}
+      }
+    };
+
+    const stageEl = document.getElementById('kyoyu-keepalive-stage');
+    if (stageEl && stageEl.style.display === 'none') {
+      stageEl.style.display = 'block';
+    }
+
+    if (!panes[0] || !panes[1] || !panes[2]) {
+      window.__kyoyuActiveWebTab = nextTab;
+      syncRouteNow();
+      return false;
+    }
+
+    if (window.__kyoyuTabCleanupTimer) {
+      clearTimeout(window.__kyoyuTabCleanupTimer);
+      window.__kyoyuTabCleanupTimer = null;
+    }
+
+    if (!animated || prevTab === nextTab) {
+      panes.forEach((el, idx) => {
+        el.style.transition = 'none';
+        el.style.visibility = 'visible';
+        if (idx === nextTab) {
+          el.style.pointerEvents = 'auto';
+          el.style.zIndex = '2';
+          el.style.transform = 'translate3d(0%, 0, 0)';
+        } else {
+          el.style.pointerEvents = 'none';
+          el.style.zIndex = '1';
+          el.style.transform = 'translate3d(100%, 0, 0)';
+        }
+      });
+      window.__kyoyuActiveWebTab = nextTab;
+      syncRouteNow();
+      void panes[nextTab].offsetHeight;
+      return true;
+    }
+
+    const dir = (direction === 1 || direction === -1)
+      ? direction
+      : (nextTab > prevTab ? 1 : -1);
+    const incomingEl = panes[nextTab];
+    const outgoingEl = panes[prevTab];
+
+    panes.forEach((el, idx) => {
+      if (idx !== nextTab && idx !== prevTab) {
+        el.style.transition = 'none';
+        el.style.visibility = 'visible';
+        el.style.pointerEvents = 'none';
+        el.style.zIndex = '1';
+        el.style.transform = 'translate3d(100%, 0, 0)';
+      }
+    });
+
+    incomingEl.style.transition = 'none';
+    outgoingEl.style.transition = 'none';
+    incomingEl.style.visibility = 'visible';
+    outgoingEl.style.visibility = 'visible';
+    incomingEl.style.pointerEvents = 'auto';
+    outgoingEl.style.pointerEvents = 'none';
+    incomingEl.style.zIndex = '2';
+    outgoingEl.style.zIndex = '1';
+    incomingEl.style.transform = dir > 0 ? 'translate3d(100%, 0, 0)' : 'translate3d(-100%, 0, 0)';
+    outgoingEl.style.transform = 'translate3d(0%, 0, 0)';
+
+    // Force synchronous reflow so the starting transforms commit before transition begins
+    void incomingEl.offsetWidth;
+
+    const transitionCSS = 'transform 300ms cubic-bezier(0.22, 1.0, 0.36, 1.0)';
+    incomingEl.style.transition = transitionCSS;
+    outgoingEl.style.transition = transitionCSS;
+    incomingEl.style.transform = 'translate3d(0%, 0, 0)';
+    outgoingEl.style.transform = dir > 0 ? 'translate3d(-100%, 0, 0)' : 'translate3d(100%, 0, 0)';
+
+    window.__kyoyuActiveWebTab = nextTab;
+    syncRouteNow();
+
+    window.__kyoyuTabCleanupTimer = setTimeout(() => {
+      const activeIdx = typeof window.__kyoyuActiveWebTab === 'number' ? window.__kyoyuActiveWebTab : nextTab;
+      panes.forEach((el, idx) => {
+        if (!el) return;
+        el.style.transition = 'none';
+        el.style.visibility = 'visible';
+        if (idx === activeIdx) {
+          el.style.pointerEvents = 'auto';
+          el.style.zIndex = '2';
+          el.style.transform = 'translate3d(0%, 0, 0)';
+        } else {
+          el.style.pointerEvents = 'none';
+          el.style.zIndex = '1';
+          el.style.transform = 'translate3d(100%, 0, 0)';
+        }
+      });
+    }, 315);
+
+    return true;
+  };
+}
+
+function KeepAliveTabStage({ effectivePathname, isKeepAliveActive }) {
+  const initialTabRef = React.useRef(null);
+  if (initialTabRef.current === null) {
+    const parsed = getWebTabIndexForPath(effectivePathname);
+    const startTab = parsed >= 0 ? parsed : (typeof window !== 'undefined' && typeof window.__kyoyuActiveWebTab === 'number' ? window.__kyoyuActiveWebTab : 0);
+    initialTabRef.current = startTab;
+    if (typeof window !== 'undefined') {
+      window.__kyoyuActiveWebTab = startTab;
+    }
+  }
+
+  useEffect(() => {
+    const nextWebTab = getWebTabIndexForPath(effectivePathname);
+    if (nextWebTab >= 0 && typeof window !== 'undefined' && window.__kyoyuActiveWebTab !== nextWebTab) {
+      window.__kyoyuSwitchTab?.(nextWebTab, window.__kyoyuActiveWebTab, 0, false);
+    }
+  }, [effectivePathname]);
+
+  const initTab = initialTabRef.current;
+
+  return (
+    <div
+      id="kyoyu-keepalive-stage"
+      className="kyoyu-keepalive-stage"
+      style={{ display: isKeepAliveActive ? 'block' : 'none' }}
+    >
+      <div
+        id="kyoyu-tab-pane-0"
+        className="kyoyu-keepalive-pane"
+        style={{
+          transform: initTab === 0 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          visibility: 'visible',
+          pointerEvents: initTab === 0 ? 'auto' : 'none',
+          zIndex: initTab === 0 ? 2 : 1,
+        }}
+      >
+        <Home />
+      </div>
+      <div
+        id="kyoyu-tab-pane-1"
+        className="kyoyu-keepalive-pane"
+        style={{
+          transform: initTab === 1 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          visibility: 'visible',
+          pointerEvents: initTab === 1 ? 'auto' : 'none',
+          zIndex: initTab === 1 ? 2 : 1,
+        }}
+      >
+        <Library />
+      </div>
+      <div
+        id="kyoyu-tab-pane-2"
+        className="kyoyu-keepalive-pane"
+        style={{
+          transform: initTab === 2 ? 'translate3d(0%, 0, 0)' : 'translate3d(100%, 0, 0)',
+          visibility: 'visible',
+          pointerEvents: initTab === 2 ? 'auto' : 'none',
+          zIndex: initTab === 2 ? 2 : 1,
+        }}
+      >
+        <Search />
+      </div>
+    </div>
+  );
+}
+
 // ─── Listener shell ────────────────────────────────────────
 function ListenerApp() {
   const { state } = usePlayer();
@@ -133,6 +343,11 @@ function ListenerApp() {
     lastMainLocationRef.current = location;
     window.__kyoyuLastMainRoute = pathname;
   }
+
+  const effectiveLocation = isProfileSheetRoute ? lastMainLocationRef.current : location;
+  const effectivePathname = effectiveLocation?.pathname || '/';
+  const webTabIndex = getWebTabIndexForPath(effectivePathname);
+  const isKeepAliveRoute = webTabIndex !== -1;
 
   const hideSidebar = pathname.startsWith('/release/')
     || pathname.startsWith('/artist/')
@@ -157,30 +372,31 @@ function ListenerApp() {
       {!hideSidebar && <Sidebar />}
       <TopBar />
       <div
-        className="main-content"
-        style={{ paddingTop:'var(--page-top)', paddingBottom: 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }}
+        className={`main-content${isKeepAliveRoute ? ' main-content--keepalive' : ''}`}
+        style={
+          isKeepAliveRoute
+            ? { paddingTop: 0, paddingBottom: 0, overflow: 'hidden', position: 'relative' }
+            : { paddingTop: 'var(--page-top)', paddingBottom: 'calc(var(--kyoyu-tab-h, 83px) + 8px)' }
+        }
       >
         {/* RouteReporter inside ListenerApp so navigate() uses this Routes context */}
         <RouteReporter />
-        <Routes location={isProfileSheetRoute ? lastMainLocationRef.current : location}>
-          <Route path="/"               element={<Home />} />
-          <Route path="/search"         element={<Search />} />
-          <Route path="/all-releases"   element={<AllReleases />} />
-          <Route path="/library"        element={<Library />} />
-          <Route path="/shop"           element={<Shop />} />
-          <Route path="/marketplace"    element={<Marketplace />} />
-          <Route path="/marketplace/:id" element={<Marketplace />} />
-          <Route path="/track/:id"      element={<Home />} />
-          <Route path="/album/:id"      element={<Home />} />
-          <Route path="/release/:id"    element={<ReleaseRoute />} />
-          <Route path="/artist/:id"     element={<ArtistRoute />} />
-          <Route path="/label/:id"      element={<LabelRoute />} />
-          <Route path="/accounts/:service" element={<AccountLibrary />} />
-          <Route path="/my-releases"      element={<MyReleases />} />
-          <Route path="/messages"        element={<Messages />} />
-          <Route path="/events"          element={<Events />} />
-          <Route path="*"               element={<Home />} />
-        </Routes>
+        <KeepAliveTabStage effectivePathname={effectivePathname} isKeepAliveActive={isKeepAliveRoute} />
+        {!isKeepAliveRoute && (
+          <Routes location={effectiveLocation}>
+            <Route path="/all-releases"   element={<AllReleases />} />
+            <Route path="/shop"           element={<Shop />} />
+            <Route path="/marketplace"    element={<Marketplace />} />
+            <Route path="/marketplace/:id" element={<Marketplace />} />
+            <Route path="/release/:id"    element={<ReleaseRoute />} />
+            <Route path="/artist/:id"     element={<ArtistRoute />} />
+            <Route path="/label/:id"      element={<LabelRoute />} />
+            <Route path="/accounts/:service" element={<AccountLibrary />} />
+            <Route path="/my-releases"      element={<MyReleases />} />
+            <Route path="/events"          element={<Events />} />
+            <Route path="*"               element={null} />
+          </Routes>
+        )}
       </div>
       {isProfileSheetRoute && (
         <div className="liquid-glass-settings-sheet-overlay">
@@ -197,47 +413,54 @@ function ListenerApp() {
 
 // ─── Creator shell ─────────────────────────────────────────
 function CreatorApp() {
+  const location = useLocation();
+  const { pathname } = location;
+  const webTabIndex = getWebTabIndexForPath(pathname);
+  const isKeepAliveRoute = webTabIndex !== -1;
+
   return (
     <div className="app-layout">
       <CreatorSidebar />
       <TopBar showSearch={true} />
-      <div className="main-content" style={{ paddingBottom: '32px' }}>
+      <div
+        className={`main-content${isKeepAliveRoute ? ' main-content--keepalive' : ''}`}
+        style={
+          isKeepAliveRoute
+            ? { paddingTop: 0, paddingBottom: 0, overflow: 'hidden', position: 'relative' }
+            : { paddingBottom: '32px' }
+        }
+      >
         {/* RouteReporter inside CreatorApp so iOS tab bar works for creators too */}
         <RouteReporter />
-        <Routes>
-          {/* ── Creator routes ── */}
-          <Route path="/dashboard"        element={<Dashboard />} />
-          <Route path="/upload"           element={<Upload />} />
-          <Route path="/releases"         element={<Releases filter="all"     />} />
-          <Route path="/releases/public"  element={<Releases filter="public"  />} />
-          <Route path="/releases/private" element={<Releases filter="private" />} />
-          <Route path="/artists"          element={<CreatorArtists />} />
-          <Route path="/visual-identity"  element={<VisualIdentity />} />
-          <Route path="/preview"          element={<ListenerPreview />} />
-          <Route path="/profile"          element={<Profile />} />
-          <Route path="/settings"         element={<Settings />} />
-          <Route path="/app-settings"     element={<AppSettings />} />
-          <Route path="/subscription"     element={<Subscription />} />
-          <Route path="/accounts/:service" element={<AccountLibrary />} />
+        <KeepAliveTabStage effectivePathname={pathname} isKeepAliveActive={isKeepAliveRoute} />
+        {!isKeepAliveRoute && (
+          <Routes>
+            {/* ── Creator routes ── */}
+            <Route path="/dashboard"        element={<Dashboard />} />
+            <Route path="/upload"           element={<Upload />} />
+            <Route path="/releases"         element={<Releases filter="all"     />} />
+            <Route path="/releases/public"  element={<Releases filter="public"  />} />
+            <Route path="/releases/private" element={<Releases filter="private" />} />
+            <Route path="/artists"          element={<CreatorArtists />} />
+            <Route path="/visual-identity"  element={<VisualIdentity />} />
+            <Route path="/preview"          element={<ListenerPreview />} />
+            <Route path="/profile"          element={<Profile />} />
+            <Route path="/settings"         element={<Settings />} />
+            <Route path="/app-settings"     element={<AppSettings />} />
+            <Route path="/subscription"     element={<Subscription />} />
+            <Route path="/accounts/:service" element={<AccountLibrary />} />
+            <Route path="/shop"             element={<Shop />} />
+            <Route path="/marketplace"      element={<Marketplace />} />
+            <Route path="/marketplace/:id"  element={<Marketplace />} />
+            <Route path="/events"           element={<Events />} />
+            <Route path="/release/:id"      element={<ReleaseRoute />} />
+            <Route path="/artist/:id"       element={<ArtistRoute />} />
+            <Route path="/label/:id"        element={<LabelRoute />} />
 
-          {/* ── Listener tab-bar routes — so iOS tab bar works for creator accounts ── */}
-          <Route path="/"                 element={<Home />} />
-          <Route path="/search"           element={<Search />} />
-          <Route path="/library"          element={<Library />} />
-          <Route path="/shop"             element={<Shop />} />
-          <Route path="/marketplace"      element={<Marketplace />} />
-          <Route path="/marketplace/:id"  element={<Marketplace />} />
-          <Route path="/messages"         element={<Messages />} />
-          <Route path="/events"           element={<Events />} />
-          <Route path="/track/:id"        element={<Home />} />
-          <Route path="/album/:id"        element={<Home />} />
-          <Route path="/release/:id"      element={<ReleaseRoute />} />
-          <Route path="/artist/:id"       element={<ArtistRoute />} />
-          <Route path="/label/:id"        element={<LabelRoute />} />
-
-          {/* ── Fallback ── */}
-          <Route path="*"                 element={<Dashboard />} />
-        </Routes>
+            {/* ── Fallback ── */}
+            <Route path="*"                 element={<Dashboard />} />
+          </Routes>
+        )}
       </div>
     </div>
   );
@@ -682,6 +905,17 @@ function PlaylistBridge() {
       return false;
     };
 
+    const resolvePlaylistCoverFromObj = (pl, tracks) => {
+      const direct = (pl?.cover && pl.cover !== '/album1.png') ? pl.cover : (pl?.artworkUrl && pl.artworkUrl !== '/album1.png' ? pl.artworkUrl : '');
+      if (direct) return direct;
+      const list = Array.isArray(tracks) ? tracks : (Array.isArray(pl?.tracks) ? pl.tracks : []);
+      for (const t of list) {
+        const tc = (t?.cover && t.cover !== '/album1.png') ? t.cover : (t?.artworkUrl && t.artworkUrl !== '/album1.png' ? t.artworkUrl : '');
+        if (tc) return tc;
+      }
+      return '';
+    };
+
     window.__kyoyuGetPlaylists = (trackId, tracksB64) => {
       const ids = String(trackId || '').split(',').map(cleanId).filter(Boolean);
       const targetProvider = resolvePlaylistTargetProvider(trackId, tracksB64);
@@ -702,6 +936,7 @@ function PlaylistBridge() {
             name: pl.title || pl.name || 'Untitled',
             trackCount: count,
             containsTrack,
+            cover: resolvePlaylistCoverFromObj(pl, tracks),
           };
         });
         return JSON.stringify(mapped);
@@ -715,6 +950,7 @@ function PlaylistBridge() {
           name: pl.name || pl.title || 'Untitled',
           trackCount: tracks.length,
           containsTrack,
+          cover: resolvePlaylistCoverFromObj(pl, tracks),
         };
       });
       return JSON.stringify(pls);
@@ -752,6 +988,18 @@ function PlaylistBridge() {
             }
           }
           pl.trackCount = Math.max((Number(pl.trackCount) || 0) + addedCount, pl.tracks.length);
+          const existingPlCov = String(pl.cover || pl.artworkUrl || '').trim();
+          if (!existingPlCov || existingPlCov === '/album1.png') {
+            const firstWithArt = resolvedTracks.find(t => {
+              const c = String(t?.cover || t?.artworkUrl || '').trim();
+              return c && c !== '/album1.png';
+            });
+            if (firstWithArt) {
+              const artUrl = String(firstWithArt.cover || firstWithArt.artworkUrl).trim();
+              pl.cover = artUrl;
+              pl.artworkUrl = artUrl;
+            }
+          }
           saveFastConnectedCache();
           window.__kyoyuTouchPlaylistActivity?.(pl);
         }
